@@ -568,7 +568,6 @@ class H(BaseHTTPRequestHandler):
         m = re.match(r'^/api/servers/([a-zA-Z0-9\-]+)$', path)
         if not m: return self._json(400, {"error": "Invalid ID"})
         sid = m.group(1)
-        if sid == "local": return self._json(403, {"error": "No se puede eliminar el servidor local"})
         srvs = load_servers()
         new  = [s for s in srvs if s["id"] != sid]
         if len(new) == len(srvs): return self._json(404, {"error": "No encontrado"})
