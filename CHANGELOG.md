@@ -2,6 +2,15 @@
 
 ## 1.1.8b — 2026-10-10
 
+### Net Monitor
+- Nuevos tipos de dispositivo **printer** (impresora) y **tablet**. Impresoras: fabricantes (Brother, Canon, Epson, Lexmark, Xerox, Ricoh, Kyocera…), nombres de host (NPI…, LaserJet, MFC…), puertos 9100/515/631 y banners. Tablets: iPad, Galaxy Tab, Kindle, MiPad, etc.; un iPhone/Android sigue siendo *phone*. Disponibles en filtros y en la edición manual.
+- Los hosts que están registrados en WOL Console (misma MAC) muestran la etiqueta **WOL**.
+
+### WOL Console
+- Lee los hosts de Net Monitor (`net-monitor/hosts.json`, solo lectura): en *Add device* aparece **From Net Monitor** (solo admin con acceso a Net Monitor) para elegir un host detectado; rellena nombre, MAC, IP y categoría (computer→PC, storage→NAS, el resto→OTHER). Los ya agregados aparecen deshabilitados.
+- Si Net Monitor conoce otra IP para la misma MAC (DHCP), la tabla muestra la IP de Net Monitor (la guardada queda tachada) y *Wake* la usa para comprobar si el equipo ya está encendido.
+- Nuevo endpoint `GET /api/netmonitor/hosts` (requiere permiso `net` de lectura). Variables opcionales: `NET_HOSTS_FILE` (WOL) y `WOL_DEVICES_FILE` (Net Monitor).
+
 ### UPS Monitor
 - Los servidores NUT ahora se pueden **editar** (nombre, host y puerto) desde el botón de lápiz de la barra lateral, además de eliminarlos. Al cambiar host o puerto se reconecta de inmediato y se descartan los datos del destino anterior; el historial se conserva. Nuevo endpoint `PUT /api/servers/<id>` (solo admin).
 
@@ -10,7 +19,7 @@
 Reúne los cambios de 1.1.7 y sus revisiones (1.1.7a–1.1.7f).
 
 ### Net Monitor
-- Tipos de dispositivo: computer, phone, router, switch, ap, storage, tv, camera, appliance, other. Columna *Type*, filtros por tipo y edición manual (`auto` vuelve a la detección).
+- Tipos de dispositivo: computer, phone, tablet, printer, router, switch, ap, storage, tv, camera, appliance, other. Columna *Type*, filtros por tipo y edición manual (`auto` vuelve a la detección).
 - Detección por puntajes (vendor, banner, hostname, puertos, gateway, TTL, MAC aleatoria). Los NAS ya no se detectan como Windows; Android/iOS se clasifican como phone.
 - El tipo/OS editado ya no se pierde al terminar un escaneo.
 - Se muestra la MAC cuando no se detecta el vendor. Fuentes de MAC: Pi-hole, ARP local, SNMP.

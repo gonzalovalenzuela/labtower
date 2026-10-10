@@ -350,7 +350,7 @@ def refresh_snmp():
         log.warning(f"SNMP error: {e}")
 
 # ─── Device identification (OS + device type, no nmap) ───────────────────────
-DEVICE_TYPES = ["computer", "phone", "router", "switch", "ap", "storage", "tv", "camera", "appliance", "other"]
+DEVICE_TYPES = ["computer", "phone", "router", "switch", "ap", "storage", "tv", "camera", "appliance", "printer", "tablet", "other"]
 
 _OUI_PATHS = ["/usr/share/ieee-data/oui.txt", "/var/lib/ieee-data/oui.txt",
               "/usr/share/misc/oui.txt"]
@@ -540,6 +540,10 @@ V_APPL    = ("espressif", "tuya", "shelly", "allterco", "sonoff", "itead", "irob
 H_CAMERA  = re.compile(r"cam(era)?([-_.\d]|$)|^ipc|nvr|dvr|doorbell|hikvision|dahua|reolink", re.I)
 H_TV      = re.compile(r"(^|[-_.])tv([-_.\d]|$)|bravia|roku|fire-?tv|apple-?tv|chromecast|webos|tizen|android-?tv|shield|smarttv", re.I)
 H_APPL    = re.compile(r"^esp[-_]?\d|esp32|esp8266|shelly|tasmota|roomba|alexa|echo|sonos|homekit|plug|bulb|lamp|fridge|washer|dryer|oven|vacuum|robot|aspirad|thermostat", re.I)
+V_PRINTER = ("brother industries", "canon", "seiko epson", "epson", "lexmark", "xerox", "ricoh", "kyocera",
+             "konica minolta", "oki data", "zebra technologies", "fuji xerox", "toshiba tec", "pantum", "sindoh")
+H_PRINTER = re.compile(r"print|laserjet|officejet|deskjet|photosmart|pixma|(^|[-_])mfc-?\d|(^|[-_])dcp-?\d|^npi[0-9a-f]|^hp[0-9a-f]{6}|epson|brother|xerox|lexmark|ricoh|kyocera|(^|[-_.])mfp([-_.\d]|$)", re.I)
+H_TABLET  = re.compile(r"ipad|tablet|galaxy[-_ ]?tab|^sm-[tx]\d|kindle|(^|[-_])tab([-_.\d]|$)|mi-?pad|matepad|lenovo[-_ ]?tab", re.I)
 H_WIN     = re.compile(r"^(desktop|laptop|win|pc|workstation|surface)[-_]", re.I)
 H_ANDROID = re.compile(r"android|galaxy|pixel|redmi|xiaomi|poco|oneplus|oppo|realme|huawei|honor|moto[-_ ]|^sm-|^sm[a-z]\d", re.I)
 H_STORAGE = re.compile(r"nas|diskstation|synology|qnap|truenas|freenas|openmediavault|\bomv\b|unraid|storage|backup", re.I)
@@ -610,13 +614,22 @@ def identify(ip: str, open_ports: list, ttl: int, hostname: str, banner: str,
     if H_APPL.search(host):                           s["appliance"] += 4
     if 1883 in ports:                                 s["appliance"] += 2
 
+    # printer
+    if _has(ven, V_PRINTER):                          s["printer"] += 4
+    if H_PRINTER.search(host):                        s["printer"] += 5
+    if ports & {9100, 515}:                           s["printer"] += 4
+    if 631 in ports:                                  s["printer"] += 3
+    if _has(ban, ("printer", "jetdirect", "laserjet", "officejet", "cups", "brother", "lexmark", "xerox", "ricoh")): s["printer"] += 3
+    # tablet
+    if H_TABLET.search(host):                         s["tablet"] += 5
+
     best = max(DEVICE_TYPES[:-1], key=lambda t: s[t])
     dtype = best if s[best] >= 4 else ("computer" if s["computer"] >= 1 else "other")
 
     # ── OS ──
     win_strong = ("windows" in ban or "microsoft" in ban or "iis" in ban or H_WIN.search(host)
                   or "microsoft" in ven)
-    if dtype in ("router", "switch", "ap", "tv", "camera", "appliance"):
+    if dtype in ("router", "switch", "ap", "tv", "camera", "appliance", "printer"):
         os_name = "IoT"
     elif dtype == "storage":
         os_name = "Linux"
@@ -650,7 +663,7 @@ def identify(ip: str, open_ports: list, ttl: int, hostname: str, banner: str,
     if dtype == "other" and os_name in ("Windows", "Linux", "macOS", "Android", "iOS"):
         dtype = "computer"
     if os_name in ("Android", "iOS") and dtype in ("computer", "other"):
-        dtype = "phone"
+        dtype = "tablet" if H_TABLET.search(host) else "phone"
     return os_name, dtype
 
 # ─── Scan host completo ───────────────────────────────────────────────────────
@@ -708,6 +721,20 @@ def scan_host(ip: str) -> dict | None:
     }
 
 # ─── Persistencia ─────────────────────────────────────────────────────────────
+WOL_DEVICES_FILE = Path(os.environ.get("WOL_DEVICES_FILE", str(Path(__file__).parent.parent / "wol-console" / "devices.json")))
+
+def _mac_key(raw) -> str:
+    h = re.sub(r"[^0-9a-fA-F]", "", raw or "").lower()
+    return h if len(h) == 12 else ""
+
+def _wol_macs() -> set:
+    """MACs registered in WOL Console (shared info, read-only)."""
+    try:
+        d = json.loads(WOL_DEVICES_FILE.read_text())
+        return {k for k in (_mac_key(x.get("mac")) for x in d if isinstance(x, dict)) if k}
+    except Exception:
+        return set()
+
 def load_hosts() -> dict:
     try:
         if DATA_FILE.exists():
@@ -894,8 +921,14 @@ class H(BaseHTTPRequestHandler):
 
         if path == "/api/hosts":
             hosts = load_hosts()
+            out = list(hosts.values())
+            if auth.check_permission(tok, "wol", "readonly"):
+                wol = _wol_macs()
+                for h in out:
+                    k = _mac_key(h.get("mac"))
+                    if k and k in wol: h["wol"] = True
             self._json(200, {
-                "hosts":   list(hosts.values()),
+                "hosts":   out,
                 "scan":    _scan_status,
                 "network": NETWORK,
             })

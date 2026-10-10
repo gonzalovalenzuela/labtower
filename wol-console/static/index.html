@@ -353,6 +353,7 @@ td{padding:10px 16px;vertical-align:middle}
           <div class="edit-banner" id="edit-banner"><span data-i18n="editMode">Edit mode</span><button onclick="cancelEdit()">✕ <span data-i18n="cancel">Cancel</span></button></div>
           <div class="form-body">
             <input type="hidden" id="f-id">
+            <div class="field" id="net-pick-field" style="display:none"><label data-i18n="fromNet">From Net Monitor</label><select id="f-net" onchange="pickNetHost(this.value)"></select></div>
             <div class="field"><label data-i18n="fieldName">Name</label><input type="text" id="f-name" placeholder="WORKSTATION-01" maxlength="40" autocomplete="off"></div>
             <div class="field"><label data-i18n="fieldMAC">MAC Address</label><input type="text" id="f-mac" placeholder="AA:BB:CC:DD:EE:FF" maxlength="17" autocomplete="off"><span class="hint" data-i18n="macHint">Formats: AA:BB:CC:DD:EE:FF · AA-BB-CC-DD-EE-FF</span></div>
             <div class="field"><label>IP / Hostname <span style="color:var(--text-dim);font-weight:400" data-i18n="refOnly">(reference only)</span></label><input type="text" id="f-ip" placeholder="192.168.0.100" autocomplete="off"></div>
@@ -428,6 +429,7 @@ const LANG = {
     devicesTitle:'Devices',
     colName:'Name', colType:'Type', colLastWake:'Last wake', colActions:'Actions',
     colDateTime:'Date/Time', colDevice:'Device', colUser:'User',
+    fromNet:'From Net Monitor', fromNetPick:'Select a detected host…', fromNetHave:'already added', netIp:'IP from Net Monitor',
     addDevice:'Add device', editMode:'Edit mode', cancel:'Cancel',
     fieldName:'Name', fieldMAC:'MAC Address', macHint:'Formats: AA:BB:CC:DD:EE:FF · AA-BB-CC-DD-EE-FF',
     refOnly:'(reference only)', wolPort:'WOL Port', category:'Category',
@@ -465,6 +467,7 @@ const LANG = {
     devicesTitle:'Dispositivos',
     colName:'Nombre', colType:'Tipo', colLastWake:'Último wake', colActions:'Acciones',
     colDateTime:'Fecha/Hora', colDevice:'Equipo', colUser:'Usuario',
+    fromNet:'Desde Net Monitor', fromNetPick:'Selecciona un equipo detectado…', fromNetHave:'ya agregado', netIp:'IP desde Net Monitor',
     addDevice:'Agregar equipo', editMode:'Modo edición', cancel:'Cancelar',
     fieldName:'Nombre', fieldMAC:'Dirección MAC', macHint:'Formatos: AA:BB:CC:DD:EE:FF · AA-BB-CC-DD-EE-FF',
     refOnly:'(solo referencia)', wolPort:'Puerto WOL', category:'Categoría',
@@ -639,6 +642,7 @@ async function initApp(){
   document.getElementById('search-input').addEventListener('input',e=>{searchQ=e.target.value.trim().toLowerCase();renderTable();});
   log('INFO', t('logStarting'));
   await refreshDevices(true);
+  loadNetHosts();
   pollTimer=setInterval(()=>refreshDevices(false), POLL_MS);
   // Refrescar también al volver a la pestaña (vuelve de background/sleep)
   document.addEventListener('visibilitychange', () => {
@@ -708,7 +712,7 @@ function renderTable(){
       <td class="col-st"><span class="ind" id="ind-${d.id}"></span></td>
       <td><span class="dev-name">${esc(d.name)}</span><span class="dev-mac">${esc(d.mac)}${notes?' · <span style="color:var(--text-dim)">'+esc(notes)+'</span>':''}</span></td>
       <td><span class="tag tag-${d.tag.toLowerCase()}">${esc(d.tag)}</span></td>
-      <td class="col-ip">${d.ip?esc(d.ip):'<span style="opacity:.25">—</span>'}</td>
+      <td class="col-ip">${ipCell(d)}</td>
       <td class="col-lw">${lwText}</td>
       <td class="col-act">
         <button class="btn-wake" id="wake-${d.id}" onclick="wakeDevice('${d.id}')" ${canWake?'':'disabled title="Sin permisos"'}>Wake</button>
@@ -716,6 +720,33 @@ function renderTable(){
       </td>`;
     tbody.appendChild(tr);
   });
+}
+function ipCell(d){
+  const n=d.net;
+  if(n&&n.ip&&n.ip!==d.ip)return '<span title="'+esc(t('netIp'))+'">'+esc(n.ip)+'</span>'+(d.ip?'<span style="color:var(--text-dim);font-size:10px;display:block;text-decoration:line-through">'+esc(d.ip)+'</span>':'');
+  return d.ip?esc(d.ip):'<span style="opacity:.25">—</span>';
+}
+// ── Net Monitor: pick a detected host (shared MAC/IP/name) ──
+let netHosts=[];
+const NET_TAG={computer:'PC',storage:'NAS'};
+async function loadNetHosts(){
+  const f=document.getElementById('net-pick-field');if(!f)return;
+  try{
+    const d=await apiFetch('api/netmonitor/hosts');
+    netHosts=d.hosts||[];
+    if(!d.available||!netHosts.length||!canAdmin()){f.style.display='none';return;}
+    const sel=document.getElementById('f-net');
+    sel.innerHTML='<option value="">'+esc(t('fromNetPick'))+'</option>'+netHosts.map((h,i)=>
+      '<option value="'+i+'"'+(h.in_wol?' disabled':'')+'>'+esc((h.name||h.ip)+' · '+h.ip+' · '+h.mac)+(h.in_wol?' ('+esc(t('fromNetHave'))+')':'')+'</option>').join('');
+    f.style.display='';
+  }catch(e){f.style.display='none';}
+}
+function pickNetHost(i){
+  const h=netHosts[parseInt(i)];if(!h)return;
+  document.getElementById('f-name').value=(h.name||h.ip).slice(0,40);
+  document.getElementById('f-mac').value=h.mac;
+  document.getElementById('f-ip').value=h.ip;
+  document.getElementById('f-tag').value=NET_TAG[h.device_type]||'OTHER';
 }
 function updateStats(){
   document.getElementById('st-total').textContent=devices.length;
@@ -832,6 +863,8 @@ function readForm(){
 function resetForm(){
   ['f-name','f-mac','f-ip','f-notes'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f-port').value='9';document.getElementById('f-tag').value='PC';document.getElementById('f-id').value='';
+  const fn=document.getElementById('f-net');if(fn)fn.value='';
+  if(typeof loadNetHosts==='function')loadNetHosts();
 }
 function confirmDelete(id){
   if(!canAdmin())return;
@@ -845,7 +878,7 @@ function confirmDelete(id){
       log('WARN','Eliminado: "'+d.name+'"');
       devices=devices.filter(x=>x.id!==id);
       if(editingId===id)cancelEdit();
-      renderAll();toast(d.name+' eliminado',false);
+      renderAll();loadNetHosts();toast(d.name+' eliminado',false);
     }catch(e){log('ERR',e.message);toast(e.message,true);}
   };
   document.getElementById('del-overlay').classList.add('show');
