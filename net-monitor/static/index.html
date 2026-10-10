@@ -211,6 +211,13 @@ td{padding:10px 14px;vertical-align:middle}
   body.nav-open .nav-backdrop{opacity:1;pointer-events:auto}
   body.nav-open{overflow:hidden}
 }
+@media(max-width:700px){
+  /* hosts table: keep status / host / type / OS; the rest is in the expanded row */
+  .tbl-wrap th:nth-child(n+5):nth-child(-n+8),#hosts-tbody>tr>td:nth-child(n+5):nth-child(-n+8){display:none}
+}
+@media(max-width:480px){
+  .tbl-wrap th:nth-child(4),#hosts-tbody>tr>td:nth-child(4){display:none}
+}
 </style>
 </head>
 <body>
