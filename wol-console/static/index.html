@@ -232,6 +232,23 @@ td{padding:10px 16px;vertical-align:middle}
   .search-wrap{max-width:100%}
   .tb-right{display:none}
 }
+
+/* Mobile navigation drawer */
+.nav-toggle{display:none;align-items:center;justify-content:center;width:36px;height:36px;flex-shrink:0;border-radius:var(--r-sm);border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;padding:0}
+.nav-toggle svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.nav-backdrop{display:none}
+@media(max-width:960px){
+  .main{margin-left:0}
+  .nav-toggle{display:flex;margin-right:12px}
+  .main{min-width:0}
+  .topbar{justify-content:flex-start!important;z-index:60;flex-wrap:wrap;height:auto!important;min-height:54px;padding-top:8px!important;padding-bottom:8px!important;row-gap:8px}
+  .topbar>:last-child{margin-left:auto;flex-wrap:wrap;max-width:100%}
+  .sidebar{display:flex!important;width:min(280px,84vw);transform:translateX(-102%);transition:transform .22s ease;z-index:300;overflow-y:auto;box-shadow:none}
+  body.nav-open .sidebar{transform:none;box-shadow:0 0 40px rgba(0,0,0,.35)}
+  .nav-backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:250;opacity:0;pointer-events:none;transition:opacity .22s}
+  body.nav-open .nav-backdrop{opacity:1;pointer-events:auto}
+  body.nav-open{overflow:hidden}
+}
 </style>
 </head>
 <body>
@@ -252,6 +269,7 @@ td{padding:10px 16px;vertical-align:middle}
   </div>
 </div>
 
+<div class="nav-backdrop" onclick="toggleNav(false)"></div>
 <aside class="sidebar">
   <div class="sb-logo">
     <div class="sb-icon"><svg viewBox="0 0 24 24"><path d="M13 3L4 14h7l-1 7 9-11h-7l1-7z"/></svg></div>
@@ -271,6 +289,7 @@ td{padding:10px 16px;vertical-align:middle}
 
 <div class="main">
   <div class="topbar">
+    <button class="nav-toggle" id="nav-toggle" aria-label="Menu" aria-expanded="false" onclick="toggleNav()"><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg></button>
     <div class="tb-left">
       <div class="search-wrap">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -971,6 +990,19 @@ document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{
     ls.style.opacity='0';
     setTimeout(()=>ls.style.display='none',150);
   } else {document.getElementById('login-screen').style.display='flex';}
+})();
+
+// ── Mobile navigation drawer ──
+function toggleNav(force){
+  const open=force!==undefined?force:!document.body.classList.contains('nav-open');
+  document.body.classList.toggle('nav-open',open);
+  const b=document.getElementById('nav-toggle');if(b)b.setAttribute('aria-expanded',open);
+}
+(function(){
+  const sb=document.querySelector('.sidebar');
+  if(sb)sb.addEventListener('click',e=>{if(e.target.closest('a,.nav-item,.srv-nav,.btn-add-srv'))setTimeout(()=>toggleNav(false),0);});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')toggleNav(false);});
+  window.addEventListener('resize',()=>{if(window.innerWidth>960)toggleNav(false);});
 })();
 </script>
 </body>
