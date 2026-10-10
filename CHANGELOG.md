@@ -1,6 +1,6 @@
 # Changelog
 
-## Sin publicar
+## 1.1.8b — 2026-10-10
 
 ### UPS Monitor
 - Los servidores NUT ahora se pueden **editar** (nombre, host y puerto) desde el botón de lápiz de la barra lateral, además de eliminarlos. Al cambiar host o puerto se reconecta de inmediato y se descartan los datos del destino anterior; el historial se conserva. Nuevo endpoint `PUT /api/servers/<id>` (solo admin).
