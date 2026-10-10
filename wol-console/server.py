@@ -12,6 +12,8 @@ PORT       = 8080
 HOST       = "0.0.0.0"
 DATA_FILE  = Path(__file__).parent / "devices.json"
 LOG_FILE   = Path(__file__).parent / "wake_log.json"
+# Net Monitor host table (shared info: MAC, IP, name, type). Read-only here.
+NET_HOSTS_FILE = Path(os.environ.get("NET_HOSTS_FILE", str(Path(__file__).parent.parent / "net-monitor" / "hosts.json")))
 STATIC_DIR = Path(__file__).parent / "static"
 WOL_SECRET = os.environ.get("WOL_SECRET", "cambiar-esta-clave")
 RATE_LIMIT  = 10
@@ -118,6 +120,29 @@ def save_devices(devs):
         tmp = DATA_FILE.with_suffix(".tmp")
         tmp.write_text(json.dumps(devs, indent=2)); tmp.replace(DATA_FILE)
 
+# ─── Net Monitor (shared host info) ───────────────────────────────────────────
+def mac_key(raw):
+    h = re.sub(r"[^0-9a-fA-F]", "", raw or "").lower()
+    return h if len(h) == 12 else ""
+
+def load_net_hosts():
+    """Hosts known to Net Monitor that have a MAC, as {mac_key: info}. Empty if unavailable."""
+    try:
+        data = json.loads(NET_HOSTS_FILE.read_text())
+    except Exception:
+        return None
+    if not isinstance(data, dict): return None
+    out = {}
+    for ip, h in data.items():
+        if not isinstance(h, dict): continue
+        k = mac_key(h.get("mac"))
+        if not k: continue
+        out[k] = {"ip": h.get("ip") or ip, "mac": norm_mac(":".join(k[i:i+2] for i in range(0, 12, 2))),
+                  "name": (h.get("alias") or h.get("hostname") or "").strip(),
+                  "vendor": h.get("vendor") or "", "device_type": h.get("device_type") or "other",
+                  "online": bool(h.get("online"))}
+    return out
+
 def validate_device(d):
     if not isinstance(d.get("name"), str) or not d["name"].strip():
         return False, "Invalid name"
@@ -195,7 +220,23 @@ class H(BaseHTTPRequestHandler):
                 lw = last_wake.get(d["id"])
                 d["last_wake"] = lw["ts"] if lw else None
                 d["last_wake_user"] = lw["user"] if lw else None
+            if auth.check_permission(tok, "net", "readonly"):
+                net = load_net_hosts() or {}
+                for d in devs:
+                    n = net.get(mac_key(d.get("mac")))
+                    if n: d["net"] = {k: n[k] for k in ("ip", "name", "online", "device_type", "vendor")}
             self._json(200, {"devices": devs})
+
+        elif path == "/api/netmonitor/hosts":
+            if not auth.check_permission(tok, "net", "readonly"):
+                return self._json(403, {"error": "Net Monitor permission required"})
+            net = load_net_hosts()
+            if net is None:
+                return self._json(200, {"available": False, "hosts": []})
+            have = {mac_key(d.get("mac")) for d in load_devices()}
+            hosts = [{**h, "in_wol": k in have} for k, h in net.items()]
+            hosts.sort(key=lambda h: (h["in_wol"], (h["name"] or h["ip"]).lower()))
+            self._json(200, {"available": True, "hosts": hosts})
 
         elif path == "/api/wake_log":
             entries = load_wake_log()
@@ -276,7 +317,9 @@ class H(BaseHTTPRequestHandler):
             if not dev: return self._json(404, {"error": "Dispositivo no encontrado"})
 
             # Verificar si ya está online
-            already_online = ping_host(dev.get("ip","")) if dev.get("ip") else False
+            net_h = (load_net_hosts() or {}).get(mac_key(dev.get("mac")))
+            ping_ip = (net_h or {}).get("ip") or dev.get("ip") or ""   # Net Monitor IP is the freshest
+            already_online = ping_host(ping_ip) if ping_ip else False
             if already_online and not body.get("force"):
                 return self._json(200, {"ok": False, "already_online": True,
                                         "message": f"{dev['name']} is already on"})

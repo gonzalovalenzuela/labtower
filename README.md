@@ -105,6 +105,10 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ---
 
+## WOL Console y Net Monitor comparten información
+
+WOL Console lee `net-monitor/hosts.json` (solo lectura): al agregar un equipo se puede elegir uno detectado por Net Monitor (se rellenan nombre, MAC, IP y categoría) y, si la IP cambió por DHCP, se muestra y usa la de Net Monitor. Net Monitor marca con la etiqueta *WOL* los hosts registrados en WOL Console. Requiere permiso de lectura `net` para ver la lista en WOL.
+
 ## Net Monitor — fuentes de MAC y vendor
 
 1. **Pi-hole** (si está configurado), 2. **ARP local** (`/proc/net/arp`), 3. **SNMP** (ARP de un router/switch; panel junto al botón *Scan*).
