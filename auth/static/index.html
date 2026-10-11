@@ -113,6 +113,18 @@ input.err{border-color:var(--red)}
 .hl-top{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--text)}
 .hl-dot{width:9px;height:9px;border-radius:50%;background:var(--green);flex:none}
 .hl-dot.warn{background:var(--orange)}.hl-dot.fail{background:var(--red)}
+.hl-top{cursor:pointer;user-select:none}
+.hl-chev{margin-left:auto;color:var(--text-dim);font-size:11px;transition:transform .15s}
+.hl-item.open .hl-chev{transform:rotate(180deg)}
+.hl-item.open{grid-column:1/-1}
+.hl-all{display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:8px}
+.hl-item.open .hl-all{display:block}
+.hl-item.open .hl-det{display:none}
+.hl-row{display:flex;gap:9px;align-items:flex-start;padding:6px 0}
+.hl-row .hl-dot{margin-top:4px}
+.hl-ck{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text)}
+.hl-cd{font-size:11.5px;color:var(--text-mid);line-height:1.4}
+.hl-cv{font-size:11.5px;color:var(--text-dim);line-height:1.4;font-family:var(--mono);word-break:break-word;margin-bottom:2px}
 .hl-det{margin-top:5px;font-size:11.5px;line-height:1.45;color:var(--text-mid);word-break:break-word}
 .hl-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;text-transform:uppercase;letter-spacing:.3px;background:var(--green-dim);color:var(--green)}
 .hl-badge.degraded{background:var(--orange-dim);color:var(--orange)}.hl-badge.fail{background:var(--red-dim);color:var(--red)}
@@ -462,7 +474,7 @@ const LANG = {
     btnCancel:'Cancel', btnCreate:'Create user', btnSave:'Save changes',
     modalDeleteTitle:'Delete user', modalDeleteBtn:'Delete',
     mustChangeBadge:'Change pwd',
-    hlTitle:'System health', hl_ok:'All healthy', hl_degraded:'Degraded', hl_fail:'Failing', hlSystem:'system', hlDown:'Service not answering',
+    hlTitle:'System health', hl_ok:'All healthy', hl_degraded:'Degraded', hl_fail:'Failing', hlSystem:'system', hlDown:'Service not answering', hlUptime:'Running for',
     tpTitle:'Backup & restore', tpUpload:'Upload backup', tpCreate:'Create backup',
     tpHint:'Back up users, WOL devices, UPS servers and history, Net Monitor, Proxmox and the NUT configuration. To move to a new installation: install the package, sign in with the default user, upload the backup here and press Restore.',
     tpColName:'Backup', tpColType:'Type', tpColSize:'Size', tpColDate:'Date', tpEmpty:'No backups yet.',
@@ -517,7 +529,7 @@ const LANG = {
     btnCancel:'Cancelar', btnCreate:'Crear usuario', btnSave:'Guardar cambios',
     modalDeleteTitle:'Eliminar usuario', modalDeleteBtn:'Eliminar',
     mustChangeBadge:'Cambiar pwd',
-    hlTitle:'Salud del sistema', hl_ok:'Todo bien', hl_degraded:'Degradado', hl_fail:'Con fallas', hlSystem:'sistema', hlDown:'El servicio no responde',
+    hlTitle:'Salud del sistema', hl_ok:'Todo bien', hl_degraded:'Degradado', hl_fail:'Con fallas', hlSystem:'sistema', hlDown:'El servicio no responde', hlUptime:'Activo hace',
     tpTitle:'Respaldo y restauración', tpUpload:'Subir respaldo', tpCreate:'Crear respaldo',
     tpHint:'Respalda usuarios, dispositivos WOL, servidores UPS e historial, Net Monitor, Proxmox y la configuración de NUT. Para migrar a una instalación nueva: instala el paquete, entra con el usuario por defecto, sube el respaldo aquí y pulsa Restaurar.',
     tpColName:'Respaldo', tpColType:'Tipo', tpColSize:'Tamaño', tpColDate:'Fecha', tpEmpty:'Aún no hay respaldos.',
@@ -705,6 +717,25 @@ async function loadUsers() {
 
 // ── System health ───────────────────────────────────────
 const HL_NAMES = {wol:'WOL Console', nut:'UPS Monitor', net:'Net Monitor', pve:'Proxmox'};
+const HL_DESC = {
+  en:{users:'User database (users.json) is readable and has accounts', sessions:'Session file is readable and its folder writable', disk:'Free disk space (warns below 100 MB, fails below 5 MB)',
+      teleporter:'Backup tool (teleporter.sh) is installed', devices:'Device list file is readable and writable', wake_log:'Wake log file is readable and writable',
+      net_monitor:'Net Monitor host list can be read (optional)', network:'This machine has a LAN address for magic packets',
+      servers_file:'UPS server list file is readable and writable', database:'History database opens and is not locked', history_write:'Buffered history rows are being written to disk',
+      pollers:'Background threads that read the data are alive', upsd:'Every NUT server answers', history_fresh:'Recent readings are really stored in the history',
+      hosts_file:'Host table file is readable and writable', config_file:'Configuration file is readable and writable', scanner:'The scan is not stuck', auto_scan:'Automatic scan timer is armed and scans are recent',
+      clusters_file:'Cluster list file is readable and writable', clusters:'Every Proxmox cluster answers with fresh data',
+      wol:'WOL Console service', nut:'UPS Monitor service', net:'Net Monitor service', pve:'Proxmox service'},
+  es:{users:'Base de usuarios (users.json) legible y con cuentas', sessions:'Archivo de sesiones legible y carpeta escribible', disk:'Espacio libre en disco (avisa bajo 100 MB, falla bajo 5 MB)',
+      teleporter:'Herramienta de respaldo (teleporter.sh) instalada', devices:'Archivo de dispositivos legible y escribible', wake_log:'Archivo del registro de encendidos legible y escribible',
+      net_monitor:'Se puede leer la lista de hosts de Net Monitor (opcional)', network:'Este equipo tiene dirección LAN para los magic packets',
+      servers_file:'Archivo de servidores UPS legible y escribible', database:'La base de historial abre y no está bloqueada', history_write:'Las filas de historial en memoria se escriben a disco',
+      pollers:'Los hilos que leen los datos están vivos', upsd:'Todos los servidores NUT responden', history_fresh:'Las lecturas recientes realmente quedan guardadas en el historial',
+      hosts_file:'Archivo de hosts legible y escribible', config_file:'Archivo de configuración legible y escribible', scanner:'El escaneo no está trabado', auto_scan:'El temporizador de auto-escaneo está armado y los escaneos son recientes',
+      clusters_file:'Archivo de clusters legible y escribible', clusters:'Todos los clusters Proxmox responden con datos frescos',
+      wol:'Servicio WOL Console', nut:'Servicio UPS Monitor', net:'Servicio Net Monitor', pve:'Servicio Proxmox'}
+};
+const _hlOpen = new Set();
 async function hlLoad() {
   try {
     const r = await fetch('api/health', {cache:'no-store'});
@@ -714,24 +745,35 @@ async function hlLoad() {
     badge.textContent = t('hl_' + d.status);
     const grid = document.getElementById('hl-grid'); grid.innerHTML = '';
     const esc = x => String(x).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-    const item = (title, level, lines) => {
-      const el = document.createElement('div'); el.className = 'hl-item';
-      el.innerHTML = `<div class="hl-top"><span class="hl-dot ${level==='ok'?'':level}"></span>${esc(title)}</div>` +
-        (lines.length ? `<div class="hl-det">${lines.map(esc).join('<br>')}</div>` : '');
+    const worst = cs => Object.values(cs).some(v=>v.level==='fail') ? 'fail' : Object.values(cs).some(v=>v.level==='warn') ? 'warn' : 'ok';
+    const desc = k => (HL_DESC[_lang]||HL_DESC.en)[k] || '';
+    const item = (id, title, level, checks, note) => {
+      const el = document.createElement('div'); el.className = 'hl-item' + (_hlOpen.has(id) ? ' open' : '');
+      const bad = Object.entries(checks||{}).filter(([k,v]) => v.level !== 'ok');
+      const rows = Object.entries(checks||{}).map(([k,v]) =>
+        `<div class="hl-row"><span class="hl-dot ${v.level==='ok'?'':v.level}"></span><div><div class="hl-ck">${esc(k)}</div>` +
+        (desc(k) ? `<div class="hl-cd">${esc(desc(k))}</div>` : '') +
+        (v.detail ? `<div class="hl-cv">${esc(v.detail)}</div>` : '') + `</div></div>`).join('');
+      el.innerHTML = `<div class="hl-top" tabindex="0" role="button" aria-expanded="${_hlOpen.has(id)}"><span class="hl-dot ${level==='ok'?'':level}"></span>${esc(title)}<span class="hl-chev">▾</span></div>` +
+        (bad.length ? `<div class="hl-det">${bad.map(([k,v])=>esc(k + (v.detail ? ': ' + v.detail : ''))).join('<br>')}</div>` : '') +
+        `<div class="hl-all">${note ? `<div class="hl-cv">${esc(note)}</div>` : ''}${rows}</div>`;
+      const toggle = () => { _hlOpen.has(id) ? _hlOpen.delete(id) : _hlOpen.add(id); el.classList.toggle('open'); el.firstChild.setAttribute('aria-expanded', _hlOpen.has(id)); };
+      el.firstChild.addEventListener('click', toggle);
+      el.firstChild.addEventListener('keydown', e => { if (e.key==='Enter' || e.key===' ') { e.preventDefault(); toggle(); } });
       grid.appendChild(el);
     };
-    const issues = (checks) => Object.entries(checks||{}).filter(([k,v]) => v.level !== 'ok').map(([k,v]) => k + (v.detail ? ': ' + v.detail : ''));
-    // this panel + shared files, then each module with its own failing checks
     const own = {}; for (const k of ['users','sessions','disk','teleporter']) if (d.checks[k]) own[k] = d.checks[k];
-    item('Admin / ' + t('hlSystem'), Object.values(own).some(v=>v.level==='fail') ? 'fail' : Object.values(own).some(v=>v.level==='warn') ? 'warn' : 'ok', issues(own));
+    item('admin', 'Admin / ' + t('hlSystem'), worst(own), own);
     for (const m of Object.keys(HL_NAMES)) {
-      const mh = (d.modules||{})[m], c = d.checks[m];
-      if (!mh) { item(HL_NAMES[m], 'fail', [t('hlDown')]); continue; }
+      const mh = (d.modules||{})[m];
+      if (!mh) { item(m, HL_NAMES[m], 'fail', {[m]: {level:'fail', detail:t('hlDown')}}); continue; }
       const lvl = mh.status === 'ok' ? 'ok' : mh.status === 'degraded' ? 'warn' : 'fail';
-      item(HL_NAMES[m], lvl, issues(mh.checks));
+      item(m, HL_NAMES[m], lvl, mh.checks, t('hlUptime') + ' ' + hlDur(mh.uptime));
     }
   } catch(e) { /* panel keeps its last state */ }
 }
+function hlDur(s) { s = s|0; const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60);
+  return d ? d+'d '+h+'h' : h ? h+'h '+m+'m' : m+'m '+(s%60)+'s'; }
 
 function updateStats(users) {
   document.getElementById('st-total').textContent   = users.length;
