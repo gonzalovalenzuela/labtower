@@ -81,10 +81,10 @@ input.err{border-color:var(--red);box-shadow:0 0 0 3px var(--red-dim)}
   --yellow-dim:rgba(234,179,8,.15);--purple-dim:rgba(139,92,246,.15);
 }
 /* ── Main ── */
-.main{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh}
-.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:54px;display:flex;align-items:center;justify-content:space-between;gap:16px;position:sticky;top:0;z-index:50}
+.main{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-width:0;min-height:100vh}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;min-height:54px;flex-wrap:wrap;row-gap:6px;display:flex;align-items:center;justify-content:space-between;gap:16px;position:sticky;top:0;z-index:50}
 .tb-left{display:flex;align-items:center;gap:10px;flex:1}
-.tb-right{display:flex;align-items:center;gap:8px}
+.tb-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .search-wrap{position:relative;max-width:260px;width:100%}
 .search-wrap svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;stroke:var(--text-dim);fill:none;stroke-width:2;pointer-events:none}
 #search-input{width:100%;background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:13px;padding:7px 12px 7px 32px;outline:none;transition:all .15s}
@@ -100,7 +100,7 @@ input.err{border-color:var(--red);box-shadow:0 0 0 3px var(--red-dim)}
 #hclock{font-family:var(--mono);font-size:12px;color:var(--text-dim);min-width:62px;text-align:right}
 .content{padding:22px 24px;display:flex;flex-direction:column;gap:18px}
 /* ── Stats ── */
-.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.stats-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
 .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:15px 18px;display:flex;align-items:center;gap:13px;box-shadow:var(--shadow);transition:box-shadow .15s}
 .stat-card:hover{box-shadow:var(--shadow-md)}
 .stat-ico{width:40px;height:40px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;flex-shrink:0}

@@ -8,6 +8,7 @@ Reúne los cambios de 1.1.8b y 1.1.8c.
 - En pantallas de hasta 960 px la barra lateral estaba oculta y no había forma de cambiar de módulo. Ahora hay un botón de menú (☰) en la barra superior que abre la navegación como panel lateral, con fondo atenuado; se cierra al tocar el fondo, un enlace o con Esc. Aplica a WOL Console, UPS Monitor, Net Monitor, Proxmox y Admin Panel.
 - La barra superior pasa a varias filas en móvil para que todos sus controles (idioma, tema, usuario, escaneo) sean alcanzables.
 - Todas las páginas (WOL, UPS, Net Monitor, Proxmox y Admin, incluida la pantalla de login) muestran *Pi Console vX.Y.Z* en el pie. La versión sale del archivo `/opt/pi-console/VERSION` que instala el paquete, vía `GET /api/version` de cada servicio (también aparece en `/api/health`).
+- Diseño: en pantallas de laptop (≈1366 px o menos) Net Monitor y WOL Console se salían de la pantalla por la derecha porque la barra superior no cabía; ahora la barra se acomoda en varias filas y no hay desbordamiento horizontal entre 320 y 1366 px. En móvil, el Admin Panel ya no se ensancha más que la pantalla (las tablas se desplazan dentro de su tarjeta).
 
 ### WOL Console
 - Lee los hosts de Net Monitor (`net-monitor/hosts.json`, solo lectura): en *Add device* aparece **From Net Monitor** (solo admin con acceso a Net Monitor) para elegir un host detectado; rellena nombre, MAC, IP y categoría (computer→PC, storage→NAS, el resto→OTHER). Los ya agregados aparecen deshabilitados.
@@ -42,6 +43,9 @@ Reúne los cambios de 1.1.8b y 1.1.8c.
 
 ### Correcciones
 - **UPS Monitor dejaba de guardar el historial (gráficos de consumo sin datos nuevos)**: aproximadamente 4 horas después de iniciar el servicio, la limpieza periódica de la base (`db_prune`) fallaba con `database table is locked` y dejaba abierta su conexión; desde ese momento todos los guardados fallaban con `database is locked` hasta reiniciar el servicio. Ahora la limpieza cierra la transacción antes de compactar el WAL, siempre libera la conexión y un error ahí ya no afecta al resto.
+
+### Documentación
+- Capturas de pantalla de todos los módulos (claro/oscuro, 4 resoluciones) en `docs/screenshots/` y galería en el README.
 
 ### Instalación
 - Los mensajes de instalación, actualización y desinstalación (`postinst`, `preinst`, `prerm`, `postrm`) ahora están en inglés.
