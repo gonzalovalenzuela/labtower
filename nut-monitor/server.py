@@ -141,10 +141,17 @@ def db_prune():
     cutoff = int(time.time()) - 365 * 86400
     with _db_lock:
         conn = db_connect()
-        deleted = conn.execute("DELETE FROM history WHERE ts < ?", (cutoff,)).rowcount
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        conn.commit(); conn.close()
+        try:
+            deleted = conn.execute("DELETE FROM history WHERE ts < ?", (cutoff,)).rowcount
+            conn.commit()    # close the DELETE transaction first: a checkpoint inside it fails
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        finally:
+            conn.close()     # always release the connection (an open one keeps the DB locked)
     if deleted: log.info(f"DB pruned: {deleted} registros >1 año eliminados")
+
+def _db_prune_safe():
+    try: db_prune()
+    except Exception as e: log.error(f"db_prune: {e}")
 
 # ─── Servidores ───────────────────────────────────────────────────────────────
 def load_servers():
@@ -362,7 +369,7 @@ def _poll(server):
         poll_n += 1
         # Limpiar DB cada 1440 polls (~4h con poll=10s)
         if poll_n % 1440 == 0:
-            threading.Thread(target=db_prune, daemon=True).start()
+            threading.Thread(target=_db_prune_safe, daemon=True).start()
         ev = _wake.get(sid)
         if ev: ev.wait(POLL_SEC); ev.clear()
         else: time.sleep(POLL_SEC)
