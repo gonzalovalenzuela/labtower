@@ -5,6 +5,8 @@
 ![alt text](https://github.com/gonzalovalenzuela/pi-console/blob/main/ups_monitor.png "Panel Screenshot")
 
 
+![alt text](https://github.com/gonzalovalenzuela/pi-console/blob/main/ups_1440x900.png "Panel Screenshot")
+
 ---
 
 ## Módulos
