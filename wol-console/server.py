@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """WOL Console — Backend con auth compartido."""
 import json, os, socket, re, sys, time, logging, hashlib, hmac, threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
 from pathlib import Path
 
@@ -24,11 +24,17 @@ log = logging.getLogger("wol")
 
 # ─── Rate limiting ────────────────────────────────────────────────────────────
 _rate: dict = {}
+_rate_lock = threading.Lock()
 def check_rate(ip):
     now = time.time()
-    hits = [t for t in _rate.get(ip, []) if now-t < 60]
-    if len(hits) >= RATE_LIMIT: return False
-    hits.append(now); _rate[ip] = hits; return True
+    with _rate_lock:
+        hits = [t for t in _rate.get(ip, []) if now-t < 60]
+        if len(hits) >= RATE_LIMIT: return False
+        hits.append(now); _rate[ip] = hits
+        if len(_rate) > 1000:                       # drop stale clients so the table cannot grow forever
+            for k in [k for k, v in _rate.items() if not v or now - v[-1] >= 60]:
+                _rate.pop(k, None)
+        return True
 
 # ─── CSRF token ───────────────────────────────────────────────────────────────
 def gen_token():
@@ -59,12 +65,17 @@ def _broadcast():
     return _local_ip().rsplit(".",1)[0] + ".255"
 
 # ─── Ping (para verificar si ya está online) ──────────────────────────────────
+_HOST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.\-]{0,252}$")
+def valid_host(h) -> bool:
+    """IPv4 or hostname; never something that could be read as a command-line option."""
+    return isinstance(h, str) and bool(_HOST_RE.match(h))
+
 def ping_host(ip: str, timeout: float = 1.0) -> bool:
     """Retorna True si el host responde a ping."""
-    if not ip: return False
+    if not valid_host(ip): return False
     try:
         import subprocess
-        r = subprocess.run(["ping", "-c1", f"-W{int(timeout)}", ip],
+        r = subprocess.run(["ping", "-c1", f"-W{int(timeout)}", "--", ip],
                            capture_output=True, timeout=timeout+1)
         return r.returncode == 0
     except Exception:
@@ -72,53 +83,54 @@ def ping_host(ip: str, timeout: float = 1.0) -> bool:
 
 # ─── WOL ──────────────────────────────────────────────────────────────────────
 def send_wol(mac, port):
-    import subprocess, shutil
-    broadcast = _broadcast()
-    clean = re.sub(r'[^0-9A-Fa-f:]', '', mac)
-    if not shutil.which("wakeonlan"):
-        raise RuntimeError("wakeonlan no encontrado. Instala: sudo apt install wakeonlan")
-    cmd = ["wakeonlan", "-i", broadcast, clean]
-    log.info(f"Ejecutando: {' '.join(cmd)}")
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-    if r.returncode != 0:
-        raise RuntimeError(r.stderr.strip() or "wakeonlan failed")
-    log.info(f"Magic packet → MAC={clean} broadcast={broadcast}:{port}")
+    """Send a magic packet natively (no external `wakeonlan` package needed).
+
+    It goes to the subnet broadcast of this host (assumed /24, or WOL_BROADCAST) and to
+    255.255.255.255, on the device's configured UDP port.
+    """
+    hexmac = re.sub(r"[^0-9A-Fa-f]", "", mac)
+    if len(hexmac) != 12:
+        raise RuntimeError("Invalid MAC address")
+    packet = b"\xff" * 6 + bytes.fromhex(hexmac) * 16
+    port = int(port or 9)
+    targets = [t.strip() for t in os.environ.get("WOL_BROADCAST", "").split(",") if t.strip()]
+    if not targets:
+        targets = [_broadcast(), "255.255.255.255"]
+    sent, last_err = 0, None
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        s.settimeout(3)
+        for t in dict.fromkeys(targets):
+            try:
+                s.sendto(packet, (t, port)); sent += 1
+            except OSError as e:
+                last_err = e
+    if not sent:
+        raise RuntimeError(f"Could not send the magic packet: {last_err}")
+    log.info(f"Magic packet → MAC={hexmac} {','.join(dict.fromkeys(targets))}:{port}")
 
 # ─── Wake log ─────────────────────────────────────────────────────────────────
 _log_lock = threading.Lock()
 
 def load_wake_log() -> list:
-    try:
-        if LOG_FILE.exists():
-            d = json.loads(LOG_FILE.read_text())
-            return d if isinstance(d, list) else []
-    except: pass
-    return []
+    return auth.read_json(LOG_FILE, [], list)
 
 def append_wake_log(entry: dict):
     with _log_lock:
         entries = load_wake_log()
         entries.append(entry)
         entries = entries[-500:]   # máx 500 entradas
-        tmp = LOG_FILE.with_suffix(".tmp")
-        tmp.write_text(json.dumps(entries, indent=2))
-        tmp.replace(LOG_FILE)
+        auth.write_json(LOG_FILE, entries, mode=0o644)
 
 # ─── Devices ──────────────────────────────────────────────────────────────────
-_dev_lock = threading.Lock()
+_dev_lock = threading.RLock()     # hold around load_devices() → modify → save_devices()
 
 def load_devices():
-    try:
-        if DATA_FILE.exists():
-            d = json.loads(DATA_FILE.read_text())
-            return d if isinstance(d, list) else []
-    except: pass
-    return []
+    return auth.read_json(DATA_FILE, [], list)
 
 def save_devices(devs):
     with _dev_lock:
-        tmp = DATA_FILE.with_suffix(".tmp")
-        tmp.write_text(json.dumps(devs, indent=2)); tmp.replace(DATA_FILE)
+        auth.write_json(DATA_FILE, devs, mode=0o644)
 
 # ─── Net Monitor (shared host info) ───────────────────────────────────────────
 def mac_key(raw):
@@ -157,6 +169,8 @@ def validate_device(d):
 
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
 class H(BaseHTTPRequestHandler):
+    timeout = 30      # a stalled client must not hold a thread forever
+
     def log_message(self, fmt, *a):
         if int(a[1]) >= 400: log.warning(f"{self.client_address[0]} {a[1]}")
 
@@ -286,15 +300,16 @@ class H(BaseHTTPRequestHandler):
             ok2, msg = validate_device(body)
             if not ok2: return self._json(400, {"error": msg})
             mac  = norm_mac(body["mac"])
-            devs = load_devices()
-            if any(d["mac"] == mac for d in devs):
-                return self._json(409, {"error": "MAC duplicada"})
             import uuid
-            dev = {"id": str(uuid.uuid4()), "name": body["name"].strip()[:40],
-                   "mac": mac, "ip": (body.get("ip") or "").strip() or None,
-                   "port": int(body.get("port",9)),
-                   "tag": body.get("tag","PC"), "added": int(time.time())}
-            devs.append(dev); save_devices(devs)
+            with _dev_lock:                       # load → modify → save must not interleave
+                devs = load_devices()
+                if any(d["mac"] == mac for d in devs):
+                    return self._json(409, {"error": "MAC duplicada"})
+                dev = {"id": str(uuid.uuid4()), "name": body["name"].strip()[:40],
+                       "mac": mac, "ip": (body.get("ip") or "").strip() or None,
+                       "port": int(body.get("port",9)),
+                       "tag": body.get("tag","PC"), "added": int(time.time())}
+                devs.append(dev); save_devices(devs)
             self._json(201, {"device": dev})
 
         elif path == "/api/ping":
@@ -304,6 +319,8 @@ class H(BaseHTTPRequestHandler):
             ip = (body.get("ip") or "").strip()
             if not ip:
                 return self._json(400, {"error": "IP requerida"})
+            if not valid_host(ip):
+                return self._json(400, {"error": "Invalid IP or host"})
             online = ping_host(ip)
             self._json(200, {"online": online, "ip": ip})
 
@@ -377,16 +394,20 @@ class H(BaseHTTPRequestHandler):
             return self._json(403, {"error": "Requiere permiso admin"})
         m = re.match(r'^/api/devices/([0-9a-f\-]{36})$', path)
         if not m: return self._json(400, {"error": "Invalid ID"})
-        devs = load_devices()
-        new  = [d for d in devs if d["id"] != m.group(1)]
-        if len(new) == len(devs): return self._json(404, {"error": "No encontrado"})
-        save_devices(new); self._json(200, {"ok": True})
+        with _dev_lock:
+            devs = load_devices()
+            new  = [d for d in devs if d["id"] != m.group(1)]
+            if len(new) == len(devs): return self._json(404, {"error": "No encontrado"})
+            save_devices(new)
+        self._json(200, {"ok": True})
 
 if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     log.info(f"WOL Console en http://{HOST}:{PORT}")
     try:
-        HTTPServer((HOST, PORT), H).serve_forever()
+        srv = ThreadingHTTPServer((HOST, PORT), H)
+        srv.daemon_threads = True
+        srv.serve_forever()
     except KeyboardInterrupt: sys.exit(0)
     except PermissionError:
         log.error(f"Sin permisos para puerto {PORT}"); sys.exit(1)

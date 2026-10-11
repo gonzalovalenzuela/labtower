@@ -2,6 +2,16 @@
 
 ## 1.1.8c — 2026-10-10
 
+### Revisión de código: bloqueos, concurrencia y robustez
+- **Servidores HTTP multihilo con timeout** (WOL, UPS, Net Monitor, Proxmox, Admin): antes eran de un solo hilo, así que un cliente lento o colgado bloqueaba todo el módulo. Ahora cada conexión tiene su hilo y un timeout.
+- **`users.json` y `sessions.json` compartidos por 5 procesos**: lectura-modificación-escritura bajo `flock`, escritura atómica (fsync + rename, archivo temporal propio) y copia `.bak` de la última versión válida. Archivos con permisos 0600. Un `users.json` dañado ya no reactiva `admin/admin`: se usa la copia `.bak` o, sin ella, no entra nadie hasta borrar el archivo.
+- **Sesiones**: usuarios eliminados o con permisos reducidos pierden el acceso de inmediato (antes seguía vigente hasta 24 h); al cambiar contraseña o eliminar un usuario se cierran sus otras sesiones.
+- **Datos de cada módulo** (`devices.json`, `wake_log.json`, `servers.json`, `hosts.json`, `config.json`, `clusters.json`): escritura atómica con copia `.bak`, y las altas/bajas/ediciones concurrentes ya no se pisan entre sí. `config.json` y `clusters.json` (tokens, SNMP, Pi-hole) pasan a 0600.
+- **UPS Monitor**: un `ERR DATA-STALE` de upsd ya no inserta filas en cero en el historial; la base espera hasta 30 s por un bloqueo en vez de fallar; un error inesperado no mata el hilo de consulta (se reinicia solo); `/api/test` requiere admin.
+- **Net Monitor**: dos escaneos simultáneos ya no pueden arrancar; el escaneo siempre libera su estado y reprograma un único temporizador (antes un reescaneo de una IP o un cambio de intervalo podían acumular temporizadores); cambiar el intervalo ya no borraba la configuración SNMP/OUI/Pi-hole; borrar un host durante un escaneo ya no reaparece; validación de IP/intervalo.
+- **WOL Console**: envío del magic packet nativo (ya no depende del paquete `wakeonlan`, que no estaba declarado) y respeta el puerto del dispositivo; `/api/ping` valida el host (no acepta opciones de línea de comandos); contador de rate-limit con bloqueo y limpieza.
+- **Proxmox**: `/api/test` requiere admin; el token API no se devuelve al crear un cluster; el hilo de consulta no muere por un error de lectura de configuración.
+
 ### Correcciones
 - **UPS Monitor dejaba de guardar el historial (gráficos de consumo sin datos nuevos)**: aproximadamente 4 horas después de iniciar el servicio, la limpieza periódica de la base (`db_prune`) fallaba con `database table is locked` y dejaba abierta su conexión; desde ese momento todos los guardados fallaban con `database is locked` hasta reiniciar el servicio. Ahora la limpieza cierra la transacción antes de compactar el WAL, siempre libera la conexión y un error ahí ya no afecta al resto.
 

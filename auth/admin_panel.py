@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Panel de administración de usuarios — corre en puerto 8082."""
 import json, sys, time, logging, re
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
 from pathlib import Path
 
@@ -20,6 +20,8 @@ log = logging.getLogger("admin")
 VALID_PERMS = ("readonly", "execute", "admin", "none")
 
 class H(BaseHTTPRequestHandler):
+    timeout = 60      # a stalled client must not hold a thread forever
+
     def log_message(self, fmt, *a):
         if int(a[1]) >= 400: log.warning(f"{self.client_address[0]} {a[1]}")
 
@@ -142,7 +144,8 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.send_header("Set-Cookie",
                 f"session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400")
-            br = json.dumps({"ok": True, "token": token, "permissions": u["permissions"],
+            br = json.dumps({"ok": True, "token": token, "username": body["username"],
+                             "permissions": u["permissions"],
                              "must_change_password": must}).encode()
             self.send_header("Content-Length", str(len(br)))
             self.end_headers(); self.wfile.write(br); return
@@ -191,16 +194,17 @@ class H(BaseHTTPRequestHandler):
                 return self._json(400, {"error": "Invalid username (2-32 alphanumeric chars)"})
             if wol_p not in VALID_PERMS or nut_p not in VALID_PERMS:
                 return self._json(400, {"error": "Invalid permission"})
-            users = auth.load_users()
-            if uname in users:
-                return self._json(409, {"error": "Usuario ya existe"})
-            users[uname] = {
-                "password_hash": auth._hash(pwd),
-                "permissions": {"wol": wol_p, "nut": nut_p},
-                "created": int(time.time()),
-                "must_change_password": body.get("must_change_password", False),
-            }
-            auth.save_users(users)
+            with auth.users_lock():
+                users = auth.load_users()
+                if uname in users:
+                    return self._json(409, {"error": "Usuario ya existe"})
+                users[uname] = {
+                    "password_hash": auth._hash(pwd),
+                    "permissions": {"wol": wol_p, "nut": nut_p},
+                    "created": int(time.time()),
+                    "must_change_password": body.get("must_change_password", False),
+                }
+                auth.save_users(users)
             log.info(f"Usuario creado: {uname} por {me}")
             self._json(201, {"ok": True})
 
@@ -213,12 +217,15 @@ class H(BaseHTTPRequestHandler):
             # No-admin solo puede cambiar la suya
             if target != me and not auth.check_permission(tok, "wol", "admin"):
                 return self._json(403, {"error": "You can only change your own password"})
-            users = auth.load_users()
-            if target not in users:
-                return self._json(404, {"error": "Usuario no encontrado"})
-            users[target]["password_hash"] = auth._hash(new_pw)
-            users[target]["must_change_password"] = False
-            auth.save_users(users)
+            with auth.users_lock():
+                users = auth.load_users()
+                if target not in users:
+                    return self._json(404, {"error": "Usuario no encontrado"})
+                users[target]["password_hash"] = auth._hash(new_pw)
+                users[target]["must_change_password"] = False
+                auth.save_users(users)
+            # every other session of that account is closed (the current one stays open)
+            auth.delete_user_sessions(target, keep=tok if target == me else None)
             log.info(f"Contraseña cambiada: {target} por {me}")
             self._json(200, {"ok": True})
 
@@ -250,12 +257,13 @@ class H(BaseHTTPRequestHandler):
             # Proteger al propio admin de quitarse permisos
             if uname == me and (wol_p == "none" or nut_p == "none"):
                 return self._json(400, {"error": "No puedes quitarte tus propios permisos de admin"})
-            users = auth.load_users()
-            if uname not in users:
-                return self._json(404, {"error": "Usuario no encontrado"})
-            if wol_p: users[uname]["permissions"]["wol"] = wol_p
-            if nut_p: users[uname]["permissions"]["nut"] = nut_p
-            auth.save_users(users)
+            with auth.users_lock():
+                users = auth.load_users()
+                if uname not in users:
+                    return self._json(404, {"error": "Usuario no encontrado"})
+                if wol_p: users[uname]["permissions"]["wol"] = wol_p
+                if nut_p: users[uname]["permissions"]["nut"] = nut_p
+                auth.save_users(users)
             log.info(f"Permisos actualizados: {uname} por {me}")
             self._json(200, {"ok": True})
         else:
@@ -279,9 +287,11 @@ class H(BaseHTTPRequestHandler):
         if not m: return self._json(400, {"error": "Invalid user"})
         uname = m.group(1)
         if uname == me: return self._json(400, {"error": "No puedes eliminarte a ti mismo"})
-        users = auth.load_users()
-        if uname not in users: return self._json(404, {"error": "No encontrado"})
-        del users[uname]; auth.save_users(users)
+        with auth.users_lock():
+            users = auth.load_users()
+            if uname not in users: return self._json(404, {"error": "No encontrado"})
+            del users[uname]; auth.save_users(users)
+        auth.delete_user_sessions(uname)
         log.info(f"Usuario eliminado: {uname} por {me}")
         self._json(200, {"ok": True})
 
@@ -289,5 +299,6 @@ if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     log.info(f"Admin Panel en http://{HOST}:{PORT}")
     try:
-        HTTPServer((HOST, PORT), H).serve_forever()
+        srv = ThreadingHTTPServer((HOST, PORT), H); srv.daemon_threads = True
+        srv.serve_forever()
     except KeyboardInterrupt: sys.exit(0)

@@ -4,7 +4,7 @@ Proxmox Monitor — Dashboard de nodos, VMs y CTs
 API REST de Proxmox VE — sin dependencias externas
 """
 import json, os, re, ssl, sys, time, logging, threading, http.client
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from urllib.request import urlopen, Request
 from urllib.error import URLError
@@ -107,18 +107,15 @@ class PVEClient:
             return ""
 
 # ─── Clusters config ──────────────────────────────────────────────────────────
+_cl_lock = threading.RLock()      # hold around load_clusters() → modify → save_clusters()
+
 def load_clusters() -> list:
-    try:
-        if DATA_FILE.exists():
-            d = json.loads(DATA_FILE.read_text())
-            return d if isinstance(d, list) else []
-    except Exception: pass
-    return []
+    return auth.read_json(DATA_FILE, [], list)
 
 def save_clusters(c: list):
-    tmp = DATA_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(c, indent=2))
-    tmp.replace(DATA_FILE)
+    # clusters.json holds the Proxmox API tokens: private to the service (0600)
+    with _cl_lock:
+        auth.write_json(DATA_FILE, c)
 
 # ─── Cache ────────────────────────────────────────────────────────────────────
 _cache:   dict = {}   # { cluster_id: snapshot }
@@ -241,7 +238,11 @@ def _poll_cluster(cluster):
     use_resources = True
 
     while True:
-        if not any(c["id"] == cid for c in load_clusters()):
+        try:
+            gone = not any(c["id"] == cid for c in load_clusters())
+        except Exception as e:                    # never let the poller thread die on a config hiccup
+            log.error(f"[{cluster['name']}] config read: {e}"); gone = False
+        if gone:
             client.close()
             return
         t0 = time.time()
@@ -305,6 +306,7 @@ def start_all():
 
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
 class H(BaseHTTPRequestHandler):
+    timeout = 30      # a stalled client must not hold a thread forever
     def log_message(self, fmt, *a):
         if int(a[1]) >= 400: log.warning(f"{self.client_address[0]} {a[1]}")
 
@@ -358,6 +360,8 @@ class H(BaseHTTPRequestHandler):
             clusters = load_clusters()
             out = []
             for c in clusters:
+                if c["id"] not in _pollers or not _pollers[c["id"]].is_alive():
+                    ensure_poller(c)                 # revive a poller thread that died
                 snap = _cache.get(c["id"], ClusterCache(c["id"])).snap()
                 # Inyectar historial por nodo
                 nodes_with_hist = []
@@ -461,12 +465,13 @@ class H(BaseHTTPRequestHandler):
             if not (isinstance(order, list) and isinstance(pinned, list) and len(order) <= 200 and len(pinned) <= 200
                     and all(name_ok(x) for x in order) and all(name_ok(x) for x in pinned)):
                 return self._json(400, {"error": "Invalid layout"})
-            clusters = load_clusters()
-            for c in clusters:
-                if c["id"] == m.group(1):
-                    c["layout"] = {"order": list(dict.fromkeys(order)), "pinned": list(dict.fromkeys(pinned))}
-                    save_clusters(clusters)
-                    return self._json(200, {"ok": True})
+            with _cl_lock:
+                clusters = load_clusters()
+                for c in clusters:
+                    if c["id"] == m.group(1):
+                        c["layout"] = {"order": list(dict.fromkeys(order)), "pinned": list(dict.fromkeys(pinned))}
+                        save_clusters(clusters)
+                        return self._json(200, {"ok": True})
             return self._json(404, {"error": "Not found"})
 
         if not auth.check_permission(tok, "pve", "readonly"):
@@ -480,24 +485,32 @@ class H(BaseHTTPRequestHandler):
             user  = (body.get("user","")).strip()
             tname = (body.get("token_name","")).strip()
             tval  = (body.get("token_value","")).strip()
-            port  = int(body.get("port", 8006))
+            try: port = int(body.get("port", 8006))
+            except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
             if not all([host,name,user,tname,tval]):
                 return self._json(400, {"error": "Todos los campos son requeridos"})
-            clusters = load_clusters()
-            if any(c["host"]==host and c["port"]==port for c in clusters):
-                return self._json(409, {"error": "Ya existe ese host:puerto"})
+            if not 1 <= port <= 65535: return self._json(400, {"error": "Invalid port"})
             import uuid
             cluster = {"id": str(uuid.uuid4()), "name": name, "host": host,
                        "port": port, "user": user, "token_name": tname,
                        "token_value": tval, "verify_ssl": False}
-            clusters.append(cluster)
-            save_clusters(clusters)
+            with _cl_lock:
+                clusters = load_clusters()
+                if any(c["host"]==host and c.get("port")==port for c in clusters):
+                    return self._json(409, {"error": "Ya existe ese host:puerto"})
+                clusters.append(cluster)
+                save_clusters(clusters)
             ensure_poller(cluster)
-            self._json(201, {"cluster": cluster})
+            # never echo the API token back
+            self._json(201, {"cluster": {k: v for k, v in cluster.items() if k != "token_value"}})
 
         elif path == "/api/test":
+            if not auth.check_permission(tok, "pve", "admin"):
+                return self._json(403, {"error": "Admin permission required"})
             host  = (body.get("host","")).strip()
-            port  = int(body.get("port", 8006))
+            try: port = int(body.get("port", 8006))
+            except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
+            if not host or not 1 <= port <= 65535: return self._json(400, {"error": "Invalid host or port"})
             user  = (body.get("user","")).strip()
             tname = (body.get("token_name","")).strip()
             tval  = (body.get("token_value","")).strip()
@@ -520,10 +533,11 @@ class H(BaseHTTPRequestHandler):
             return self._json(403, {"error": "Admin permission required"})
         m = re.match(r'^/api/clusters/([a-zA-Z0-9\-]+)$', path)
         if not m: return self._json(400, {"error": "Invalid ID"})
-        clusters = load_clusters()
-        new = [c for c in clusters if c["id"] != m.group(1)]
-        if len(new) == len(clusters): return self._json(404, {"error": "Not found"})
-        save_clusters(new)
+        with _cl_lock:
+            clusters = load_clusters()
+            new = [c for c in clusters if c["id"] != m.group(1)]
+            if len(new) == len(clusters): return self._json(404, {"error": "Not found"})
+            save_clusters(new)
         remove_poller(m.group(1))
         self._json(200, {"ok": True})
 
@@ -531,19 +545,22 @@ if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     # Agregar permiso 'pve' a usuarios existentes
     try:
-        users = auth.load_users()
-        changed = False
-        for udata in users.values():
-            if "pve" not in udata.get("permissions", {}):
-                udata["permissions"]["pve"] = "admin" if udata["permissions"].get("wol") == "admin" else "readonly"
-                changed = True
-        if changed:
-            auth.save_users(users); log.info("Permisos 'pve' actualizados")
+        with auth.users_lock():
+            users = auth.load_users()
+            changed = False
+            for udata in users.values():
+                if "pve" not in udata.get("permissions", {}):
+                    udata["permissions"]["pve"] = "admin" if udata["permissions"].get("wol") == "admin" else "readonly"
+                    changed = True
+            if changed:
+                auth.save_users(users); log.info("Permisos 'pve' actualizados")
     except Exception as e:
         log.warning(f"Permisos: {e}")
 
     log.info(f"Proxmox Monitor en http://{HOST}:{PORT} — poll {POLL_ACTIVE:g}s active / {POLL_IDLE:g}s idle")
     start_all()
     try:
-        HTTPServer((HOST, PORT), H).serve_forever()
+        srv = ThreadingHTTPServer((HOST, PORT), H)
+        srv.daemon_threads = True
+        srv.serve_forever()
     except KeyboardInterrupt: sys.exit(0)

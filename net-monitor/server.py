@@ -4,7 +4,7 @@ Net Monitor — Escaneo de red sin nmap + mapeo de host con mac address + evalua
 Detección: TTL + puertos Python puro + HTTP banner + mDNS
 """
 import json, os, re, socket, struct, subprocess, sys, time, logging, threading, ipaddress, ssl
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -23,17 +23,15 @@ STATIC_DIR    = Path(__file__).parent / "static"
 DATA_FILE     = Path(__file__).parent / "hosts.json"
 CONF_FILE     = Path(__file__).parent / "config.json"
 
+_cfg_lock = threading.RLock()     # hold around load_config() → modify → save_config()
+
 def load_config() -> dict:
-    try:
-        if CONF_FILE.exists():
-            return json.loads(CONF_FILE.read_text())
-    except Exception: pass
-    return {}
+    return auth.read_json(CONF_FILE, {}, dict)
 
 def save_config(cfg: dict):
-    tmp = CONF_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(cfg, indent=2))
-    tmp.replace(CONF_FILE)
+    # config.json holds the SNMP community and Pi-hole password: private to the service
+    with _cfg_lock:
+        auth.write_json(CONF_FILE, cfg)
 NETWORK       = os.environ.get("SCAN_NETWORK",   "192.168.0.0/24")
 SCAN_PORTS    = os.environ.get("SCAN_PORTS",     "21,22,23,25,53,80,111,135,139,443,445,548,554,873,1883,2049,3260,3306,3389,5000,5001,5357,5432,5555,5900,6379,7547,8001,8002,8008,8009,8080,8291,8443,9100,27017,62078")
 SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL", 3600))
@@ -736,20 +734,14 @@ def _wol_macs() -> set:
         return set()
 
 def load_hosts() -> dict:
-    try:
-        if DATA_FILE.exists():
-            return json.loads(DATA_FILE.read_text())
-    except Exception: pass
-    return {}
+    return auth.read_json(DATA_FILE, {}, dict)
 
 _hosts_lock = threading.RLock()
 _live_hosts = None   # the scan's in-memory table while a scan runs, so manual edits are not overwritten
 
 def save_hosts(hosts: dict):
     with _hosts_lock:
-        tmp = DATA_FILE.with_suffix(".tmp")
-        tmp.write_text(json.dumps(hosts, indent=2))
-        tmp.replace(DATA_FILE)
+        auth.write_json(DATA_FILE, hosts, mode=0o644)   # WOL Console reads this file
 
 # ─── Scanner ──────────────────────────────────────────────────────────────────
 _scan_lock        = threading.Lock()
@@ -766,26 +758,29 @@ if _saved.get("pihole_hosts"):
 
 def run_scan(network: str = None, single_ip: str = None):
     global _scan_timer, _live_hosts
-    with _scan_lock:
+    with _scan_lock:                      # reserve the scan atomically: two triggers can't both start
         if _scan_status["running"]:
             return
-
-    hosts = load_hosts()
-    _live_hosts = hosts
-    refresh_snmp()
-    oui_maybe_update()
-
-    if single_ip:
-        ips = [ipaddress.ip_address(single_ip)]
-    else:
-        try:
+        _scan_status.update({"running": True, "progress": 0, "total": 0,
+                             "started": int(time.time()), "finished": None, "error": None})
+    try:
+        if single_ip:
+            ips = [ipaddress.ip_address(single_ip)]
+        else:
             ips = list(ipaddress.ip_network(network or NETWORK, strict=False).hosts())
-        except Exception as e:
-            log.error(f"Red inválida: {e}"); return
+        with _hosts_lock:
+            hosts = load_hosts()
+            _live_hosts = hosts
+        refresh_snmp()
+        oui_maybe_update()
+    except Exception as e:
+        log.error(f"Scan setup failed: {e}")
+        with _hosts_lock: _live_hosts = None
+        _scan_status.update({"running": False, "error": str(e), "finished": int(time.time())})
+        if not single_ip: _schedule_next_scan()
+        return
 
-    _scan_status.update({"running": True, "progress": 0,
-                         "total": len(ips), "started": int(time.time()),
-                         "finished": None, "error": None})
+    _scan_status.update({"total": len(ips)})
     log.info(f"Iniciando escaneo: {len(ips)} hosts en {network or NETWORK}")
 
     def scan_one(ip):
@@ -800,74 +795,86 @@ def run_scan(network: str = None, single_ip: str = None):
                 _scan_status["progress"] = completed
                 try:
                     ip_str, result = future.result()
-                    if result:
-                        existing = hosts.get(ip_str, {})
-                        is_new = ip_str not in hosts
-                        result["first_seen"] = existing.get("first_seen", result["first_seen"])
-                        result["alias"]      = existing.get("alias", "")
-                        # Marcar como "nuevo" si nunca se vio antes o apareció en últimas 48h
-                        new_threshold = int(time.time()) - 48 * 3600
-                        result["new_device"] = is_new or (result["first_seen"] > new_threshold and is_new)
-                        # Respetar latencia anterior si ahora no hay datos
-                        if result.get("latency", 0) == 0 and existing.get("latency", 0) > 0:
-                            result["latency"] = existing["latency"]
-                        # Keep MAC/vendor from earlier scans when this one found none
-                        for k in ("mac", "vendor"):
-                            if not result.get(k) and existing.get(k):
-                                result[k] = existing[k]
-                        # Keep manually chosen device type
-                        if existing.get("type_manual"):
-                            result["device_type"] = existing.get("device_type", result["device_type"])
-                            result["type_manual"] = True
-                        # Respetar OS editado manualmente
-                        if existing.get("os_manual"):
-                            result["os"]        = existing["os"]
-                            result["os_manual"] = True
-                        # Historial de disponibilidad: registrar evento si cambió estado
-                        history = existing.get("uptime_history", [])
-                        was_online = existing.get("online", False)
-                        if not was_online and result["online"]:
-                            history.append({"ts": int(time.time()), "event": "up"})
-                        history = history[-200:]  # max 200 eventos
-                        result["uptime_history"] = history
-                        hosts[ip_str] = result
-                        log.debug(f"[{completed}/{len(ips)}] {ip_str} → {result['os']} | TTL={result['ttl']} | {len(result['ports'])} puertos")
-                    else:
-                        if ip_str in hosts:
-                            if hosts[ip_str].get("online"):  # was online, now offline
-                                history = hosts[ip_str].get("uptime_history", [])
-                                history.append({"ts": int(time.time()), "event": "down"})
-                                hosts[ip_str]["uptime_history"] = history[-200:]
-                            hosts[ip_str]["online"] = False
-                            hosts[ip_str]["last_seen_offline"] = int(time.time())
+                    with _hosts_lock:
+                        if result:
+                            existing = hosts.get(ip_str, {})
+                            is_new = ip_str not in hosts
+                            result["first_seen"] = existing.get("first_seen", result["first_seen"])
+                            result["alias"]      = existing.get("alias", "")
+                            # Marcar como "nuevo" si nunca se vio antes o apareció en últimas 48h
+                            new_threshold = int(time.time()) - 48 * 3600
+                            result["new_device"] = is_new or (result["first_seen"] > new_threshold and is_new)
+                            # Respetar latencia anterior si ahora no hay datos
+                            if result.get("latency", 0) == 0 and existing.get("latency", 0) > 0:
+                                result["latency"] = existing["latency"]
+                            # Keep MAC/vendor from earlier scans when this one found none
+                            for k in ("mac", "vendor"):
+                                if not result.get(k) and existing.get(k):
+                                    result[k] = existing[k]
+                            # Keep manually chosen device type
+                            if existing.get("type_manual"):
+                                result["device_type"] = existing.get("device_type", result["device_type"])
+                                result["type_manual"] = True
+                            # Respetar OS editado manualmente
+                            if existing.get("os_manual"):
+                                result["os"]        = existing["os"]
+                                result["os_manual"] = True
+                            # Historial de disponibilidad: registrar evento si cambió estado
+                            history = existing.get("uptime_history", [])
+                            was_online = existing.get("online", False)
+                            if not was_online and result["online"]:
+                                history.append({"ts": int(time.time()), "event": "up"})
+                            history = history[-200:]  # max 200 eventos
+                            result["uptime_history"] = history
+                            hosts[ip_str] = result
+                            log.debug(f"[{completed}/{len(ips)}] {ip_str} → {result['os']} | TTL={result['ttl']} | {len(result['ports'])} puertos")
+                        else:
+                            if ip_str in hosts:
+                                if hosts[ip_str].get("online"):  # was online, now offline
+                                    history = hosts[ip_str].get("uptime_history", [])
+                                    history.append({"ts": int(time.time()), "event": "down"})
+                                    hosts[ip_str]["uptime_history"] = history[-200:]
+                                hosts[ip_str]["online"] = False
+                                hosts[ip_str]["last_seen_offline"] = int(time.time())
                 except Exception as e:
                     log.error(f"Error escaneando: {e}")
 
                 if completed % 20 == 0:
                     save_hosts(hosts)
 
-        save_hosts(hosts)
-        _live_hosts = None
+        with _hosts_lock:
+            save_hosts(hosts)
+            _live_hosts = None
         online = sum(1 for h in hosts.values() if h.get("online"))
         _scan_status.update({"running": False, "finished": int(time.time())})
         log.info(f"Escaneo completado: {online} hosts online de {len(ips)} escaneados")
 
-    except Exception as e:
-        _live_hosts = None
+    except BaseException as e:
+        with _hosts_lock: _live_hosts = None
         _scan_status.update({"running": False, "error": str(e), "finished": int(time.time())})
         log.error(f"Error en escaneo: {e}")
+    finally:
+        with _hosts_lock: _live_hosts = None
+        _scan_status["running"] = False                   # never leave the scanner "running"
+        if not single_ip:                                 # a one-host rescan must not stack another timer
+            _schedule_next_scan()
 
-    # Próximo escaneo automático
-    if _current_interval > 0:
-        _scan_timer = threading.Timer(
-            _current_interval,
-            lambda: threading.Thread(target=run_scan, daemon=True).start()
-        )
-        _scan_timer.daemon = True
-        _scan_timer.start()
-        log.info(f"Próximo escaneo en {_current_interval//60} minutos")
-    else:
-        log.info("Auto-scan desactivado (modo manual)")
+def _schedule_next_scan():
+    """(Re)arm the single automatic-scan timer."""
+    global _scan_timer
+    with _scan_lock:
+        if _scan_timer:
+            _scan_timer.cancel(); _scan_timer = None
+        if _current_interval > 0:
+            _scan_timer = threading.Timer(
+                _current_interval,
+                lambda: threading.Thread(target=run_scan, daemon=True).start()
+            )
+            _scan_timer.daemon = True
+            _scan_timer.start()
+            log.info(f"Próximo escaneo en {_current_interval//60} minutos")
+        else:
+            log.info("Auto-scan desactivado (modo manual)")
 
 def start_auto_scan():
     # Cargar cache de Pi-hole antes del primer escaneo
@@ -877,6 +884,7 @@ def start_auto_scan():
 
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
 class H(BaseHTTPRequestHandler):
+    timeout = 30      # a stalled client must not hold a thread forever
     def log_message(self, fmt, *a):
         if int(a[1]) >= 400: log.warning(f"{self.client_address[0]} {a[1]}")
 
@@ -1003,6 +1011,9 @@ class H(BaseHTTPRequestHandler):
             if _scan_status["running"]:
                 return self._json(409, {"error": "Scan already running"})
             single = (body.get("ip") or "").strip() or None
+            if single:
+                try: ipaddress.ip_address(single)
+                except ValueError: return self._json(400, {"error": "Invalid IP"})
             threading.Thread(target=run_scan, kwargs={"single_ip": single}, daemon=True).start()
             self._json(200, {"ok": True, "message": single or NETWORK})
 
@@ -1099,34 +1110,24 @@ class H(BaseHTTPRequestHandler):
             if not auth.check_permission(tok, "net", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
             global _current_interval, _scan_timer
-            interval = int(body.get("interval", 3600))
+            try: interval = int(body.get("interval", 3600))
+            except (TypeError, ValueError): return self._json(400, {"error": "Invalid interval"})
             if interval < 0 or (interval > 0 and interval < 60):
                 return self._json(400, {"error": "Minimum 60 seconds or 0 for manual"})
-            # Cancelar timer anterior
-            if _scan_timer:
-                _scan_timer.cancel()
-                _scan_timer = None
             _current_interval = interval
-            save_config({"scan_interval": interval})
-            # Programar nuevo timer si no es manual
-            if interval > 0:
-                _scan_timer = threading.Timer(
-                    interval,
-                    lambda: threading.Thread(target=run_scan, daemon=True).start()
-                )
-                _scan_timer.daemon = True
-                _scan_timer.start()
-                log.info(f"Intervalo de escaneo cambiado a {interval//60} minutos")
-            else:
-                log.info("Auto-scan desactivado")
+            with _cfg_lock:                       # merge: don't wipe the SNMP / OUI / Pi-hole settings
+                cfg = load_config(); cfg["scan_interval"] = interval
+                save_config(cfg)
+            _schedule_next_scan()
             self._json(200, {"ok": True, "interval": interval})
 
         elif path == "/api/hosts/delete":
             if not auth.check_permission(tok, "net", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
             ip = (body.get("ip") or "").strip()
-            hosts = load_hosts()
-            if ip in hosts: del hosts[ip]; save_hosts(hosts)
+            with _hosts_lock:
+                hosts = _live_hosts if _live_hosts is not None else load_hosts()
+                if ip in hosts: del hosts[ip]; save_hosts(hosts)
             self._json(200, {"ok": True})
 
         else:
@@ -1136,14 +1137,15 @@ if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     # Agregar permiso 'net' a usuarios existentes
     try:
-        users = auth.load_users()
-        changed = False
-        for udata in users.values():
-            if "net" not in udata.get("permissions", {}):
-                udata["permissions"]["net"] = "admin" if udata["permissions"].get("wol") == "admin" else "readonly"
-                changed = True
-        if changed:
-            auth.save_users(users); log.info("Permisos 'net' actualizados")
+        with auth.users_lock():
+            users = auth.load_users()
+            changed = False
+            for udata in users.values():
+                if "net" not in udata.get("permissions", {}):
+                    udata["permissions"]["net"] = "admin" if udata["permissions"].get("wol") == "admin" else "readonly"
+                    changed = True
+            if changed:
+                auth.save_users(users); log.info("Permisos 'net' actualizados")
     except Exception as e:
         log.warning(f"No se pudo actualizar permisos: {e}")
 
@@ -1152,5 +1154,7 @@ if __name__ == "__main__":
     log.info(f"Detección: TTL + puertos Python + HTTP banner (sin nmap)")
     start_auto_scan()
     try:
-        HTTPServer((HOST, PORT), H).serve_forever()
+        srv = ThreadingHTTPServer((HOST, PORT), H)
+        srv.daemon_threads = True
+        srv.serve_forever()
     except KeyboardInterrupt: sys.exit(0)
