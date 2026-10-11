@@ -257,7 +257,7 @@ td{padding:10px 14px;vertical-align:middle}
     <div class="os-filters" id="os-filters">
       <div class="os-filter active" data-os="ALL" onclick="setOsFilter(this)">
         <span class="os-dot" style="background:var(--teal)"></span>
-        <span class="os-filter-name">Todos</span>
+        <span class="os-filter-name" data-i18n="filterAll">All</span>
         <span class="os-count" id="cnt-ALL">0</span>
       </div>
     </div>
@@ -272,13 +272,13 @@ td{padding:10px 14px;vertical-align:middle}
       <div class="interval-wrap">
         <span class="interval-lbl">Auto-scan:</span>
         <input type="number" id="iv-min" min="0" max="1440" value="60"
-          title="Minutos" style="width:52px;text-align:center"
+          data-i18n-title="titleMinutes" title="Minutes" style="width:52px;text-align:center"
           class="interval-sel" placeholder="min">
         <span class="interval-lbl">min</span>
         <input type="number" id="iv-sec" min="0" max="59" value="0"
-          title="Segundos" style="width:44px;text-align:center"
-          class="interval-sel" placeholder="seg">
-        <span class="interval-lbl">seg</span>
+          data-i18n-title="titleSeconds" title="Seconds" style="width:44px;text-align:center"
+          class="interval-sel" placeholder="sec">
+        <span class="interval-lbl" data-i18n="unitSec">sec</span>
         <button onclick="applyInterval()" id="btn-iv"
           style="padding:5px 10px;border-radius:var(--r-sm);border:1px solid var(--teal);background:transparent;color:var(--teal);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap"
           onmouseover="this.style.background='var(--teal)';this.style.color='#fff'"
@@ -389,8 +389,8 @@ td{padding:10px 14px;vertical-align:middle}
         <button class="lang-btn" id="lang-es" onclick="setLang('es')">ES</button>
       </div>
       <div class="theme-btns">
-        <button class="theme-btn" id="theme-light" onclick="setTheme('light')" title="Claro"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span data-i18n="themeLight">Light</span></button>
-        <button class="theme-btn" id="theme-dark" onclick="setTheme('dark')" title="Oscuro"><svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span data-i18n="themeDark">Dark</span></button>
+        <button class="theme-btn" id="theme-light" onclick="setTheme('light')" data-i18n-title="themeLight" title="Light"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span data-i18n="themeLight">Light</span></button>
+        <button class="theme-btn" id="theme-dark" onclick="setTheme('dark')" data-i18n-title="themeDark" title="Dark"><svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span data-i18n="themeDark">Dark</span></button>
         <button class="theme-btn" id="theme-system" onclick="setTheme('system')" title="Auto"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>Auto</button>
       </div>
       <span id="clock"></span>
@@ -402,7 +402,7 @@ td{padding:10px 14px;vertical-align:middle}
           <span class="topbar-user-role" id="me-role">—</span>
         </div>
       </div>
-      <button class="btn-logout" onclick="logout()" title="Cerrar sesión">
+      <button class="btn-logout" onclick="logout()" data-i18n-title="titleLogout" title="Sign out">
         <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       </button>
     </div>
@@ -411,7 +411,7 @@ td{padding:10px 14px;vertical-align:middle}
   <!-- Scan progress bar -->
   <div class="scan-bar" id="scan-bar">
     <svg style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    <span id="scan-text">Escaneando red...</span>
+    <span id="scan-text" data-i18n="scanningNet">Scanning network...</span>
     <div class="scan-progress-track"><div class="scan-progress-fill" id="scan-fill" style="width:0%"></div></div>
     <span id="scan-pct" style="font-family:var(--mono);font-size:11px;flex-shrink:0">0%</span>
   </div>
@@ -498,7 +498,7 @@ const LANG={
     chartMonitoring:'Monitoring — data will appear after several scans',
     snmpTitle:'SNMP source',snmpDesc:'Reads the ARP table of a switch or router to get MAC addresses (and vendor) for hosts the Pi cannot see directly. Requires the snmp package on the Pi.',snmpMissing:'snmpwalk is not installed — run: apt install snmp',snmpEnable:'Use SNMP during scans',snmpHost:'Switch / router IP',snmpPort:'Port',snmpVersion:'Version',snmpTimeout:'Timeout (s)',snmpCommunity:'Community',snmpUser:'Username',snmpLevel:'Security level',snmpAuthProto:'Auth',snmpAuthPass:'Auth password',snmpPrivProto:'Privacy',snmpPrivPass:'Privacy password',snmpTest:'Test',snmpTesting:'Testing…',snmpSaved:'SNMP settings saved',snmpEntries:'ARP entries found',snmpKeep:'unchanged',snmpLast:'Last scan',ouiTitle:'MAC vendor database',ouiDesc:'Wireshark manuf list, downloaded weekly (ieee-data is used as fallback).',ouiAuto:'Update weekly',ouiUpdate:'Update now',ouiUpdating:'Downloading…',ouiPrefixes:'prefixes',ouiNever:'not downloaded yet',ouiDone:'Vendor database updated',osUnknown:'Unknown',colType:'Type',deviceTypes:'Device type',editDevice:'Edit device',fieldType:'Device type',fieldOs:'Operating system',autoDetect:'Auto-detect',saved:'Device updated',tComputer:'Computer',tRouter:'Router',tSwitch:'Switch',tAp:'Access point',tStorage:'Storage / NAS',tPhone:'Phone',tTv:'TV',tCamera:'Camera',tAppliance:'Appliance',tPrinter:'Printer',tTablet:'Tablet',tOther:'Other',newDevice:'NEW',
     newDeviceMsg:(n,names,more)=>`${n} new device${n>1?'s':''} detected: ${names}${more?' and more':''}`,
-    osEditTitle:'Edit OS'},
+    osEditTitle:'Edit OS',unitSec:'sec',titleSeconds:'Seconds',titleMinutes:'Minutes',titleLogout:'Sign out',titleDrag:'Drag',every:'every',manual:'manual',autoOff:'disabled (manual)',detailInfo:'Information',seen:'Seen',discovered:'Discovered',noOpenPortsDetected:'No open ports detected',ago:x=>x+' ago',},
   es:{loginTitle:'Iniciar sesión',loginSub:'Ingresa tus credenciales para continuar.',
     username:'Usuario',password:'Contraseña',loginBtn:'Entrar',
     navSection:'Navegación',osDetected:'OS detectado',
@@ -528,7 +528,7 @@ const LANG={
     chartMonitoring:'Monitoreando — los datos aparecerán tras varios escaneos',
     snmpTitle:'Fuente SNMP',snmpDesc:'Lee la tabla ARP de un switch o router para obtener MAC (y vendor) de equipos que el Pi no ve directamente. Requiere el paquete snmp en el Pi.',snmpMissing:'snmpwalk no está instalado — ejecuta: apt install snmp',snmpEnable:'Usar SNMP en los escaneos',snmpHost:'IP del switch / router',snmpPort:'Puerto',snmpVersion:'Versión',snmpTimeout:'Timeout (s)',snmpCommunity:'Community',snmpUser:'Usuario',snmpLevel:'Nivel de seguridad',snmpAuthProto:'Auth',snmpAuthPass:'Password auth',snmpPrivProto:'Privacidad',snmpPrivPass:'Password privacidad',snmpTest:'Probar',snmpTesting:'Probando…',snmpSaved:'Configuración SNMP guardada',snmpEntries:'entradas ARP encontradas',snmpKeep:'sin cambios',snmpLast:'Último escaneo',ouiTitle:'Base de datos de vendors MAC',ouiDesc:'Lista manuf de Wireshark, descargada cada semana (ieee-data como respaldo).',ouiAuto:'Actualizar cada semana',ouiUpdate:'Actualizar ahora',ouiUpdating:'Descargando…',ouiPrefixes:'prefijos',ouiNever:'aún no descargada',ouiDone:'Base de vendors actualizada',osUnknown:'Desconocido',colType:'Tipo',deviceTypes:'Tipo de dispositivo',editDevice:'Editar dispositivo',fieldType:'Tipo de dispositivo',fieldOs:'Sistema operativo',autoDetect:'Detección automática',saved:'Dispositivo actualizado',tComputer:'Equipo',tRouter:'Router',tSwitch:'Switch',tAp:'Access point',tStorage:'Storage / NAS',tPhone:'Teléfono',tTv:'TV',tCamera:'Cámara',tAppliance:'Electrodoméstico',tPrinter:'Impresora',tTablet:'Tablet',tOther:'Otro',newDevice:'NUEVO',
     newDeviceMsg:(n,names,more)=>`${n} nuevo${n>1?'s dispositivos':'dispositivo'} detectado${n>1?'s':''}: ${names}${more?' y más':''}`,
-    osEditTitle:'Editar OS'}
+    osEditTitle:'Editar OS',unitSec:'seg',titleSeconds:'Segundos',titleMinutes:'Minutos',titleLogout:'Cerrar sesión',titleDrag:'Arrastrar',every:'cada',manual:'manual',autoOff:'desactivado (manual)',detailInfo:'Información',seen:'Visto',discovered:'Descubierto',noOpenPortsDetected:'Sin puertos abiertos detectados',ago:x=>'hace '+x,}
 };
 let _lang=localStorage.getItem('pi-lang')||'en';
 var _i18nReady=false;
@@ -544,6 +544,7 @@ function tOs(os){return os==='Desconocido'||os==='Unknown'?t('osUnknown'):os;}
 function setLang(l){
   _lang=l;localStorage.setItem('pi-lang',l);document.documentElement.lang=l;
   document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.getAttribute('data-i18n')));
+  document.querySelectorAll('[data-i18n-title]').forEach(el=>el.title=t(el.getAttribute('data-i18n-title')));
   const si=document.getElementById('search-input');
   if(si)si.placeholder=t('searchPlaceholder');
   ['en','es'].forEach(x=>document.getElementById('lang-'+x)?.classList.toggle('active',x===l));
@@ -592,7 +593,7 @@ function renderNav(){
     const a=document.createElement('a');
     a.className='nav-item nav-drag-item'+(isSelf?' active':'');
     a.href=isSelf?'#':item.href;a.dataset.navId=item.id;a.draggable=true;
-    a.innerHTML=`<span class="nav-drag-handle" title="Arrastrar">⠿</span><svg viewBox="0 0 24 24">${item.svg}</svg>${item.label}`;
+    a.innerHTML=`<span class="nav-drag-handle" title="${esc(t('titleDrag'))}">⠿</span><svg viewBox="0 0 24 24">${item.svg}</svg>${item.label}`;
     a.addEventListener('dragstart',e=>{_navDragSrc=id;e.dataTransfer.effectAllowed='move';a.classList.add('nav-dragging');});
     a.addEventListener('dragend',()=>a.classList.remove('nav-dragging'));
     a.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';a.classList.add('nav-drag-over');});
@@ -671,8 +672,8 @@ function updateNextScan(){
   const el = document.getElementById('iv-next');
   if(!el) return;
   const secs = getIntervalSecs();
-  if(secs === 0){ el.textContent = '(manual)'; return; }
-  el.textContent = 'cada ' + fmtInterval(secs);
+  if(secs === 0){ el.textContent = '('+t('manual')+')'; return; }
+  el.textContent = t('every') + ' ' + fmtInterval(secs);
 }
 
 function getIntervalSecs(){
@@ -682,7 +683,7 @@ function getIntervalSecs(){
 }
 
 function fmtInterval(secs){
-  if(secs === 0) return 'manual';
+  if(secs === 0) return t('manual');
   if(secs < 60)  return secs+'s';
   if(secs < 3600) return Math.floor(secs/60)+'m '+(secs%60?secs%60+'s':'');
   const h = Math.floor(secs/3600), m = Math.floor((secs%3600)/60);
@@ -700,7 +701,7 @@ async function applyInterval(){
     });
     const d = await r.json();
     if(!r.ok) throw new Error(d.error);
-    const label = secs===0 ? 'desactivado (manual)' : 'cada '+fmtInterval(secs);
+    const label = secs===0 ? t('autoOff') : t('every')+' '+fmtInterval(secs);
     toast('Auto-scan: '+label);
     updateNextScan();
   }catch(e){ toast(e.message, true); }
@@ -789,7 +790,7 @@ function updateScanBar(scan){
   }else{
     bar.className='scan-bar';
     btn.disabled=false;
-    btn.innerHTML='<svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Escanear red';
+    btn.innerHTML='<svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> '+t('scanBtn');
   }
 }
 
@@ -1016,7 +1017,7 @@ function renderTable(){
     dtr.innerHTML=`<td colspan="9" class="detail-cell">
       <div class="detail-inner">
         <div class="detail-section">
-          <div class="detail-label">Información</div>
+          <div class="detail-label">${esc(t('detailInfo'))}</div>
           <div class="detail-value">IP: ${esc(h.ip)}</div>
           ${h.hostname?`<div class="detail-value">Host: ${esc(h.hostname)}</div>`:''}
           ${h.vendor?`<div class="detail-value">Vendor: ${esc(h.vendor)}</div>`:''}${h.mac?`<div class="detail-value">MAC: ${esc(h.mac)}</div>`:''}
@@ -1031,10 +1032,10 @@ function renderTable(){
         </div>
         <div class="detail-section">
           <div class="detail-label">Tiempos</div>
-          <div class="detail-value">Visto: ${h.last_seen?new Date(h.last_seen*1000).toLocaleString('es-CL'):'—'}</div>
-          <div class="detail-value">Descubierto: ${h.first_seen?new Date(h.first_seen*1000).toLocaleDateString('es-CL'):'—'}</div>
-          <div class="detail-value" style="margin-top:4px">Estado: <span style="color:${h.online?'var(--green)':'var(--text-dim)'};font-weight:600">${h.online?'Online':'Offline'}</span></div>
-          ${h.latency?`<div class="detail-value">Latencia: <span style="font-family:var(--mono);font-weight:600">${h.latency} ms</span></div>`:''}
+          <div class="detail-value">${esc(t('seen'))}: ${h.last_seen?new Date(h.last_seen*1000).toLocaleString(_lang==='es'?'es-CL':'en-GB'):'—'}</div>
+          <div class="detail-value">${esc(t('discovered'))}: ${h.first_seen?new Date(h.first_seen*1000).toLocaleDateString(_lang==='es'?'es-CL':'en-GB'):'—'}</div>
+          <div class="detail-value" style="margin-top:4px">${esc(t("colStatus"))}: <span style="color:${h.online?'var(--green)':'var(--text-dim)'};font-weight:600">${h.online?'Online':'Offline'}</span></div>
+          ${h.latency?`<div class="detail-value">${esc(t("colLatency"))}: <span style="font-family:var(--mono);font-weight:600">${h.latency} ms</span></div>`:''}
           ${(()=>{
             const hist=h.uptime_history||[];
             if(!hist.length) return '';
@@ -1058,7 +1059,7 @@ function renderTable(){
               <span class="port-full-num">${p.port}</span>
               <span class="port-full-svc">${esc(p.service||'unknown')}</span>
             </div>`).join('')}
-          </div>`:'<div style="font-size:12px;color:var(--text-dim)">Sin puertos abiertos detectados</div>'}
+          </div>`:`<div style="font-size:12px;color:var(--text-dim)">${esc(t('noOpenPortsDetected'))}</div>`}
         </div>
         <div class="detail-section" style="grid-column:1/-1">
           <div class="detail-label" style="margin-bottom:6px" data-i18n="availHistory">Availability history</div>
@@ -1331,7 +1332,7 @@ function drawUptimeChart(ip, history){
   ctx.fillStyle = css('--text-dim')||'#94a3b8';
   ctx.font = '9px DM Mono,monospace';
   ctx.textAlign = 'left';
-  ctx.fillText(new Date(history[0].ts*1000).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}), 4, H-3);
+  ctx.fillText(new Date(history[0].ts*1000).toLocaleString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}), 4, H-3);
   ctx.textAlign = 'right';
   ctx.fillText('Ahora', W-4, H-3);
 
@@ -1412,7 +1413,7 @@ async function editAlias(ip){
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function relTime(ts){const d=Math.floor((Date.now()-ts)/1000);if(d<60)return'hace '+d+'s';if(d<3600)return'hace '+Math.floor(d/60)+'m';if(d<86400)return'hace '+Math.floor(d/3600)+'h';return new Date(ts).toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit'});}
+function relTime(ts){const d=Math.floor((Date.now()-ts)/1000);if(d<60)return t('ago',d+'s');if(d<3600)return t('ago',Math.floor(d/60)+'m');if(d<86400)return t('ago',Math.floor(d/3600)+'h');return new Date(ts).toLocaleDateString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit'});}
 function updateClock(){const el=document.getElementById('clock');if(el)el.textContent=new Date().toTimeString().slice(0,8);}
 let _tt;
 function toast(msg,isErr=false){const el=document.getElementById('toast');el.textContent=msg;el.style.background=isErr?'var(--red)':'var(--text)';void el.offsetWidth;el.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>el.classList.remove('show'),3400);}
