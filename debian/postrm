@@ -22,5 +22,5 @@ if [ "$1" = "purge" ]; then
     systemctl daemon-reload 2>/dev/null || true
     # Eliminar usuario del sistema
     userdel pi-console 2>/dev/null || true
-    echo "pi-console: purgado (backups en /var/backups/pi-console)"
+    echo "pi-console: purged (backups in /var/backups/pi-console)"
 fi

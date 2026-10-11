@@ -29,5 +29,5 @@ do
 done
 
 if [ "$BACKED_UP" = true ]; then
-    echo "pi-console: backup en $BACKUP_DIR"
+    echo "pi-console: backup saved in $BACKUP_DIR"
 fi

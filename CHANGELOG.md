@@ -2,6 +2,9 @@
 
 ## 1.1.8c — 2026-10-10
 
+### Instalación
+- Los mensajes de instalación, actualización y desinstalación (`postinst`, `preinst`, `prerm`, `postrm`) ahora están en inglés.
+
 ### Módulo de salud
 - Cada servicio expone `GET /api/health` (sin login: solo niveles ok/warn/fail; con sesión, el detalle) y responde 503 si algo falla. Revisa archivos de datos legibles/escribibles, espacio en disco, y por módulo: WOL (red y lista de Net Monitor), UPS (base de datos, que el historial **realmente se esté guardando**, pollers vivos, upsd respondiendo), Net Monitor (escaneo trabado, temporizador de auto-escaneo armado) y Proxmox (pollers vivos, clusters respondiendo).
 - El Admin Panel agrega la salud de todos los módulos en una tarjeta **Salud del sistema** (se refresca cada 30 s) y en `GET /admin/api/health`.
