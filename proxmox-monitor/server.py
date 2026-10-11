@@ -367,6 +367,8 @@ class H(BaseHTTPRequestHandler):
         if path in ("/", "/index.html"):
             return self._file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
 
+        if path == "/api/version":     # public: shown in the page footer
+            return self._json(200, {"version": auth.version()})
         if path == "/api/health":      # public: levels only; details need a valid session
             code, body = health_report(auth.get_session(tok) is not None)
             return self._json(code, body)

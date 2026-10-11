@@ -227,6 +227,8 @@ class H(BaseHTTPRequestHandler):
         if path in ("/", "/index.html"):
             return self._file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
 
+        if path == "/api/version":     # public: shown in the page footer
+            return self._json(200, {"version": auth.version()})
         if path == "/api/token":
             return self._json(200, {"token": gen_token()})
 
