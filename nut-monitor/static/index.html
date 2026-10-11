@@ -1565,5 +1565,22 @@ function toggleNav(force){
   window.addEventListener('resize',()=>{if(window.innerWidth>960)toggleNav(false);});
 })();
 </script>
+<script>
+/* Version footer (same snippet in every page): shows the installed Pi Console version */
+(function(){
+  var st=document.createElement('style');
+  st.textContent='.pc-footer{margin-top:auto;padding:14px 20px;text-align:center;font-size:11px;color:var(--text-dim);font-family:var(--mono);letter-spacing:.2px}'+
+    '.pc-ver{margin-top:18px;text-align:center;font-size:11px;color:var(--text-dim);font-family:var(--mono)}';
+  document.head.appendChild(st);
+  fetch('api/version',{cache:'no-store'}).then(function(r){return r.json()}).then(function(d){
+    if(!d||!d.version) return;
+    var txt='Pi Console v'+d.version;
+    var main=document.querySelector('.main');
+    if(main){var f=document.createElement('footer');f.className='pc-footer';f.textContent=txt;main.appendChild(f);}
+    var box=document.querySelector('.login-box');
+    if(box){var v=document.createElement('div');v.className='pc-ver';v.textContent=txt;box.appendChild(v);}
+  }).catch(function(){});
+})();
+</script>
 </body>
 </html>

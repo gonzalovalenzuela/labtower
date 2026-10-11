@@ -5,6 +5,9 @@
 ### UPS Monitor (interfaz)
 - La cabecera de los dos gráficos (voltaje y consumo) ahora tiene el mismo diseño: título a la izquierda, rangos 1h/1d/1mo/All a la derecha y la leyenda entre ambos; en pantallas de hasta 700 px, título y rangos en la primera línea y la leyenda debajo, igual en los dos. Antes el gráfico de voltaje pasaba los rangos a una segunda línea y el de consumo no.
 
+### Versión visible
+- Todas las páginas (WOL, UPS, Net Monitor, Proxmox y Admin, incluida la pantalla de login) muestran *Pi Console vX.Y.Z* en el pie. La versión sale del archivo `/opt/pi-console/VERSION` que instala el paquete, vía `GET /api/version` de cada servicio (también aparece en `/api/health`).
+
 ### Instalación
 - Los mensajes de instalación, actualización y desinstalación (`postinst`, `preinst`, `prerm`, `postrm`) ahora están en inglés.
 

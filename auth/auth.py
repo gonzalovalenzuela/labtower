@@ -307,6 +307,17 @@ def token_from_request(headers, cookie_str="") -> str | None:
     return None
 
 
+# ─── Version ──────────────────────────────────────────────────────────────────
+def version() -> str:
+    """Installed Pi Console version: $PICONSOLE_VERSION, else the VERSION file at the install root."""
+    v = os.environ.get("PICONSOLE_VERSION", "").strip()
+    if v: return v
+    try:
+        return (Path(__file__).resolve().parent.parent / "VERSION").read_text().strip() or "dev"
+    except OSError:
+        return "dev"
+
+
 # ─── Health ───────────────────────────────────────────────────────────────────
 STARTED = time.time()
 OK, WARN, FAIL = "ok", "warn", "fail"
@@ -347,7 +358,7 @@ def health_reply(module, checks, detailed=False, extra=None):
     """Build (http_code, body). Unauthenticated callers get levels only, no detail text."""
     levels = [c["level"] for c in checks.values()]
     status = FAIL if FAIL in levels else "degraded" if WARN in levels else OK
-    body = {"module": module, "status": status, "uptime": int(time.time() - STARTED),
+    body = {"module": module, "version": version(), "status": status, "uptime": int(time.time() - STARTED),
             "checks": {k: ({**v} if detailed else {"level": v["level"]}) for k, v in checks.items()}}
     if extra and detailed: body.update(extra)
     return (503 if status == FAIL else 200), body
