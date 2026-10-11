@@ -5,6 +5,8 @@
 <title>Pi Console — Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+
 :root{--input-bg:#e7ebf2;--input-border:#c3cbda;--bg:#f0f2f5;--surface:#fff;--surface2:#f8f9fb;--border:#e3e8ef;--border-b:#cdd4e0;--blue:#4361ee;--blue-dim:rgba(67,97,238,.1);--green:#22c55e;--green-dim:rgba(34,197,94,.1);--red:#ef4444;--red-dim:rgba(239,68,68,.1);--orange:#f97316;--orange-dim:rgba(249,115,22,.1);--purple:#8b5cf6;--purple-dim:rgba(139,92,246,.1);--text:#1a2033;--text-mid:#5a6a85;--text-dim:#94a3b8;--sidebar-w:220px;--r:10px;--r-sm:6px;--shadow:0 1px 3px rgba(0,0,0,.07);--shadow-md:0 4px 16px rgba(0,0,0,.1);--sans:'DM Sans',sans-serif;--mono:'DM Mono',monospace}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh;display:flex}
@@ -207,11 +209,11 @@ input.err{border-color:var(--red)}
 }
 @media(max-width:700px){
   .content{padding:16px 12px;min-width:0}
+  .topbar{padding-left:12px!important;padding-right:12px!important}
   .stats-row{grid-template-columns:1fr 1fr;gap:10px}
   .stat-card{padding:12px;gap:10px;min-width:0}
   .stat-card:last-child{grid-column:1/-1}
-  .card{overflow-x:auto}              /* wide tables scroll inside their card instead of widening the page */
-}
+  }
 </style>
 </head>
 <body>
@@ -303,7 +305,7 @@ input.err{border-color:var(--red)}
           <span data-i18n="btnNewUser">New user</span>
         </button>
       </div>
-      <table>
+      <div class="tbl-wrap"><table>
         <thead><tr>
           <th data-i18n="colUser">User</th>
           <th data-i18n="colWOL">WOL</th>
@@ -313,7 +315,7 @@ input.err{border-color:var(--red)}
           <th style="text-align:right" data-i18n="colActions">Actions</th>
         </tr></thead>
         <tbody id="users-tbody"></tbody>
-      </table>
+      </table></div>
     </div>
 
     <div class="card" id="hl-card" style="margin-top:16px">
@@ -334,7 +336,7 @@ input.err{border-color:var(--red)}
         </div>
       </div>
       <div class="tp-hint" data-i18n="tpHint">Back up users, WOL devices, UPS servers and history, Net Monitor, Proxmox and the NUT configuration. To move to a new installation: install the package, sign in with the default user, upload the backup here and press Restore.</div>
-      <table>
+      <div class="tbl-wrap"><table>
         <thead><tr>
           <th data-i18n="tpColName">Backup</th>
           <th data-i18n="tpColType">Type</th>
@@ -343,7 +345,7 @@ input.err{border-color:var(--red)}
           <th style="text-align:right" data-i18n="colActions">Actions</th>
         </tr></thead>
         <tbody id="tp-tbody"></tbody>
-      </table>
+      </table></div>
       <div class="tp-empty" id="tp-empty" style="display:none" data-i18n="tpEmpty">No backups yet.</div>
       <pre class="tp-out" id="tp-out"></pre>
     </div>

@@ -9,6 +9,8 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+CiAgPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOCIgZmlsbD0iI2VhYjMwOCIvPgogIDxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDQsNCkgc2NhbGUoMSkiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj4KICAgIDxwYXRoIGQ9Ik01IDlWNWEyIDIgMCAwIDEgMi0yaDEwYTIgMiAwIDAgMSAyIDJ2NCBNMyA5aDE4djExYTIgMiAwIDAgMS0yIDJINWEyIDIgMCAwIDEtMi0yVjl6IE0xMiAxM3YzIi8+PHJlY3QgeD0iMyIgeT0iOSIgd2lkdGg9IjE4IiBoZWlnaHQ9IjExIiByeD0iMiIvPjxsaW5lIHgxPSIxMiIgeTE9IjEzIiB4Mj0iMTIiIHkyPSIxNiIvPgogIDwvZz4KPC9zdmc+">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+
 :root{--input-bg:#e7ebf2;--input-border:#c3cbda;--bg:#f0f2f5;--surface:#fff;--surface2:#f8f9fb;--border:#e3e8ef;--border-b:#cdd4e0;--blue:#4361ee;--blue-dim:rgba(67,97,238,.1);--green:#22c55e;--green-dim:rgba(34,197,94,.1);--red:#ef4444;--red-dim:rgba(239,68,68,.1);--orange:#f97316;--orange-dim:rgba(249,115,22,.1);--yellow:#eab308;--yellow-dim:rgba(234,179,8,.1);--purple:#8b5cf6;--purple-dim:rgba(139,92,246,.1);--text:#1a2033;--text-mid:#5a6a85;--text-dim:#94a3b8;--sidebar-w:224px;--r:10px;--r-sm:6px;--shadow:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.04);--shadow-md:0 4px 16px rgba(0,0,0,.1);--sans:'DM Sans',sans-serif;--mono:'DM Mono',monospace}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh;display:flex}
@@ -295,6 +297,9 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
   .charge-val{font-size:11px;min-width:30px}
   /* Detail panel: 1 columna en mobile */
   .detail-inner{grid-template-columns:1fr;padding:12px 14px;gap:12px}
+  .detail-inner{position:sticky;left:0;width:calc(100vw - 30px);box-sizing:border-box}
+  .charge-bar{width:40px}
+  .ups-cell-sub{white-space:normal;word-break:break-word}
   .gauge-box{flex-direction:row;justify-content:flex-start;gap:16px;padding:10px 14px}
   .circle-wrap{width:60px;height:60px;flex-shrink:0}
   .circle-val{font-size:13px}
@@ -316,7 +321,8 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
   /* Topbar */
   .topbar-title{font-size:13px}
   /* UPS table rows más compactos */
-  .ups-row td{padding:10px 12px}
+  .ups-row td{padding:10px 8px}
+  .ups-table thead th{padding-left:8px;padding-right:8px}
   .ups-cell-name{font-size:13px}
   .ups-cell-sub{font-size:10px}
   .srv-tag{font-size:9px;padding:1px 5px}
@@ -452,7 +458,7 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
             </button>
           </div>
         </div>
-        <table class="ups-table">
+        <div class="tbl-wrap"><table class="ups-table">
           <thead>
             <tr>
               <th style="width:28px"></th>
@@ -465,7 +471,7 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
             </tr>
           </thead>
           <tbody id="ups-tbody"></tbody>
-        </table>
+        </table></div>
       </div>
 
       <!-- Panel derecho -->
