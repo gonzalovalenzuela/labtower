@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """NUT Monitor — Backend con auth, multi-servidor, historial SQLite."""
 import json, os, re, socket, time, logging, threading, sys, sqlite3
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from pathlib import Path
 from collections import deque
@@ -35,15 +35,17 @@ log = logging.getLogger("nut")
 _db_lock = threading.Lock()
 
 def db_connect():
-    conn = sqlite3.connect(str(DB_FILE), check_same_thread=False)
+    # timeout: wait for a competing writer instead of failing at once with "database is locked"
+    conn = sqlite3.connect(str(DB_FILE), timeout=30, check_same_thread=False)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")
     conn.execute("PRAGMA synchronous=NORMAL")
     return conn
 
 def db_init():
     with _db_lock:
         conn = db_connect()
+        conn.execute("PRAGMA journal_mode=WAL")      # persistent; set once, not on every connection
         conn.execute("""
             CREATE TABLE IF NOT EXISTS history (
                 id      INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -154,17 +156,18 @@ def _db_prune_safe():
     except Exception as e: log.error(f"db_prune: {e}")
 
 # ─── Servidores ───────────────────────────────────────────────────────────────
+_srv_lock = threading.RLock()     # hold around load_servers() → modify → save_servers()
+
 def load_servers():
-    try:
-        if DATA_FILE.exists():
-            d = json.loads(DATA_FILE.read_text())
-            return d if isinstance(d, list) else []
-    except: pass
-    return [{"id": "local", "name": "Local", "host": "127.0.0.1", "port": 3493}]
+    # A missing file means a fresh install (default local server); an existing but empty
+    # list is valid (the user deleted every server). Damaged file → last good copy.
+    if not DATA_FILE.exists() and not DATA_FILE.with_name(DATA_FILE.name + ".bak").exists():
+        return [{"id": "local", "name": "Local", "host": "127.0.0.1", "port": 3493}]
+    return auth.read_json(DATA_FILE, [], list)
 
 def save_servers(s):
-    tmp = DATA_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(s, indent=2)); tmp.replace(DATA_FILE)
+    with _srv_lock:
+        auth.write_json(DATA_FILE, s, mode=0o644)
 
 # ─── Watts ────────────────────────────────────────────────────────────────────
 def _calc_watts(vars_):
@@ -226,13 +229,21 @@ class NUTClient:
                    line.startswith("ERR") or line.startswith("OK"): break
         return lines
 
+    @staticmethod
+    def _check(lines):
+        """upsd answers errors as `ERR <CODE>` (e.g. DATA-STALE): raise instead of treating it as empty data."""
+        for l in lines:
+            if l.startswith("ERR"):
+                raise RuntimeError(f"upsd: {l[3:].strip() or 'error'}")
+        return lines
+
     def list_ups(self):
-        with self._conn() as s: lines = self._cmd(s, "LIST UPS")
+        with self._conn() as s: lines = self._check(self._cmd(s, "LIST UPS"))
         return [{"name": m.group(1), "desc": m.group(2)}
                 for line in lines for m in [re.match(r'^UPS (\S+) "(.*)"$', line)] if m]
 
     def get_vars(self, ups):
-        with self._conn() as s: lines = self._cmd(s, f"LIST VAR {ups}")
+        with self._conn() as s: lines = self._check(self._cmd(s, f"LIST VAR {ups}"))
         return {m.group(1): m.group(2)
                 for line in lines for m in [re.match(r'^VAR \S+ (\S+) "(.*)"$', line)] if m}
 
@@ -343,13 +354,18 @@ def _poll(server):
     poll_n = 0
     target = (server["host"], int(server["port"]))
     while True:
-        cur = next((s for s in load_servers() if s["id"] == sid), None)
-        if cur is None: return
-        if (cur["host"], int(cur["port"])) != target:
-            # host/port edited: reconnect and drop data from the old address
-            target = (cur["host"], int(cur["port"]))
-            nut = NUTClient(*target); cache.reset()
-            log.info(f"Poller → {cur['name']} ({target[0]}:{target[1]}) (edited)")
+        try:
+            cur = next((s for s in load_servers() if s["id"] == sid), None)
+            if cur is None: return
+            if (cur["host"], int(cur["port"])) != target:
+                # host/port edited: reconnect and drop data from the old address
+                target = (cur["host"], int(cur["port"]))
+                nut = NUTClient(*target); cache.reset()
+                log.info(f"Poller → {cur['name']} ({target[0]}:{target[1]}) (edited)")
+        except Exception as e:                # never let the poller thread die
+            log.error(f"poll config: {e}"); cur = None
+        if cur is None and not any(s["id"] == sid for s in _safe_servers()):
+            return
         try:
             ver   = nut.get_version()
             ups_l = nut.list_ups()
@@ -374,12 +390,17 @@ def _poll(server):
         if ev: ev.wait(POLL_SEC); ev.clear()
         else: time.sleep(POLL_SEC)
 
+def _safe_servers():
+    try: return load_servers()
+    except Exception: return []
+
 def start_all():
     db_init()
     for s in load_servers(): ensure_poller(s)
 
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
 class H(BaseHTTPRequestHandler):
+    timeout = 30      # a stalled client must not hold a thread forever
     def log_message(self, fmt, *a):
         if int(a[1]) >= 400: log.warning(f"{self.client_address[0]} {a[1]}")
 
@@ -434,6 +455,10 @@ class H(BaseHTTPRequestHandler):
         elif path == "/api/servers":
             range_ = self._range_param()
             srvs   = load_servers()
+            for s_ in srvs:                      # revive a poller thread that died unexpectedly
+                t_ = _pollers.get(s_["id"])
+                if t_ is None or not t_.is_alive():
+                    ensure_poller(s_)
             out    = [{**s, "status": _caches.get(s["id"], SCache(s["id"])).snap(range_)} for s in srvs]
             self._json(200, {"servers": out})
         elif path == "/api/ups":
@@ -521,18 +546,26 @@ class H(BaseHTTPRequestHandler):
                 return self._json(403, {"error": "Requiere permiso admin"})
             host = (body.get("host") or "").strip()
             name = (body.get("name") or "").strip()
-            port = int(body.get("port") or 3493)
+            try: port = int(body.get("port") or 3493)
+            except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
             if not host or not name: return self._json(400, {"error": "host y name requeridos"})
-            srvs = load_servers()
-            if any(s["host"]==host and s["port"]==port for s in srvs):
-                return self._json(409, {"error": "Ya existe ese host:puerto"})
+            if not 1 <= port <= 65535: return self._json(400, {"error": "Invalid port"})
             import uuid
-            server = {"id": str(uuid.uuid4()), "name": name, "host": host, "port": port}
-            srvs.append(server); save_servers(srvs); ensure_poller(server)
+            with _srv_lock:
+                srvs = load_servers()
+                if any(s["host"]==host and s["port"]==port for s in srvs):
+                    return self._json(409, {"error": "Ya existe ese host:puerto"})
+                server = {"id": str(uuid.uuid4()), "name": name, "host": host, "port": port}
+                srvs.append(server); save_servers(srvs)
+            ensure_poller(server)
             self._json(201, {"server": server})
         elif path == "/api/test":
+            if not auth.check_permission(tok, "nut", "admin"):
+                return self._json(403, {"error": "Requiere permiso admin"})
             host = (body.get("host") or "").strip()
-            port = int(body.get("port") or 3493)
+            try: port = int(body.get("port") or 3493)
+            except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
+            if not host or not 1 <= port <= 65535: return self._json(400, {"error": "Invalid host or port"})
             try:
                 nut  = NUTClient(host, port, timeout=4)
                 ups  = nut.list_ups(); ver = nut.get_version()
@@ -558,13 +591,15 @@ class H(BaseHTTPRequestHandler):
         except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
         if not host or not name: return self._json(400, {"error": "host y name requeridos"})
         if not 1 <= port <= 65535: return self._json(400, {"error": "Invalid port"})
-        srvs = load_servers()
-        srv  = next((x for x in srvs if x["id"] == sid), None)
-        if srv is None: return self._json(404, {"error": "No encontrado"})
-        if any(x["id"] != sid and x["host"] == host and x["port"] == port for x in srvs):
-            return self._json(409, {"error": "Ya existe ese host:puerto"})
-        srv.update({"name": name, "host": host, "port": port})
-        save_servers(srvs); ensure_poller(srv)
+        with _srv_lock:
+            srvs = load_servers()
+            srv  = next((x for x in srvs if x["id"] == sid), None)
+            if srv is None: return self._json(404, {"error": "No encontrado"})
+            if any(x["id"] != sid and x["host"] == host and x["port"] == port for x in srvs):
+                return self._json(409, {"error": "Ya existe ese host:puerto"})
+            srv.update({"name": name, "host": host, "port": port})
+            save_servers(srvs)
+        ensure_poller(srv)
         self._json(200, {"server": srv})
 
     def do_DELETE(self):
@@ -575,10 +610,12 @@ class H(BaseHTTPRequestHandler):
         m = re.match(r'^/api/servers/([a-zA-Z0-9\-]+)$', path)
         if not m: return self._json(400, {"error": "Invalid ID"})
         sid = m.group(1)
-        srvs = load_servers()
-        new  = [s for s in srvs if s["id"] != sid]
-        if len(new) == len(srvs): return self._json(404, {"error": "No encontrado"})
-        save_servers(new); remove_poller(sid); self._json(200, {"ok": True})
+        with _srv_lock:
+            srvs = load_servers()
+            new  = [s for s in srvs if s["id"] != sid]
+            if len(new) == len(srvs): return self._json(404, {"error": "No encontrado"})
+            save_servers(new)
+        remove_poller(sid); self._json(200, {"ok": True})
 
 if __name__ == "__main__":
     import signal, atexit
@@ -589,6 +626,8 @@ if __name__ == "__main__":
     signal.signal(signal.SIGTERM, lambda *_: (db_flush(), sys.exit(0)))
     log.info(f"NUT Monitor en http://{HOST}:{PORT} — poll cada {POLL_SEC}s")
     try:
-        HTTPServer((HOST, PORT), H).serve_forever()
+        srv = ThreadingHTTPServer((HOST, PORT), H)
+        srv.daemon_threads = True
+        srv.serve_forever()
     except KeyboardInterrupt:
         sys.exit(0)
