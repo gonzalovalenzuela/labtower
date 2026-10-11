@@ -304,6 +304,27 @@ def start_all():
     for c in load_clusters():
         ensure_poller(c)
 
+# ─── Health ───────────────────────────────────────────────────────────────────
+def health_report(detailed=False):
+    c = auth.check_common()
+    c["clusters_file"] = auth.check_file(DATA_FILE)
+    now = time.time(); cls = load_clusters(); dead = []; bad = []
+    for cl in cls:
+        t = _pollers.get(cl["id"])
+        if t is None or not t.is_alive(): dead.append(cl["name"]); continue
+        cc = _cache.get(cl["id"])
+        if cc is None: continue
+        sn = cc.snap()
+        if sn["error"]:
+            bad.append(f'{cl["name"]}: {sn["error"]}')
+        elif sn["ts"] and now - sn["ts"] > max(3 * POLL_IDLE, 180):
+            bad.append(f'{cl["name"]}: data {int(now - sn["ts"])} s old')
+    if not cls:   c["pollers"] = auth.chk(auth.OK, "no clusters configured")
+    elif dead:    c["pollers"] = auth.chk(auth.FAIL, "poller stopped: " + ", ".join(dead))
+    else:         c["pollers"] = auth.chk(auth.OK, f"{len(cls)} running")
+    c["clusters"] = auth.chk(auth.WARN, "; ".join(bad)) if bad else auth.chk(auth.OK, "all clusters answering")
+    return auth.health_reply("pve", c, detailed)
+
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
 class H(BaseHTTPRequestHandler):
     timeout = 30      # a stalled client must not hold a thread forever
@@ -345,6 +366,10 @@ class H(BaseHTTPRequestHandler):
 
         if path in ("/", "/index.html"):
             return self._file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
+
+        if path == "/api/health":      # public: levels only; details need a valid session
+            code, body = health_report(auth.get_session(tok) is not None)
+            return self._json(code, body)
 
         if not auth.check_permission(tok, "pve", "readonly"):
             return self._json(401, {"error": "Unauthorized"})

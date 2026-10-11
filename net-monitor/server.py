@@ -882,6 +882,35 @@ def start_auto_scan():
         threading.Thread(target=refresh_pihole_cache, daemon=True).start()
     threading.Thread(target=run_scan, daemon=True).start()
 
+# ─── Health ───────────────────────────────────────────────────────────────────
+def health_report(detailed=False):
+    c = auth.check_common()
+    c["hosts_file"]  = auth.check_file(DATA_FILE)
+    c["config_file"] = auth.check_file(CONF_FILE)
+    now = time.time(); st = dict(_scan_status)
+    if st.get("running"):
+        age = now - (st.get("started") or now)
+        c["scanner"] = (auth.chk(auth.FAIL, f"scan running for {int(age)} s ({st.get('progress')}/{st.get('total')})")
+                        if age > 7200 else auth.chk(auth.OK, f"scanning {st.get('progress')}/{st.get('total')}"))
+    elif st.get("error"):
+        c["scanner"] = auth.chk(auth.WARN, f"last scan failed: {st['error']}")
+    else:
+        c["scanner"] = auth.chk(auth.OK, "idle")
+    iv = _current_interval
+    if iv > 0:
+        t = _scan_timer
+        armed = (t is not None and t.is_alive()) or st.get("running")
+        fin = st.get("finished")
+        if not armed:
+            c["auto_scan"] = auth.chk(auth.FAIL, "auto-scan is enabled but no timer is armed")
+        elif fin and now - fin > 2 * iv + 600:
+            c["auto_scan"] = auth.chk(auth.WARN, f"last scan finished {int(now - fin)} s ago (interval {iv} s)")
+        else:
+            c["auto_scan"] = auth.chk(auth.OK, f"every {iv} s")
+    else:
+        c["auto_scan"] = auth.chk(auth.OK, "manual mode")
+    return auth.health_reply("net", c, detailed)
+
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
 class H(BaseHTTPRequestHandler):
     timeout = 30      # a stalled client must not hold a thread forever
@@ -923,6 +952,10 @@ class H(BaseHTTPRequestHandler):
 
         if path in ("/", "/index.html"):
             return self._file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
+
+        if path == "/api/health":      # public: levels only; details need a valid session
+            code, body = health_report(auth.get_session(tok) is not None)
+            return self._json(code, body)
 
         if not auth.check_permission(tok, "net", "readonly"):
             return self._json(401, {"error": "Unauthorized"})

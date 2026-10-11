@@ -107,6 +107,15 @@ input.err{border-color:var(--red)}
 .btn-mc:hover{background:var(--bg)}
 .btn-mok{padding:8px 16px;border-radius:var(--r-sm);border:none;background:var(--red);color:#fff;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer}
 .btn-mok:hover{background:#dc2626}
+/* Health */
+.hl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;padding:16px 18px}
+.hl-item{border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;background:var(--surface2)}
+.hl-top{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--text)}
+.hl-dot{width:9px;height:9px;border-radius:50%;background:var(--green);flex:none}
+.hl-dot.warn{background:var(--orange)}.hl-dot.fail{background:var(--red)}
+.hl-det{margin-top:5px;font-size:11.5px;line-height:1.45;color:var(--text-mid);word-break:break-word}
+.hl-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;text-transform:uppercase;letter-spacing:.3px;background:var(--green-dim);color:var(--green)}
+.hl-badge.degraded{background:var(--orange-dim);color:var(--orange)}.hl-badge.fail{background:var(--red-dim);color:var(--red)}
 /* Teleporter */
 .tp-hint{padding:12px 18px;font-size:12px;color:var(--text-mid);line-height:1.6;border-bottom:1px solid var(--border)}
 .btn-sec{background:transparent;color:var(--text-mid);border:1px solid var(--border-b);border-radius:var(--r-sm);font-family:var(--sans);font-size:12px;font-weight:600;padding:7px 14px;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
@@ -288,6 +297,14 @@ input.err{border-color:var(--red)}
       </table>
     </div>
 
+    <div class="card" id="hl-card" style="margin-top:16px">
+      <div class="card-hd">
+        <span class="card-title" data-i18n="hlTitle">System health</span>
+        <span class="hl-badge" id="hl-badge">…</span>
+      </div>
+      <div class="hl-grid" id="hl-grid"></div>
+    </div>
+
     <div class="card" id="tp-card" style="margin-top:16px">
       <div class="card-hd">
         <span class="card-title" data-i18n="tpTitle">Backup &amp; restore</span>
@@ -445,6 +462,7 @@ const LANG = {
     btnCancel:'Cancel', btnCreate:'Create user', btnSave:'Save changes',
     modalDeleteTitle:'Delete user', modalDeleteBtn:'Delete',
     mustChangeBadge:'Change pwd',
+    hlTitle:'System health', hl_ok:'All healthy', hl_degraded:'Degraded', hl_fail:'Failing', hlSystem:'system', hlDown:'Service not answering',
     tpTitle:'Backup & restore', tpUpload:'Upload backup', tpCreate:'Create backup',
     tpHint:'Back up users, WOL devices, UPS servers and history, Net Monitor, Proxmox and the NUT configuration. To move to a new installation: install the package, sign in with the default user, upload the backup here and press Restore.',
     tpColName:'Backup', tpColType:'Type', tpColSize:'Size', tpColDate:'Date', tpEmpty:'No backups yet.',
@@ -499,6 +517,7 @@ const LANG = {
     btnCancel:'Cancelar', btnCreate:'Crear usuario', btnSave:'Guardar cambios',
     modalDeleteTitle:'Eliminar usuario', modalDeleteBtn:'Eliminar',
     mustChangeBadge:'Cambiar pwd',
+    hlTitle:'Salud del sistema', hl_ok:'Todo bien', hl_degraded:'Degradado', hl_fail:'Con fallas', hlSystem:'sistema', hlDown:'El servicio no responde',
     tpTitle:'Respaldo y restauración', tpUpload:'Subir respaldo', tpCreate:'Crear respaldo',
     tpHint:'Respalda usuarios, dispositivos WOL, servidores UPS e historial, Net Monitor, Proxmox y la configuración de NUT. Para migrar a una instalación nueva: instala el paquete, entra con el usuario por defecto, sube el respaldo aquí y pulsa Restaurar.',
     tpColName:'Respaldo', tpColType:'Tipo', tpColSize:'Tamaño', tpColDate:'Fecha', tpEmpty:'Aún no hay respaldos.',
@@ -681,6 +700,37 @@ async function loadUsers() {
   renderUsers(users);
   updateStats(users);
   tpLoad();
+  hlLoad(); if (!window._hlTimer) window._hlTimer = setInterval(hlLoad, 30000);
+}
+
+// ── System health ───────────────────────────────────────
+const HL_NAMES = {wol:'WOL Console', nut:'UPS Monitor', net:'Net Monitor', pve:'Proxmox'};
+async function hlLoad() {
+  try {
+    const r = await fetch('api/health', {cache:'no-store'});
+    const d = await r.json();
+    const badge = document.getElementById('hl-badge');
+    badge.className = 'hl-badge ' + (d.status === 'ok' ? '' : d.status);
+    badge.textContent = t('hl_' + d.status);
+    const grid = document.getElementById('hl-grid'); grid.innerHTML = '';
+    const esc = x => String(x).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const item = (title, level, lines) => {
+      const el = document.createElement('div'); el.className = 'hl-item';
+      el.innerHTML = `<div class="hl-top"><span class="hl-dot ${level==='ok'?'':level}"></span>${esc(title)}</div>` +
+        (lines.length ? `<div class="hl-det">${lines.map(esc).join('<br>')}</div>` : '');
+      grid.appendChild(el);
+    };
+    const issues = (checks) => Object.entries(checks||{}).filter(([k,v]) => v.level !== 'ok').map(([k,v]) => k + (v.detail ? ': ' + v.detail : ''));
+    // this panel + shared files, then each module with its own failing checks
+    const own = {}; for (const k of ['users','sessions','disk','teleporter']) if (d.checks[k]) own[k] = d.checks[k];
+    item('Admin / ' + t('hlSystem'), Object.values(own).some(v=>v.level==='fail') ? 'fail' : Object.values(own).some(v=>v.level==='warn') ? 'warn' : 'ok', issues(own));
+    for (const m of Object.keys(HL_NAMES)) {
+      const mh = (d.modules||{})[m], c = d.checks[m];
+      if (!mh) { item(HL_NAMES[m], 'fail', [t('hlDown')]); continue; }
+      const lvl = mh.status === 'ok' ? 'ok' : mh.status === 'degraded' ? 'warn' : 'fail';
+      item(HL_NAMES[m], lvl, issues(mh.checks));
+    }
+  } catch(e) { /* panel keeps its last state */ }
 }
 
 function updateStats(users) {

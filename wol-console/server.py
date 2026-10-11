@@ -167,6 +167,18 @@ def validate_device(d):
         return False, "Invalid category"
     return True, ""
 
+# ─── Health ───────────────────────────────────────────────────────────────────
+def health_report(detailed=False):
+    c = auth.check_common()
+    c["devices"]  = auth.check_file(DATA_FILE)
+    c["wake_log"] = auth.check_file(LOG_FILE)
+    n = load_net_hosts()
+    c["net_monitor"] = (auth.chk(auth.OK, f"{len(n)} hosts with MAC") if n is not None
+                        else auth.chk(auth.WARN, "Net Monitor hosts file not readable (optional)"))
+    ip = _local_ip()
+    c["network"] = auth.chk(auth.OK, ip) if ip != "127.0.0.1" else auth.chk(auth.WARN, "no LAN address: magic packets will not reach the network")
+    return auth.health_reply("wol", c, detailed)
+
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
 class H(BaseHTTPRequestHandler):
     timeout = 30      # a stalled client must not hold a thread forever
@@ -217,6 +229,10 @@ class H(BaseHTTPRequestHandler):
 
         if path == "/api/token":
             return self._json(200, {"token": gen_token()})
+
+        if path == "/api/health":      # public: levels only; details need a valid session
+            code, body = health_report(auth.get_session(tok) is not None)
+            return self._json(code, body)
 
         if not auth.check_permission(tok, "wol", "readonly"):
             return self._json(401, {"error": "Unauthorized"})

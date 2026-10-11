@@ -121,6 +121,17 @@ El servidor consulta cada cluster con sondeo adaptivo (5 s con la vista abierta,
 
 ---
 
+## Salud del sistema
+
+Cada módulo responde `GET /api/health` (200 = ok o degradado, 503 = falla). Sin sesión solo muestra niveles; con sesión incluye el detalle. El Admin Panel muestra todo en la tarjeta **Salud del sistema**, y desde la terminal:
+
+```bash
+pi-console-health        # resumen; exit 0 = ok, 1 = degradado, 2 = falla
+pi-console-health -j     # JSON completo
+```
+
+Detecta, entre otras cosas: servicio caído, archivo de datos corrupto, disco casi lleno, hilo de consulta muerto, base de historial bloqueada o sin guardar datos, escaneo trabado y upsd/Proxmox sin respuesta.
+
 ## Backup y migración — Teleporter
 
 ```bash

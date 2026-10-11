@@ -19,6 +19,40 @@ log = logging.getLogger("admin")
 
 VALID_PERMS = ("readonly", "execute", "admin", "none")
 
+# ─── Health (aggregate of every module) ───────────────────────────────────────
+MODULES = {"wol": 8080, "nut": 8081, "net": 8083, "pve": 8084}
+
+def _module_health(name, port, tok):
+    import urllib.request, urllib.error
+    hdr = {"Authorization": f"Bearer {tok}"} if tok else {}
+    try:
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/api/health", headers=hdr)
+        with urllib.request.urlopen(req, timeout=4) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:              # 503 still carries the report
+        try: return json.loads(e.read())
+        except Exception: return None
+    except Exception:
+        return None
+
+def health_report(tok, detailed=False):
+    c = auth.check_common()
+    c["teleporter"] = (auth.chk(auth.OK) if tp.available()
+                       else auth.chk(auth.WARN, "teleporter.sh not installed"))
+    modules = {}
+    for name, port in MODULES.items():
+        h = _module_health(name, port, tok)
+        if h is None:
+            c[name] = auth.chk(auth.FAIL, f"service on :{port} not answering")
+        else:
+            lvl = {"ok": auth.OK, "degraded": auth.WARN}.get(h.get("status"), auth.FAIL)
+            bad = [k for k, v in h.get("checks", {}).items() if v.get("level") != auth.OK]
+            c[name] = auth.chk(lvl, ", ".join(bad) if bad else "")
+            modules[name] = h
+    code, body = auth.health_reply("admin", c, detailed, extra={"modules": modules})
+    if not detailed: body["modules"] = {k: {"status": v.get("status")} for k, v in modules.items()}
+    return code, body
+
 class H(BaseHTTPRequestHandler):
     timeout = 60      # a stalled client must not hold a thread forever
 
@@ -96,6 +130,10 @@ class H(BaseHTTPRequestHandler):
 
         if path in ("/", "/index.html"):
             return self._file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
+
+        if path == "/api/health":      # public: levels only; details need a valid session
+            code, body = health_report(tok, auth.get_session(tok) is not None)
+            return self._json(code, body)
 
         if not auth.check_permission(tok, "wol", "admin") and \
            not auth.check_permission(tok, "nut", "admin"):
