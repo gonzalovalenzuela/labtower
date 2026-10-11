@@ -210,6 +210,21 @@ input.err{border-color:var(--red)}
 @media(max-width:700px){
   .content{padding:16px 12px;min-width:0}
   .topbar{padding-left:12px!important;padding-right:12px!important}
+  /* users table becomes one card per user on phones */
+  #users-table thead{display:none}
+  #users-table,#users-table tbody{display:block;width:100%}
+  #users-tbody tr{display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;padding:12px 14px}
+  #users-tbody td{padding:0;display:block;min-width:0}
+  #users-tbody td:first-child{grid-column:1;grid-row:1}
+  #users-tbody td.col-actions{grid-column:2;grid-row:1;white-space:nowrap}
+  #users-tbody td[data-label]{grid-column:1/-1;display:flex;align-items:center;gap:10px}
+  #users-tbody td[data-label]::before{content:attr(data-label);flex:0 0 84px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim)}
+  #tp-table thead{display:none}
+  #tp-table,#tp-table tbody{display:block;width:100%}
+  #tp-tbody tr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:12px 14px}
+  #tp-tbody td{padding:0;display:block;min-width:0}
+  #tp-tbody td:first-child{flex:1 0 100%;word-break:break-all}
+  #tp-tbody td.col-actions{margin-left:auto;white-space:nowrap}
   .stats-row{grid-template-columns:1fr 1fr;gap:10px}
   .stat-card{padding:12px;gap:10px;min-width:0}
   .stat-card:last-child{grid-column:1/-1}
@@ -305,7 +320,7 @@ input.err{border-color:var(--red)}
           <span data-i18n="btnNewUser">New user</span>
         </button>
       </div>
-      <div class="tbl-wrap"><table>
+      <div class="tbl-wrap"><table id="users-table">
         <thead><tr>
           <th data-i18n="colUser">User</th>
           <th data-i18n="colWOL">WOL</th>
@@ -336,7 +351,7 @@ input.err{border-color:var(--red)}
         </div>
       </div>
       <div class="tp-hint" data-i18n="tpHint">Back up users, WOL devices, UPS servers and history, Net Monitor, Proxmox and the NUT configuration. To move to a new installation: install the package, sign in with the default user, upload the backup here and press Restore.</div>
-      <div class="tbl-wrap"><table>
+      <div class="tbl-wrap"><table id="tp-table">
         <thead><tr>
           <th data-i18n="tpColName">Backup</th>
           <th data-i18n="tpColType">Type</th>
@@ -798,10 +813,10 @@ function renderUsers(users) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><span class="uname">${esc(u.username)}</span></td>
-      <td>${permBadge(u.permissions.wol)}</td>
-      <td>${permBadge(u.permissions.nut)}</td>
-      <td>${u.must_change_password ? `<span class="must-change">${t('mustChangeBadge')}</span>` : '<span style="font-size:11px;color:var(--text-dim)">—</span>'}</td>
-      <td><span class="ucreated">${u.created ? new Date(u.created*1000).toLocaleDateString(locale) : '—'}</span></td>
+      <td data-label="${esc(t('colWOL'))}">${permBadge(u.permissions.wol)}</td>
+      <td data-label="${esc(t('colUPS'))}">${permBadge(u.permissions.nut)}</td>
+      <td data-label="${esc(t('colStatus'))}">${u.must_change_password ? `<span class="must-change">${t('mustChangeBadge')}</span>` : '<span style="font-size:11px;color:var(--text-dim)">—</span>'}</td>
+      <td data-label="${esc(t('colCreated'))}"><span class="ucreated">${u.created ? new Date(u.created*1000).toLocaleDateString(locale) : '—'}</span></td>
       <td class="col-actions">
         <button class="btn-ri edit" onclick='editUser(${JSON.stringify(u)})' title="Edit">✎</button>
         ${u.username !== me?.username
