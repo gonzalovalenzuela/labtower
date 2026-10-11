@@ -230,15 +230,20 @@ input.err{border-color:var(--red)}
 .btn-link:hover{color:var(--text-mid)}
 /* Voltage chart */
 .vchart-section{grid-column:span 3;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden}
-.vchart-header{padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-.vchart-title{font-size:12px;font-weight:600;color:var(--text)}
-.vchart-legend{display:flex;gap:14px}
-.vchart-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-dim);font-weight:500}
+.vchart-header{padding:7px 12px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"title legend filters";align-items:center;column-gap:14px;row-gap:6px}
+.vchart-title{grid-area:title;font-size:12px;font-weight:600;color:var(--text);white-space:nowrap}
+.vchart-legend{grid-area:legend;display:flex;gap:14px;flex-wrap:wrap;justify-content:flex-end;min-width:0}
+.vchart-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-dim);font-weight:500;white-space:nowrap}
 .vchart-legend-dot{width:10px;height:3px;border-radius:99px}
-.vchart-filters{display:flex;gap:4px}
-.vchart-filter{font-size:11px;font-weight:500;padding:3px 9px;border-radius:99px;border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer;transition:all .15s}
+.vchart-filters{grid-area:filters;display:flex;gap:4px}
+.vchart-filter{font-size:11px;font-weight:500;padding:3px 9px;min-width:34px;border-radius:99px;border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer;transition:all .15s}
 .vchart-filter:hover{border-color:var(--border-b);color:var(--text)}
 .vchart-filter.active{background:var(--blue);border-color:var(--blue);color:#fff}
+/* Same layout in both charts on narrow screens: title + ranges on the first line, legend below */
+@media(max-width:700px){
+  .vchart-header{grid-template-columns:1fr auto;grid-template-areas:"title filters" "legend legend"}
+  .vchart-legend{justify-content:flex-start}
+}
 .vchart-body{padding:6px 12px 8px}
 canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
 /* Toast */

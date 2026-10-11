@@ -2,6 +2,9 @@
 
 ## 1.1.8c — 2026-10-10
 
+### UPS Monitor (interfaz)
+- La cabecera de los dos gráficos (voltaje y consumo) ahora tiene el mismo diseño: título a la izquierda, rangos 1h/1d/1mo/All a la derecha y la leyenda entre ambos; en pantallas de hasta 700 px, título y rangos en la primera línea y la leyenda debajo, igual en los dos. Antes el gráfico de voltaje pasaba los rangos a una segunda línea y el de consumo no.
+
 ### Instalación
 - Los mensajes de instalación, actualización y desinstalación (`postinst`, `preinst`, `prerm`, `postrm`) ahora están en inglés.
 
