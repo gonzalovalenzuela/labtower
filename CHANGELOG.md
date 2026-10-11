@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.9 — 2026-10-11
+## 1.1.9b — 2026-10-11
 
 Reúne los cambios de 1.1.8b y 1.1.8c.
 
