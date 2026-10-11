@@ -1,15 +1,28 @@
 # Changelog
 
-## 1.1.8c — 2026-10-10
+## 1.1.9 — 2026-10-11
 
-### UPS Monitor (interfaz)
-- La cabecera de los dos gráficos (voltaje y consumo) ahora tiene el mismo diseño: título a la izquierda, rangos 1h/1d/1mo/All a la derecha y la leyenda entre ambos; en pantallas de hasta 700 px, título y rangos en la primera línea y la leyenda debajo, igual en los dos. Antes el gráfico de voltaje pasaba los rangos a una segunda línea y el de consumo no.
+Reúne los cambios de 1.1.8b y 1.1.8c.
 
-### Versión visible
+### Interfaz
+- En pantallas de hasta 960 px la barra lateral estaba oculta y no había forma de cambiar de módulo. Ahora hay un botón de menú (☰) en la barra superior que abre la navegación como panel lateral, con fondo atenuado; se cierra al tocar el fondo, un enlace o con Esc. Aplica a WOL Console, UPS Monitor, Net Monitor, Proxmox y Admin Panel.
+- La barra superior pasa a varias filas en móvil para que todos sus controles (idioma, tema, usuario, escaneo) sean alcanzables.
 - Todas las páginas (WOL, UPS, Net Monitor, Proxmox y Admin, incluida la pantalla de login) muestran *Pi Console vX.Y.Z* en el pie. La versión sale del archivo `/opt/pi-console/VERSION` que instala el paquete, vía `GET /api/version` de cada servicio (también aparece en `/api/health`).
 
-### Instalación
-- Los mensajes de instalación, actualización y desinstalación (`postinst`, `preinst`, `prerm`, `postrm`) ahora están en inglés.
+### WOL Console
+- Lee los hosts de Net Monitor (`net-monitor/hosts.json`, solo lectura): en *Add device* aparece **From Net Monitor** (solo admin con acceso a Net Monitor) para elegir un host detectado; rellena nombre, MAC, IP y categoría (computer→PC, storage→NAS, el resto→OTHER). Los ya agregados aparecen deshabilitados.
+- Si Net Monitor conoce otra IP para la misma MAC (DHCP), la tabla muestra la IP de Net Monitor (la guardada queda tachada) y *Wake* la usa para comprobar si el equipo ya está encendido.
+- Nuevo endpoint `GET /api/netmonitor/hosts` (requiere permiso `net` de lectura). Variables opcionales: `NET_HOSTS_FILE` (WOL) y `WOL_DEVICES_FILE` (Net Monitor).
+
+### UPS Monitor
+- Los servidores NUT ahora se pueden **editar** (nombre, host y puerto) desde el botón de lápiz de la barra lateral, además de eliminarlos. Al cambiar host o puerto se reconecta de inmediato y se descartan los datos del destino anterior; el historial se conserva. Nuevo endpoint `PUT /api/servers/<id>` (solo admin).
+- La cabecera de los dos gráficos (voltaje y consumo) ahora tiene el mismo diseño: título a la izquierda, rangos 1h/1d/1mo/All a la derecha y la leyenda entre ambos; en pantallas de hasta 700 px, título y rangos en la primera línea y la leyenda debajo, igual en los dos. Antes el gráfico de voltaje pasaba los rangos a una segunda línea y el de consumo no.
+- Se pueden eliminar todos los servidores, incluido el *Local*. Sin servidores el panel muestra "No UPS found" y el resto de los módulos no se ve afectado; la lista vacía se conserva tras reiniciar y se puede volver a agregar un servidor cuando se quiera. Antes solo el servidor Local no se podía eliminar.
+
+### Net Monitor
+- Nuevos tipos de dispositivo **printer** (impresora) y **tablet**. Impresoras: fabricantes (Brother, Canon, Epson, Lexmark, Xerox, Ricoh, Kyocera…), nombres de host (NPI…, LaserJet, MFC…), puertos 9100/515/631 y banners. Tablets: iPad, Galaxy Tab, Kindle, MiPad, etc.; un iPhone/Android sigue siendo *phone*. Disponibles en filtros y en la edición manual.
+- Los hosts que están registrados en WOL Console (misma MAC) muestran la etiqueta **WOL**.
+- La tabla de hosts ya no se desborda en pantallas angostas: hasta 700 px se ocultan las columnas Vendor/MAC, puertos, latencia y último visto, y hasta 480 px también OS. Todo eso sigue disponible al expandir la fila (toca el nombre del host).
 
 ### Módulo de salud
 - Cada servicio expone `GET /api/health` (sin login: solo niveles ok/warn/fail; con sesión, el detalle) y responde 503 si algo falla. Revisa archivos de datos legibles/escribibles, espacio en disco, y por módulo: WOL (red y lista de Net Monitor), UPS (base de datos, que el historial **realmente se esté guardando**, pollers vivos, upsd respondiendo), Net Monitor (escaneo trabado, temporizador de auto-escaneo armado) y Proxmox (pollers vivos, clusters respondiendo).
@@ -30,29 +43,8 @@
 ### Correcciones
 - **UPS Monitor dejaba de guardar el historial (gráficos de consumo sin datos nuevos)**: aproximadamente 4 horas después de iniciar el servicio, la limpieza periódica de la base (`db_prune`) fallaba con `database table is locked` y dejaba abierta su conexión; desde ese momento todos los guardados fallaban con `database is locked` hasta reiniciar el servicio. Ahora la limpieza cierra la transacción antes de compactar el WAL, siempre libera la conexión y un error ahí ya no afecta al resto.
 
-### Net Monitor (móvil)
-- La tabla de hosts ya no se desborda en pantallas angostas: hasta 700 px se ocultan las columnas Vendor/MAC, puertos, latencia y último visto, y hasta 480 px también OS. Todo eso sigue disponible al expandir la fila (toca el nombre del host).
-
-### UPS Monitor
-- Se pueden eliminar todos los servidores, incluido el *Local*. Sin servidores el panel muestra "No UPS found" y el resto de los módulos no se ve afectado; la lista vacía se conserva tras reiniciar y se puede volver a agregar un servidor cuando se quiera. Antes solo el servidor Local no se podía eliminar.
-
-## 1.1.8b — 2026-10-10
-
-### Interfaz móvil
-- En pantallas de hasta 960 px la barra lateral estaba oculta y no había forma de cambiar de módulo. Ahora hay un botón de menú (☰) en la barra superior que abre la navegación como panel lateral, con fondo atenuado; se cierra al tocar el fondo, un enlace o con Esc. Aplica a WOL Console, UPS Monitor, Net Monitor, Proxmox y Admin Panel.
-- La barra superior pasa a varias filas en móvil para que todos sus controles (idioma, tema, usuario, escaneo) sean alcanzables.
-
-### Net Monitor
-- Nuevos tipos de dispositivo **printer** (impresora) y **tablet**. Impresoras: fabricantes (Brother, Canon, Epson, Lexmark, Xerox, Ricoh, Kyocera…), nombres de host (NPI…, LaserJet, MFC…), puertos 9100/515/631 y banners. Tablets: iPad, Galaxy Tab, Kindle, MiPad, etc.; un iPhone/Android sigue siendo *phone*. Disponibles en filtros y en la edición manual.
-- Los hosts que están registrados en WOL Console (misma MAC) muestran la etiqueta **WOL**.
-
-### WOL Console
-- Lee los hosts de Net Monitor (`net-monitor/hosts.json`, solo lectura): en *Add device* aparece **From Net Monitor** (solo admin con acceso a Net Monitor) para elegir un host detectado; rellena nombre, MAC, IP y categoría (computer→PC, storage→NAS, el resto→OTHER). Los ya agregados aparecen deshabilitados.
-- Si Net Monitor conoce otra IP para la misma MAC (DHCP), la tabla muestra la IP de Net Monitor (la guardada queda tachada) y *Wake* la usa para comprobar si el equipo ya está encendido.
-- Nuevo endpoint `GET /api/netmonitor/hosts` (requiere permiso `net` de lectura). Variables opcionales: `NET_HOSTS_FILE` (WOL) y `WOL_DEVICES_FILE` (Net Monitor).
-
-### UPS Monitor
-- Los servidores NUT ahora se pueden **editar** (nombre, host y puerto) desde el botón de lápiz de la barra lateral, además de eliminarlos. Al cambiar host o puerto se reconecta de inmediato y se descartan los datos del destino anterior; el historial se conserva. Nuevo endpoint `PUT /api/servers/<id>` (solo admin).
+### Instalación
+- Los mensajes de instalación, actualización y desinstalación (`postinst`, `preinst`, `prerm`, `postrm`) ahora están en inglés.
 
 ## 1.1.8 — 2026-10-10
 
