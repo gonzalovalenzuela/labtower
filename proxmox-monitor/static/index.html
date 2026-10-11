@@ -61,11 +61,11 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 .btn-add-cluster:hover{background:var(--pve-dim)}
 .btn-add-cluster svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.5;flex-shrink:0}
 /* Main */
-.main{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh}
-.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:54px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
-.topbar-title{font-size:14px;font-weight:600;color:var(--text)}
+.main{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-width:0;min-height:100vh}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;min-height:54px;flex-wrap:wrap;row-gap:6px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.topbar-title{white-space:nowrap;font-size:14px;font-weight:600;color:var(--text)}
 .topbar-sub{font-size:12px;color:var(--text-dim);font-family:var(--mono)}
-.tb-right{display:flex;align-items:center;gap:8px}
+.tb-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 #clock{font-family:var(--mono);font-size:12px;color:var(--text-dim)}
 .btn-logout{background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px;line-height:1;transition:color .15s;display:flex;align-items:center}
 .btn-logout svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2}
@@ -86,7 +86,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 /* Content */
 .content{padding:22px 24px;display:flex;flex-direction:column;gap:18px}
 /* Stats */
-.stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.stats-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}
 .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow);transition:box-shadow .15s}
 .stat-card:hover{box-shadow:var(--shadow-md)}
 .stat-ico{width:38px;height:38px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;flex-shrink:0}
