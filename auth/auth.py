@@ -305,3 +305,50 @@ def token_from_request(headers, cookie_str="") -> str | None:
         part = part.strip()
         if part.startswith("session="): return part[8:].strip()
     return None
+
+
+# ─── Health ───────────────────────────────────────────────────────────────────
+STARTED = time.time()
+OK, WARN, FAIL = "ok", "warn", "fail"
+
+def chk(level, detail=""):
+    """One health check result: level is OK, WARN (degraded) or FAIL."""
+    return {"level": level, "detail": detail}
+
+def check_file(path, writable_dir=True, must_exist=False):
+    """Data file is readable (if present) and its directory writable."""
+    path = Path(path)
+    try:
+        if path.exists():
+            with open(path, "rb") as f: json.loads(f.read() or b"null")
+        elif must_exist:
+            return chk(FAIL, f"{path.name} missing")
+    except Exception as e:
+        return chk(FAIL, f"{path.name} unreadable: {e}")
+    if writable_dir and not os.access(path.parent, os.W_OK):
+        return chk(FAIL, f"{path.parent} not writable")
+    return chk(OK)
+
+def check_common():
+    """Checks every module shares: users file, sessions file, disk space."""
+    out = {}
+    users = _users_cached()
+    out["users"] = chk(OK) if users else chk(FAIL, "no usable users.json")
+    out["sessions"] = check_file(SESSIONS_FILE)
+    try:
+        st = os.statvfs(str(SESSIONS_FILE.parent if SESSIONS_FILE.parent.exists() else "/"))
+        mb = st.f_bavail * st.f_frsize // (1024 * 1024)
+        out["disk"] = chk(FAIL if mb < 5 else WARN if mb < 100 else OK, f"{mb} MB free")
+    except OSError as e:
+        out["disk"] = chk(WARN, str(e))
+    return out
+
+def health_reply(module, checks, detailed=False, extra=None):
+    """Build (http_code, body). Unauthenticated callers get levels only, no detail text."""
+    levels = [c["level"] for c in checks.values()]
+    status = FAIL if FAIL in levels else "degraded" if WARN in levels else OK
+    body = {"module": module, "status": status, "uptime": int(time.time() - STARTED),
+            "checks": {k: ({**v} if detailed else {"level": v["level"]}) for k, v in checks.items()}}
+    if extra and detailed: body.update(extra)
+    return (503 if status == FAIL else 200), body
+

@@ -1,0 +1,18 @@
+#!/bin/bash
+# pi-console-health — show the health of every Pi Console module (no login needed).
+# Exit code: 0 = all ok, 1 = degraded, 2 = failing/unreachable.   Use -j for raw JSON.
+URL="${PICONSOLE_HEALTH_URL:-http://127.0.0.1:8082/api/health}"
+if ! out=$(curl -sS --max-time 10 "$URL" 2>&1); then echo "FAIL: admin service not answering ($out)"; exit 2; fi
+if [ "$1" = "-j" ]; then echo "$out"; fi
+python3 - "$out" <<'PY'
+import json, sys
+try: d = json.loads(sys.argv[1])
+except Exception: print("FAIL: invalid answer"); sys.exit(2)
+icon = {"ok": "OK  ", "warn": "WARN", "degraded": "WARN", "fail": "FAIL"}
+print(f"Pi Console: {d['status'].upper()}")
+for k, v in d["checks"].items():
+    print(f"  [{icon.get(v['level'], v['level'])}] {k}")
+for m, h in d.get("modules", {}).items():
+    if h.get("status") != "ok": print(f"      {m}: {h.get('status')} — run: curl -s localhost:8082/api/health | python3 -m json.tool")
+sys.exit({"ok": 0, "degraded": 1}.get(d["status"], 2))
+PY

@@ -76,9 +76,10 @@ _INSERT_SQL = """
 """
 _ins_buf = []
 _ins_last = time.time()
+_flush_err = None            # last history-write error (None once a write succeeds), for /api/health
 
 def _flush_locked():
-    global _ins_last
+    global _ins_last, _flush_err
     if not _ins_buf: return
     conn = db_connect()
     try:
@@ -86,6 +87,10 @@ def _flush_locked():
         conn.commit()
         _ins_buf.clear()
         _ins_last = time.time()
+        _flush_err = None
+    except Exception as e:
+        _flush_err = str(e)
+        raise
     finally:
         conn.close()
 
@@ -398,6 +403,63 @@ def start_all():
     db_init()
     for s in load_servers(): ensure_poller(s)
 
+# ─── Health ───────────────────────────────────────────────────────────────────
+def health_report(detailed=False):
+    c = auth.check_common()
+    c["servers_file"] = auth.check_file(DATA_FILE)
+    now = time.time()
+    # History database: reachable, and rows are really being written
+    if not _db_lock.acquire(timeout=2):
+        c["database"] = auth.chk(auth.FAIL, "database lock held for more than 2 s")
+        last_by = {}
+    else:
+        last_by = {}
+        try:
+            conn = db_connect()
+            try:
+                conn.execute("SELECT 1").fetchone()
+                for r in conn.execute("SELECT srv_id, ups, MAX(ts) AS t FROM history GROUP BY srv_id, ups"):
+                    last_by[(r["srv_id"], r["ups"])] = r["t"]
+            finally:
+                conn.close()
+            c["database"] = auth.chk(auth.OK)
+        except Exception as e:
+            c["database"] = auth.chk(auth.FAIL, f"database error: {e}")
+        finally:
+            _db_lock.release()
+    if _flush_err:
+        c["history_write"] = auth.chk(auth.FAIL, f"last write failed: {_flush_err}")
+    elif _ins_buf and now - _ins_last > max(3 * DB_FLUSH_SEC, 180):
+        c["history_write"] = auth.chk(auth.FAIL, f"{len(_ins_buf)} rows unsaved for {int(now - _ins_last)} s")
+    else:
+        c["history_write"] = auth.chk(auth.OK, f"{len(_ins_buf)} rows buffered")
+    # Pollers and data freshness, per server
+    srvs = _safe_servers(); dead = []; stale = []; stuck = []
+    stale_after = max(6 * POLL_SEC, 60)
+    for s in srvs:
+        sid = s["id"]; t = _pollers.get(sid)
+        if t is None or not t.is_alive(): dead.append(s["name"]); continue
+        cache = _caches.get(sid)
+        if cache is None: continue
+        sn = cache.snap("none")
+        if sn["error"] or not sn["last_ok"] or now - sn["last_ok"] > stale_after:
+            stale.append(f'{s["name"]}: {sn["error"] or "no data yet"}')
+        else:
+            for ups in sn["ups"]:                      # fresh data in memory but nothing in the DB?
+                lt = last_by.get((sid, ups))
+                if lt is None or now - lt > max(5 * DB_FLUSH_SEC, 600):
+                    stuck.append(f"{s['name']}/{ups}: last saved {'never' if lt is None else str(int(now - lt)) + ' s ago'}")
+    if not srvs:
+        c["pollers"] = auth.chk(auth.OK, "no servers configured")
+    elif dead:
+        c["pollers"] = auth.chk(auth.FAIL, "poller stopped: " + ", ".join(dead))
+    else:
+        c["pollers"] = auth.chk(auth.OK, f"{len(srvs)} running")
+    c["upsd"] = auth.chk(auth.WARN, "; ".join(stale)) if stale else auth.chk(auth.OK, "all servers answering")
+    if stuck: c["history_fresh"] = auth.chk(auth.FAIL, "history not being saved — " + "; ".join(stuck))
+    else:     c["history_fresh"] = auth.chk(auth.OK)
+    return auth.health_reply("nut", c, detailed)
+
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
 class H(BaseHTTPRequestHandler):
     timeout = 30      # a stalled client must not hold a thread forever
@@ -444,6 +506,9 @@ class H(BaseHTTPRequestHandler):
 
         if path in ("/", "/index.html"):
             return self._file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
+        if path == "/api/health":      # public: levels only; details need a valid session
+            code, body = health_report(auth.get_session(tok) is not None)
+            return self._json(code, body)
         if path == "/api/login":
             return self._json(200, {"ok": True})
 
