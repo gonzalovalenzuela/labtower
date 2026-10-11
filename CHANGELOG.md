@@ -10,6 +10,7 @@ Reúne los cambios de 1.1.8b y 1.1.8c.
 - Todas las páginas (WOL, UPS, Net Monitor, Proxmox y Admin, incluida la pantalla de login) muestran *Pi Console vX.Y.Z* en el pie. La versión sale del archivo `/opt/pi-console/VERSION` que instala el paquete, vía `GET /api/version` de cada servicio (también aparece en `/api/health`).
 - Diseño: en pantallas de laptop (≈1366 px o menos) Net Monitor y WOL Console se salían de la pantalla por la derecha porque la barra superior no cabía; ahora la barra se acomoda en varias filas y no hay desbordamiento horizontal entre 320 y 1366 px. En móvil, el Admin Panel ya no se ensancha más que la pantalla (las tablas se desplazan dentro de su tarjeta).
 - Net Monitor: textos que quedaban en español con la interfaz en inglés («Todos», «seg», «cada 1h», «hace 8m», tooltips, detalle del host, progreso del escaneo) ahora siguen el idioma elegido.
+- Móvil: en el Admin Panel las tablas se desplazan dentro de su tarjeta sin mover el título ni el botón *New user*, y la barra superior alinea sus márgenes con el contenido. En UPS Monitor la tabla de resumen cabe en pantallas de 360 px aunque el modelo/serie sea largo, y el panel de detalle del UPS queda siempre visible aunque la tabla se desplace.
 
 ### WOL Console
 - Lee los hosts de Net Monitor (`net-monitor/hosts.json`, solo lectura): en *Add device* aparece **From Net Monitor** (solo admin con acceso a Net Monitor) para elegir un host detectado; rellena nombre, MAC, IP y categoría (computer→PC, storage→NAS, el resto→OTHER). Los ya agregados aparecen deshabilitados.
