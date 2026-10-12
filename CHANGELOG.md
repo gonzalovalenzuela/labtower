@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.9i — 2026-10-12
+## 1.1.9j — 2026-10-12
 
 Reúne los cambios de 1.1.8b y 1.1.8c.
 
@@ -34,6 +34,7 @@ Reúne los cambios de 1.1.8b y 1.1.8c.
 - El Admin Panel agrega la salud de todos los módulos en una tarjeta **Salud del sistema** (se refresca cada 30 s) y en `GET /admin/api/health`.
 - Cada módulo de la tarjeta se expande al hacer clic y muestra todo lo que se revisa: cada chequeo con su descripción, su nivel (verde/naranja/rojo) y el detalle (espacio libre, filas pendientes, error exacto, tiempo activo). Se mantiene abierto al refrescar.
 - Nuevo comando `pi-console-health` (código de salida 0 = ok, 1 = degradado, 2 = falla; `-j` muestra el JSON), útil para cron o monitoreo externo.
+- **Fuente de la Raspberry Pi:** el Admin Panel y `pi-console-health` muestran el chequeo `power` con aviso cuando la Pi registra subtensión o limitación (por fuente o cable insuficiente), sea ahora o desde el arranque. Solo aparece en una Raspberry Pi: en una VM u otro equipo no se muestra. Los eventos «desde el arranque» solo se borran al reiniciar. El instalador agrega al usuario del servicio al grupo `video` en una Pi para poder leer `vcgencmd get_throttled`.
 
 ### Revisión de código: bloqueos, concurrencia y robustez
 - **Servidores HTTP multihilo con timeout** (WOL, UPS, Net Monitor, Proxmox, Admin): antes eran de un solo hilo, así que un cliente lento o colgado bloqueaba todo el módulo. Ahora cada conexión tiene su hilo y un timeout.
