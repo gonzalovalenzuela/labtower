@@ -202,6 +202,9 @@ td{padding:10px 16px;vertical-align:middle}
 #wakeall-list{max-height:150px;overflow-y:auto;margin-bottom:18px;border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 12px;font-size:12px;font-family:var(--mono);color:var(--text-mid);display:flex;flex-direction:column;gap:4px;background:var(--bg)}
 .spin{display:inline-block;animation:spin .5s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:1180px){
+  .main-grid{grid-template-columns:1fr}     /* tablets: the 'Add device' panel goes below the table instead of squeezing it */
+}
 @media(max-width:960px){
   .sidebar{display:none}.main{margin-left:0}
   .stats-row{grid-template-columns:1fr 1fr}
