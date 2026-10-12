@@ -110,9 +110,9 @@ class FileLock:
                     except OSError:
                         os.close(fd); raise
                     self._fd = fd
-                except OSError as e:       # read-only dir etc.: keep going with the thread lock only
-                    log.warning(f"file lock unavailable ({self.path}): {e}")
-                    self._fd = None
+                except OSError as e:       # without the lock, concurrent writers could corrupt data
+                    log.error(f"file lock unavailable ({self.path}): {e}")
+                    raise RuntimeError(f"cannot acquire file lock {self.path}: {e}") from e
             self._depth += 1
         except BaseException:
             self._t.release(); raise
@@ -192,6 +192,19 @@ def _default_users() -> dict:
 
 _ucache = {"sig": None, "data": None}
 
+INIT_MARKER = USERS_FILE.with_name(".users-initialized")
+
+def _initialized() -> bool:
+    """True once this install has had a users table (marker or backup present)."""
+    return INIT_MARKER.exists() or USERS_FILE.with_name(USERS_FILE.name + ".bak").exists()
+
+def _mark_initialized():
+    try:
+        if not INIT_MARKER.exists():
+            atomic_write(INIT_MARKER, "1\n")
+    except OSError as e:
+        log.warning(f"cannot write {INIT_MARKER}: {e}")
+
 def _file_sig(p: Path):
     try:
         st = p.stat()
@@ -202,14 +215,19 @@ def _file_sig(p: Path):
 def _users_cached() -> dict:
     """Parsed users.json (shared object: do not mutate). Re-read only when the file changes.
 
-    * Missing file (fresh install)  → the initial admin account.
+    * Missing file, never initialised → the initial admin account (fresh install only).
+    * Missing file after use         → the last good copy (users.json.bak) or NO users.
     * Unreadable/corrupt file       → the last good copy (users.json.bak) or, failing that,
       NO users. It must never fall back to the default admin/admin account, which would
       silently reopen the panel with well-known credentials after a bad write.
     """
     sig = _file_sig(USERS_FILE)
     if sig is None:
-        return _default_users()
+        # users.json missing. Only a genuinely fresh install (no marker, no backup) gets the
+        # initial admin; otherwise the file was removed and nobody may log in with defaults.
+        if not _initialized():
+            return _default_users()
+        sig = ("missing",)
     if sig == _ucache["sig"] and _ucache["data"] is not None:
         return _ucache["data"]
     for p in (USERS_FILE, USERS_FILE.with_name(USERS_FILE.name + ".bak")):
@@ -219,12 +237,34 @@ def _users_cached() -> dict:
                 if p is not USERS_FILE:
                     log.error(f"{USERS_FILE} is unreadable; using {p.name}")
                 _ucache["sig"], _ucache["data"] = sig, data
+                _mark_initialized()
                 return data
+        except FileNotFoundError:
+            continue
         except Exception as e:
             log.error(f"{p}: {e}")
-    log.error(f"{USERS_FILE} is corrupt and there is no usable backup: no user can log in "
-              f"until it is fixed or deleted (deleting it recreates the default admin account)")
+    log.error(f"{USERS_FILE} is missing or corrupt and there is no usable backup: no user can "
+              f"log in until it is restored (or {INIT_MARKER} is removed to start from scratch)")
     return {}
+
+def ensure_permissions(modules=("net", "pve")) -> bool:
+    """One-time migration at service start: give every user an EXPLICIT level for `modules`.
+
+    Users that predate a module get "admin" if they administer WOL, else "readonly" (what the
+    old runtime fallback granted). After this a missing permission means no access: levels are
+    never derived from another module at request time. Returns True if users.json changed."""
+    with users_lock():
+        users = load_users()
+        changed = False
+        for udata in users.values():
+            perms = udata.setdefault("permissions", {})
+            for m in modules:
+                if m not in perms:
+                    perms[m] = "admin" if perms.get("wol") == "admin" else "readonly"
+                    changed = True
+        if changed:
+            save_users(users)
+        return changed
 
 def load_users() -> dict:
     """A private copy of the users table, safe to modify and pass to save_users()."""
@@ -239,6 +279,7 @@ def save_users(users: dict):
             except Exception:
                 pass
         atomic_write(USERS_FILE, json.dumps(users, indent=2))
+        _mark_initialized()
         _ucache["sig"], _ucache["data"] = _file_sig(USERS_FILE), copy.deepcopy(users)
 
 

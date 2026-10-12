@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
 
 PORT       = 8080
-HOST       = "0.0.0.0"
+HOST       = "127.0.0.1"
 DATA_FILE  = Path(__file__).parent / "devices.json"
 LOG_FILE   = Path(__file__).parent / "wake_log.json"
 # Net Monitor host table (shared info: MAC, IP, name, type). Read-only here.

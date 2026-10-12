@@ -489,6 +489,9 @@ cmd_gui_restore() {  # <name> <nut:0|1> <nginx:0|1>
   local name="${1:-}" nut="${2:-0}" ngx="${3:-0}" src copy
   [[ "$name" =~ $NAME_RE ]] || die "invalid backup name"
   [[ "$nut" =~ ^[01]$ && "$ngx" =~ ^[01]$ ]] || die "invalid option"
+  # The GUI path runs as root through sudo: restoring /etc/nut or the nginx site there would
+  # let anyone who can upload a backup run commands as root. Those two are CLI-only.
+  [ "$nut" = 0 ] && [ "$ngx" = 0 ] || die "restoring NUT/nginx is only available from the command line (teleporter restore --nut/--nginx)"
   src="$SPOOL_DIR/$name"
   [ -f "$src" ] && [ ! -L "$src" ] || die "backup not found: $name"
   # Work on a root-owned private copy so the unprivileged user cannot swap the

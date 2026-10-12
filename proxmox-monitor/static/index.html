@@ -256,6 +256,7 @@ input.err{border-color:var(--red)}
     <div style="display:flex;align-items:center;gap:10px">
       <span class="topbar-title" id="tb-title">Proxmox Dashboard</span>
       <span class="topbar-sub" id="tb-sub"></span>
+      <button id="tb-pin" class="btn-secondary" style="display:none;width:auto;padding:3px 9px;font-size:11px;color:var(--amber,#f59e0b)" onclick="pinCluster()"></button>
     </div>
     <div class="tb-right">
       <div class="lang-btns">
@@ -360,6 +361,9 @@ const LANG={
     pinNode:'Pin node in place',unpinNode:'Unpin node',moveEarlier:'Move earlier',moveLater:'Move later',dragReorder:'Drag to reorder',resetOrder:'Reset node order',layoutSaved:'Node order saved',
     testConnected:(v,n)=>`✓ PVE ${v} — ${n} node${n!==1?'s':''}`,
     testFillAll:'Fill in all fields',
+    fpConfirm:(fp)=>`Certificate SHA-256: ${fp} — compare it with the one shown in Proxmox (Datacenter → Node → Certificates). Press Test again to trust it and test the connection.`,
+    fpNeedTest:'Run Test and confirm the certificate first',fpChanged:'Host or port changed: run Test again',
+    unpinned:'Certificate not verified',pinCert:'Pin certificate',pinPrompt:(fp)=>`Trust this certificate for this cluster?\n\nSHA-256:\n${fp}`,pinned:'Certificate pinned',
     clusterAdded:(name)=>`${name} added`,
     deleteClusterConfirm:(name)=>`Delete cluster "${name}"?`,
     cpuAlert:(pct)=>`CPU at ${pct}%`,ramAlert:(pct)=>`RAM at ${pct}%`},
@@ -388,6 +392,9 @@ const LANG={
     pinNode:'Fijar nodo en su lugar',unpinNode:'Desfijar nodo',moveEarlier:'Mover antes',moveLater:'Mover después',dragReorder:'Arrastra para reordenar',resetOrder:'Restablecer orden de nodos',layoutSaved:'Orden de nodos guardado',
     testConnected:(v,n)=>`✓ PVE ${v} — ${n} nodo${n!==1?'s':''}`,
     testFillAll:'Completa todos los campos',
+    fpConfirm:(fp)=>`Certificado SHA-256: ${fp} — compáralo con el de Proxmox (Datacenter → Nodo → Certificates). Presiona Probar otra vez para confiar en él y probar la conexión.`,
+    fpNeedTest:'Primero usa Probar y confirma el certificado',fpChanged:'Cambió el host o el puerto: usa Probar otra vez',
+    unpinned:'Certificado sin verificar',pinCert:'Fijar certificado',pinPrompt:(fp)=>`¿Confiar en este certificado para este cluster?\n\nSHA-256:\n${fp}`,pinned:'Certificado fijado',
     clusterAdded:(name)=>`${name} agregado`,
     deleteClusterConfirm:(name)=>`¿Eliminar el cluster "${name}"?`,
     cpuAlert:(pct)=>`CPU al ${pct}%`,ramAlert:(pct)=>`RAM al ${pct}%`}
@@ -587,6 +594,8 @@ function renderDashboard(){
   const snap=cluster.snap;
   document.getElementById('tb-title').textContent=cluster.name;
   document.getElementById('tb-sub').textContent=cluster.host+':'+cluster.port+(snap?.data?.version?' · PVE '+snap.data.version:'');
+  const pb=document.getElementById('tb-pin');
+  if(pb){pb.style.display=cluster.pinned?'none':'';pb.textContent='⚠ '+t('unpinned')+' — '+t('pinCert');}
   const main=document.getElementById('main-content');
 
   if(!snap?.ts){
@@ -855,6 +864,7 @@ function toggleSection(id){
 // ── Add cluster ───────────────────────────────────────────────────────────────
 function openAddCluster(){document.getElementById('add-overlay').classList.add('show');document.getElementById('f-name').focus();}
 
+let pendingFp=null;                                          // certificate shown to the admin in the add dialog
 async function testCluster(){
   const btn=document.getElementById('btn-test'),res=document.getElementById('test-result');
   const host=document.getElementById('f-host').value.trim();
@@ -865,7 +875,15 @@ async function testCluster(){
   if(!host||!user||!tname||!tval){res.className='test-result fail show';res.textContent='✕ '+t('testFillAll');return;}
   btn.innerHTML='<span class="spin">⟳</span>';btn.disabled=true;
   try{
-    const r=await fetch('api/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host,port,user,token_name:tname,token_value:tval})});
+    if(!pendingFp||pendingFp.hp!==host+':'+port){          // step 1: show the certificate, token not sent yet
+      const r0=await fetch('api/fingerprint',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host,port})});
+      const d0=await r0.json();
+      if(!d0.ok){res.className='test-result fail show';res.textContent='✕ '+(d0.error||'Error');return;}
+      pendingFp={hp:host+':'+port,fp:d0.fingerprint,confirmed:false};
+      res.className='test-result show';res.textContent=t('fpConfirm',d0.fingerprint);return;
+    }
+    pendingFp.confirmed=true;                               // step 2: pinned test
+    const r=await fetch('api/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host,port,user,token_name:tname,token_value:tval,fingerprint:pendingFp.fp})});
     const d=await r.json();
     if(d.ok){res.className='test-result ok show';res.textContent=t('testConnected',d.version,d.nodes);log('OK','Test OK: '+host);}
     else{res.className='test-result fail show';res.textContent='✕ '+d.error;}
@@ -882,13 +900,28 @@ async function saveCluster(){
   const tval=document.getElementById('f-tval').value.trim();
   const btn=document.getElementById('btn-save');
   if(!name||!host||!user||!tname||!tval){toast(t('testFillAll'),true);return;}
+  if(!pendingFp||!pendingFp.confirmed){toast(t('fpNeedTest'),true);return;}
+  if(pendingFp.hp!==host+':'+port){toast(t('fpChanged'),true);return;}
   btn.disabled=true;btn.innerHTML='<span class="spin">⟳</span>';
   try{
-    const r=await fetch('api/clusters',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,host,port,user,token_name:tname,token_value:tval})});
+    const r=await fetch('api/clusters',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,host,port,user,token_name:tname,token_value:tval,fingerprint:pendingFp.fp})});
     const d=await r.json();if(!r.ok)throw new Error(d.error||'HTTP '+r.status);
-    toast(t('clusterAdded',name));closeModals();await fetchAll();selectCluster(d.cluster.id);
+    pendingFp=null;toast(t('clusterAdded',name));closeModals();await fetchAll();selectCluster(d.cluster.id);
   }catch(e){toast(e.message,true);}
   finally{btn.disabled=false;btn.textContent=t('addCluster');}
+}
+
+async function pinCluster(){
+  const c=clusters.find(x=>x.id===activeId);if(!c)return;
+  try{
+    const post=b=>fetch('api/clusters/'+c.id+'/pin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json());
+    const d=await post({});
+    if(!d.ok){toast(d.error||'Error',true);return;}
+    if(!confirm(t('pinPrompt',d.fingerprint)))return;
+    const d2=await post({fingerprint:d.fingerprint});
+    if(!d2.ok){toast(d2.error||'Error',true);return;}
+    toast(t('pinned'));await fetchAll();
+  }catch(e){toast(e.message,true);}
 }
 
 function confirmDelete(id,name){

@@ -3,7 +3,7 @@
 Proxmox Monitor — Dashboard de nodos, VMs y CTs
 API REST de Proxmox VE — sin dependencias externas
 """
-import json, os, re, ssl, sys, time, logging, threading, http.client
+import json, os, re, ssl, sys, time, logging, threading, http.client, hashlib, socket
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
 from urllib.parse import urlparse, parse_qs
@@ -35,10 +35,31 @@ class PVEHTTPError(RuntimeError):
         super().__init__(f"HTTP {status}: {reason}")
         self.status = status
 
+class PVECertError(Exception):
+    pass
+
+def _fp_norm(fp) -> str:
+    """Normalise a SHA-256 fingerprint to 64 lowercase hex chars ('' if it is not one)."""
+    h = re.sub(r"[^0-9a-fA-F]", "", fp or "").lower() if isinstance(fp, str) else ""
+    return h if len(h) == 64 else ""
+
+def _fp_fmt(h: str) -> str:
+    return ":".join(h[i:i + 2] for i in range(0, 64, 2)).upper()
+
+def fetch_fingerprint(host, port, timeout=8) -> str:
+    """SHA-256 of the certificate the server presents (no token is sent). Normalised hex."""
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    with socket.create_connection((host, int(port)), timeout=timeout) as raw:
+        with ctx.wrap_socket(raw, server_hostname=host) as tls:
+            return hashlib.sha256(tls.getpeercert(binary_form=True)).hexdigest()
+
 class PVEClient:
     """PVE API client with a persistent HTTPS connection (avoids a TLS handshake on every poll)."""
-    def __init__(self, host, port, user, token_name, token_value, verify_ssl=False):
+    def __init__(self, host, port, user, token_name, token_value, verify_ssl=False, fingerprint=None):
         self.host, self.port = host, int(port)
+        self.fingerprint = _fp_norm(fingerprint)          # pinned SHA-256 of the server certificate
         self.headers = {
             "Authorization": f"PVEAPIToken={user}!{token_name}={token_value}",
             "Accept":        "application/json",
@@ -63,13 +84,20 @@ class PVEClient:
                 try:
                     if self._conn is None:
                         self._conn = http.client.HTTPSConnection(self.host, self.port, timeout=8, context=self.ctx)
+                        if self.fingerprint:            # check the certificate BEFORE sending the API token
+                            self._conn.connect()
+                            got = hashlib.sha256(self._conn.sock.getpeercert(binary_form=True)).hexdigest()
+                            if got != self.fingerprint:
+                                self.close()
+                                raise PVECertError("Certificate fingerprint mismatch: the server's certificate "
+                                                   "changed (re-pin it if this is expected)")
                     self._conn.request("GET", "/api2/json" + path, headers=self.headers)
                     r = self._conn.getresponse()
                     body = r.read()
                     if r.status >= 400:
                         raise PVEHTTPError(r.status, r.reason)
                     return json.loads(body.decode())
-                except PVEHTTPError:
+                except (PVEHTTPError, PVECertError):
                     raise
                 except (http.client.HTTPException, OSError, ValueError):
                     self.close()                      # stale keep-alive connection: reconnect once
@@ -233,14 +261,20 @@ def _poll_cluster(cluster):
         host=cluster["host"], port=cluster.get("port", 8006),
         user=cluster["user"], token_name=cluster["token_name"],
         token_value=cluster["token_value"],
-        verify_ssl=cluster.get("verify_ssl", False)
+        verify_ssl=cluster.get("verify_ssl", False),
+        fingerprint=cluster.get("fingerprint")
     )
     version, ceph, slow_ts = "", None, 0.0
     use_resources = True
 
     while True:
         try:
-            gone = not any(c["id"] == cid for c in load_clusters())
+            cur = next((c for c in load_clusters() if c["id"] == cid), None)
+            gone = cur is None
+            if cur is not None:                  # picks up a certificate pinned while running
+                fp = _fp_norm(cur.get("fingerprint"))
+                if fp != client.fingerprint:
+                    client.fingerprint = fp; client.close()
         except Exception as e:                    # never let the poller thread die on a config hiccup
             log.error(f"[{cluster['name']}] config read: {e}"); gone = False
         if gone:
@@ -414,6 +448,7 @@ class H(BaseHTTPRequestHandler):
                         if mem_pct > 90:
                             alerts.append({"node": nd["name"], "type": "mem", "value": round(mem_pct, 1)})
                 pub = {k: v for k, v in c.items() if k != "token_value"}     # never send the API token to the browser
+                pub["pinned"] = bool(_fp_norm(c.get("fingerprint")))
                 pub.setdefault("layout", {"order": [], "pinned": []})
                 out.append({**pub, "snap": snap, "alerts": alerts})
             self._json(200, {"clusters": out})
@@ -440,17 +475,6 @@ class H(BaseHTTPRequestHandler):
         elif path == "/api/me":
             sess = auth.get_session(tok)
             if sess:
-                # Auto-agregar permiso 'pve' si tiene sesión válida de otra app
-                if "pve" not in sess.get("permissions", {}):
-                    try:
-                        users = auth.load_users()
-                        uname = sess["username"]
-                        if uname in users:
-                            lvl = "admin" if users[uname]["permissions"].get("wol") == "admin" else "readonly"
-                            users[uname]["permissions"]["pve"] = lvl
-                            auth.save_users(users)
-                            sess["permissions"]["pve"] = lvl
-                    except Exception: pass
                 self._json(200, {"username": sess["username"],
                                   "permissions": sess["permissions"]})
             else:
@@ -516,12 +540,15 @@ class H(BaseHTTPRequestHandler):
             try: port = int(body.get("port", 8006))
             except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
             if not all([host,name,user,tname,tval]):
-                return self._json(400, {"error": "Todos los campos son requeridos"})
+                return self._json(400, {"error": "All fields are required"})
             if not 1 <= port <= 65535: return self._json(400, {"error": "Invalid port"})
+            fp = _fp_norm(body.get("fingerprint"))
+            if not fp:
+                return self._json(400, {"error": "Certificate fingerprint required: run Test and confirm it"})
             import uuid
             cluster = {"id": str(uuid.uuid4()), "name": name, "host": host,
                        "port": port, "user": user, "token_name": tname,
-                       "token_value": tval, "verify_ssl": False}
+                       "token_value": tval, "verify_ssl": False, "fingerprint": fp}
             with _cl_lock:
                 clusters = load_clusters()
                 if any(c["host"]==host and c.get("port")==port for c in clusters):
@@ -531,6 +558,42 @@ class H(BaseHTTPRequestHandler):
             ensure_poller(cluster)
             # never echo the API token back
             self._json(201, {"cluster": {k: v for k, v in cluster.items() if k != "token_value"}})
+
+        elif path == "/api/fingerprint":
+            if not auth.check_permission(tok, "pve", "admin"):
+                return self._json(403, {"error": "Admin permission required"})
+            host = (body.get("host","")).strip()
+            try: port = int(body.get("port", 8006))
+            except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
+            if not host or not 1 <= port <= 65535: return self._json(400, {"error": "Invalid host or port"})
+            try:
+                self._json(200, {"ok": True, "fingerprint": _fp_fmt(fetch_fingerprint(host, port))})
+            except Exception as e:
+                self._json(200, {"ok": False, "error": str(e)})
+
+        elif re.match(r'^/api/clusters/[a-zA-Z0-9\-]+/pin$', path):
+            if not auth.check_permission(tok, "pve", "admin"):
+                return self._json(403, {"error": "Admin permission required"})
+            cid = path.split("/")[3]
+            with _cl_lock:
+                clusters = load_clusters()
+                c = next((x for x in clusters if x["id"] == cid), None)
+            if not c: return self._json(404, {"error": "Not found"})
+            try:
+                cur = fetch_fingerprint(c["host"], c.get("port", 8006))
+            except Exception as e:
+                return self._json(200, {"ok": False, "error": str(e)})
+            want = _fp_norm(body.get("fingerprint"))
+            if not want:                                  # step 1: show what the server presents now
+                return self._json(200, {"ok": True, "fingerprint": _fp_fmt(cur)})
+            if want != cur:
+                return self._json(409, {"error": "The certificate changed since you looked at it"})
+            with _cl_lock:
+                clusters = load_clusters()
+                for x in clusters:
+                    if x["id"] == cid: x["fingerprint"] = cur
+                save_clusters(clusters)
+            self._json(200, {"ok": True, "pinned": True})
 
         elif path == "/api/test":
             if not auth.check_permission(tok, "pve", "admin"):
@@ -543,7 +606,9 @@ class H(BaseHTTPRequestHandler):
             tname = (body.get("token_name","")).strip()
             tval  = (body.get("token_value","")).strip()
             try:
-                client = PVEClient(host, port, user, tname, tval)
+                fp = _fp_norm(body.get("fingerprint"))
+                if not fp: return self._json(400, {"error": "Certificate fingerprint required"})
+                client = PVEClient(host, port, user, tname, tval, fingerprint=fp)
                 ver    = client.version()
                 nodes  = client.nodes()
                 self._json(200, {"ok": True, "version": ver,
@@ -571,17 +636,9 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
-    # Agregar permiso 'pve' a usuarios existentes
+    # Explicit 'pve' level for users that predate the module (one-time migration)
     try:
-        with auth.users_lock():
-            users = auth.load_users()
-            changed = False
-            for udata in users.values():
-                if "pve" not in udata.get("permissions", {}):
-                    udata["permissions"]["pve"] = "admin" if udata["permissions"].get("wol") == "admin" else "readonly"
-                    changed = True
-            if changed:
-                auth.save_users(users); log.info("Permisos 'pve' actualizados")
+        if auth.ensure_permissions(("pve",)): log.info("Permisos 'pve' actualizados")
     except Exception as e:
         log.warning(f"Permisos: {e}")
 

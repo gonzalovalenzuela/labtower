@@ -325,6 +325,8 @@ input.err{border-color:var(--red)}
           <th data-i18n="colUser">User</th>
           <th data-i18n="colWOL">WOL</th>
           <th data-i18n="colUPS">UPS Monitor</th>
+          <th data-i18n="colNET">Net Monitor</th>
+          <th data-i18n="colPVE">Proxmox</th>
           <th data-i18n="colStatus">Status</th>
           <th data-i18n="colCreated">Created</th>
           <th style="text-align:right" data-i18n="colActions">Actions</th>
@@ -413,6 +415,24 @@ input.err{border-color:var(--red)}
               <option value="admin">Administrator</option>
             </select>
           </div>
+          <div class="field">
+            <label>Net Monitor</label>
+            <select id="d-net">
+              <option value="none" selected>No access</option>
+              <option value="readonly">Read only</option>
+              <option value="execute">Execute</option>
+              <option value="admin">Administrator</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Proxmox</label>
+            <select id="d-pve">
+              <option value="none" selected>No access</option>
+              <option value="readonly">Read only</option>
+              <option value="execute">Execute</option>
+              <option value="admin">Administrator</option>
+            </select>
+          </div>
         </div>
         <div id="perm-help-box" style="margin-top:10px;padding:10px 12px;background:var(--bg);border-radius:var(--r-sm);font-size:11px;color:var(--text-dim);line-height:1.7"></div>
       </div>
@@ -444,9 +464,7 @@ input.err{border-color:var(--red)}
 <div class="overlay" id="tp-rs-overlay">
   <div class="modal wide">
     <h3 data-i18n="tpRestoreTitle">Restore backup</h3>
-    <p><b id="tp-rs-name" style="font-family:var(--mono);font-size:12px"></b><br><span data-i18n="tpRestoreWarn">This replaces the current users, devices, history and settings with the ones in the backup. A safety snapshot of the current state is saved first. The panel restarts and you will have to sign in again.</span></p>
-    <label class="tp-opt"><input type="checkbox" id="tp-opt-nut"><span data-i18n="tpOptNut">Also restore the NUT configuration in /etc/nut (optional; normally configure it manually). It can contain passwords and commands run by the UPS daemon as root: only restore backups you trust.</span></label>
-    <label class="tp-opt"><input type="checkbox" id="tp-opt-nginx"><span data-i18n="tpOptNginx">Also overwrite the nginx site (normally keep the one that comes with this version).</span></label>
+    <p><b id="tp-rs-name" style="font-family:var(--mono);font-size:12px"></b><br><span data-i18n="tpRestoreWarn">This replaces the current users, devices, history and settings with the ones in the backup. A safety snapshot of the current state is saved first. The panel restarts and you will have to sign in again. The NUT and nginx configuration are not restored from here (command line only: <code>teleporter restore --nut / --nginx</code>).</span></p>
     <label class="tp-opt"><input type="checkbox" id="tp-opt-ok" onchange="document.getElementById('tp-rs-go').disabled=!this.checked"><span data-i18n="tpOptOk">I understand that the current data will be overwritten.</span></label>
     <div class="modal-acts">
       <button class="btn-mc" onclick="closeModals()" data-i18n="btnCancel">Cancel</button>
@@ -482,7 +500,7 @@ const LANG = {
     topbarTitle:'User management',
     statTotal:'Total users', statAdmins:'Administrators', statReadonly:'Read-only',
     cardTitle:'System users', btnNewUser:'New user',
-    colUser:'User', colWOL:'WOL', colUPS:'UPS Monitor', colStatus:'Status', colCreated:'Created', colActions:'Actions',
+    colUser:'User', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colStatus:'Status', colCreated:'Created', colActions:'Actions',
     drawerNew:'New user', drawerEdit:'Edit — ',
     fieldUsername:'Username', fieldUsernameHint:'2-32 alphanumeric chars, dash or underscore',
     fieldPassword:'Password', fieldPasswordHint:'Minimum 6 characters',
@@ -509,9 +527,7 @@ const LANG = {
     tpChecking:'Verifying…', tpCheckOk:'Backup is valid', tpCheckBad:'Backup is NOT valid',
     tpNotAvailable:'teleporter.sh is not installed on this system.',
     tpRestoreTitle:'Restore backup',
-    tpRestoreWarn:'This replaces the current users, devices, history and settings with the ones in the backup. A safety snapshot of the current state is saved first. The panel restarts and you will have to sign in again.',
-    tpOptNut:'Also restore the NUT configuration in /etc/nut (optional; normally configure it manually). It can contain passwords and commands run by the UPS daemon as root: only restore backups you trust.',
-    tpOptNginx:'Also overwrite the nginx site (normally keep the one that comes with this version).',
+    tpRestoreWarn:'This replaces the current users, devices, history and settings with the ones in the backup. A safety snapshot of the current state is saved first. The panel restarts and you will have to sign in again. The NUT and nginx configuration are not restored from here (command line only: teleporter restore --nut / --nginx).',
     tpOptOk:'I understand that the current data will be overwritten.',
     tpRestoreBtn:'Restore', tpConfirmDelete:n=>`Delete the backup "${n}"?`, tpDeleted:'Backup deleted',
     tpProgTitle:'Restoring…', tpProgMsg:'Do not close this page. The services restart during the restore.',
@@ -537,7 +553,7 @@ const LANG = {
     topbarTitle:'Gestión de usuarios',
     statTotal:'Usuarios totales', statAdmins:'Administradores', statReadonly:'Solo lectura',
     cardTitle:'Usuarios del sistema', btnNewUser:'Nuevo usuario',
-    colUser:'Usuario', colWOL:'WOL', colUPS:'UPS Monitor', colStatus:'Estado', colCreated:'Creado', colActions:'Acciones',
+    colUser:'Usuario', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colStatus:'Estado', colCreated:'Creado', colActions:'Acciones',
     drawerNew:'Nuevo usuario', drawerEdit:'Editar — ',
     fieldUsername:'Nombre de usuario', fieldUsernameHint:'2-32 caracteres alfanuméricos, guion o guion bajo',
     fieldPassword:'Contraseña', fieldPasswordHint:'Mínimo 6 caracteres',
@@ -564,9 +580,7 @@ const LANG = {
     tpChecking:'Verificando…', tpCheckOk:'El respaldo es válido', tpCheckBad:'El respaldo NO es válido',
     tpNotAvailable:'teleporter.sh no está instalado en este sistema.',
     tpRestoreTitle:'Restaurar respaldo',
-    tpRestoreWarn:'Esto reemplaza los usuarios, dispositivos, historial y ajustes actuales por los del respaldo. Antes se guarda un snapshot de seguridad del estado actual. El panel se reinicia y tendrás que iniciar sesión de nuevo.',
-    tpOptNut:'Restaurar también la configuración de NUT en /etc/nut (opcional; lo normal es configurarla manualmente). Puede contener contraseñas y comandos que el demonio del UPS ejecuta como root: restaura solo respaldos de confianza.',
-    tpOptNginx:'Sobrescribir también el sitio nginx (normalmente conviene mantener el que trae esta versión).',
+    tpRestoreWarn:'Esto reemplaza los usuarios, dispositivos, historial y ajustes actuales por los del respaldo. Antes se guarda un snapshot de seguridad del estado actual. El panel se reinicia y tendrás que iniciar sesión de nuevo. La configuración de NUT y nginx no se restaura desde aquí (solo por consola: teleporter restore --nut / --nginx).',
     tpOptOk:'Entiendo que se sobrescribirán los datos actuales.',
     tpRestoreBtn:'Restaurar', tpConfirmDelete:n=>`¿Eliminar el respaldo "${n}"?`, tpDeleted:'Respaldo eliminado',
     tpProgTitle:'Restaurando…', tpProgMsg:'No cierres esta página. Los servicios se reinician durante la restauración.',
@@ -599,7 +613,7 @@ function setLang(l){
   const dpw = document.getElementById('d-password');
   if(dpw) dpw.placeholder = t('fieldPasswordHint');
   // Update permission selects
-  ['d-wol','d-nut'].forEach(id=>{
+  ['d-wol','d-nut','d-net','d-pve'].forEach(id=>{
     const sel = document.getElementById(id); if(!sel) return;
     const val = sel.value;
     sel.innerHTML = ['none','readonly','execute','admin'].map(v=>`<option value="${v}"${val===v?' selected':''}>${t('perm'+v.charAt(0).toUpperCase()+v.slice(1))}</option>`).join('');
@@ -815,6 +829,8 @@ function renderUsers(users) {
       <td><span class="uname">${esc(u.username)}</span></td>
       <td data-label="${esc(t('colWOL'))}">${permBadge(u.permissions.wol)}</td>
       <td data-label="${esc(t('colUPS'))}">${permBadge(u.permissions.nut)}</td>
+      <td data-label="${esc(t('colNET'))}">${permBadge(u.permissions.net)}</td>
+      <td data-label="${esc(t('colPVE'))}">${permBadge(u.permissions.pve)}</td>
       <td data-label="${esc(t('colStatus'))}">${u.must_change_password ? `<span class="must-change">${t('mustChangeBadge')}</span>` : '<span style="font-size:11px;color:var(--text-dim)">—</span>'}</td>
       <td data-label="${esc(t('colCreated'))}"><span class="ucreated">${u.created ? new Date(u.created*1000).toLocaleDateString(locale) : '—'}</span></td>
       <td class="col-actions">
@@ -842,9 +858,10 @@ function openDrawer(user) {
   document.getElementById('d-must-change').checked = isEdit ? user.must_change_password : false;
 
   // Rebuild selects with translated options at current perm values
-  ['d-wol','d-nut'].forEach(id=>{
+  ['d-wol','d-nut','d-net','d-pve'].forEach(id=>{
     const sel = document.getElementById(id); if(!sel) return;
-    const val = isEdit ? (id==='d-wol' ? (user.permissions.wol||'none') : (user.permissions.nut||'none')) : (id==='d-wol' ? 'execute' : 'readonly');
+    const key = id.slice(2), defs = {wol:'execute', nut:'readonly', net:'none', pve:'none'};
+    const val = isEdit ? (user.permissions[key]||'none') : defs[key];
     sel.innerHTML = ['none','readonly','execute','admin'].map(v=>`<option value="${v}"${val===v?' selected':''}>${t('perm'+v.charAt(0).toUpperCase()+v.slice(1))}</option>`).join('');
   });
 
@@ -879,11 +896,13 @@ async function saveUser() {
       const pwd   = document.getElementById('d-password').value;
       const wol   = document.getElementById('d-wol').value;
       const nut   = document.getElementById('d-nut').value;
+      const net   = document.getElementById('d-net').value;
+      const pve   = document.getElementById('d-pve').value;
       const must  = document.getElementById('d-must-change').checked;
       if (!uname || !pwd) { toast(t('loginFill'), true); return; }
       const r = await fetch('api/users', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({username:uname, password:pwd, wol_permission:wol, nut_permission:nut, must_change_password:must})
+        body: JSON.stringify({username:uname, password:pwd, wol_permission:wol, nut_permission:nut, net_permission:net, pve_permission:pve, must_change_password:must})
       });
       const d = await r.json();
       if (!r.ok) { toast(d.error||'Error', true); return; }
@@ -892,11 +911,13 @@ async function saveUser() {
       const uorig = document.getElementById('d-username-orig').value;
       const wol   = document.getElementById('d-wol').value;
       const nut   = document.getElementById('d-nut').value;
+      const net   = document.getElementById('d-net').value;
+      const pve   = document.getElementById('d-pve').value;
       const newPw = document.getElementById('d-new-pw').value;
       // Actualizar permisos
       const r = await fetch('api/users/'+uorig, {
         method: 'PUT', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({wol_permission:wol, nut_permission:nut})
+        body: JSON.stringify({wol_permission:wol, nut_permission:nut, net_permission:net, pve_permission:pve})
       });
       const d = await r.json();
       if (!r.ok) { toast(d.error||'Error', true); return; }
@@ -1025,15 +1046,12 @@ async function tpDelete(name) {
 function tpRestoreOpen(name) {
   _tpName = name;
   document.getElementById('tp-rs-name').textContent = name;
-  document.getElementById('tp-opt-nut').checked = false;
-  document.getElementById('tp-opt-nginx').checked = false;
   document.getElementById('tp-opt-ok').checked = false;
   document.getElementById('tp-rs-go').disabled = true;
   document.getElementById('tp-rs-overlay').classList.add('show');
 }
 async function tpRestoreGo() {
-  const body = {name:_tpName, confirm:true,
-    nut:document.getElementById('tp-opt-nut').checked, nginx:document.getElementById('tp-opt-nginx').checked};
+  const body = {name:_tpName, confirm:true};
   closeModals();
   try {
     const r = await fetch('api/teleporter/restore', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
