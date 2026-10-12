@@ -2,6 +2,7 @@
 """Panel de administración de usuarios — corre en puerto 8082."""
 import json, sys, time, logging, re
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
 from urllib.parse import urlparse
 from pathlib import Path
 
@@ -171,8 +172,8 @@ class H(BaseHTTPRequestHandler):
 
         # Login público
         if path == "/api/login":
-            u = auth.authenticate(body.get("username",""), body.get("password",""))
-            if not u: return self._json(401, {"error": "Invalid credentials"})
+            u, err = auth.login(self, body.get("username",""), body.get("password",""))
+            if not u: return self._json(err[0], {"error": err[1]})
             # Solo admins pueden acceder al panel
             if auth.LEVELS.get(u["permissions"].get("wol",""),0) < 3 and \
                auth.LEVELS.get(u["permissions"].get("nut",""),0) < 3:

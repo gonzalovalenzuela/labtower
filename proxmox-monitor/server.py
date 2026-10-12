@@ -5,6 +5,7 @@ API REST de Proxmox VE — sin dependencias externas
 """
 import json, os, re, ssl, sys, time, logging, threading, http.client
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
 from urllib.parse import urlparse, parse_qs
 from urllib.request import urlopen, Request
 from urllib.error import URLError
@@ -464,8 +465,8 @@ class H(BaseHTTPRequestHandler):
         if body is None: return self._json(400, {"error": "Invalid request body"})
 
         if path == "/api/login":
-            u = auth.authenticate(body.get("username",""), body.get("password",""))
-            if not u: return self._json(401, {"error": "Invalid credentials"})
+            u, err = auth.login(self, body.get("username",""), body.get("password",""))
+            if not u: return self._json(err[0], {"error": err[1]})
             token = auth.create_session(body["username"], u["permissions"])
             users = auth.load_users()
             must  = users.get(body["username"],{}).get("must_change_password", False)

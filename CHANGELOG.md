@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.9d — 2026-10-11
+## 1.1.9e — 2026-10-11
 
 Reúne los cambios de 1.1.8b y 1.1.8c.
 
@@ -46,9 +46,15 @@ Reúne los cambios de 1.1.8b y 1.1.8c.
 
 ### Correcciones
 - **UPS Monitor dejaba de guardar el historial (gráficos de consumo sin datos nuevos)**: aproximadamente 4 horas después de iniciar el servicio, la limpieza periódica de la base (`db_prune`) fallaba con `database table is locked` y dejaba abierta su conexión; desde ese momento todos los guardados fallaban con `database is locked` hasta reiniciar el servicio. Ahora la limpieza cierra la transacción antes de compactar el WAL, siempre libera la conexión y un error ahí ya no afecta al resto.
+- Los servicios aceptan ráfagas de conexiones simultáneas (cola de escucha de 5 a 128): antes, 30 peticiones a la vez podían terminar con la conexión reiniciada.
 
 ### Documentación
 - Capturas de pantalla de todos los módulos (claro/oscuro, 4 resoluciones) en `docs/screenshots/` y galería en el README.
+
+### Seguridad
+- Contraseñas: ahora se guardan con **scrypt** y una sal aleatoria por usuario (antes SHA-256 con una sal fija). Los usuarios existentes se migran solos en su próximo inicio de sesión; los respaldos antiguos siguen funcionando.
+- Inicio de sesión: tras 5 intentos fallidos desde la misma IP se bloquea el acceso durante 5 minutos (respuesta 429). Cada fallo añade una pequeña espera, y un usuario inexistente tarda lo mismo que uno real. Los contadores son por servicio y se reinician al reiniciarlo.
+- nginx: cabeceras `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` y una política `Content-Security-Policy` básica.
 
 ### Instalación
 - Los mensajes de instalación, actualización y desinstalación (`postinst`, `preinst`, `prerm`, `postrm`) ahora están en inglés.
