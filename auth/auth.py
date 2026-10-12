@@ -137,17 +137,53 @@ def users_lock():
 
 
 def _salt() -> str:
+    """Salt of the LEGACY sha256 hashes (kept only to verify and migrate old users.json files)."""
     return os.environ.get("PICONSOLE_SALT", "pi-console-salt-change-me")
 
+_SCRYPT_N, _SCRYPT_R, _SCRYPT_P = 2 ** 14, 8, 1      # ~16 MB, ~0.1-0.3 s on a Pi 3
+
 def _hash(password: str) -> str:
+    """Salted scrypt hash, stored as  scrypt$N$r$p$<salt hex>$<hash hex>  (random salt per password)."""
+    salt = os.urandom(16)
+    dk = hashlib.scrypt(password.encode(), salt=salt, n=_SCRYPT_N, r=_SCRYPT_R, p=_SCRYPT_P, dklen=32)
+    return f"scrypt${_SCRYPT_N}${_SCRYPT_R}${_SCRYPT_P}${salt.hex()}${dk.hex()}"
+
+def _legacy_hash(password: str) -> str:
     return hashlib.sha256(f"{_salt()}:{password}".encode()).hexdigest()
+
+def _is_legacy(stored) -> bool:
+    return not (isinstance(stored, str) and stored.startswith("scrypt$"))
+
+def _verify(stored, password: str) -> bool:
+    """Check a password against a stored hash (scrypt, or the legacy sha256 format)."""
+    if not isinstance(stored, str): return False
+    if _is_legacy(stored):
+        return hmac.compare_digest(stored, _legacy_hash(password))
+    try:
+        _, n, r, p, salt, want = stored.split("$")
+        dk = hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), n=int(n), r=int(r), p=int(p),
+                            dklen=len(want) // 2, maxmem=128 * 1024 * 1024)
+        return hmac.compare_digest(dk.hex(), want)
+    except Exception:
+        return False
+
+_dummy_hash = None
+def _burn_time(password: str):
+    """Spend the same time as a real check so an unknown user cannot be told apart by latency."""
+    global _dummy_hash
+    if _dummy_hash is None: _dummy_hash = _hash("x")
+    _verify(_dummy_hash, password)
 
 
 # ─── Usuarios ─────────────────────────────────────────────────────────────────
+_default_pw_hash = None
+
 def _default_users() -> dict:
+    global _default_pw_hash
+    if _default_pw_hash is None: _default_pw_hash = _hash("admin")      # computed once: this runs per request on a fresh install
     return {
         "admin": {
-            "password_hash": _hash("admin"),
+            "password_hash": _default_pw_hash,
             "permissions": {"wol": "admin", "nut": "admin", "net": "admin", "pve": "admin"},
             "created": int(time.time()),
             "must_change_password": True,
@@ -288,10 +324,62 @@ def _purge(sessions: dict):
 LEVELS = {"readonly": 1, "execute": 2, "admin": 3}
 
 def authenticate(username: str, password: str) -> dict | None:
-    user = _users_cached().get(username)
-    if not user: return None
-    if not hmac.compare_digest(user["password_hash"], _hash(password)): return None
+    user = _users_cached().get(username) if isinstance(username, str) else None
+    if not user or not isinstance(password, str):
+        _burn_time(password if isinstance(password, str) else "")
+        return None
+    stored = user.get("password_hash")
+    if not _verify(stored, password): return None
+    if _is_legacy(stored):                              # old sha256 hash: upgrade it now that we know the password
+        try:
+            with users_lock():
+                users = load_users()
+                if username in users and users[username].get("password_hash") == stored:
+                    users[username]["password_hash"] = _hash(password)
+                    save_users(users)
+        except Exception as e:
+            log.warning(f"could not upgrade the password hash of {username}: {e}")
     return copy.deepcopy(user)
+
+
+# ─── Login throttling ─────────────────────────────────────────────────────────
+# Per client IP and per process (each service keeps its own counters): MAX_FAILS failed
+# logins within WINDOW seconds lock that IP out for LOCKOUT seconds.
+MAX_FAILS, WINDOW, LOCKOUT = 5, 600, 300
+_fails: dict = {}
+_fails_lock = threading.Lock()
+
+def client_ip(handler) -> str:
+    """Peer address; X-Real-IP is honoured only when the request comes from the local nginx."""
+    ip = handler.client_address[0]
+    if ip in ("127.0.0.1", "::1"):
+        real = (handler.headers.get("X-Real-IP") or "").strip()
+        if real and len(real) <= 45: return real
+    return ip
+
+def login(handler, username, password):
+    """Throttled login: returns (user, None) or (None, (http_status, message))."""
+    ip, now = client_ip(handler), time.time()
+    with _fails_lock:
+        if len(_fails) > 2048:
+            for k in [k for k, v in _fails.items() if v["lock"] < now and now - v["first"] > WINDOW]: del _fails[k]
+        f = _fails.get(ip)
+        if f and f["lock"] > now:
+            wait = int(f["lock"] - now) + 1
+            return None, (429, f"Too many failed attempts. Try again in {wait} s")
+    u = authenticate(username, password)
+    with _fails_lock:
+        if u:
+            _fails.pop(ip, None)
+            return u, None
+        f = _fails.get(ip)
+        if not f or now - f["first"] > WINDOW: f = _fails[ip] = {"n": 0, "first": now, "lock": 0}
+        f["n"] += 1
+        if f["n"] >= MAX_FAILS:
+            f["lock"], f["n"], f["first"] = now + LOCKOUT, 0, now
+            log.warning(f"login locked for {ip} after {MAX_FAILS} failed attempts")
+    time.sleep(0.3)
+    return None, (401, "Invalid credentials")
 
 def check_permission(token: str, resource: str, required: str) -> bool:
     s = get_session(token)

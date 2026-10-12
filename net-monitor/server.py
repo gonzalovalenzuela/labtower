@@ -5,6 +5,7 @@ Detección: TTL + puertos Python puro + HTTP banner + mDNS
 """
 import json, os, re, socket, struct, subprocess, sys, time, logging, threading, ipaddress, ssl
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
 from urllib.parse import urlparse
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -1021,8 +1022,8 @@ class H(BaseHTTPRequestHandler):
         if body is None: return self._json(400, {"error": "Invalid request body"})
 
         if path == "/api/login":
-            u = auth.authenticate(body.get("username", ""), body.get("password", ""))
-            if not u: return self._json(401, {"error": "Invalid credentials"})
+            u, err = auth.login(self, body.get("username",""), body.get("password",""))
+            if not u: return self._json(err[0], {"error": err[1]})
             token = auth.create_session(body["username"], u["permissions"])
             users = auth.load_users()
             must  = users.get(body["username"], {}).get("must_change_password", False)
