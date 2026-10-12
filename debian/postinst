@@ -59,6 +59,11 @@ if getent group dialout >/dev/null 2>&1; then
     usermod -aG dialout pi-console 2>/dev/null || true
 fi
 
+# Raspberry Pi: leer el estado de la fuente (vcgencmd get_throttled) para el aviso de subtensión
+if grep -qa "Raspberry Pi" /proc/device-tree/model 2>/dev/null && getent group video >/dev/null 2>&1; then
+    usermod -aG video pi-console 2>/dev/null || true
+fi
+
 # ── 4b. Migracion: el servicio del dashboard se llamaba "nut-monitor", igual que el
 # servicio upsmon de NUT (paquete nut-client). Nuestro archivo en /etc/systemd/system
 # tapaba el de NUT, y nut.target arrancaba el dashboard en lugar de upsmon.

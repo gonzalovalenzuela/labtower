@@ -41,6 +41,8 @@ def health_report(tok, detailed=False):
     c = auth.check_common()
     c["teleporter"] = (auth.chk(auth.OK) if tp.available()
                        else auth.chk(auth.WARN, "teleporter.sh not installed"))
+    pw = auth.check_power()                       # Raspberry Pi only: absent on VMs and other hardware
+    if pw: c["power"] = pw
     modules = {}
     for name, port in MODULES.items():
         h = _module_health(name, port, tok)

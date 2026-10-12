@@ -8,7 +8,7 @@ toda lectura-modificación-escritura se hace bajo un bloqueo de archivo (flock) 
 del bloqueo entre hilos, y todo se escribe de forma atómica (archivo temporal propio,
 fsync y rename) para no perder ni corromper datos ante cortes de energía.
 """
-import copy, json, os, hashlib, hmac, secrets, time, logging, threading
+import copy, json, os, hashlib, hmac, secrets, time, logging, threading, glob, shutil, subprocess
 from pathlib import Path
 
 try:
@@ -482,6 +482,58 @@ def check_common():
     except OSError as e:
         out["disk"] = chk(WARN, str(e))
     return out
+
+def _is_raspberry_pi() -> bool:
+    for f in (os.environ.get("PICONSOLE_PI_MODEL"), "/proc/device-tree/model", "/sys/firmware/devicetree/base/model"):
+        if not f: continue
+        try:
+            return "raspberry pi" in Path(f).read_bytes().decode("utf-8", "ignore").lower()
+        except OSError:
+            continue
+    return False
+
+_THROTTLE_BITS = ((0, "under-voltage now"), (2, "throttled now"), (3, "temperature limit now"),
+                  (16, "under-voltage since boot"), (18, "throttling since boot"), (19, "temperature limit since boot"))
+
+def _read_throttled():
+    """Raspberry Pi firmware 'throttled' bit mask, or None when it cannot be read."""
+    cmd = os.environ.get("PICONSOLE_VCGENCMD") or shutil.which("vcgencmd") or "/usr/bin/vcgencmd"
+    try:
+        out = subprocess.run([cmd, "get_throttled"], capture_output=True, text=True, timeout=3).stdout
+        return int(out.split("=")[1].strip(), 16)
+    except (OSError, ValueError, IndexError, subprocess.SubprocessError):
+        pass
+    try:                                              # kernel interface, if the service user cannot use vcgencmd
+        return int(Path("/sys/devices/platform/soc/soc:firmware/get_throttled").read_text().strip(), 16)
+    except (OSError, ValueError):
+        return None
+
+def check_power():
+    """Raspberry Pi power supply health (under-voltage / throttling).
+
+    Returns None on anything that is not a Raspberry Pi (VMs, other hardware), so no check is
+    shown there. The 'since boot' bits only clear on reboot, so after replacing the power
+    supply the warning stays until the Pi is restarted."""
+    if not _is_raspberry_pi():
+        return None
+    bits = _read_throttled()
+    now, have_hwmon = False, False
+    for d in glob.glob(os.environ.get("PICONSOLE_HWMON", "/sys/class/hwmon") + "/hwmon*"):
+        try:
+            if Path(d, "name").read_text().strip() == "rpi_volt":
+                now = Path(d, "in0_lcrit_alarm").read_text().strip() == "1"
+                have_hwmon = True
+        except OSError:
+            pass
+    if bits is None and not have_hwmon:
+        return None                                   # no way to read the power state on this Pi
+    flags = [txt for b, txt in _THROTTLE_BITS if bits and bits & (1 << b)]
+    if now and "under-voltage now" not in flags:
+        flags.insert(0, "under-voltage now")
+    if not flags:
+        return chk(OK)
+    return chk(WARN, ", ".join(flags) + " — check the power supply and cable"
+               + ("" if any("now" in f for f in flags) else " (a reboot clears the history)"))
 
 def health_reply(module, checks, detailed=False, extra=None):
     """Build (http_code, body). Unauthenticated callers get levels only, no detail text."""

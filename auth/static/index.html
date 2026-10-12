@@ -757,7 +757,7 @@ async function loadUsers() {
 const HL_NAMES = {wol:'WOL Console', nut:'UPS Monitor', net:'Net Monitor', pve:'Proxmox'};
 const HL_DESC = {
   en:{users:'User database (users.json) is readable and has accounts', sessions:'Session file is readable and its folder writable', disk:'Free disk space (warns below 100 MB, fails below 5 MB)',
-      teleporter:'Backup tool (teleporter.sh) is installed', devices:'Device list file is readable and writable', wake_log:'Wake log file is readable and writable',
+      teleporter:'Backup tool (teleporter.sh) is installed', power:'Raspberry Pi power supply: no under-voltage or throttling (shown only on a Raspberry Pi)', devices:'Device list file is readable and writable', wake_log:'Wake log file is readable and writable',
       net_monitor:'Net Monitor host list can be read (optional)', network:'This machine has a LAN address for magic packets',
       servers_file:'UPS server list file is readable and writable', database:'History database opens and is not locked', history_write:'Buffered history rows are being written to disk',
       pollers:'Background threads that read the data are alive', upsd:'Every NUT server answers', history_fresh:'Recent readings are really stored in the history',
@@ -765,7 +765,7 @@ const HL_DESC = {
       clusters_file:'Cluster list file is readable and writable', clusters:'Every Proxmox cluster answers with fresh data',
       wol:'WOL Console service', nut:'UPS Monitor service', net:'Net Monitor service', pve:'Proxmox service'},
   es:{users:'Base de usuarios (users.json) legible y con cuentas', sessions:'Archivo de sesiones legible y carpeta escribible', disk:'Espacio libre en disco (avisa bajo 100 MB, falla bajo 5 MB)',
-      teleporter:'Herramienta de respaldo (teleporter.sh) instalada', devices:'Archivo de dispositivos legible y escribible', wake_log:'Archivo del registro de encendidos legible y escribible',
+      teleporter:'Herramienta de respaldo (teleporter.sh) instalada', power:'Fuente de la Raspberry Pi: sin subtensión ni limitación (solo se muestra en una Raspberry Pi)', devices:'Archivo de dispositivos legible y escribible', wake_log:'Archivo del registro de encendidos legible y escribible',
       net_monitor:'Se puede leer la lista de hosts de Net Monitor (opcional)', network:'Este equipo tiene dirección LAN para los magic packets',
       servers_file:'Archivo de servidores UPS legible y escribible', database:'La base de historial abre y no está bloqueada', history_write:'Las filas de historial en memoria se escriben a disco',
       pollers:'Los hilos que leen los datos están vivos', upsd:'Todos los servidores NUT responden', history_fresh:'Las lecturas recientes realmente quedan guardadas en el historial',
@@ -800,7 +800,7 @@ async function hlLoad() {
       el.firstChild.addEventListener('keydown', e => { if (e.key==='Enter' || e.key===' ') { e.preventDefault(); toggle(); } });
       grid.appendChild(el);
     };
-    const own = {}; for (const k of ['users','sessions','disk','teleporter']) if (d.checks[k]) own[k] = d.checks[k];
+    const own = {}; for (const k of ['users','sessions','disk','teleporter','power']) if (d.checks[k]) own[k] = d.checks[k];
     item('admin', 'Admin / ' + t('hlSystem'), worst(own), own);
     for (const m of Object.keys(HL_NAMES)) {
       const mh = (d.modules||{})[m];
