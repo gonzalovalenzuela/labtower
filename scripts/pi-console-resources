@@ -1,0 +1,47 @@
+#!/bin/bash
+# pi-console-resources — memory and CPU used by Pi Console (no login needed).
+#   pi-console-resources        one-off summary
+#   pi-console-resources -w     refresh every 2 s (Ctrl-C to quit)
+# RSS is the resident memory of each Python service; "free" is what the system still has available.
+show() {
+  python3 - <<'PY'
+import os, subprocess, time
+NAMES = {"wol-console": "WOL Console", "nut-monitor": "UPS Monitor", "net-monitor": "Net Monitor",
+         "proxmox-monitor": "Proxmox Monitor", "auth": "Admin panel"}
+rows, total = [], 0.0
+for pid in filter(str.isdigit, os.listdir("/proc")):
+    try:
+        cmd = open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0")
+        if not any(c.endswith((b"server.py", b"admin_panel.py")) for c in cmd): continue
+        cwd = os.path.basename(os.readlink(f"/proc/{pid}/cwd"))
+        st = open(f"/proc/{pid}/status").read()
+        rss = int(next(l for l in st.splitlines() if l.startswith("VmRSS")).split()[1]) / 1024
+        thr = int(next(l for l in st.splitlines() if l.startswith("Threads")).split()[1])
+        f = open(f"/proc/{pid}/stat").read().rsplit(")", 1)[1].split()
+        cpu = (int(f[11]) + int(f[12])) / os.sysconf("SC_CLK_TCK")
+        up = time.time() - (os.stat(f"/proc/{pid}").st_ctime)
+        rows.append((NAMES.get(cwd, cwd), rss, thr, cpu, up)); total += rss
+    except Exception:
+        continue
+print(f"{'Service':<17}{'RSS MB':>8}{'Threads':>9}{'CPU time':>11}{'Uptime':>10}")
+for n, rss, thr, cpu, up in sorted(rows, key=lambda r: -r[1]):
+    print(f"{n:<17}{rss:>8.1f}{thr:>9}{cpu:>10.0f}s{up/3600:>9.1f}h")
+if not rows: print("  (no Pi Console service is running)")
+ng = 0.0
+for pid in filter(str.isdigit, os.listdir("/proc")):
+    try:
+        if open(f"/proc/{pid}/comm").read().strip() == "nginx":
+            ng += int(next(l for l in open(f"/proc/{pid}/status") if l.startswith("VmRSS")).split()[1]) / 1024
+    except Exception: pass
+print(f"{'Python total':<17}{total:>8.1f}")
+print(f"{'nginx':<17}{ng:>8.1f}")
+mem = dict(l.split(":") for l in open("/proc/meminfo"))
+mb = lambda k: int(mem[k].split()[0]) / 1024
+print(f"\nSystem: {mb('MemTotal'):.0f} MB total, {mb('MemAvailable'):.0f} MB free, swap used {mb('SwapTotal')-mb('SwapFree'):.0f} MB, load {' '.join(open('/proc/loadavg').read().split()[:3])}")
+dirs = [d for d in ("/opt/pi-console", "/opt/pi-console-home") if os.path.isdir(d)]
+if dirs:
+    out = subprocess.run(["du", "-sh"] + dirs, capture_output=True, text=True).stdout.split("\n")
+    print("Disk:  " + ", ".join(l.replace("\t", " ") for l in out if l))
+PY
+}
+if [ "$1" = "-w" ]; then while true; do clear; show; sleep 2; done; else show; fi

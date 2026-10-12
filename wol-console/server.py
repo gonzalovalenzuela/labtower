@@ -350,7 +350,7 @@ class H(BaseHTTPRequestHandler):
                 return self._json(429, {"error": "Rate limit"})
             devs = load_devices()
             dev  = next((d for d in devs if d["id"] == body.get("id")), None)
-            if not dev: return self._json(404, {"error": "Dispositivo no encontrado"})
+            if not dev: return self._json(404, {"error": "Device not found"})
 
             # Verificar si ya está online
             net_h = (load_net_hosts() or {}).get(mac_key(dev.get("mac")))
@@ -373,7 +373,7 @@ class H(BaseHTTPRequestHandler):
                     "already_online": already_online,
                 })
                 self._json(200, {"ok": True,
-                                 "message": f"Paquete enviado a {dev['name']}",
+                                 "message": f"Magic packet sent to {dev['name']}",
                                  "already_online": already_online})
             except Exception as e:
                 log.error(f"WOL error: {e}"); self._json(500, {"error": str(e)})
@@ -416,7 +416,7 @@ class H(BaseHTTPRequestHandler):
         with _dev_lock:
             devs = load_devices()
             new  = [d for d in devs if d["id"] != m.group(1)]
-            if len(new) == len(devs): return self._json(404, {"error": "No encontrado"})
+            if len(new) == len(devs): return self._json(404, {"error": "Not found"})
             save_devices(new)
         self._json(200, {"ok": True})
 

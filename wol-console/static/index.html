@@ -293,10 +293,10 @@ td{padding:10px 16px;vertical-align:middle}
     <div class="tb-left">
       <div class="search-wrap">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="search-input" placeholder="Buscar por nombre, MAC, IP...">
+        <input type="text" id="search-input" placeholder="Search by name, MAC, IP...">
       </div>
       <div class="pills">
-        <button class="pill active" data-filter="ALL"    onclick="setFilter(this)">Todos</button>
+        <button class="pill active" data-filter="ALL"    onclick="setFilter(this)" data-i18n="filterAll">All</button>
         <button class="pill"        data-filter="PC"     onclick="setFilter(this)">PC</button>
         <button class="pill"        data-filter="SERVER" onclick="setFilter(this)">Server</button>
         <button class="pill"        data-filter="NAS"    onclick="setFilter(this)">NAS</button>
@@ -333,7 +333,7 @@ td{padding:10px 16px;vertical-align:middle}
           <span class="topbar-user-role" id="me-role">—</span>
         </div>
       </div>
-      <button class="btn-logout" onclick="logout()" title="Cerrar sesión">
+      <button class="btn-logout" onclick="logout()" data-i18n-title="titleLogout" title="Sign out">
         <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       </button>
     </div>
@@ -440,6 +440,8 @@ td{padding:10px 16px;vertical-align:middle}
 // ── i18n ──────────────────────────────────────────────
 const LANG = {
   en: {
+    filterAll:'All', titleLogout:'Sign out', errLoad:'Error loading data', noPerm:'No permission', titEdit:'Edit', titDelete:'Delete',
+    msgSent:n=>`Magic packet sent to "${n}"`, noVisible:'No visible devices', errDelete:'Error deleting', errHistory:'Error loading history', ago:x=>x+' ago',
     loginTitle:'Sign in', loginSub:'Enter your credentials to continue.',
     username:'Username', password:'Password', loginBtn:'Sign in',
     navSection:'Navigation', actionsSection:'Actions',
@@ -478,6 +480,8 @@ const LANG = {
     signingIn:'Signing in…',saving:'Saving…'
   },
   es: {
+    filterAll:'Todos', titleLogout:'Cerrar sesión', errLoad:'Error al cargar', noPerm:'Sin permisos', titEdit:'Editar', titDelete:'Eliminar',
+    msgSent:n=>`Paquete enviado a "${n}"`, noVisible:'No hay equipos visibles', errDelete:'Error al eliminar', errHistory:'Error cargando historial', ago:x=>'hace '+x,
     loginTitle:'Iniciar sesión', loginSub:'Ingresa tus credenciales para continuar.',
     username:'Usuario', password:'Contraseña', loginBtn:'Entrar',
     navSection:'Navegación', actionsSection:'Acciones',
@@ -527,6 +531,7 @@ function setLang(l){
     const k = el.getAttribute('data-i18n');
     el.textContent = t(k);
   });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.getAttribute('data-i18n-title')); });
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
     el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
   });
@@ -677,7 +682,7 @@ async function refreshDevices(isInitial){
     if(isInitial) log('OK', devices.length + t('logLoaded'));
     renderAll();
   }catch(e){
-    if(isInitial){ log('ERR','Error al cargar: '+e.message); showConnError(); }
+    if(isInitial){ log('ERR',t('errLoad')+': '+e.message); showConnError(); }
   }
 }
 
@@ -734,8 +739,8 @@ function renderTable(){
       <td class="col-ip">${ipCell(d)}</td>
       <td class="col-lw">${lwText}</td>
       <td class="col-act">
-        <button class="btn-wake" id="wake-${d.id}" onclick="wakeDevice('${d.id}')" ${canWake?'':'disabled title="Sin permisos"'}>Wake</button>
-        ${canEdit?`<button class="btn-ri e" onclick="editDevice('${d.id}')" title="Editar">✎</button><button class="btn-ri d" onclick="confirmDelete('${d.id}')" title="Eliminar">✕</button>`:''}
+        <button class="btn-wake" id="wake-${d.id}" onclick="wakeDevice('${d.id}')" ${canWake?'':'disabled title="'+esc(t('noPerm'))+'"'}>Wake</button>
+        ${canEdit?`<button class="btn-ri e" onclick="editDevice('${d.id}')" title="${esc(t('titEdit'))}">✎</button><button class="btn-ri d" onclick="confirmDelete('${d.id}')" title="${esc(t('titDelete'))}">✕</button>`:''}
       </td>`;
     tbody.appendChild(tr);
   });
@@ -794,7 +799,7 @@ async function wakeDevice(id, force=false){
     }
     wakeCount++;lastWakeName=device.name;
     meta[id]={...meta[id],lastWoke:Date.now()};saveMeta(meta);
-    const msg = res.message||'Paquete enviado a "'+device.name+'"';
+    const msg = res.message||t('msgSent',device.name);
     log('OK', msg);
     toast('Magic packet → '+device.name,false);
     if(ind)ind.className='ind sent';
@@ -810,7 +815,7 @@ function showAlreadyOnlineModal(id, name){
 }
 function openWakeAll(){
   const list=filtered();
-  if(!list.length){toast('No hay equipos visibles',true);return;}
+  if(!list.length){toast(t('noVisible'),true);return;}
   document.getElementById('wakeall-list').innerHTML=list.map(d=>'<div>'+esc(d.name)+' <span style="color:var(--text-dim)">'+esc(d.mac)+'</span></div>').join('');
   document.getElementById('wakeall-btn').onclick=async()=>{closeModals();for(const d of list){await wakeDevice(d.id);await sleep(300);}};
   document.getElementById('wakeall-overlay').classList.add('show');
@@ -858,7 +863,7 @@ async function saveEdit(){
   btn.disabled=true;btn.innerHTML=`<span class="spin">⟳</span> ${t('saving')}`;
   try{
     const r1=await fetch('api/devices/'+editingId,{method:'DELETE'});
-    if(!r1.ok)throw new Error('Error al eliminar');
+    if(!r1.ok)throw new Error(t('errDelete'));
     const d2=await apiFetch('api/devices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,mac,ip,port,tag})});
     const updated=d2.device;
     const oldMeta=meta[editingId]||{};delete meta[editingId];
@@ -944,7 +949,7 @@ function applyTheme(t){
 
 function closeModals(){document.querySelectorAll('.overlay').forEach(o=>o.classList.remove('show'));}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function relTime(ts){const d=Math.floor((Date.now()-ts)/1000);if(d<60)return'hace '+d+'s';if(d<3600)return'hace '+Math.floor(d/60)+'m';if(d<86400)return'hace '+Math.floor(d/3600)+'h';return new Date(ts).toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit'});}
+function relTime(ts){const d=Math.floor((Date.now()-ts)/1000);if(d<60)return t('ago',d+'s');if(d<3600)return t('ago',Math.floor(d/60)+'m');if(d<86400)return t('ago',Math.floor(d/3600)+'h');return new Date(ts).toLocaleDateString((_lang==='es'?'es-CL':'en-GB'),{day:'2-digit',month:'2-digit'});}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 function updateClock(){const el=document.getElementById('hclock');if(el)el.textContent=new Date().toTimeString().slice(0,8);}
 function updateUptime(){const s=Math.floor((Date.now()-sessionStart)/1000);const el=document.getElementById('st-uptime');if(el)el.textContent=String(Math.floor(s/3600)).padStart(2,'0')+':'+String(Math.floor(s/60)%60).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
@@ -970,9 +975,9 @@ async function showWakeLog(){
         </tr>`).join('');
     }
     document.getElementById('wl-overlay').classList.add('show');
-  }catch(e){ toast('Error cargando historial: '+e.message, true); }
+  }catch(e){ toast(t('errHistory')+': '+e.message, true); }
 }
-function fmtTs(ts){ const d=new Date(ts*1000); return d.toLocaleDateString('es-CL')+' '+d.toTimeString().slice(0,8); }
+function fmtTs(ts){ const d=new Date(ts*1000); return d.toLocaleDateString((_lang==='es'?'es-CL':'en-GB'))+' '+d.toTimeString().slice(0,8); }
 _i18nReady = true;
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('f-mac').addEventListener('input',function(){let v=this.value.replace(/[^0-9a-fA-F]/g,'');if(v.length>12)v=v.slice(0,12);const pos=this.selectionStart;this.value=(v.match(/.{1,2}/g)||[]).join(':').toUpperCase();try{this.setSelectionRange(pos,pos);}catch{}});

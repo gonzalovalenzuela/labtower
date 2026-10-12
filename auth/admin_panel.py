@@ -238,7 +238,7 @@ class H(BaseHTTPRequestHandler):
             with auth.users_lock():
                 users = auth.load_users()
                 if uname in users:
-                    return self._json(409, {"error": "Usuario ya existe"})
+                    return self._json(409, {"error": "User already exists"})
                 users[uname] = {
                     "password_hash": auth._hash(pwd),
                     "permissions": {"wol": wol_p, "nut": nut_p},
@@ -261,7 +261,7 @@ class H(BaseHTTPRequestHandler):
             with auth.users_lock():
                 users = auth.load_users()
                 if target not in users:
-                    return self._json(404, {"error": "Usuario no encontrado"})
+                    return self._json(404, {"error": "User not found"})
                 users[target]["password_hash"] = auth._hash(new_pw)
                 users[target]["must_change_password"] = False
                 auth.save_users(users)
@@ -301,7 +301,7 @@ class H(BaseHTTPRequestHandler):
             with auth.users_lock():
                 users = auth.load_users()
                 if uname not in users:
-                    return self._json(404, {"error": "Usuario no encontrado"})
+                    return self._json(404, {"error": "User not found"})
                 if wol_p: users[uname]["permissions"]["wol"] = wol_p
                 if nut_p: users[uname]["permissions"]["nut"] = nut_p
                 auth.save_users(users)
@@ -330,7 +330,7 @@ class H(BaseHTTPRequestHandler):
         if uname == me: return self._json(400, {"error": "No puedes eliminarte a ti mismo"})
         with auth.users_lock():
             users = auth.load_users()
-            if uname not in users: return self._json(404, {"error": "No encontrado"})
+            if uname not in users: return self._json(404, {"error": "Not found"})
             del users[uname]; auth.save_users(users)
         auth.delete_user_sessions(uname)
         log.info(f"Usuario eliminado: {uname} por {me}")

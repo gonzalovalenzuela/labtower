@@ -622,7 +622,7 @@ class H(BaseHTTPRequestHandler):
             with _srv_lock:
                 srvs = load_servers()
                 if any(s["host"]==host and s["port"]==port for s in srvs):
-                    return self._json(409, {"error": "Ya existe ese host:puerto"})
+                    return self._json(409, {"error": "That host:port already exists"})
                 server = {"id": str(uuid.uuid4()), "name": name, "host": host, "port": port}
                 srvs.append(server); save_servers(srvs)
             ensure_poller(server)
@@ -662,9 +662,9 @@ class H(BaseHTTPRequestHandler):
         with _srv_lock:
             srvs = load_servers()
             srv  = next((x for x in srvs if x["id"] == sid), None)
-            if srv is None: return self._json(404, {"error": "No encontrado"})
+            if srv is None: return self._json(404, {"error": "Not found"})
             if any(x["id"] != sid and x["host"] == host and x["port"] == port for x in srvs):
-                return self._json(409, {"error": "Ya existe ese host:puerto"})
+                return self._json(409, {"error": "That host:port already exists"})
             srv.update({"name": name, "host": host, "port": port})
             save_servers(srvs)
         ensure_poller(srv)
@@ -681,7 +681,7 @@ class H(BaseHTTPRequestHandler):
         with _srv_lock:
             srvs = load_servers()
             new  = [s for s in srvs if s["id"] != sid]
-            if len(new) == len(srvs): return self._json(404, {"error": "No encontrado"})
+            if len(new) == len(srvs): return self._json(404, {"error": "Not found"})
             save_servers(new)
         remove_poller(sid); self._json(200, {"ok": True})
 

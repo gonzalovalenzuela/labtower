@@ -335,7 +335,7 @@ input.err{border-color:var(--red)}
 
 <script>
 const LANG={
-  en:{loginTitle:'Sign in',loginSub:'Enter your credentials to continue.',
+  en:{connecting:'Connecting…',connectingMsg:'Fetching data from Proxmox.',noNodes:'No nodes',noNodesMsg:'No nodes were found in this cluster.',loginTitle:'Sign in',loginSub:'Enter your credentials to continue.',
     username:'Username',password:'Password',loginBtn:'Sign in',
     navSection:'Navigation',clustersPVE:'PVE Clusters',addCluster:'Add cluster',
     themeLight:'Light',themeDark:'Dark',
@@ -363,7 +363,7 @@ const LANG={
     clusterAdded:(name)=>`${name} added`,
     deleteClusterConfirm:(name)=>`Delete cluster "${name}"?`,
     cpuAlert:(pct)=>`CPU at ${pct}%`,ramAlert:(pct)=>`RAM at ${pct}%`},
-  es:{loginTitle:'Iniciar sesión',loginSub:'Ingresa tus credenciales para continuar.',
+  es:{connecting:'Conectando…',connectingMsg:'Obteniendo datos de Proxmox.',noNodes:'Sin nodos',noNodesMsg:'No se encontraron nodos en este cluster.',loginTitle:'Iniciar sesión',loginSub:'Ingresa tus credenciales para continuar.',
     username:'Usuario',password:'Contraseña',loginBtn:'Entrar',
     navSection:'Navegación',clustersPVE:'Clusters PVE',addCluster:'Agregar cluster',
     themeLight:'Claro',themeDark:'Oscuro',
@@ -590,7 +590,7 @@ function renderDashboard(){
   const main=document.getElementById('main-content');
 
   if(!snap?.ts){
-    main.innerHTML='<div class="state-msg"><strong>Conectando...</strong>Obteniendo datos de Proxmox.</div>';return;
+    main.innerHTML='<div class="state-msg"><strong>'+esc(t('connecting'))+'</strong>'+esc(t('connectingMsg'))+'</div>';return;
   }
   if(snap.error&&!snap.data?.nodes?.length){
     main.innerHTML=`<div class="state-msg err"><strong>${t('connError')||'Connection error'}</strong>${esc(snap.error)}<br><br><span style="font-size:12px;font-family:var(--mono)">${t('connErrorHint')||'Check host, port and API token'}</span></div>`;return;
@@ -598,7 +598,7 @@ function renderDashboard(){
 
   const nodes=orderedNodes(cluster,snap.data?.nodes||[]);
   if(!nodes.length){
-    main.innerHTML='<div class="state-msg"><strong>Sin nodos</strong>No se encontraron nodos en este cluster.</div>';return;
+    main.innerHTML='<div class="state-msg"><strong>'+esc(t('noNodes'))+'</strong>'+esc(t('noNodesMsg'))+'</div>';return;
   }
 
   main.innerHTML='';
