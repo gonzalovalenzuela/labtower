@@ -147,6 +147,8 @@ Cada módulo responde `GET /api/health` (200 = ok o degradado, 503 = falla). Sin
 ```bash
 pi-console-health        # resumen; exit 0 = ok, 1 = degradado, 2 = falla
 pi-console-health -j     # JSON completo
+pi-console-resources     # memoria (RSS) y CPU de cada servicio, nginx y RAM libre del sistema
+pi-console-resources -w  # lo mismo, refrescando cada 2 s
 ```
 
 Detecta, entre otras cosas: servicio caído, archivo de datos corrupto, disco casi lleno, hilo de consulta muerto, base de historial bloqueada o sin guardar datos, escaneo trabado y upsd/Proxmox sin respuesta.

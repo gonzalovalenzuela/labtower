@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.9e — 2026-10-11
+## 1.1.9f — 2026-10-12
 
 Reúne los cambios de 1.1.8b y 1.1.8c.
 
@@ -50,6 +50,13 @@ Reúne los cambios de 1.1.8b y 1.1.8c.
 
 ### Documentación
 - Capturas de pantalla de todos los módulos (claro/oscuro, 4 resoluciones) en `docs/screenshots/` y galería en el README.
+
+### Idioma
+- Quedaban textos en español con la interfaz en inglés en WOL Console (filtro «Todos», tooltips, avisos y el «hace 8m»), UPS Monitor (tooltips y campo de servidor) y Proxmox Monitor («Conectando…», «Sin nodos»): ahora siguen el idioma elegido. Las fechas usan el formato del idioma.
+- Mensajes de error del backend traducidos al inglés («User already exists», «Device not found», «Not found», «That host:port already exists», «Magic packet sent to …»).
+
+### Herramientas
+- Nuevo comando `pi-console-resources`: memoria (RSS) y CPU de cada servicio, de nginx y RAM libre del sistema (`-w` para verlo en vivo). Sirve para decidir si hace falta mover Pi Console fuera de la Pi.
 
 ### Seguridad
 - Contraseñas: ahora se guardan con **scrypt** y una sal aleatoria por usuario (antes SHA-256 con una sal fija). Los usuarios existentes se migran solos en su próximo inicio de sesión; los respaldos antiguos siguen funcionando.

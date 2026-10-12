@@ -525,7 +525,7 @@ class H(BaseHTTPRequestHandler):
             with _cl_lock:
                 clusters = load_clusters()
                 if any(c["host"]==host and c.get("port")==port for c in clusters):
-                    return self._json(409, {"error": "Ya existe ese host:puerto"})
+                    return self._json(409, {"error": "That host:port already exists"})
                 clusters.append(cluster)
                 save_clusters(clusters)
             ensure_poller(cluster)
