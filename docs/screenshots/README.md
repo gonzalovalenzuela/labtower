@@ -1,6 +1,6 @@
 # Capturas de pantalla
 
-Capturas de Pi Console 1.1.9f con datos de demostración (ficticios), en tema claro y oscuro y en cuatro resoluciones.
+Capturas de Pi Console 1.1.9g con datos de demostración (ficticios), en tema claro y oscuro y en cuatro resoluciones.
 
 Carpetas: `<resolución>/<tema>/<pantalla>.png`. En tablet y móvil la captura es de página completa; en escritorio, del área visible.
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.9f — 2026-10-12
+## 1.1.9g — 2026-10-12
 
 Reúne los cambios de 1.1.8b y 1.1.8c.
 
@@ -12,6 +12,7 @@ Reúne los cambios de 1.1.8b y 1.1.8c.
 - Net Monitor: textos que quedaban en español con la interfaz en inglés («Todos», «seg», «cada 1h», «hace 8m», tooltips, detalle del host, progreso del escaneo) ahora siguen el idioma elegido.
 - Móvil: en el Admin Panel las tablas se desplazan dentro de su tarjeta sin mover el título ni el botón *New user*, y la barra superior alinea sus márgenes con el contenido. En UPS Monitor la tabla de resumen cabe en pantallas de 360 px aunque el modelo/serie sea largo, y el panel de detalle del UPS queda siempre visible aunque la tabla se desplace.
 - Móvil: en el Admin Panel la lista de usuarios y la de backups pasan a tarjetas (una por usuario/backup), sin columnas cortadas ni desplazamiento lateral.
+- Tablets (≈800–1180 px, p. ej. iPad horizontal): en WOL Console el panel *Add device* pasa debajo de la tabla y el botón *Wake* ya no queda cortado; en Net Monitor el vendor/MAC se muestra solo en la fila expandida y la tabla cabe sin desplazarse.
 
 ### WOL Console
 - Lee los hosts de Net Monitor (`net-monitor/hosts.json`, solo lectura): en *Add device* aparece **From Net Monitor** (solo admin con acceso a Net Monitor) para elegir un host detectado; rellena nombre, MAC, IP y categoría (computer→PC, storage→NAS, el resto→OTHER). Los ya agregados aparecen deshabilitados.

@@ -211,6 +211,11 @@ td{padding:10px 14px;vertical-align:middle}
   body.nav-open .nav-backdrop{opacity:1;pointer-events:auto}
   body.nav-open{overflow:hidden}
 }
+@media(max-width:1120px){
+  /* tablets: vendor / MAC moves to the expanded row so the table fits */
+  .tbl-wrap th:nth-child(5),#hosts-tbody>tr>td:nth-child(5){display:none}
+  .tbl-wrap th,#hosts-tbody>tr>td{padding-left:9px;padding-right:9px}
+}
 @media(max-width:700px){
   /* hosts table: keep status / host / type / OS; the rest is in the expanded row */
   .tbl-wrap th:nth-child(n+5):nth-child(-n+8),#hosts-tbody>tr>td:nth-child(n+5):nth-child(-n+8){display:none}
