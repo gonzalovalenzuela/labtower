@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.9h — 2026-10-12
+## 1.1.9i — 2026-10-12
 
 Reúne los cambios de 1.1.8b y 1.1.8c.
 
@@ -63,6 +63,12 @@ Reúne los cambios de 1.1.8b y 1.1.8c.
 - Contraseñas: ahora se guardan con **scrypt** y una sal aleatoria por usuario (antes SHA-256 con una sal fija). Los usuarios existentes se migran solos en su próximo inicio de sesión; los respaldos antiguos siguen funcionando.
 - Inicio de sesión: tras 5 intentos fallidos desde la misma IP se bloquea el acceso durante 5 minutos (respuesta 429). Cada fallo añade una pequeña espera, y un usuario inexistente tarda lo mismo que uno real. Los contadores son por servicio y se reinician al reiniciarlo.
 - nginx: cabeceras `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` y una política `Content-Security-Policy` básica.
+- **users.json ausente (SEC-01):** si el archivo de usuarios desaparece en una instalación ya usada, ya no se vuelve a crear el usuario `admin` / `admin`: se usa la copia `.bak` o, si no existe, nadie puede entrar hasta restaurarla. El usuario inicial solo se crea en una instalación nueva (marcador `.users-initialized` en `/var/lib/pi-console`).
+- **WOL Console** escucha solo en `127.0.0.1`, como los demás módulos; se accede por nginx (puerto 80).
+- **Permisos explícitos (PVE-01):** `net` y `pve` ya no se derivan del permiso WOL en cada petición. Al arrancar los servicios se migran una sola vez a valores explícitos (admin si era admin de WOL, solo lectura en otro caso) y un permiso ausente significa sin acceso. El Admin Panel muestra y edita ahora las columnas **Net Monitor** y **Proxmox**; los usuarios nuevos reciben *Sin acceso* a ambos por defecto.
+- **Proxmox, certificado (PVE-02):** al agregar un cluster se muestra la huella SHA-256 del certificado y hay que confirmarla (botón *Probar* dos veces) antes de enviar el token; la conexión queda fijada a esa huella y falla si el certificado cambia. Los clusters existentes siguen funcionando, pero muestran el aviso «Certificado sin verificar» con un botón para fijarlo.
+- **Restore de NUT y nginx solo por consola (SEC-03):** el panel ya no ofrece restaurar `/etc/nut` ni el sitio nginx (corrían como root vía sudo); `teleporter restore --nut` / `--nginx` sigue disponible en la consola. `teleporter.sh gui-restore` rechaza esas opciones.
+- **Bloqueo entre procesos (CON-01):** si no se puede obtener el bloqueo de archivo, la operación falla con error en lugar de continuar sin él.
 
 ### Instalación
 - Los mensajes de instalación, actualización y desinstalación (`postinst`, `preinst`, `prerm`, `postrm`) ahora están en inglés.

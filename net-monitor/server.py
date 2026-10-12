@@ -1171,17 +1171,9 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
-    # Agregar permiso 'net' a usuarios existentes
+    # Explicit 'net' level for users that predate the module (one-time migration)
     try:
-        with auth.users_lock():
-            users = auth.load_users()
-            changed = False
-            for udata in users.values():
-                if "net" not in udata.get("permissions", {}):
-                    udata["permissions"]["net"] = "admin" if udata["permissions"].get("wol") == "admin" else "readonly"
-                    changed = True
-            if changed:
-                auth.save_users(users); log.info("Permisos 'net' actualizados")
+        if auth.ensure_permissions(("net",)): log.info("Permisos 'net' actualizados")
     except Exception as e:
         log.warning(f"No se pudo actualizar permisos: {e}")
 

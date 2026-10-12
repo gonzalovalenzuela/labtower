@@ -19,6 +19,7 @@ logging.basicConfig(level=logging.INFO,
 log = logging.getLogger("admin")
 
 VALID_PERMS = ("readonly", "execute", "admin", "none")
+PERM_KEYS = ("wol", "nut", "net", "pve")          # one explicit level per module
 
 # ─── Health (aggregate of every module) ───────────────────────────────────────
 MODULES = {"wol": 8080, "nut": 8081, "net": 8083, "pve": 8084}
@@ -216,8 +217,7 @@ class H(BaseHTTPRequestHandler):
             if action == "restore":
                 if body.get("confirm") is not True:
                     return self._json(400, {"error": "Confirmation required"})
-                ok, out = tp.start_restore(name, nut=body.get("nut") is True,
-                                           nginx=body.get("nginx") is True)
+                ok, out = tp.start_restore(name)
                 log.warning(f"Restore started by {me}: {name} -> {'ok' if ok else 'FAILED'}")
                 return self._json(200 if ok else 500, {"ok": ok, "output": out,
                                   **({} if ok else {"error": "Could not start the restore"})})
@@ -227,13 +227,13 @@ class H(BaseHTTPRequestHandler):
             # Crear usuario
             uname = (body.get("username") or "").strip()
             pwd   = (body.get("password") or "").strip()
-            wol_p = body.get("wol_permission","readonly")
-            nut_p = body.get("nut_permission","readonly")
+            perms = {k: body.get(k + "_permission", "readonly" if k in ("wol", "nut") else "none")
+                     for k in PERM_KEYS}
             if not uname or not pwd:
-                return self._json(400, {"error": "username y password requeridos"})
+                return self._json(400, {"error": "Username and password are required"})
             if not re.match(r'^[a-zA-Z0-9_\-]{2,32}$', uname):
                 return self._json(400, {"error": "Invalid username (2-32 alphanumeric chars)"})
-            if wol_p not in VALID_PERMS or nut_p not in VALID_PERMS:
+            if any(v not in VALID_PERMS for v in perms.values()):
                 return self._json(400, {"error": "Invalid permission"})
             with auth.users_lock():
                 users = auth.load_users()
@@ -241,7 +241,7 @@ class H(BaseHTTPRequestHandler):
                     return self._json(409, {"error": "User already exists"})
                 users[uname] = {
                     "password_hash": auth._hash(pwd),
-                    "permissions": {"wol": wol_p, "nut": nut_p},
+                    "permissions": perms,
                     "created": int(time.time()),
                     "must_change_password": body.get("must_change_password", False),
                 }
@@ -289,21 +289,17 @@ class H(BaseHTTPRequestHandler):
         m = re.match(r'^/api/users/([a-zA-Z0-9_\-]+)$', path)
         if m:
             uname = m.group(1)
-            wol_p = body.get("wol_permission")
-            nut_p = body.get("nut_permission")
-            if wol_p and wol_p not in VALID_PERMS:
-                return self._json(400, {"error": "Invalid WOL permission"})
-            if nut_p and nut_p not in VALID_PERMS:
-                return self._json(400, {"error": "Invalid NUT permission"})
-            # Proteger al propio admin de quitarse permisos
-            if uname == me and (wol_p == "none" or nut_p == "none"):
-                return self._json(400, {"error": "No puedes quitarte tus propios permisos de admin"})
+            new = {k: body.get(k + "_permission") for k in PERM_KEYS if body.get(k + "_permission")}
+            if any(v not in VALID_PERMS for v in new.values()):
+                return self._json(400, {"error": "Invalid permission"})
+            # Don't let admins lock themselves out of the panel
+            if uname == me and (new.get("wol") == "none" or new.get("nut") == "none"):
+                return self._json(400, {"error": "You cannot remove your own admin permissions"})
             with auth.users_lock():
                 users = auth.load_users()
                 if uname not in users:
                     return self._json(404, {"error": "User not found"})
-                if wol_p: users[uname]["permissions"]["wol"] = wol_p
-                if nut_p: users[uname]["permissions"]["nut"] = nut_p
+                users[uname].setdefault("permissions", {}).update(new)
                 auth.save_users(users)
             log.info(f"Permisos actualizados: {uname} por {me}")
             self._json(200, {"ok": True})
@@ -327,7 +323,7 @@ class H(BaseHTTPRequestHandler):
         m = re.match(r'^/api/users/([a-zA-Z0-9_\-]+)$', path)
         if not m: return self._json(400, {"error": "Invalid user"})
         uname = m.group(1)
-        if uname == me: return self._json(400, {"error": "No puedes eliminarte a ti mismo"})
+        if uname == me: return self._json(400, {"error": "You cannot delete yourself"})
         with auth.users_lock():
             users = auth.load_users()
             if uname not in users: return self._json(404, {"error": "Not found"})
@@ -338,6 +334,10 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        if auth.ensure_permissions(): log.info("Permisos 'net'/'pve' completados")
+    except Exception as e:
+        log.warning(f"Permisos: {e}")
     log.info(f"Admin Panel en http://{HOST}:{PORT}")
     try:
         srv = ThreadingHTTPServer((HOST, PORT), H); srv.daemon_threads = True

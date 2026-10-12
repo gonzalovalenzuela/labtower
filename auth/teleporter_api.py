@@ -123,11 +123,11 @@ def verify(name):
     return run(["check", str(p)], sudo=False, timeout=180)
 
 
-def start_restore(name, nut=False, nginx=False):
+def start_restore(name):
+    """Restore from the panel. NUT and nginx are never restored here (CLI only: see teleporter.sh)."""
     if not path_of(name):
         return False, "Backup not found"
-    ok, out = run(["gui-restore", name, "1" if nut else "0", "1" if nginx else "0"],
-                  sudo=True, timeout=60)
+    ok, out = run(["gui-restore", name, "0", "0"], sudo=True, timeout=60)
     return ok and "RESTORE_STARTED=1" in out, out
 
 
