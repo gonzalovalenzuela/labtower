@@ -1,6 +1,6 @@
 # Capturas de pantalla
 
-Capturas de Pi Console 1.2.0 con datos de demostración (ficticios), en tema claro y oscuro y en cuatro resoluciones.
+Capturas de Pi Console 1.2.0b con datos de demostración (ficticios), en tema claro y oscuro y en cuatro resoluciones.
 
 Carpetas: `<resolución>/<tema>/<pantalla>.png`. En tablet y móvil la captura es de página completa; en escritorio, del área visible.
 
@@ -14,6 +14,8 @@ Carpetas: `<resolución>/<tema>/<pantalla>.png`. En tablet y móvil la captura e
 | Net Monitor | [net.png](1920x1080/light/net.png) | [net.png](1920x1080/dark/net.png) |
 | Proxmox Monitor | [proxmox.png](1920x1080/light/proxmox.png) | [proxmox.png](1920x1080/dark/proxmox.png) |
 | Admin Panel | [admin.png](1920x1080/light/admin.png) | [admin.png](1920x1080/dark/admin.png) |
+| Cambio de contraseña obligatorio | [password.png](1920x1080/light/password.png) | [password.png](1920x1080/dark/password.png) |
+| Net Monitor (sin escaneos aún) | [net-empty.png](1920x1080/light/net-empty.png) | [net-empty.png](1920x1080/dark/net-empty.png) |
 
 ## 1366x768
 
@@ -25,6 +27,8 @@ Carpetas: `<resolución>/<tema>/<pantalla>.png`. En tablet y móvil la captura e
 | Net Monitor | [net.png](1366x768/light/net.png) | [net.png](1366x768/dark/net.png) |
 | Proxmox Monitor | [proxmox.png](1366x768/light/proxmox.png) | [proxmox.png](1366x768/dark/proxmox.png) |
 | Admin Panel | [admin.png](1366x768/light/admin.png) | [admin.png](1366x768/dark/admin.png) |
+| Cambio de contraseña obligatorio | [password.png](1366x768/light/password.png) | [password.png](1366x768/dark/password.png) |
+| Net Monitor (sin escaneos aún) | [net-empty.png](1366x768/light/net-empty.png) | [net-empty.png](1366x768/dark/net-empty.png) |
 
 ## 820x1180
 
@@ -36,6 +40,8 @@ Carpetas: `<resolución>/<tema>/<pantalla>.png`. En tablet y móvil la captura e
 | Net Monitor | [net.png](820x1180/light/net.png) | [net.png](820x1180/dark/net.png) |
 | Proxmox Monitor | [proxmox.png](820x1180/light/proxmox.png) | [proxmox.png](820x1180/dark/proxmox.png) |
 | Admin Panel | [admin.png](820x1180/light/admin.png) | [admin.png](820x1180/dark/admin.png) |
+| Cambio de contraseña obligatorio | [password.png](820x1180/light/password.png) | [password.png](820x1180/dark/password.png) |
+| Net Monitor (sin escaneos aún) | [net-empty.png](820x1180/light/net-empty.png) | [net-empty.png](820x1180/dark/net-empty.png) |
 | Menú móvil | [menu.png](820x1180/light/menu.png) | [menu.png](820x1180/dark/menu.png) |
 
 ## 390x844
@@ -48,4 +54,6 @@ Carpetas: `<resolución>/<tema>/<pantalla>.png`. En tablet y móvil la captura e
 | Net Monitor | [net.png](390x844/light/net.png) | [net.png](390x844/dark/net.png) |
 | Proxmox Monitor | [proxmox.png](390x844/light/proxmox.png) | [proxmox.png](390x844/dark/proxmox.png) |
 | Admin Panel | [admin.png](390x844/light/admin.png) | [admin.png](390x844/dark/admin.png) |
+| Cambio de contraseña obligatorio | [password.png](390x844/light/password.png) | [password.png](390x844/dark/password.png) |
+| Net Monitor (sin escaneos aún) | [net-empty.png](390x844/light/net-empty.png) | [net-empty.png](390x844/dark/net-empty.png) |
 | Menú móvil | [menu.png](390x844/light/menu.png) | [menu.png](390x844/dark/menu.png) |

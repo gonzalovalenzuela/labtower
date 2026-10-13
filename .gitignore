@@ -35,3 +35,4 @@ data/
 # Logs
 *.log
 logs/
+.csrf-secret
