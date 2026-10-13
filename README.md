@@ -102,6 +102,17 @@ El instalador:
 - Configura nginx
 - Crea el usuario inicial `admin` / `admin` (cambiar en primer login)
 
+### Opción A2 — repositorio APT (instala y actualiza con `apt`)
+
+Ver [docs/APT.md](docs/APT.md) (publicación y uso). En la Pi:
+
+```bash
+sudo install -d -m 0755 /etc/apt/keyrings
+sudo wget -O /etc/apt/keyrings/pi-console.asc https://gonzalovalenzuela.github.io/pi-console/pi-console.asc
+echo "deb [signed-by=/etc/apt/keyrings/pi-console.asc] https://gonzalovalenzuela.github.io/pi-console stable main" | sudo tee /etc/apt/sources.list.d/pi-console.list
+sudo apt update && sudo apt install pi-console
+```
+
 ### Opción B — desde fuente (desarrollo)
 
 ```bash
