@@ -1014,6 +1014,11 @@ function tpFmtSize(b){ return b>=1048576 ? (b/1048576).toFixed(1)+' MB' : Math.m
 // Descarga la lista de respaldos y el estado de la última restauración.
 // EN: Download the backup list and the state of the last restore.
 async function tpLoad() {
+  // Los respaldos solo los maneja quien es admin de todos los módulos: para el resto se oculta la tarjeta.
+  // EN: Backups are handled only by an admin of every module: for everyone else the card is hidden.
+  const full = ['wol','nut','net','pve'].every(k => (me?.permissions||{})[k] === 'admin');
+  document.getElementById('tp-card').style.display = full ? '' : 'none';
+  if (!full) return;
   try {
     const r = await fetch('api/teleporter');
     if (!r.ok) return;

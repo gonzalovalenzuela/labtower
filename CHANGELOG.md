@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0d — 2026-10-13
+
+### Seguridad
+- **Permisos entre módulos («solo das lo que tienes»).** En el Admin Panel, un administrador solo puede dar o quitar permisos en los módulos donde él mismo tiene ese nivel (un admin de WOL ya no puede dar ni quitar permisos en Net o Proxmox) y no puede borrar ni cambiar la contraseña de un usuario con más permisos que él. Los valores por defecto al crear un usuario se limitan a lo que el admin puede dar.
+- **Respaldos (Teleporter) solo para admins de todos los módulos**: contienen hashes de contraseñas, tokens de Proxmox y la configuración completa. A los demás admins la tarjeta se les oculta y la API responde 403.
+- **Proxmox: aviso permanente de certificado sin verificar** en cada cluster sin huella fijada (con el botón «Fijar certificado» para admins), y una advertencia en el log al arrancar el servicio.
+- **Cookie de sesión `Secure` opcional**: con `PICONSOLE_SECURE_COOKIE=1` en `/etc/default/pi-console` (leído por las 5 unidades systemd) la cookie lleva `Secure`. Apagado por defecto: Pi Console se usa por HTTP en la LAN.
+- README: nueva sección **Seguridad** (uso en LAN de confianza por HTTP, HTTPS opcional delante, permisos por módulo, certificados de Proxmox).
+
 ## 1.2.0c — 2026-10-13
 
 ### Instalación nueva

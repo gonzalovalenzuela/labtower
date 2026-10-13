@@ -88,11 +88,11 @@ El código fuente está comentado en español e inglés (los comentarios en ingl
 
 ```bash
 # Descargar el .deb desde Releases
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0/pi-console_1.2.0c_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0/pi-console_1.2.0d_all.deb
 
 # Instalar (apt resuelve e instala las dependencias: python3, nginx, nut, nut-client…)
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.0c_all.deb
+sudo apt-get install -y ./pi-console_1.2.0d_all.deb
 ```
 
 El instalador:
@@ -177,6 +177,17 @@ Seguridad: el panel ejecuta el respaldo/restauración como root mediante una reg
 Incluye usuarios, WOL, UPS (servidores e historial), Net Monitor (hosts y SNMP), Proxmox, configuración de NUT y nginx. El archivo contiene contraseñas y tokens (permisos 600): guárdalo en un lugar privado. Para migrar a otra Pi: instalar el `.deb`, copiar el backup y ejecutar `restore`. Antes de restaurar se guarda un snapshot del estado actual en `/var/backups/pi-console/`.
 
 ---
+
+## Seguridad
+
+Pi Console está pensado para una **red local de confianza** y se sirve por **HTTP en el puerto 80** (nginx). Es una decisión de diseño, no un descuido:
+
+- **Sin TLS en el paquete.** Las credenciales y la cookie de sesión viajan sin cifrar por la LAN. No expongas el puerto 80 a internet ni a redes no confiables. Si algún día lo publicas, pon delante un proxy con HTTPS (nginx, Caddy, Cloudflare Tunnel…) y deja que solo ese proxy llegue al puerto 80.
+- **Los servicios Python escuchan solo en `127.0.0.1`** (8080–8084); únicamente nginx es accesible desde la red.
+- **Cookie `Secure` (opcional).** La cookie de sesión lleva `HttpOnly` y `SameSite=Strict`. Detrás de HTTPS crea `/etc/default/pi-console` con la línea `PICONSOLE_SECURE_COOKIE=1` y reinicia los servicios (`sudo systemctl restart wol-console pi-console-ups admin-panel net-monitor proxmox-monitor`) para que además lleve `Secure`. Está apagado por defecto porque con HTTP el navegador no enviaría una cookie `Secure` y no podrías iniciar sesión.
+- **Permisos por módulo.** Cada módulo (WOL, UPS, Net, Proxmox) tiene su propio nivel (ninguno, solo lectura, ejecutar, admin). Un administrador **solo puede dar o quitar permisos en los módulos donde él mismo tiene ese nivel**, y no puede borrar ni cambiar la contraseña de un usuario con más permisos que él. Los respaldos (Teleporter) solo los maneja quien es admin de todos los módulos, porque contienen usuarios, tokens de Proxmox y la configuración completa.
+- **Proxmox: fija el certificado.** Los clusters nuevos exigen fijar la huella SHA-256 del certificado. Un cluster antiguo sin huella se conecta sin validar la identidad del servidor: la página muestra un aviso permanente y el servicio lo anota en el log al arrancar; usa «Fijar certificado» para corregirlo.
+- **Primer ingreso.** La cuenta inicial `admin`/`admin` obliga a cambiar la contraseña antes de usar cualquier módulo.
 
 ## Internacionalización
 

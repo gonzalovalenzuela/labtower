@@ -292,6 +292,13 @@ input.err{border-color:var(--red)}
       <div class="stat-card"><div class="stat-ico blue"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div><div><div class="stat-val" id="st-mem">—<span style="font-size:13px;color:var(--text-dim)">%</span></div><div class="stat-lbl" data-i18n="statAvgRAM">Avg RAM</div></div></div>
     </div>
 
+    <!-- Aviso persistente: cluster sin certificado fijado (se conecta sin validar la identidad del servidor). -->
+    <!-- EN: Persistent warning: cluster without a pinned certificate (it connects without validating the server's identity). -->
+    <div id="pin-banner" style="display:none;margin:0 0 14px;padding:10px 14px;border:1px solid rgba(245,158,11,.4);background:rgba(245,158,11,.12);border-radius:8px;font-size:12px;line-height:1.5;color:var(--text)">
+      <strong style="color:var(--amber,#f59e0b)">⚠ <span id="pin-banner-t"></span></strong> <span id="pin-banner-d"></span>
+      <button class="btn-secondary" id="pin-banner-b" style="display:none;width:auto;padding:3px 10px;font-size:11px;margin-left:8px" onclick="pinCluster()"></button>
+    </div>
+
     <div id="main-content">
       <div class="state-msg" id="no-clusters-msg"><strong data-i18n="noClusters">No clusters configured</strong><span data-i18n="noClustersHint">Add a Proxmox cluster to get started.</span></div>
     </div>
@@ -365,7 +372,7 @@ const LANG={
     testFillAll:'Fill in all fields',
     fpConfirm:(fp)=>`Certificate SHA-256: ${fp} — compare it with the one shown in Proxmox (Datacenter → Node → Certificates). Press Test again to trust it and test the connection.`,
     fpNeedTest:'Run Test and confirm the certificate first',fpChanged:'Host or port changed: run Test again',
-    unpinned:'Certificate not verified',pinCert:'Pin certificate',pinPrompt:(fp)=>`Trust this certificate for this cluster?\n\nSHA-256:\n${fp}`,pinned:'Certificate pinned',
+    unpinnedWarn:'This cluster\'s certificate is not verified.',unpinnedDesc:'The connection does not check the identity of the server before sending the API token, so someone on the network could impersonate it.',unpinned:'Certificate not verified',pinCert:'Pin certificate',pinPrompt:(fp)=>`Trust this certificate for this cluster?\n\nSHA-256:\n${fp}`,pinned:'Certificate pinned',
     clusterAdded:(name)=>`${name} added`,
     deleteClusterConfirm:(name)=>`Delete cluster "${name}"?`,
     cpuAlert:(pct)=>`CPU at ${pct}%`,ramAlert:(pct)=>`RAM at ${pct}%`},
@@ -396,7 +403,7 @@ const LANG={
     testFillAll:'Completa todos los campos',
     fpConfirm:(fp)=>`Certificado SHA-256: ${fp} — compáralo con el de Proxmox (Datacenter → Nodo → Certificates). Presiona Probar otra vez para confiar en él y probar la conexión.`,
     fpNeedTest:'Primero usa Probar y confirma el certificado',fpChanged:'Cambió el host o el puerto: usa Probar otra vez',
-    unpinned:'Certificado sin verificar',pinCert:'Fijar certificado',pinPrompt:(fp)=>`¿Confiar en este certificado para este cluster?\n\nSHA-256:\n${fp}`,pinned:'Certificado fijado',
+    unpinnedWarn:'El certificado de este cluster no está verificado.',unpinnedDesc:'La conexión no comprueba la identidad del servidor antes de enviar el token de la API, así que alguien en la red podría suplantarlo.',unpinned:'Certificado sin verificar',pinCert:'Fijar certificado',pinPrompt:(fp)=>`¿Confiar en este certificado para este cluster?\n\nSHA-256:\n${fp}`,pinned:'Certificado fijado',
     clusterAdded:(name)=>`${name} agregado`,
     deleteClusterConfirm:(name)=>`¿Eliminar el cluster "${name}"?`,
     cpuAlert:(pct)=>`CPU al ${pct}%`,ramAlert:(pct)=>`RAM al ${pct}%`}
@@ -645,6 +652,13 @@ function renderDashboard(){
   const snap=cluster.snap;
   document.getElementById('tb-title').textContent=cluster.name;
   document.getElementById('tb-sub').textContent=cluster.host+':'+cluster.port+(snap?.data?.version?' · PVE '+snap.data.version:'');
+  const bn=document.getElementById('pin-banner');
+  if(bn){
+    bn.style.display=cluster.pinned?'none':'';
+    document.getElementById('pin-banner-t').textContent=t('unpinnedWarn');
+    document.getElementById('pin-banner-d').textContent=t('unpinnedDesc');
+    const bb=document.getElementById('pin-banner-b');bb.style.display=isPveAdmin()?'':'none';bb.textContent=t('pinCert');
+  }
   const pb=document.getElementById('tb-pin');
   if(pb){pb.style.display=cluster.pinned?'none':'';pb.textContent='⚠ '+t('unpinned')+' — '+t('pinCert');}
   const main=document.getElementById('main-content');

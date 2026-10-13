@@ -65,6 +65,12 @@ USERS_FILE    = Path(os.environ.get("PICONSOLE_USERS",    "/var/lib/pi-console/u
 # Duración de una sesión sin actividad.
 # EN: How long a session lasts without activity.
 SESSION_TTL = 24 * 3600   # 24 horas
+# Cookie de sesión. Por defecto sin «Secure» (Pi Console se usa por HTTP en la LAN: con «Secure» el navegador no la enviaría). Si se publica detrás de HTTPS, PICONSOLE_SECURE_COOKIE=1 agrega «Secure». No se deduce de encabezados del cliente.
+# EN: Session cookie. Without "Secure" by default (Pi Console is used over HTTP on the LAN: with "Secure" the browser would not send it). If published behind HTTPS, PICONSOLE_SECURE_COOKIE=1 adds "Secure". It is never inferred from client-supplied headers.
+SECURE_COOKIE = os.environ.get("PICONSOLE_SECURE_COOKIE", "").strip().lower() in ("1", "true", "yes", "on")
+def session_cookie(token: str) -> str:
+    return (f"session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={SESSION_TTL}"
+            + ("; Secure" if SECURE_COOKIE else ""))
 # La ventana deslizante se renueva como máximo cada RENEW_EVERY segundos: renovar en
 # cada request reescribiría sessions.json (y la SD) varias veces por segundo.
 RENEW_EVERY = 600
