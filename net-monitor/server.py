@@ -72,7 +72,16 @@ def save_config(cfg: dict):
         auth.write_json(CONF_FILE, cfg)
 # Parámetros del escáner; todos se pueden cambiar con variables de entorno. NETWORK es la red a recorrer, SCAN_PORTS los puertos que se sondean por equipo, PORT_TIMEOUT cuánto se espera por puerto y MAX_WORKERS cuántos equipos se escanean a la vez.
 # EN: Scanner parameters; all can be changed with environment variables. NETWORK is the network to walk, SCAN_PORTS the ports probed per device, PORT_TIMEOUT how long to wait per port and MAX_WORKERS how many devices are scanned at once.
-NETWORK       = os.environ.get("SCAN_NETWORK",   "192.168.0.0/24")
+# Red a escanear por defecto: la /24 de la IP de esta máquina (sin enviar nada: connect() en UDP solo elige la interfaz).
+# EN: Default network to scan: the /24 of this machine's IP (nothing is sent: a UDP connect() only picks the interface).
+def _default_network():
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("192.0.2.1", 9))
+            return str(ipaddress.ip_network(s.getsockname()[0] + "/24", strict=False))
+    except Exception:
+        return "192.168.0.0/24"
+NETWORK       = os.environ.get("SCAN_NETWORK",   _default_network())
 SCAN_PORTS    = os.environ.get("SCAN_PORTS",     "21,22,23,25,53,80,111,135,139,443,445,548,554,873,1883,2049,3260,3306,3389,5000,5001,5357,5432,5555,5900,6379,7547,8001,8002,8008,8009,8080,8291,8443,9100,27017,62078")
 SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL", 3600))
 PORT_TIMEOUT  = float(os.environ.get("PORT_TIMEOUT", 0.5))
@@ -85,7 +94,7 @@ log = logging.getLogger("net")
 # Pi-hole v6 API
 # Pi-hole (API v6) como fuente de nombres, MAC y fabricante. Opcional: sin contraseña no se usa. La caché se refresca cada 30 min.
 # EN: Pi-hole (API v6) as a source of names, MACs and vendors. Optional: it is not used without a password. The cache is refreshed every 30 min.
-PIHOLE_HOSTS  = os.environ.get("PIHOLE_HOSTS",  "192.168.0.2,192.168.0.5")
+PIHOLE_HOSTS  = os.environ.get("PIHOLE_HOSTS",  "")
 PIHOLE_PASS   = os.environ.get("PIHOLE_PASS",   "")
 _pihole_cache: dict = {}   # { ip: {hostname, vendor, mac} }
 _pihole_lock  = threading.Lock()
@@ -238,7 +247,7 @@ def refresh_pihole_cache():
             for dev in devices:
                 mac    = dev.get("hwaddr", "") or ""
                 if not MAC_RE.match(mac):
-                    mac = ""          # Pi-hole uses placeholders like "ip-192.168.0.5"
+                    mac = ""          # Pi-hole uses placeholders like "ip-192.0.2.5"
                 vendor = dev.get("macVendor", "")
                 for ip_entry in dev.get("ips", []):
                     ip   = ip_entry.get("ip", "")

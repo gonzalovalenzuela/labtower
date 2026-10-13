@@ -317,7 +317,7 @@ td{padding:10px 14px;vertical-align:middle}
           <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);margin-bottom:10px;cursor:pointer"><input type="checkbox" id="sn-enabled"> <span data-i18n="snmpEnable">Use SNMP during scans</span></label>
           <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px">
             <div style="display:grid;grid-template-columns:1fr 80px;gap:8px">
-              <div ><label style="font-size:10px;font-weight:600;color:var(--text-mid);display:block;margin-bottom:4px" data-i18n="snmpHost">Switch / router IP</label><input type="text" id="sn-host" placeholder="192.168.0.1" autocomplete="off" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--r-sm);color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;width:100%;box-sizing:border-box"></div>
+              <div ><label style="font-size:10px;font-weight:600;color:var(--text-mid);display:block;margin-bottom:4px" data-i18n="snmpHost">Switch / router IP</label><input type="text" id="sn-host" placeholder="192.0.2.1" autocomplete="off" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--r-sm);color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;width:100%;box-sizing:border-box"></div>
               <div ><label style="font-size:10px;font-weight:600;color:var(--text-mid);display:block;margin-bottom:4px" data-i18n="snmpPort">Port</label><input type="number" id="sn-port" placeholder="161" autocomplete="off" style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--r-sm);color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;width:100%;box-sizing:border-box"></div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 80px;gap:8px">
@@ -377,7 +377,7 @@ td{padding:10px 14px;vertical-align:middle}
           <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px">
             <div>
               <label style="font-size:10px;font-weight:600;color:var(--text-mid);display:block;margin-bottom:4px" data-i18n="piholeHosts">Pi-hole hosts (comma separated)</label>
-              <input type="text" id="ph-hosts" placeholder="192.168.0.2,192.168.0.5" autocomplete="off"
+              <input type="text" id="ph-hosts" placeholder="192.0.2.2,192.0.2.3" autocomplete="off"
                 style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;width:100%;box-sizing:border-box">
             </div>
             <div>
@@ -602,10 +602,10 @@ function canAdmin(){return ME&&ME.permissions?.net==='admin';}
 // Barra lateral común: los mismos accesos en todas las páginas. El usuario puede reordenarlos arrastrando (el orden se guarda en el navegador, clave pi-nav-order). «Admin» solo se muestra a administradores.
 // EN: Common sidebar: the same links on every page. The user can reorder them by dragging (the order is stored in the browser, key pi-nav-order). "Admin" is shown to administrators only.
 const _NAV_ITEMS=[
-  {id:'wol',  href:'/wol/',   label:'WOL Console', svg:'<polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/>'},
   {id:'nut',  href:'/nut/',   label:'UPS Monitor', svg:'<path d="M5 9V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><rect x="3" y="9" width="18" height="11" rx="2"/><line x1="12" y1="13" x2="12" y2="16"/>'},
   {id:'net',  href:'/net/',   label:'Net Monitor', svg:'<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>'},
   {id:'pve',  href:'/pve/',   label:'Proxmox',     svg:'<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>'},
+  {id:'wol',  href:'/wol/',   label:'WOL Console', svg:'<polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/>'},
   {id:'admin',href:'/admin/', label:'Admin Panel', svg:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',adminOnly:true},
 ];
 // Identificador de esta página en la barra lateral (se marca como activa).
@@ -1310,7 +1310,7 @@ document.addEventListener('click',e=>{
 async function loadPiholeConfig(){
   try{
     const r=await fetch('api/config');const d=await r.json();
-    document.getElementById('ph-hosts').value=d.pihole_hosts||'192.168.0.2,192.168.0.5';
+    document.getElementById('ph-hosts').value=d.pihole_hosts||'';
     const st=document.getElementById('ph-status');
     if(d.pihole_enabled){
       const ts=d.pihole_cache_ts?new Date(d.pihole_cache_ts*1000).toLocaleTimeString():'—';
