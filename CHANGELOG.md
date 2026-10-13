@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0e — 2026-10-13
+
+### Net Monitor
+- **El «Hacer escaneo inicial» se comporta igual que el botón «Escanear red»**: ambos llaman a la misma función, pero el botón inicial tardaba ~1,5 s en reaccionar (seguía clicable y mostrando «Sin hosts descubiertos» hasta la primera consulta de estado). Ahora, venga de donde venga el clic, al instante se muestran la barra de progreso, el botón superior ocupado y la lista vacía en «Escaneando…».
+
 ## 1.2.0d — 2026-10-13
 
 ### Seguridad
