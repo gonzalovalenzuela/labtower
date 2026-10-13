@@ -16,7 +16,7 @@
 | **Net Monitor** | 8083 | `/net/` | Escáner de red — hosts, tipo de dispositivo, OS, MAC/vendor (ARP, Pi-hole, SNMP) |
 | **Proxmox Monitor** | 8084 | `/pve/` | Dashboard de clusters Proxmox VE — nodos, VMs, CTs; orden manual y pin de nodos |
 
-La página de inicio (`/`) sirve desde `/opt/pi-console-home/` vía nginx.
+La página de inicio (`/`) sirve desde `/opt/pi-console/home/` vía nginx.
 
 ---
 
@@ -89,11 +89,11 @@ El código fuente está comentado en español e inglés (los comentarios en ingl
 
 ```bash
 # Descargar el .deb desde Releases
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0/pi-console_1.2.0_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0/pi-console_1.2.0a_all.deb
 
 # Instalar (apt resuelve e instala las dependencias: python3, nginx, nut, nut-client…)
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.0_all.deb
+sudo apt-get install -y ./pi-console_1.2.0a_all.deb
 ```
 
 El instalador:
@@ -122,7 +122,7 @@ cd pi-console
 # Copiar archivos
 sudo mkdir -p /opt/pi-console
 sudo cp -r wol-console nut-monitor net-monitor proxmox-monitor auth /opt/pi-console/
-sudo cp -r home /opt/pi-console-home
+sudo cp -r home /opt/pi-console/home
 
 # Nginx
 sudo cp etc/nginx/sites-available/pi-console.conf /etc/nginx/sites-available/
