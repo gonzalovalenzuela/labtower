@@ -1225,7 +1225,7 @@ class H(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Set-Cookie",
-                f"session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400")
+                auth.session_cookie(token))
             br = json.dumps({"ok": True, "token": token, "username": body["username"],
                              "permissions": u["permissions"],
                              "must_change_password": must}).encode()

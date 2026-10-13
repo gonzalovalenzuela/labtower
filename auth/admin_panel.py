@@ -39,6 +39,26 @@ log = logging.getLogger("admin")
 # Niveles de permiso aceptados al crear o editar usuarios («none» = sin acceso al módulo).
 # EN: Permission levels accepted when creating or editing users ("none" = no access to the module).
 VALID_PERMS = ("readonly", "execute", "admin", "none")
+
+# Nivel numérico (0 = ninguno) de un diccionario de permisos para un módulo.
+# EN: Numeric level (0 = none) of a permissions dictionary for a module.
+def _lvl(perms, k):
+    return auth.LEVELS.get((perms or {}).get(k, ""), 0)
+
+# Regla «solo das lo que tienes»: para cada módulo que cambia, quien actúa debe tener en ese módulo al menos el nivel nuevo y el actual del usuario afectado. Así un admin de WOL no puede dar ni quitar permisos en Net o Proxmox. Devuelve el primer módulo no permitido, o None.
+# EN: "You only give what you have" rule: for each module that changes, the actor must hold at least the new level and the target's current level on that module. So a WOL admin can neither grant nor remove permissions on Net or Proxmox. Returns the first module not allowed, or None.
+def _grant_denied(actor_perms, current, wanted):
+    for k, v in wanted.items():
+        cur = (current or {}).get(k, "none")
+        if cur == v: continue
+        if _lvl(actor_perms, k) < max(auth.LEVELS.get(v, 0), auth.LEVELS.get(cur, 0)):
+            return k
+    return None
+
+# ¿El usuario afectado tiene en algún módulo más nivel que quien actúa? Entonces este no puede borrarlo ni cambiarle la contraseña.
+# EN: Does the target have a higher level than the actor on any module? Then the actor cannot delete them or change their password.
+def _outranks(actor_perms, target_perms):
+    return any(_lvl(target_perms, k) > _lvl(actor_perms, k) for k in PERM_KEYS)
 PERM_KEYS = ("wol", "nut", "net", "pve")          # one explicit level per module
 
 # ─── Health (aggregate of every module) ───────────────────────────────────────
@@ -136,6 +156,12 @@ class H(BaseHTTPRequestHandler):
         except FileNotFoundError:
             self._json(404, {"error": "Not found"})
 
+    # ¿La sesión es admin de TODOS los módulos? Los respaldos (Teleporter) contienen usuarios, tokens de Proxmox y la configuración de todo, así que solo los maneja quien administra todo.
+    # EN: Is the session an admin of ALL the modules? Backups (Teleporter) contain users, Proxmox tokens and the configuration of everything, so only someone who administers everything handles them.
+    def _is_full_admin(self, tok):
+        sess = auth.get_session(tok)
+        return bool(sess) and all(_lvl(sess["permissions"], k) >= 3 for k in PERM_KEYS)
+
     # ¿La sesión es administradora de WOL o de UPS? Es el criterio de acceso a todo el panel.
     # EN: Is the session an admin of WOL or UPS? This is the access criterion for the whole panel.
     def _is_admin(self, tok):
@@ -213,6 +239,8 @@ class H(BaseHTTPRequestHandler):
            not auth.check_permission(tok, "nut", "admin"):
             return self._json(401, {"error": "Unauthorized"})
 
+        if path.startswith("/api/teleporter") and not self._is_full_admin(tok):
+            return self._json(403, {"error": "Backups require administrator access on all modules"})
         if path == "/api/teleporter":
             return self._json(200, {"available": tp.available(), "backups": tp.list_backups(),
                                     "restore": tp.restore_status(),
@@ -241,7 +269,10 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urlparse(self.path).path.rstrip("/")
         tok  = self._tok()
-        if path == "/api/teleporter/upload": return self._tp_upload(tok)
+        if path == "/api/teleporter/upload":
+            if not self._is_full_admin(tok):
+                return self._json(403, {"error": "Backups require administrator access on all modules"})
+            return self._tp_upload(tok)
         body = self._body()
         if body is None: return self._json(400, {"error": "Invalid request body"})
 
@@ -263,7 +294,7 @@ class H(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Set-Cookie",
-                f"session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400")
+                auth.session_cookie(token))
             br = json.dumps({"ok": True, "token": token, "username": body["username"],
                              "permissions": u["permissions"],
                              "must_change_password": must}).encode()
@@ -311,6 +342,8 @@ class H(BaseHTTPRequestHandler):
         # EN: Backups: backup (create), check (verify without changing anything) and restore (requires confirm=true).
         #     Restoring from the panel never touches /etc/nut or nginx; that is done only from the command line.
         if path.startswith("/api/teleporter/"):
+            if not self._is_full_admin(tok):
+                return self._json(403, {"error": "Backups require administrator access on all modules"})
             if not tp.available(): return self._json(503, {"error": "teleporter.sh is not installed"})
             action = path.rsplit("/", 1)[1]
             if action == "backup":
@@ -339,14 +372,22 @@ class H(BaseHTTPRequestHandler):
             # Crear usuario
             uname = (body.get("username") or "").strip()
             pwd   = (body.get("password") or "").strip()
-            perms = {k: body.get(k + "_permission", "readonly" if k in ("wol", "nut") else "none")
-                     for k in PERM_KEYS}
+            # Sin nivel indicado: «readonly» en WOL/UPS y «none» en Net/Proxmox, pero nunca más de lo que el admin tiene en ese módulo.
+            # EN: With no level given: "readonly" on WOL/UPS and "none" on Net/Proxmox, but never more than the admin holds on that module.
+            perms = {}
+            for k in PERM_KEYS:
+                dflt = "readonly" if k in ("wol", "nut") else "none"
+                if _lvl(sess["permissions"], k) < auth.LEVELS.get(dflt, 0): dflt = "none"
+                perms[k] = body.get(k + "_permission", dflt)
             if not uname or not pwd:
                 return self._json(400, {"error": "Username and password are required"})
             if not re.match(r'^[a-zA-Z0-9_\-]{2,32}$', uname):
                 return self._json(400, {"error": "Invalid username (2-32 alphanumeric chars)"})
             if any(v not in VALID_PERMS for v in perms.values()):
                 return self._json(400, {"error": "Invalid permission"})
+            denied = _grant_denied(sess["permissions"], {}, perms)
+            if denied:
+                return self._json(403, {"error": f"You cannot grant a level on '{denied}' above your own"})
             with auth.users_lock():
                 users = auth.load_users()
                 if uname in users:
@@ -378,6 +419,8 @@ class H(BaseHTTPRequestHandler):
                 users = auth.load_users()
                 if target not in users:
                     return self._json(404, {"error": "User not found"})
+                if target != me and _outranks(sess["permissions"], users[target].get("permissions")):
+                    return self._json(403, {"error": "You cannot change the password of a user with higher permissions than yours"})
                 users[target]["password_hash"] = auth._hash(new_pw)
                 users[target]["must_change_password"] = False
                 auth.save_users(users)
@@ -419,6 +462,9 @@ class H(BaseHTTPRequestHandler):
                 users = auth.load_users()
                 if uname not in users:
                     return self._json(404, {"error": "User not found"})
+                denied = _grant_denied(sess["permissions"], users[uname].get("permissions"), new)
+                if denied:
+                    return self._json(403, {"error": f"You cannot change the level on '{denied}': it is above your own"})
                 users[uname].setdefault("permissions", {}).update(new)
                 auth.save_users(users)
             log.info(f"Permissions updated: {uname} by {me}")
@@ -436,6 +482,8 @@ class H(BaseHTTPRequestHandler):
             return self._json(401, {"error": "Unauthorized"})
         sess = auth.get_session(tok)
         me   = sess["username"] if sess else ""
+        if path.startswith("/api/teleporter") and not self._is_full_admin(tok):
+            return self._json(403, {"error": "Backups require administrator access on all modules"})
         mt = re.match(r"^/api/teleporter/([A-Za-z0-9._-]+)$", path)
         if mt:
             if tp.delete(mt.group(1)):
@@ -449,6 +497,8 @@ class H(BaseHTTPRequestHandler):
         with auth.users_lock():
             users = auth.load_users()
             if uname not in users: return self._json(404, {"error": "Not found"})
+            if _outranks(sess["permissions"], users[uname].get("permissions")):
+                return self._json(403, {"error": "You cannot delete a user with higher permissions than yours"})
             del users[uname]; auth.save_users(users)
         auth.delete_user_sessions(uname)
         log.info(f"Usuario eliminado: {uname} por {me}")

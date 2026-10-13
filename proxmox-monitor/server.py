@@ -622,7 +622,7 @@ class H(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Set-Cookie",
-                f"session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400")
+                auth.session_cookie(token))
             br = json.dumps({"ok": True, "token": token, "username": body["username"],
                              "permissions": u["permissions"],
                              "must_change_password": must}).encode()
@@ -786,6 +786,14 @@ if __name__ == "__main__":
         log.warning(f"Permissions: {e}")
 
     log.info(f"Proxmox Monitor en http://{HOST}:{PORT} — poll {POLL_ACTIVE:g}s active / {POLL_IDLE:g}s idle")
+    # Aviso en el log por cada cluster sin huella fijada: se conecta sin validar el certificado del servidor.
+    # EN: Log warning for every cluster without a pinned fingerprint: it connects without validating the server certificate.
+    try:
+        for _c in load_clusters():
+            if not _fp_norm(_c.get("fingerprint")):
+                log.warning(f"Cluster '{_c.get('name', _c.get('id'))}' has no pinned certificate: the server identity is NOT verified. Pin it from the Proxmox page.")
+    except Exception as e:
+        log.warning(f"Could not check pinned certificates: {e}")
     start_all()
     try:
         srv = ThreadingHTTPServer((HOST, PORT), H)
