@@ -49,6 +49,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 </style>
 </head>
 <body>
+<!-- Portada de Pi Console: una tarjeta por módulo (WOL, Proxmox, Net, UPS, Admin). Es una página estática; nginx la sirve en «/». -->
+<!-- EN: Pi Console home page: one card per module (WOL, Proxmox, Net, UPS, Admin). It is a static page; nginx serves it at "/". -->
 <div class="container">
   <div class="hero">
     <div class="hero-icon">
@@ -101,6 +103,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
     </a>
   </div>
 
+  <!-- Indicadores de estado de WOL y UPS (se rellenan con el script de abajo). -->
+  <!-- EN: WOL and UPS status indicators (filled in by the script below). -->
   <div class="footer">
     <div class="status-row" id="status-row">
       <div class="status-item"><span class="dot gray" id="dot-wol"></span><span id="lbl-wol">WOL comprobando...</span></div>
@@ -109,6 +113,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
   </div>
 </div>
 <script>
+// Consulta una URL con 3 s de espera: si responde bien, el punto se pone verde y el texto dice «activo»; si no, «sin respuesta».
+// EN: Query a URL with a 3 s timeout: if it answers fine, the dot turns green and the text says "active"; otherwise "no response".
 async function checkService(url,dotId,lblId,name){
   try{
     const r=await fetch(url,{signal:AbortSignal.timeout(3000)});

@@ -2,10 +2,14 @@
 set -e
 
 # La regla sudo se quita al desinstalar (el script que autoriza ya no existe)
+# La regla de sudo se quita en cuanto el paquete se desinstala: autorizaba un script que ya no existe.
+# EN: The sudo rule is removed as soon as the package is uninstalled: it authorised a script that no longer exists.
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
     rm -f /etc/sudoers.d/pi-console-teleporter
 fi
 
+# «purge» (apt purge) borra además la instalación, los servicios y el usuario del sistema. Los respaldos de /var/backups se conservan.
+# EN: "purge" (apt purge) also deletes the installation, the services and the system user. Backups in /var/backups are kept.
 if [ "$1" = "purge" ]; then
     echo "pi-console: purging..."
     rm -rf /opt/pi-console /opt/pi-console-auth
@@ -13,6 +17,8 @@ if [ "$1" = "purge" ]; then
     rm -f /etc/systemd/system/wol-console.service
     rm -f /etc/systemd/system/pi-console-ups.service
     # servicio con el nombre antiguo (solo si es el de Pi Console; nut-monitor tambien es el upsmon de NUT)
+    # El nombre antiguo nut-monitor.service también lo usa el upsmon de NUT: solo se borra si el archivo es de Pi Console.
+    # EN: The old name nut-monitor.service is also used by NUT's upsmon: it is deleted only if the file belongs to Pi Console.
     if grep -q "Pi Console" /etc/systemd/system/nut-monitor.service 2>/dev/null; then
         rm -f /etc/systemd/system/nut-monitor.service
     fi

@@ -298,6 +298,8 @@ input.err{border-color:var(--red)}
   </div>
 </div>
 
+<!-- Proxmox Monitor (página del módulo, servida en /pve/). Estructura: login · barra lateral con los clusters · panel del cluster activo (nodos, VMs, contenedores, almacenamiento, Ceph) · diálogo de agregar cluster · script. -->
+<!-- EN: Proxmox Monitor (module page, served at /pve/). Structure: login · sidebar with the clusters · active cluster panel (nodes, VMs, containers, storage, Ceph) · add-cluster dialog · script. -->
 <!-- Add cluster form -->
 <div class="overlay" id="add-overlay">
   <div class="modal" style="max-width:460px;width:95%">
@@ -401,7 +403,11 @@ const LANG={
 };
 let _lang=localStorage.getItem('pi-lang')||'en';
 var _i18nReady=false;
+// Traducción: busca la clave en el idioma activo (admite textos con función para incluir valores).
+// EN: Translation: looks the key up in the active language (supports function texts that take values).
 function t(k,...args){const v=(LANG[_lang]||LANG.en)[k]||(LANG.en)[k]||k;return typeof v==='function'?v(...args):v;}
+// Cambia el idioma, lo recuerda y vuelve a pintar los textos de la página.
+// EN: Switch the language, remember it and repaint the page texts.
 function setLang(l){
   _lang=l;localStorage.setItem('pi-lang',l);document.documentElement.lang=l;
   document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.getAttribute('data-i18n')));
@@ -410,17 +416,31 @@ function setLang(l){
 }
 (()=>setLang(_lang))();
 
+// Estado: sesión, clusters, cluster activo y temporizador de refresco.
+// EN: State: session, clusters, active cluster and refresh timer.
 let ME=null, clusters=[], activeId=null, pollTimer=null;
+// Refresco rápido mientras la pestaña está visible; en segundo plano se detiene (así el servidor pasa a su ritmo lento).
+// EN: Fast refresh while the tab is visible; it stops in the background (so the server switches to its slow rate).
 const POLL=5000;            // fast refresh while the tab is visible; paused when hidden
+// El historial de CPU/RAM de los nodos es grande y cambia cada 30 s: se pide cada 30 s y entre medias se reutiliza la copia anterior.
+// EN: The nodes' CPU/RAM history is large and changes every 30 s: it is requested every 30 s and the previous copy is reused in between.
 let _histTs=0, _histCache={}, _collapsed=new Set();
 
 // ── Theme ────────────────────────────────────────────────────────────────────
+// Elige el tema (claro, oscuro o automático según el sistema) y lo recuerda (clave pi-theme).
+// EN: Choose the theme (light, dark or automatic following the system) and remember it (key pi-theme).
 function setTheme(t){localStorage.setItem('pi-theme',t);applyTheme(t);['light','dark','system'].forEach(x=>document.getElementById('theme-'+x)?.classList.toggle('active',x===t));}
+// Aplica el tema al documento.
+// EN: Apply the theme to the document.
 function applyTheme(t){const p=t==='system'?(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t;document.documentElement.setAttribute('data-theme',p==='dark'?'dark':'light');}
 (()=>{const t=localStorage.getItem('pi-theme')||'system';applyTheme(t);window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if((localStorage.getItem('pi-theme')||'system')==='system')applyTheme('system');});setTimeout(()=>{['light','dark','system'].forEach(x=>document.getElementById('theme-'+x)?.classList.toggle('active',x===(localStorage.getItem('pi-theme')||'system')));},0);})();
 
 // ── Nav reordenable ───────────────────────────────────────────────────────────
+// ¿Puede agregar y borrar clusters, fijar certificados y ordenar nodos? (nivel «admin» de Proxmox).
+// EN: Can it add and delete clusters, pin certificates and reorder nodes? (Proxmox "admin" level).
 function canAdmin(){return ME&&ME.permissions?.pve==='admin';}
+// Barra lateral común: los mismos accesos en todas las páginas. El usuario puede reordenarlos arrastrando (el orden se guarda en el navegador, clave pi-nav-order). «Admin» solo se muestra a administradores.
+// EN: Common sidebar: the same links on every page. The user can reorder them by dragging (the order is stored in the browser, key pi-nav-order). "Admin" is shown to administrators only.
 const _NAV_ITEMS=[
   {id:'wol',  href:'/wol/',   label:'WOL Console', svg:'<polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/>'},
   {id:'nut',  href:'/nut/',   label:'UPS Monitor', svg:'<path d="M5 9V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><rect x="3" y="9" width="18" height="11" rx="2"/><line x1="12" y1="13" x2="12" y2="16"/>'},
@@ -428,13 +448,19 @@ const _NAV_ITEMS=[
   {id:'pve',  href:'/pve/',   label:'Proxmox',     svg:'<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>'},
   {id:'admin',href:'/admin/', label:'Admin Panel', svg:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',adminOnly:true},
 ];
+// Identificador de esta página en la barra lateral (se marca como activa).
+// EN: Identifier of this page in the sidebar (shown as active).
 const _NAV_SELF='pve';
 let _navDragSrc=null;
+// Orden guardado de los accesos; si falta alguno nuevo, se agrega al final.
+// EN: Saved order of the links; any new one missing is appended at the end.
 function _navOrder(){
   try{const s=JSON.parse(localStorage.getItem('pi-nav-order')||'[]');
     if(s.length){const ids=_NAV_ITEMS.map(i=>i.id);const o=s.filter(id=>ids.includes(id));ids.forEach(id=>{if(!o.includes(id))o.push(id);});return o;}}catch(e){}
   return _NAV_ITEMS.map(i=>i.id);
 }
+// Dibuja la barra lateral y activa el arrastrar y soltar para reordenar.
+// EN: Draw the sidebar and enable drag and drop to reorder.
 function renderNav(){
   const wrap=document.getElementById('nav-items');if(!wrap)return;
   const order=_navOrder(),isAdmin=canAdmin();
@@ -469,6 +495,8 @@ function renderNav(){
 
 // ── Login ────────────────────────────────────────────────────────────────────
 document.getElementById('l-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+// Inicio de sesión. La cookie la fija el servidor (HttpOnly): el JavaScript nunca guarda el token.
+// EN: Login. The cookie is set by the server (HttpOnly): the JavaScript never stores the token.
 async function doLogin(){
   const btn=document.getElementById('btn-l'),err=document.getElementById('login-err');
   const u=document.getElementById('l-user').value.trim(),p=document.getElementById('l-pass').value;
@@ -484,6 +512,8 @@ async function doLogin(){
   }catch(e){err.textContent='Error: '+e.message;err.className='login-err show';}
   finally{btn.disabled=false;btn.textContent='Entrar';}
 }
+// Pregunta al servidor quién es el usuario; sin sesión o sin acceso a Proxmox devuelve false y se muestra el login.
+// EN: Ask the server who the user is; without a session or without Proxmox access it returns false and the login is shown.
 async function checkSession(){
   try{
     const r=await fetch('api/me');
@@ -496,6 +526,8 @@ async function checkSession(){
 }
 
 // Si hay sesión válida en otra app, pre-rellena el usuario y muestra aviso
+// Reutiliza la sesión existente (cookie); si no hay, se muestra el login normal.
+// EN: Reuse the existing session (cookie); if there is none, the normal login is shown.
 async function tryAutoLogin(){
   // Intenta reusar sesión existente vía cookie
   const ok = await checkSession();
@@ -503,6 +535,8 @@ async function tryAutoLogin(){
   // No hay sesión — mostrar login normal
   return false;
 }
+// Muestra nombre y rol y oculta los controles de administración a quien no es admin.
+// EN: Show name and role and hide the admin controls from non-admins.
 function applyPermissions(){
   const _un=String(ME.username||'?');
   document.getElementById('me-name').textContent=_un;
@@ -512,9 +546,13 @@ function applyPermissions(){
   renderNav();
   if(ME.permissions?.pve==='admin') document.getElementById('btn-add-cluster').style.display='';
 }
+// Cierra la sesión en el servidor y recarga la página.
+// EN: Close the session on the server and reload the page.
 async function logout(){await fetch('api/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});location.reload();}
 
 // ── Init ────────────────────────────────────────────────────────────────────
+// Arranque tras iniciar sesión: primera descarga y refresco periódico (pausado cuando la pestaña no se ve).
+// EN: Startup after login: first download and periodic refresh (paused when the tab is not visible).
 async function initApp(){
   updateClock();setInterval(updateClock,1000);
   await fetchAll();
@@ -522,6 +560,8 @@ async function initApp(){
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)fetchAll();});
 }
 
+// Descarga los clusters con su última lectura. El historial pesado se pide solo cada 30 s y se reutiliza entre medias. Un 401 recarga la página (sesión vencida).
+// EN: Download the clusters with their last reading. The heavy history is requested only every 30 s and reused in between. A 401 reloads the page (expired session).
 async function fetchAll(){
   try{
     // node history is big and only changes every 30 s: ask for it rarely, reuse the last copy otherwise
@@ -542,8 +582,12 @@ async function fetchAll(){
   }catch(e){console.error(e);}
 }
 
+// Cambia el cluster mostrado.
+// EN: Switch the displayed cluster.
 function selectCluster(id){activeId=id;renderSidebar();renderDashboard();}
 
+// Lista de clusters en la barra lateral: punto de estado (cargando / error / ok), host:puerto, cantidad de nodos y, para administradores, botón de borrar.
+// EN: Cluster list in the sidebar: status dot (loading / error / ok), host:port, node count and, for administrators, a delete button.
 function renderSidebar(){
   const list=document.getElementById('cluster-list');list.innerHTML='';
   clusters.forEach(c=>{
@@ -565,6 +609,8 @@ function renderSidebar(){
 }
 
 // ── Stats globales ────────────────────────────────────────────────────────────
+// Contadores de la cabecera sumando todos los clusters: nodos en línea, VMs y contenedores en ejecución, y CPU y RAM promedio.
+// EN: Header counters adding up all the clusters: online nodes, running VMs and containers, and average CPU and RAM.
 function updateGlobalStats(){
   let totalNodes=0, runVMs=0, runCTs=0, cpuSum=0, memSum=0, cpuN=0, memN=0;
   clusters.forEach(c=>{
@@ -587,6 +633,8 @@ function updateGlobalStats(){
 }
 
 // ── Dashboard cluster activo ──────────────────────────────────────────────────
+// Dibuja el cluster activo: resumen, estado de Ceph y una tarjeta por nodo. Si el certificado no está fijado, ofrece el botón «Fijar certificado».
+// EN: Draw the active cluster: summary, Ceph state and one card per node. If the certificate is not pinned, it offers the "Pin certificate" button.
 function renderDashboard(){
   if(_dragging) return;                       // do not rebuild the DOM under a drag in progress
   const cluster=clusters.find(c=>c.id===activeId);
@@ -650,8 +698,12 @@ function renderDashboard(){
 }
 
 // ── Manual node order + pins (saved on the server, shared by all browsers) ────────
+// Orden manual y nodos fijados: se guardan en el servidor junto al cluster, así todos los navegadores ven lo mismo. Solo el admin puede cambiarlos.
+// EN: Manual order and pinned nodes: stored on the server with the cluster, so every browser sees the same. Only the admin can change them.
 let _dragging=false;
 const isPveAdmin=()=>ME?.permissions?.pve==='admin';
+// Nodos en el orden guardado; los nodos nuevos o desconocidos van al final, en orden natural (pve2 antes que pve10). No depende del orden en que responda la API.
+// EN: Nodes in the saved order; new or unknown nodes go last, in natural order (pve2 before pve10). It does not depend on the order the API answers in.
 function orderedNodes(cluster,nodes){
   const idx=new Map((cluster.layout?.order||[]).map((n,i)=>[n,i]));
   const pos=n=>idx.has(n.name)?idx.get(n.name):1e6;        // unknown/new nodes go last, in the server's stable order
@@ -659,6 +711,8 @@ function orderedNodes(cluster,nodes){
   return [...nodes].sort((a,b)=>pos(a)-pos(b)||nat(a,b));      // never depends on the order the API returns
 }
 // Pinned nodes keep their slot; the others are redistributed among the remaining slots.
+// Calcula el nuevo orden al arrastrar una tarjeta sobre otra: los nodos fijados conservan su posición y los demás se mueven alrededor.
+// EN: Compute the new order when dragging one card over another: pinned nodes keep their position and the others move around them.
 function reorderNames(names,pinned,drag,target){
   if(drag===target||pinned.has(drag))return names;
   const unp=names.filter(n=>!pinned.has(n)&&n!==drag);
@@ -670,6 +724,8 @@ function reorderNames(names,pinned,drag,target){
   let k=0;
   return names.map(n=>pinned.has(n)?n:unp[k++]);
 }
+// Guarda el orden y los fijados en el servidor.
+// EN: Save the order and the pins on the server.
 async function saveLayout(cluster,order,pinned){
   cluster.layout={order,pinned};
   renderDashboard();
@@ -683,11 +739,15 @@ function curLayout(cid){
   const names=orderedNodes(c,c.snap?.data?.nodes||[]).map(n=>n.name);
   return {c,names,pinned:new Set(c.layout?.pinned||[])};
 }
+// Fija o suelta un nodo.
+// EN: Pin or unpin a node.
 function togglePin(cid,name){
   const {c,names,pinned}=curLayout(cid);
   pinned.has(name)?pinned.delete(name):pinned.add(name);
   saveLayout(c,names,[...pinned]);
 }
+// Mueve un nodo una posición con los botones (alternativa al arrastre, útil en pantallas táctiles).
+// EN: Move a node one position with the buttons (alternative to dragging, useful on touch screens).
 function moveNode(cid,name,dir){
   const {c,names,pinned}=curLayout(cid);
   let i=names.indexOf(name)+dir;
@@ -732,6 +792,8 @@ function decorateCard(card,cluster,name,names,pinned){
   });
 }
 
+// Tarjeta de un nodo: CPU, RAM, disco, tiempo encendido, gráfico pequeño y secciones de VMs y contenedores.
+// EN: Node card: CPU, RAM, disk, uptime, small chart and sections for VMs and containers.
 function buildNodeCard(node){
   const card=document.createElement('div');card.className='node-card';
   const isOnline=node.status==='online';
@@ -782,6 +844,8 @@ function buildNodeCard(node){
   return card;
 }
 
+// Gráfico pequeño de CPU y RAM de las últimas ~12 horas, dibujado en un canvas.
+// EN: Small CPU and RAM chart of the last ~12 hours, drawn on a canvas.
 function drawSparkline(nodeId, history){
   const canvas=document.getElementById('spark-'+nodeId);
   if(!canvas||!history?.length) return;
@@ -811,6 +875,8 @@ function renderSparklines(nodes){
   });
 }
 
+// Lista desplegable de VMs o contenedores de un nodo, con estado, CPU y RAM.
+// EN: Collapsible list of a node's VMs or containers, with state, CPU and RAM.
 function buildVMSection(items, type, running, nodeName){
   if(!items.length) return '';
   const id='sec-'+String(nodeName).replace(/[^\w-]/g,'_')+'-'+type;   // stable id: collapsed state survives refreshes
@@ -862,9 +928,15 @@ function toggleSection(id){
 }
 
 // ── Add cluster ───────────────────────────────────────────────────────────────
+// AGREGAR CLUSTER (dos pasos, por seguridad del certificado). 1.º «Probar»: se muestra la huella SHA-256 del certificado que presenta el servidor, sin enviar todavía el token. 2.º El administrador la compara y vuelve a pulsar «Probar»: se prueba con esa huella fijada. Solo entonces se puede guardar.
+// EN: ADD CLUSTER (two steps, for certificate security). 1st "Test": the SHA-256 fingerprint of the certificate the server presents is shown, without sending the token yet. 2nd The administrator compares it and presses "Test" again: it is tested with that fingerprint pinned. Only then can it be saved.
 function openAddCluster(){document.getElementById('add-overlay').classList.add('show');document.getElementById('f-name').focus();}
 
+// Huella mostrada al administrador en el diálogo; se invalida si cambia host o puerto.
+// EN: Fingerprint shown to the administrator in the dialog; invalidated if host or port changes.
 let pendingFp=null;                                          // certificate shown to the admin in the add dialog
+// Paso 1 o 2 según haya una huella pendiente (ver arriba).
+// EN: Step 1 or 2 depending on whether a fingerprint is pending (see above).
 async function testCluster(){
   const btn=document.getElementById('btn-test'),res=document.getElementById('test-result');
   const host=document.getElementById('f-host').value.trim();
@@ -891,6 +963,8 @@ async function testCluster(){
   finally{btn.disabled=false;btn.textContent=t('test');}
 }
 
+// Guarda el cluster junto con la huella confirmada; el servidor rechaza el alta sin ella.
+// EN: Save the cluster together with the confirmed fingerprint; the server rejects adding without it.
 async function saveCluster(){
   const name=document.getElementById('f-name').value.trim();
   const host=document.getElementById('f-host').value.trim();
@@ -911,6 +985,8 @@ async function saveCluster(){
   finally{btn.disabled=false;btn.textContent=t('addCluster');}
 }
 
+// Para clusters antiguos sin certificado fijado: muestra la huella actual, pide confirmación y la guarda.
+// EN: For old clusters without a pinned certificate: show the current fingerprint, ask for confirmation and save it.
 async function pinCluster(){
   const c=clusters.find(x=>x.id===activeId);if(!c)return;
   try{
@@ -924,6 +1000,8 @@ async function pinCluster(){
   }catch(e){toast(e.message,true);}
 }
 
+// Pide confirmación y borra un cluster (admin).
+// EN: Ask for confirmation and delete a cluster (admin).
 function confirmDelete(id,name){
   document.getElementById('del-msg').textContent=t('deleteClusterConfirm',name);
   document.getElementById('del-btn').onclick=async()=>{
@@ -935,12 +1013,18 @@ function confirmDelete(id,name){
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+// Formateadores: bytes y tiempo encendido a texto legible.
+// EN: Formatters: bytes and uptime to readable text.
 function fmtBytes(b){if(!b)return'0B';const u=['B','KB','MB','GB','TB'];let i=0;while(b>=1024&&i<u.length-1){b/=1024;i++;}return b.toFixed(i>0?1:0)+' '+u[i];}
 function fmtUptime(s){if(!s)return'—';const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);if(d>0)return d+'d '+h+'h';if(h>0)return h+'h '+m+'m';return m+'m';}
+// Escapa HTML antes de insertar texto de usuarios, equipos o la red en la página: evita inyección de código (XSS).
+// EN: Escape HTML before inserting text from users, devices or the network into the page: prevents code injection (XSS).
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function updateClock(){const el=document.getElementById('clock');if(el)el.textContent=new Date().toTimeString().slice(0,8);}
 function closeModals(){document.querySelectorAll('.overlay').forEach(o=>o.classList.remove('show'));}
 let _tt;
+// Aviso emergente breve (error si isErr).
+// EN: Short pop-up notice (error if isErr).
 function toast(msg,isErr=false){const el=document.getElementById('toast');el.textContent=msg;el.style.background=isErr?'var(--red)':'var(--text)';void el.offsetWidth;el.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>el.classList.remove('show'),3400);}
 function log(l,m){console.log(`[${l}] ${m}`);}
 
@@ -954,6 +1038,8 @@ _i18nReady=true;
 })();
 
 // ── Mobile navigation drawer ──
+// Menú lateral desplegable en pantallas pequeñas (celular y tablet).
+// EN: Slide-out side menu on small screens (phone and tablet).
 function toggleNav(force){
   const open=force!==undefined?force:!document.body.classList.contains('nav-open');
   document.body.classList.toggle('nav-open',open);
@@ -967,6 +1053,8 @@ function toggleNav(force){
 })();
 </script>
 <script>
+// Pie con la versión instalada, leída de /api/version. Se repite igual en todas las páginas.
+// EN: Footer with the installed version, read from /api/version. Repeated identically on every page.
 /* Version footer (same snippet in every page): shows the installed Pi Console version */
 (function(){
   var st=document.createElement('style');

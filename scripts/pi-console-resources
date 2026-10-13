@@ -3,6 +3,8 @@
 #   pi-console-resources        one-off summary
 #   pi-console-resources -w     refresh every 2 s (Ctrl-C to quit)
 # RSS is the resident memory of each Python service; "free" is what the system still has available.
+# Imprime la tabla de recursos. El Python va en un heredoc y lee /proc directamente: no hace falta ps ni psutil.
+# EN: Print the resources table. The Python is in a heredoc and reads /proc directly: neither ps nor psutil is needed.
 show() {
   python3 - <<'PY'
 import os, subprocess, time
@@ -44,4 +46,6 @@ if dirs:
     print("Disk:  " + ", ".join(l.replace("\t", " ") for l in out if l))
 PY
 }
+# Con -w repite cada 2 segundos, como un «top» simplificado.
+# EN: With -w it repeats every 2 seconds, like a simplified "top".
 if [ "$1" = "-w" ]; then while true; do clear; show; sleep 2; done; else show; fi

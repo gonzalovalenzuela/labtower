@@ -17,12 +17,18 @@
 #  * Services are always restarted, even if the restore fails half way.
 #  * Archive members are whitelisted: absolute paths, "..", links are rejected.
 #  * Files with secrets (tokens, SNMP/NUT passwords) are stored/restored 0600.
+# ES: Teleporter = respaldo y restauración de Pi Console (datos + NUT + nginx). Lo usa el administrador por consola
+#     (backup / check / restore) y el panel web a través de sudo (gui-backup / gui-restore). Los comentarios de este
+#     archivo están en inglés y, donde aporta, con su versión en español («ES:»).
+#     Ideas clave: se verifica el respaldo ANTES de tocar nada; se toma una foto de seguridad del estado actual;
+#     los servicios siempre se reinician aunque falle a medias; y el archivo solo admite miembros de una lista blanca.
 set -uo pipefail
 
 TELEPORTER_VERSION="2.1.0"
 
 # Paths (overridable through the environment, used by the tests).
 # Under sudo (the admin panel) every override is dropped: only the defaults apply.
+# ES: Cuando corre por sudo (desde el panel) se ignoran todas las variables de entorno de prueba: solo valen las rutas reales, así nadie puede redirigir el script como root.
 if [ -n "${SUDO_USER:-}" ]; then
   unset PICONSOLE_HOME PICONSOLE_DATA PICONSOLE_AUTH_LINK PICONSOLE_NUT_DIR PICONSOLE_NGINX_CONF \
         PICONSOLE_NGINX_ENABLED PICONSOLE_SAFETY_DIR PICONSOLE_LOCK TELEPORTER_SKIP_SYSTEM
@@ -41,6 +47,7 @@ SERVICES="wol-console pi-console-ups admin-panel net-monitor proxmox-monitor"
 SKIP_SYSTEM="${TELEPORTER_SKIP_SYSTEM:-0}"   # 1 = no systemctl/nginx/chown (tests)
 
 # member-in-archive | real path on disk
+# ES: Tabla «miembro dentro del archivo | ruta real en disco» de los datos de cada módulo. Si se agrega un módulo con datos, se agrega aquí.
 DATA_FILES=(
   "data/users.json|$DATA_DIR/users.json"
   "data/sessions.json|$DATA_DIR/sessions.json"
@@ -52,6 +59,7 @@ DATA_FILES=(
   "data/net-monitor/config.json|$PI_HOME/net-monitor/config.json"
   "data/proxmox-monitor/clusters.json|$PI_HOME/proxmox-monitor/clusters.json"
 )
+# ES: Igual para la configuración del sistema (nginx y NUT). Estos archivos solo se restauran por consola con --nut / --nginx.
 CONF_FILES=(
   "conf/nginx/pi-console.conf|$NGINX_CONF"
   "conf/nut/nut.conf|$NUT_DIR/nut.conf"
@@ -64,6 +72,7 @@ CONF_FILES=(
 # ── output helpers ────────────────────────────────────────────────────────────
 if [ -t 1 ]; then G=$'\033[0;32m'; Y=$'\033[1;33m'; R=$'\033[0;31m'; B=$'\033[0;34m'; N=$'\033[0m'
 else G=""; Y=""; R=""; B=""; N=""; fi
+# ES: Ayudantes de salida: ok (✓), warn (!, cuenta advertencias), err (✗, cuenta errores), hdr (título de sección) y die (error fatal).
 ok()   { echo "  ${G}✓${N} $*"; }
 warn() { echo "  ${Y}!${N} $*"; WARNINGS=$((WARNINGS+1)); }
 err()  { echo "  ${R}✗${N} $*" >&2; ERRORS=$((ERRORS+1)); }
@@ -75,6 +84,7 @@ TMP=""
 cleanup() { [ -n "$TMP" ] && rm -rf "$TMP"; }
 trap cleanup EXIT
 
+# ES: Exige ser root; si no, aborta indicando que se use sudo.
 need_root() {
   [ "$SKIP_SYSTEM" = "1" ] && return 0
   [ "$(id -u)" -eq 0 ] || die "this command needs root: sudo teleporter $*"
@@ -93,6 +103,7 @@ is_secret() {
 }
 
 # ── validators ────────────────────────────────────────────────────────────────
+# ES: Validadores: JSON bien formado, base SQLite íntegra (devuelve la cantidad de filas) y que users.json tenga al menos un usuario (si no, restaurarlo dejaría fuera a todos).
 validate_json() {  # file -> prints nothing, rc 0/1
   python3 -I - "$1" <<'PY' 2>/dev/null
 import json, sys
@@ -120,6 +131,7 @@ PY
 
 # ── archive safety ────────────────────────────────────────────────────────────
 # Rejects absolute paths, "..", links/devices and unknown members.
+# ES: Seguridad del archivo: rechaza rutas absolutas, «..», enlaces, dispositivos y cualquier miembro que no esté en la lista blanca.
 archive_is_safe() {  # archive
   local archive="$1" listing m
   gzip -t "$archive" 2>/dev/null || { err "not a valid gzip file"; return 1; }
@@ -144,6 +156,7 @@ archive_is_safe() {  # archive
   return 0
 }
 
+# ES: Extrae el archivo ya validado en una carpeta temporal privada.
 extract_archive() {  # archive dest
   tar -xzf "$1" -C "$2" --no-same-owner --no-same-permissions 2>/dev/null \
     || { err "could not extract the archive"; return 1; }
@@ -158,6 +171,7 @@ extract_archive() {  # archive dest
 }
 
 # ── BACKUP ────────────────────────────────────────────────────────────────────
+# ES: BACKUP. Copia los datos (la base SQLite con su API de respaldo, que es consistente aunque el servicio esté escribiendo), la configuración, escribe backup.json (versión, fecha, host) y SHA256SUMS, empaqueta con modo 600 y verifica lo que acaba de escribir.
 cmd_backup() {
   need_root backup "$@"; need_tools; take_lock
   local dest="${1:-}"
@@ -240,6 +254,7 @@ PY
 
 # ── CHECK ─────────────────────────────────────────────────────────────────────
 # check_archive <archive> <extract-dir> ; fills counters, returns 1 on hard errors
+# ES: CHECK. Verifica un respaldo sin cambiar nada: archivo seguro, backup.json válido, sumas SHA-256, cada JSON/SQLite íntegro y un usuario al menos. Devuelve error solo si hay errores duros; los archivos opcionales ausentes son advertencias.
 check_archive() {
   local archive="$1" dir="$2" entry rel f size
   [ -f "$archive" ] || { err "file not found: $archive"; return 1; }
@@ -278,8 +293,10 @@ check_archive() {
   [ "$ERRORS" -eq 0 ]
 }
 
+# ES: Igual que check_archive pero sin imprimir (se usa en la autoverificación del respaldo).
 cmd_check_quiet() { local d; d=$(mktemp -d) || return 1; ( check_archive "$1" "$d" >/dev/null 2>&1 ); local rc=$?; rm -rf "$d"; return $rc; }
 
+# ES: Comando «check» para el usuario: muestra el resultado y de dónde viene el respaldo (host, fecha, versiones).
 cmd_check() {
   need_tools
   [ $# -ge 1 ] || die "usage: teleporter check <file.tar.gz>"
@@ -306,6 +323,7 @@ PY
 
 # ── RESTORE ───────────────────────────────────────────────────────────────────
 SERVICES_STOPPED=0
+# ES: RESTORE. Arranca los 5 servicios e informa cuál falla (con el comando para ver su log).
 start_services() {
   [ "$SKIP_SYSTEM" = "1" ] && return 0
   systemctl daemon-reload 2>/dev/null || true
@@ -316,6 +334,7 @@ start_services() {
   done
 }
 RESTORE_FINISHED=0; RM_SOURCE=""
+# ES: Se ejecuta SIEMPRE al salir de una restauración (incluso si se aborta): reinicia los servicios, marca «RESULT: failed» si no terminó bien y borra el respaldo temporal.
 on_exit_restore() {
   local rc=$?
   # Always bring the services back, even after an abort.
@@ -328,6 +347,7 @@ on_exit_restore() {
   return $rc
 }
 
+# ES: Instala un archivo de forma atómica: copia a un temporal junto al destino, fija modo y dueño, y lo mueve encima (también reemplaza un enlace simbólico perdido).
 install_file() {  # src dst mode owner:group
   local src="$1" dst="$2" mode="$3" owner="$4" tmpf
   mkdir -p "$(dirname "$dst")" || return 1
@@ -337,6 +357,10 @@ install_file() {  # src dst mode owner:group
   mv -f -- "$tmpf" "$dst"          # atomic replace; also replaces a stray symlink
 }
 
+# ES: Pasos de la restauración: 1) verificar el respaldo sin tocar nada · 2) pedir confirmación · 3) foto de seguridad del estado actual
+#     · 4) detener servicios · 5) restaurar datos (borrando restos -wal/-shm de SQLite) · 6) recrear los enlaces de auth
+#     · 7) configuración del sistema (NUT y nginx solo si se pidió con --nut / --nginx; nginx se prueba con «nginx -t» y, si falla, vuelve la anterior)
+#     · 8) permisos · 9) arrancar servicios. Termina con «RESULT: ok|errors|failed», que el panel lee en restore.log.
 cmd_restore() {
   need_root restore "$@"; need_tools
   local archive="" assume_yes=0 with_nut=0 with_nginx=0 rm_source=0 a
@@ -451,6 +475,7 @@ cmd_restore() {
 
 # ── lock (one backup/restore at a time) ───────────────────────────────────────
 LOCK_HELD=0
+# ES: Candado: solo un respaldo/restauración a la vez (flock sobre un archivo de /run/lock).
 take_lock() {
   [ "$LOCK_HELD" = 1 ] && return 0
   command -v flock >/dev/null 2>&1 || return 0
@@ -462,17 +487,21 @@ take_lock() {
 release_lock() { exec 9>&-; LOCK_HELD=0; }
 
 # ── admin-panel entry points (run through sudo as root; strict argument checks) ─
+# ES: PUNTOS DE ENTRADA DEL PANEL (corren como root vía sudo, con validación estricta). El nombre del respaldo debe cumplir este patrón: evita rutas con «../».
 NAME_RE='^(pi-console-[A-Za-z0-9._-]{1,80}|upload-[0-9]{8}_[0-9]{6})\.tar\.gz$'
+# ES: Prepara la carpeta de intercambio con el panel (modo 700, dueño pi-console).
 spool_init() {
   mkdir -p "$SPOOL_DIR" && chmod 700 "$SPOOL_DIR"
   [ "$SKIP_SYSTEM" = "1" ] || chown "$SERVICE_USER:$SERVICE_USER" "$SPOOL_DIR" 2>/dev/null || true
 }
+# ES: Limpieza: se conservan los 5 respaldos más nuevos y se borran las subidas con más de un día.
 spool_prune() {  # keep the newest 5 backups, drop uploads older than a day
   local f i=0
   while IFS= read -r f; do i=$((i+1)); [ $i -gt 5 ] && rm -f -- "$f"; done < <(ls -1t "$SPOOL_DIR"/pi-console-*.tar.gz 2>/dev/null)
   find "$SPOOL_DIR" -maxdepth 1 -name 'upload-*.tar.gz' -mmin +1440 -delete 2>/dev/null || true
 }
 
+# ES: Crea un respaldo para el panel y imprime «BACKUP_FILE=<nombre>» (la línea que el panel lee).
 cmd_gui_backup() {
   need_root gui-backup "$@"; need_tools; take_lock
   spool_init
@@ -484,6 +513,7 @@ cmd_gui_backup() {
   echo "BACKUP_FILE=$name"
 }
 
+# ES: Restaura para el panel. Trabaja sobre una COPIA privada propiedad de root (así el usuario sin privilegios no puede cambiar el archivo entre la verificación y la extracción) y la lanza separada del servicio del panel, porque la restauración reinicia ese mismo servicio. Desde el panel NUT/nginx nunca se restauran.
 cmd_gui_restore() {  # <name> <nut:0|1> <nginx:0|1>
   need_root gui-restore "$@"; need_tools; take_lock
   local name="${1:-}" nut="${2:-0}" ngx="${3:-0}" src copy
@@ -517,6 +547,7 @@ cmd_gui_restore() {  # <name> <nut:0|1> <nginx:0|1>
 }
 
 # ── main ──────────────────────────────────────────────────────────────────────
+# ES: Ayuda de uso del comando.
 usage() {
   cat <<EOF
 Pi Console Teleporter v$TELEPORTER_VERSION
@@ -534,6 +565,7 @@ Net Monitor hosts + config (SNMP), Proxmox clusters, NUT config, nginx site.
 The archive holds passwords and tokens (mode 600) — keep it private.
 EOF
 }
+# ES: Despacho de comandos: backup, check, restore (consola) y gui-backup, gui-restore (panel).
 CMD="${1:-}"; [ $# -gt 0 ] && shift
 case "$CMD" in
   backup)  cmd_backup "$@";;

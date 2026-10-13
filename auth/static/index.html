@@ -233,6 +233,8 @@ input.err{border-color:var(--red)}
 </head>
 <body>
 
+<!-- Admin Panel (página del módulo, servida en /admin/). Estructura: login · barra lateral · contenido (salud del sistema, usuarios, respaldos) · cajón de usuario · ventanas modales de borrar y restaurar · script. Solo entran administradores. -->
+<!-- EN: Admin Panel (module page, served at /admin/). Structure: login · sidebar · content (system health, users, backups) · user drawer · delete and restore modal windows · script. Administrators only. -->
 <!-- Login screen -->
 <div id="login-screen">
   <div class="login-box">
@@ -486,9 +488,13 @@ input.err{border-color:var(--red)}
 <div id="toast"></div>
 
 <script>
+// Sesión actual {username, permissions}.
+// EN: Current session {username, permissions}.
 let me = null;
 
 // ── i18n ──────────────────────────────────────────────────────────────────────
+// Textos de la interfaz en inglés (en) y español (es). t('clave') devuelve el texto del idioma activo; si falta la clave en español, usa el inglés. Para agregar un idioma basta otro bloque con las mismas claves.
+// EN: Interface texts in English (en) and Spanish (es). t('key') returns the text for the active language; if a Spanish key is missing, it falls back to English. Adding a language only takes another block with the same keys.
 const LANG = {
   en: {
     loginTitle:'Admin access', loginSub:'Only administrators can access.',
@@ -597,8 +603,14 @@ const LANG = {
     editTitle: u=>`Editar — ${u}`,
   }
 };
+// Idioma elegido, guardado en el navegador (clave pi-lang) y compartido por todas las páginas. Por defecto, inglés.
+// EN: Chosen language, stored in the browser (key pi-lang) and shared by all pages. English by default.
 let _lang = localStorage.getItem('pi-lang') || 'en';
+// Traducción: busca la clave en el idioma activo (admite textos con función para incluir valores).
+// EN: Translation: looks the key up in the active language (supports function texts that take values).
 function t(k,...args){ const v=(LANG[_lang]||LANG.en)[k]||(LANG.en)[k]||k; return typeof v==='function'?v(...args):v; }
+// Cambia el idioma, lo recuerda y vuelve a pintar los textos de la página.
+// EN: Switch the language, remember it and repaint the page texts.
 function setLang(l){
   _lang=l; localStorage.setItem('pi-lang',l); document.documentElement.lang=l;
   document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.getAttribute('data-i18n')));
@@ -633,6 +645,8 @@ function setLang(l){
     bSave.textContent = dMode.value==='edit' ? t('btnSave') : t('btnCreate');
   }
 }
+// Texto de ayuda que explica qué significa cada nivel de permiso (cambia con el idioma).
+// EN: Help text explaining what each permission level means (changes with the language).
 function updatePermHelpBox(){
   const box = document.getElementById('perm-help-box');
   if(!box) return;
@@ -645,6 +659,8 @@ function updatePermHelpBox(){
 (()=>{ setLang(_lang); updatePermHelpBox(); })();
 
 // ── Nav reordenable ───────────────────────────────────────────────────────────
+// Barra lateral común: los mismos accesos en todas las páginas. El usuario puede reordenarlos arrastrando (el orden se guarda en el navegador, clave pi-nav-order). «Admin» solo se muestra a administradores.
+// EN: Common sidebar: the same links on every page. The user can reorder them by dragging (the order is stored in the browser, key pi-nav-order). "Admin" is shown to administrators only.
 const _NAV_ITEMS=[
   {id:'wol',   href:'/wol/',   label:'WOL Console', svg:'<polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/>'},
   {id:'nut',   href:'/nut/',   label:'UPS Monitor', svg:'<path d="M5 9V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><rect x="3" y="9" width="18" height="11" rx="2"/><line x1="12" y1="13" x2="12" y2="16"/>'},
@@ -652,13 +668,19 @@ const _NAV_ITEMS=[
   {id:'pve',   href:'/pve/',   label:'Proxmox',     svg:'<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>'},
   {id:'admin', href:'/admin/', label:'Admin Panel', svg:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'},
 ];
+// Identificador de esta página en la barra lateral (se marca como activa).
+// EN: Identifier of this page in the sidebar (shown as active).
 const _NAV_SELF='admin';
 let _navDragSrc=null;
+// Orden guardado de los accesos; si falta alguno nuevo, se agrega al final.
+// EN: Saved order of the links; any new one missing is appended at the end.
 function _navOrder(){
   try{const s=JSON.parse(localStorage.getItem('pi-nav-order')||'[]');
     if(s.length){const ids=_NAV_ITEMS.map(i=>i.id);const o=s.filter(id=>ids.includes(id));ids.forEach(id=>{if(!o.includes(id))o.push(id);});return o;}}catch(e){}
   return _NAV_ITEMS.map(i=>i.id);
 }
+// Dibuja la barra lateral y activa el arrastrar y soltar para reordenar.
+// EN: Draw the sidebar and enable drag and drop to reorder.
 function renderNav(){
   const wrap=document.getElementById('nav-items');if(!wrap)return;
   const order=_navOrder();
@@ -691,6 +713,8 @@ function renderNav(){
 renderNav();
 
 // ── Theme ──────────────────────────────────────────────
+// Elige el tema (claro, oscuro o automático según el sistema) y lo recuerda (clave pi-theme).
+// EN: Choose the theme (light, dark or automatic following the system) and remember it (key pi-theme).
 function setTheme(th){
   localStorage.setItem('pi-theme',th);
   const dark=th==='dark'||(th==='system'&&matchMedia('(prefers-color-scheme:dark)').matches);
@@ -702,6 +726,8 @@ function setTheme(th){
 // ── Login ──────────────────────────────────────────────
 document.getElementById('l-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
 
+// Inicio de sesión. La cookie la fija el servidor (HttpOnly): el JavaScript nunca guarda el token.
+// EN: Login. The cookie is set by the server (HttpOnly): the JavaScript never stores the token.
 async function doLogin() {
   const btn = document.getElementById('btn-l');
   const err = document.getElementById('login-err');
@@ -727,6 +753,8 @@ async function doLogin() {
   }
 }
 
+// Recarga los datos de la sesión actual.
+// EN: Reload the current session data.
 async function loadMe() {
   const r = await fetch('api/me');
   if (!r.ok) return;
@@ -736,12 +764,16 @@ async function loadMe() {
   document.getElementById('avatar').textContent  = me.username[0].toUpperCase();
 }
 
+// Cierra la sesión en el servidor y recarga la página.
+// EN: Close the session on the server and reload the page.
 async function logout() {
   await fetch('api/logout', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
   location.reload();
 }
 
 // ── Users ──────────────────────────────────────────────
+// Descarga la lista de usuarios y repinta tabla y estadísticas.
+// EN: Download the user list and repaint the table and statistics.
 async function loadUsers() {
   const r = await fetch('api/users');
   if (!r.ok) { if(r.status===401) location.reload(); return; }
@@ -754,6 +786,8 @@ async function loadUsers() {
 }
 
 // ── System health ───────────────────────────────────────
+// SALUD DEL SISTEMA: tarjetas con el estado de cada módulo (datos de /api/health). HL_DESC explica en palabras simples qué comprueba cada chequeo.
+// EN: SYSTEM HEALTH: cards with the state of each module (data from /api/health). HL_DESC explains in plain words what each check verifies.
 const HL_NAMES = {wol:'WOL Console', nut:'UPS Monitor', net:'Net Monitor', pve:'Proxmox'};
 const HL_DESC = {
   en:{users:'User database (users.json) is readable and has accounts', sessions:'Session file is readable and its folder writable', disk:'Free disk space (warns below 100 MB, fails below 5 MB)',
@@ -774,6 +808,8 @@ const HL_DESC = {
       wol:'Servicio WOL Console', nut:'Servicio UPS Monitor', net:'Servicio Net Monitor', pve:'Servicio Proxmox'}
 };
 const _hlOpen = new Set();
+// Consulta /api/health y arma una tarjeta por módulo más la del propio panel (usuarios, sesiones, disco, respaldo y fuente de la Pi). Cada tarjeta se despliega para ver cada chequeo y recuerda si estaba abierta entre refrescos.
+// EN: Query /api/health and build one card per module plus the panel's own (users, sessions, disk, backup and Pi power supply). Each card expands to show each check and remembers whether it was open between refreshes.
 async function hlLoad() {
   try {
     const r = await fetch('api/health', {cache:'no-store'});
@@ -810,15 +846,21 @@ async function hlLoad() {
     }
   } catch(e) { /* panel keeps its last state */ }
 }
+// Segundos a texto corto (días, horas, minutos).
+// EN: Seconds to short text (days, hours, minutes).
 function hlDur(s) { s = s|0; const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60);
   return d ? d+'d '+h+'h' : h ? h+'h '+m+'m' : m+'m '+(s%60)+'s'; }
 
+// Contadores de la cabecera: total de usuarios y administradores.
+// EN: Header counters: total users and administrators.
 function updateStats(users) {
   document.getElementById('st-total').textContent   = users.length;
   document.getElementById('st-admins').textContent  = users.filter(u=>u.permissions.wol==='admin'||u.permissions.nut==='admin').length;
   document.getElementById('st-readonly').textContent= users.filter(u=>u.permissions.wol==='readonly'&&u.permissions.nut==='readonly').length;
 }
 
+// Tabla de usuarios con una columna por módulo (WOL, UPS, Net, Proxmox) y acciones de editar y borrar.
+// EN: User table with a column per module (WOL, UPS, Net, Proxmox) and edit and delete actions.
 function renderUsers(users) {
   const tbody = document.getElementById('users-tbody');
   tbody.innerHTML = '';
@@ -843,12 +885,16 @@ function renderUsers(users) {
   });
 }
 
+// Etiqueta de color para el nivel de permiso.
+// EN: Colored badge for the permission level.
 function permBadge(perm) {
   const labels = {admin:t('permAdmin'),execute:t('permExecute'),readonly:t('permReadonly'),none:t('permNone')};
   return `<span class="perm-badge perm-${perm||'none'}">${labels[perm]||'—'}</span>`;
 }
 
 // ── Drawer ─────────────────────────────────────────────
+// Abre el cajón lateral para crear un usuario o editar uno existente (el nombre no se puede cambiar al editar).
+// EN: Open the side drawer to create a user or edit an existing one (the name cannot be changed when editing).
 function openDrawer(user) {
   const isEdit = !!user;
   document.getElementById('d-mode').value          = isEdit ? 'edit' : 'create';
@@ -885,6 +931,8 @@ function closeDrawer() {
   document.getElementById('drawer-overlay').classList.remove('show');
 }
 
+// Crea o actualiza: alta con contraseña y los cuatro niveles; edición cambia los niveles y, si se escribió una contraseña nueva, también la contraseña (lo que cierra las sesiones de ese usuario).
+// EN: Create or update: creation takes a password and the four levels; editing changes the levels and, if a new password was typed, the password too (which closes that user's sessions).
 async function saveUser() {
   const mode = document.getElementById('d-mode').value;
   const btn  = document.getElementById('btn-save');
@@ -938,6 +986,8 @@ async function saveUser() {
 }
 
 // ── Delete ─────────────────────────────────────────────
+// Pide confirmación antes de borrar un usuario.
+// EN: Ask for confirmation before deleting a user.
 function confirmDelete(username) {
   document.getElementById('del-msg').textContent = t('confirmDelete', username);
   document.getElementById('del-btn').onclick = async () => {
@@ -954,8 +1004,12 @@ function confirmDelete(username) {
 function closeModals() { document.querySelectorAll('.overlay:not(.noclose)').forEach(o=>o.classList.remove('show')); }
 
 // ── Teleporter (backup & restore) ───────────────────────
+// RESPALDOS (Teleporter): lista, crear, descargar, subir, verificar, restaurar y borrar. El trabajo real lo hace el servidor; la página solo lo dispara y muestra el resultado.
+// EN: BACKUPS (Teleporter): list, create, download, upload, verify, restore and delete. The server does the real work; the page only triggers it and shows the result.
 let _tp = {backups:[], max:0, available:true}, _tpPoll = null, _tpName = null;
 function tpFmtSize(b){ return b>=1048576 ? (b/1048576).toFixed(1)+' MB' : Math.max(1,Math.round(b/1024))+' KB'; }
+// Descarga la lista de respaldos y el estado de la última restauración.
+// EN: Download the backup list and the state of the last restore.
 async function tpLoad() {
   try {
     const r = await fetch('api/teleporter');
@@ -966,6 +1020,8 @@ async function tpLoad() {
     if (d.restore && d.restore.state==='running' && !_tpPoll) tpShowProgress(d.restore);
   } catch(e) {}
 }
+// Dibuja la lista de respaldos con sus acciones.
+// EN: Draw the backup list with its actions.
 function tpRender() {
   const tb = document.getElementById('tp-tbody'); tb.innerHTML = '';
   const locale = _lang === 'es' ? 'es-CL' : 'en-US';
@@ -997,6 +1053,8 @@ function tpDownload(name) {
   const a = document.createElement('a'); a.href = 'api/teleporter/download/'+encodeURIComponent(name); a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
 }
+// Crea un respaldo nuevo en el servidor.
+// EN: Create a new backup on the server.
 async function tpCreate() {
   const btn = document.getElementById('tp-create'); btn.disabled = true;
   btn.innerHTML = `<span class="spin">⟳</span> ${t('tpCreating')}`;
@@ -1012,6 +1070,8 @@ document.getElementById('tp-file').addEventListener('change', e => {
   const f = e.target.files[0]; e.target.value = '';
   if (f) tpUpload(f);
 });
+// Sube un respaldo .tar.gz; el servidor comprueba tamaño y formato.
+// EN: Upload a .tar.gz backup; the server checks size and format.
 function tpUpload(file) {
   if (_tp.max && file.size > _tp.max) { toast(t('tpTooBig', Math.round(_tp.max/1048576)), true); return; }
   const btn = document.getElementById('tp-upload-btn'); btn.disabled = true;
@@ -1028,6 +1088,8 @@ function tpUpload(file) {
   xhr.onerror = () => { btn.disabled = false; btn.textContent = t('tpUpload'); toast(t('tpFailed'), true); };
   xhr.send(file);
 }
+// Verifica un respaldo sin cambiar nada.
+// EN: Verify a backup without changing anything.
 async function tpCheck(name) {
   tpShowOut(t('tpChecking'));
   try {
@@ -1043,6 +1105,8 @@ async function tpDelete(name) {
   if (r.ok) toast(t('tpDeleted')); else toast(t('tpFailed'), true);
   tpLoad();
 }
+// Abre la confirmación de restauración, que avisa que NUT y nginx solo se restauran por consola.
+// EN: Open the restore confirmation, which warns that NUT and nginx are restored from the command line only.
 function tpRestoreOpen(name) {
   _tpName = name;
   document.getElementById('tp-rs-name').textContent = name;
@@ -1050,6 +1114,8 @@ function tpRestoreOpen(name) {
   document.getElementById('tp-rs-go').disabled = true;
   document.getElementById('tp-rs-overlay').classList.add('show');
 }
+// Confirma y lanza la restauración en el servidor; luego sigue su avance.
+// EN: Confirm and start the restore on the server; then follow its progress.
 async function tpRestoreGo() {
   const body = {name:_tpName, confirm:true};
   closeModals();
@@ -1060,6 +1126,8 @@ async function tpRestoreGo() {
     tpShowProgress({state:'running', log:''});
   } catch(e) { toast(t('tpFailed'), true); }
 }
+// Muestra el avance consultando cada 2 s. Durante la restauración el panel se reinicia: errores de conexión o un 401 (la sesión ya no existe) significan «reiniciado», no «falló».
+// EN: Show progress by polling every 2 s. During the restore the panel restarts: connection errors or a 401 (the session no longer exists) mean "restarted", not "failed".
 function tpShowProgress(st) {
   const ov = document.getElementById('tp-pg-overlay'); ov.classList.add('show');
   tpProgUpdate(st);
@@ -1075,11 +1143,15 @@ function tpShowProgress(st) {
     } catch(e) { lost++; }                                      // panel restarting
   }, 2000);
 }
+// Actualiza el texto y el registro del avance.
+// EN: Update the progress text and log.
 function tpProgUpdate(st) {
   const log = document.getElementById('tp-pg-log');
   if (st.log) { log.textContent = st.log; log.scrollTop = log.scrollHeight; }
   if (st.state && st.state !== 'running' && st.state !== 'idle') tpProgEnd(st.state);
 }
+// Fin de la restauración: muestra el resultado (ok, con errores o fallida).
+// EN: End of the restore: show the result (ok, with errors or failed).
 function tpProgEnd(state) {
   clearInterval(_tpPoll); _tpPoll = null;
   const map = {ok:['tpProgOk','tpProgOkMsg'], errors:['tpProgErr','tpProgErrMsg'], failed:['tpProgFail','tpProgFailMsg'], restarted:['tpProgRestarted','tpProgRestartedMsg']};
@@ -1090,8 +1162,12 @@ function tpProgEnd(state) {
 }
 
 // ── Helpers ────────────────────────────────────────────
+// Escapa HTML antes de insertar texto de usuarios, equipos o la red en la página: evita inyección de código (XSS).
+// EN: Escape HTML before inserting text from users, devices or the network into the page: prevents code injection (XSS).
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 let _tt;
+// Aviso emergente breve (error si isErr).
+// EN: Short pop-up notice (error if isErr).
 function toast(msg, isErr=false) {
   const el = document.getElementById('toast');
   el.textContent = msg; el.className = isErr?'err':'';
@@ -1105,6 +1181,8 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape'){closeModals();clo
 document.getElementById('l-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 
 // ── Check session on load ──────────────────────────────
+// Al cargar: si hay sesión de administrador válida se muestra el panel; si no, el login.
+// EN: On load: if there is a valid administrator session the panel is shown; otherwise the login.
 (async()=>{
   try {
     const r = await fetch('api/me');
@@ -1124,6 +1202,8 @@ document.getElementById('l-pass').addEventListener('keydown',e=>{if(e.key==='Ent
 })();
 
 // ── Mobile navigation drawer ──
+// Menú lateral desplegable en pantallas pequeñas (celular y tablet).
+// EN: Slide-out side menu on small screens (phone and tablet).
 function toggleNav(force){
   const open=force!==undefined?force:!document.body.classList.contains('nav-open');
   document.body.classList.toggle('nav-open',open);
@@ -1137,6 +1217,8 @@ function toggleNav(force){
 })();
 </script>
 <script>
+// Pie con la versión instalada, leída de /api/version. Se repite igual en todas las páginas.
+// EN: Footer with the installed version, read from /api/version. Repeated identically on every page.
 /* Version footer (same snippet in every page): shows the installed Pi Console version */
 (function(){
   var st=document.createElement('style');

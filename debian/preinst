@@ -1,6 +1,8 @@
 #!/bin/sh
 set -e
 
+# Antes de instalar o actualizar se copian los datos del usuario; si algo sale mal, siempre queda una copia con fecha en /var/backups/pi-console.
+# EN: Before installing or upgrading, the user's data is copied; if anything goes wrong, there is always a dated copy in /var/backups/pi-console.
 BACKUP_DIR="/var/backups/pi-console"
 STAMP=$(date +%Y%m%d_%H%M%S)
 
@@ -8,6 +10,8 @@ STAMP=$(date +%Y%m%d_%H%M%S)
 # En versiones >= 1.1.4 los datos ya están en /var/lib/pi-console/ y sobreviven solos.
 # Este backup sirve como safety net y para migración desde versiones anteriores.
 BACKED_UP=false
+# Archivos de datos a respaldar: los de /var/lib (versiones nuevas) y los de /opt (versiones antiguas, para migrarlos).
+# EN: Data files to back up: those in /var/lib (new versions) and those in /opt (old versions, to migrate them).
 for f in \
     /var/lib/pi-console/users.json \
     /var/lib/pi-console/sessions.json \

@@ -82,6 +82,8 @@ Cada módulo es un servidor HTTP Python 3 independiente. La autenticación se co
 
 Ver [CHANGELOG.md](CHANGELOG.md) para el detalle de cambios por versión.
 
+El código fuente está comentado en español e inglés (los comentarios en inglés llevan el prefijo `EN:`); cada archivo empieza con un mapa de su estructura. / The source code is commented in Spanish and English (English comments are prefixed with `EN:`); every file starts with a map of its structure.
+
 ---
 
 ## Instalación
@@ -90,10 +92,10 @@ Ver [CHANGELOG.md](CHANGELOG.md) para el detalle de cambios por versión.
 
 ```bash
 # Descargar el .deb desde Releases
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.0.8/pi-console_1.0.8_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0/pi-console_1.2.0_all.deb
 
 # Instalar
-sudo dpkg -i pi-console_1.0.8_all.deb
+sudo dpkg -i pi-console_1.2.0_all.deb
 sudo apt-get install -f   # si faltan dependencias
 ```
 

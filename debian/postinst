@@ -1,6 +1,8 @@
 #!/bin/sh
 set -e
 
+# Rutas de la instalación: código en /opt/pi-console, datos en /var/lib/pi-console (que sobrevive a las actualizaciones) y un enlace de compatibilidad para el módulo auth.
+# EN: Installation paths: code in /opt/pi-console, data in /var/lib/pi-console (which survives upgrades) and a compatibility link for the auth module.
 PI_HOME="/opt/pi-console"
 DATA_DIR="/var/lib/pi-console"
 AUTH_LINK="/opt/pi-console-auth"
@@ -8,20 +10,25 @@ AUTH_LINK="/opt/pi-console-auth"
 echo "pi-console: configuring installation..."
 
 # ── 1. Crear usuario del sistema ──────────────────────────────────────────────
+# EN: Step 1: create the unprivileged system user that runs every service (no home, no login shell).
 if ! id -u pi-console >/dev/null 2>&1; then
     useradd --system --no-create-home --shell /usr/sbin/nologin pi-console
     echo "  system user pi-console created"
 fi
 
 # ── 2. Directorio de datos persistentes (nunca tocado por dpkg) ───────────────
+# EN: Step 2: persistent data folder (/var/lib/pi-console). dpkg never touches it, so users and settings survive upgrades.
 mkdir -p "$DATA_DIR"
 chown pi-console:pi-console "$DATA_DIR"
 chmod 750 "$DATA_DIR"
 
 # ── 2b. Teleporter: directorio de trabajo + regla sudo para el panel de admin ─
 # El panel (usuario pi-console) solo puede ejecutar estas dos acciones como root.
+# EN: Step 2b: Teleporter work folder + sudo rule. The panel (user pi-console) may run only these two actions as root.
 install -d -m 700 -o pi-console -g pi-console "$DATA_DIR/teleporter"
 if [ -d /etc/sudoers.d ] && command -v visudo >/dev/null 2>&1; then
+    # La regla se escribe primero en un archivo temporal y se valida con visudo: una regla inválida bloquearía sudo en todo el sistema.
+    # EN: The rule is written to a temp file first and validated with visudo: an invalid rule would break sudo on the whole system.
     SUDOERS_TMP=$(mktemp)
     cat > "$SUDOERS_TMP" <<'SUDOEOF'
 # Pi Console: the admin panel runs backup/restore as root
@@ -39,6 +46,7 @@ else
 fi
 
 # ── 3. Symlink auth compartido → datos persistentes ───────────────────────────
+# EN: Step 3: shared auth links, so the old path /opt/pi-console-auth keeps pointing at the module and the persistent data.
 mkdir -p "$AUTH_LINK"
 ln -sf "$PI_HOME/auth/auth.py"        "$AUTH_LINK/auth.py"        2>/dev/null || true
 ln -sf "$DATA_DIR/users.json"         "$AUTH_LINK/users.json"     2>/dev/null || true
@@ -47,6 +55,7 @@ chown -h pi-console:pi-console "$AUTH_LINK"/* 2>/dev/null || true
 chown pi-console:pi-console "$AUTH_LINK"
 
 # ── 4. Permisos de directorios de código ─────────────────────────────────────
+# EN: Step 4: ownership and permissions of the code folders.
 chown -R pi-console:pi-console "$PI_HOME"
 chmod 755 "$PI_HOME"
 for module in wol-console nut-monitor net-monitor proxmox-monitor auth; do
@@ -55,11 +64,13 @@ for module in wol-console nut-monitor net-monitor proxmox-monitor auth; do
 done
 
 # ttyUSB0 para NUT (UPS por serial)
+# EN: ttyUSB0 for NUT (serial UPS): the service user needs the dialout group to open the port.
 if getent group dialout >/dev/null 2>&1; then
     usermod -aG dialout pi-console 2>/dev/null || true
 fi
 
 # Raspberry Pi: leer el estado de la fuente (vcgencmd get_throttled) para el aviso de subtensión
+# EN: Raspberry Pi only: read the power supply state (vcgencmd get_throttled) for the under-voltage warning; needs the video group.
 if grep -qa "Raspberry Pi" /proc/device-tree/model 2>/dev/null && getent group video >/dev/null 2>&1; then
     usermod -aG video pi-console 2>/dev/null || true
 fi
@@ -67,6 +78,7 @@ fi
 # ── 4b. Migracion: el servicio del dashboard se llamaba "nut-monitor", igual que el
 # servicio upsmon de NUT (paquete nut-client). Nuestro archivo en /etc/systemd/system
 # tapaba el de NUT, y nut.target arrancaba el dashboard en lugar de upsmon.
+# EN: Step 4b, migration: the dashboard service used to be called "nut-monitor", the same as NUT's upsmon service (package nut-client). Our file in /etc/systemd/system hid NUT's, and nut.target started the dashboard instead of upsmon.
 migrate_legacy_nut_unit() {
     legacy="/etc/systemd/system/nut-monitor.service"
     [ -f "$legacy" ] || return 0
@@ -89,6 +101,7 @@ migrate_legacy_nut_unit() {
 migrate_legacy_nut_unit
 
 # ── 5. Instalar archivos de servicio systemd ──────────────────────────────────
+# EN: Step 5: install the systemd unit files. One template for the 5 services; they restart on failure after 5 s and log to the journal.
 install_service() {
     name="$1" desc="$2" module="$3" script="$4"
     cat > "/etc/systemd/system/${name}.service" <<EOF
@@ -121,6 +134,7 @@ install_service "net-monitor"     "Net Monitor"      "net-monitor"     "server.p
 install_service "proxmox-monitor" "Proxmox Monitor"  "proxmox-monitor" "server.py"
 
 # ── 6. Nginx ──────────────────────────────────────────────────────────────────
+# EN: Step 6: nginx. The default site is removed (it would take port 80) and the Pi Console one is enabled.
 if [ -f /etc/nginx/sites-enabled/default ]; then
     rm -f /etc/nginx/sites-enabled/default
 fi
@@ -130,6 +144,7 @@ ln -sf /etc/nginx/sites-available/pi-console.conf \
 # ── 7. Migrar datos desde rutas antiguas (solo una vez) ──────────────────────
 # Si los datos estaban en la ruta antigua /opt/pi-console/auth/ o en backup,
 # los movemos a /var/lib/pi-console/ — solo si aún no existen ahí.
+# EN: Step 7: migrate data from old paths (only once). If the data was in the old /opt/pi-console/auth/ path or in a backup, it is moved to /var/lib/pi-console/ — only if it does not exist there yet.
 BACKUP_DIR="/var/backups/pi-console"
 
 if [ ! -f "$DATA_DIR/users.json" ]; then
@@ -142,6 +157,8 @@ if [ ! -f "$DATA_DIR/users.json" ]; then
         echo "  users migrated from backup: $latest_users"
     else
         # Fresh install: crear admin/admin
+        # Instalación nueva: usuario admin/admin con cambio de contraseña obligatorio en el primer ingreso. El hash antiguo se migra a scrypt en el primer login.
+        # EN: Fresh install: admin/admin user with a mandatory password change at first login. The old hash is migrated to scrypt on the first login.
         python3 -c "
 import hashlib, json, time
 salt = 'pi-console-salt-change-me'
@@ -177,6 +194,7 @@ fi
 # se recuperan del backup. Nunca se sobrescribe un archivo existente.
 # history.db: se usa el respaldo MÁS GRANDE (el más reciente puede ser una base
 # casi vacía creada por un reinicio previo); el resto, el más reciente.
+# EN: Step 7b: restore module data from backup (only if missing). WOL devices, UPS servers, history, hosts, config and clusters live inside /opt/pi-console; after a remove/purge + reinstall they are recovered from the backup. An existing file is never overwritten. For history.db the LARGEST backup is used (the newest may be an almost empty database created by a previous restart); for the rest, the newest.
 if [ -d "$BACKUP_DIR" ]; then
     MODULE_FILES="
 wol-console/devices.json:devices.json
@@ -204,6 +222,7 @@ proxmox-monitor/clusters.json:clusters.json
 fi
 
 # ── 8. Recargar y habilitar servicios ─────────────────────────────────────────
+# EN: Step 8: reload systemd, then enable and (re)start the services and reload nginx if its configuration is valid.
 systemctl daemon-reload
 
 for svc in wol-console pi-console-ups admin-panel net-monitor proxmox-monitor; do
@@ -222,6 +241,8 @@ fi
 
 echo ""
 echo "╔════════════════════════════════════════════════╗"
+# Mensaje final con la URL de acceso.
+# EN: Final message with the access URL.
 echo "║  Pi Console installed successfully             ║"
 echo "║  URL: http://$(hostname -I | awk '{print $1}')                  ║"
 echo "║  Initial user: admin / admin                   ║"

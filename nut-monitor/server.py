@@ -1,5 +1,33 @@
 #!/usr/bin/env python3
 """NUT Monitor — Backend con auth, multi-servidor, historial SQLite."""
+# UPS Monitor (puerto 8081): consulta uno o varios servidores NUT (upsd), muestra el estado de los UPS y
+# guarda un historial de 1 año en SQLite.
+#
+# Cómo se conecta con el UPS: NUT tiene un driver que habla con el UPS (en esta instalación por
+# puerto serie) y un servidor, upsd, que expone los datos por TCP (puerto 3493) con un protocolo de
+# texto sencillo: «LIST UPS», «LIST VAR <ups>», etc. Este módulo es un cliente de upsd.
+#
+# Flujo de datos:
+#   hilo «poller» por servidor → NUTClient pregunta a upsd cada POLL_SEC segundos
+#   → SCache guarda el estado actual en memoria → la API lo entrega a la página
+#   → cada lectura también se acumula en un búfer y se escribe a SQLite por lotes (history.db)
+#
+# Estructura del archivo: SQLite · servidores · cálculo de watts · cliente NUT · caché ·
+# pollers · salud · manejador HTTP.
+# EN: UPS Monitor (port 8081): queries one or more NUT servers (upsd), shows the status of the UPS units and
+#     keeps a 1-year history in SQLite.
+#
+#     How it talks to the UPS: NUT has a driver that talks to the UPS (over a serial port in this install)
+#     and a server, upsd, that exposes the data over TCP (port 3493) with a simple text protocol:
+#     "LIST UPS", "LIST VAR <ups>", etc. This module is a client of upsd.
+#
+#     Data flow:
+#       one "poller" thread per server → NUTClient asks upsd every POLL_SEC seconds
+#       → SCache keeps the current state in memory → the API hands it to the page
+#       → every reading is also accumulated in a buffer and written to SQLite in batches (history.db)
+#
+#     File structure: SQLite · servers · watts calculation · NUT client · cache ·
+#     pollers · health · HTTP handler.
 import json, os, re, socket, time, logging, threading, sys, sqlite3
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
@@ -9,17 +37,29 @@ from collections import deque
 from contextlib import contextmanager
 
 # Auth compartido
+# Módulo compartido de autenticación (carpeta hermana /auth).
+# EN: Shared authentication module (sibling folder /auth).
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
 
+# Solo loopback; el acceso desde la red pasa por nginx.
+# EN: Loopback only; network access goes through nginx.
 HOST        = "127.0.0.1"
 PORT        = 8081
+# Cada cuántos segundos se consulta a upsd (variable NUT_POLL, 10 por defecto).
+# EN: How often upsd is queried, in seconds (NUT_POLL variable, 10 by default).
 POLL_SEC    = int(os.environ.get("NUT_POLL", 10))
 STATIC_DIR  = Path(__file__).parent / "static"
+# servers.json: lista de servidores NUT configurados. history.db: historial en SQLite.
+# EN: servers.json: list of configured NUT servers. history.db: history in SQLite.
 DATA_FILE   = Path(__file__).parent / "servers.json"
 DB_FILE     = Path(__file__).parent / "history.db"
 
 # Cuántos puntos devolver en la API según rango
+# Máximo de puntos que se devuelven por rango del gráfico. Se reducen promediando intervalos
+# (ver db_query), así la gráfica es liviana aunque el historial sea de un año.
+# EN: Maximum number of points returned per chart range. They are reduced by averaging intervals
+#     (see db_query), so the chart stays light even with a one-year history.
 RANGE_LIMIT = {
     "1h":  720,    # 1h a 10s = 360 pts (margen x2 para no truncar los puntos recientes)
     "1d":  2880,   # 1d a 30s = 2880 pts
@@ -33,8 +73,12 @@ logging.basicConfig(level=logging.INFO,
 log = logging.getLogger("nut")
 
 # ─── SQLite ───────────────────────────────────────────────────────────────────
+# Un solo hilo a la vez usa la base: SQLite tolera varios lectores pero un único escritor.
+# EN: Only one thread at a time uses the database: SQLite tolerates many readers but a single writer.
 _db_lock = threading.Lock()
 
+# Abre una conexión a history.db. El timeout hace que un escritor concurrente espere en vez de fallar con «database is locked».
+# EN: Open a connection to history.db. The timeout makes a concurrent writer wait instead of failing with "database is locked".
 def db_connect():
     # timeout: wait for a competing writer instead of failing at once with "database is locked"
     conn = sqlite3.connect(str(DB_FILE), timeout=30, check_same_thread=False)
@@ -43,6 +87,10 @@ def db_connect():
     conn.execute("PRAGMA synchronous=NORMAL")
     return conn
 
+# Crea la tabla de historial y su índice si no existen. Usa modo WAL (el diario de escritura queda aparte), que
+# permite leer mientras se escribe y es más amable con la tarjeta SD.
+# EN: Create the history table and its index if they do not exist. Uses WAL mode (the write journal is kept apart), which
+#     allows reading while writing and is gentler on the SD card.
 def db_init():
     with _db_lock:
         conn = db_connect()
@@ -70,15 +118,23 @@ def db_init():
 # (un commit por lote en vez de uno cada POLL_SEC por UPS: menos desgaste de la SD).
 # Si el UPS no está en línea (ups.status distinto de OL: batería, carga baja, etc.)
 # se escribe de inmediato, porque ahí es cuando más importa no perder datos.
+# Reduce el desgaste de la SD: se acumulan las filas y se escriben juntas cada DB_FLUSH_SEC segundos.
+# EN: Reduces SD wear: rows are accumulated and written together every DB_FLUSH_SEC seconds.
 DB_FLUSH_SEC = int(os.environ.get("NUT_DB_FLUSH", 60))
+# Sentencia de inserción de una fila de historial.
+# EN: Insert statement for one history row.
 _INSERT_SQL = """
     INSERT INTO history (srv_id,ups,ts,charge,runtime,load,vin,vout,watts,temp)
     VALUES (?,?,?,?,?,?,?,?,?,?)
 """
+# Búfer de filas pendientes de escribir, instante de la última escritura y último error (lo usa /api/health).
+# EN: Buffer of rows waiting to be written, time of the last write and last error (used by /api/health).
 _ins_buf = []
 _ins_last = time.time()
 _flush_err = None            # last history-write error (None once a write succeeds), for /api/health
 
+# Escribe el búfer completo en una sola transacción. Debe llamarse con el candado de la base tomado.
+# EN: Write the whole buffer in a single transaction. Must be called with the database lock held.
 def _flush_locked():
     global _ins_last, _flush_err
     if not _ins_buf: return
@@ -95,6 +151,8 @@ def _flush_locked():
     finally:
         conn.close()
 
+# Vacía el búfer a disco. Se usa al apagar el servicio; el timeout evita bloquearse si otro hilo tiene el candado.
+# EN: Empty the buffer to disk. Used when the service shuts down; the timeout avoids blocking if another thread holds the lock.
 def db_flush(timeout=3):
     # timeout: desde el handler de SIGTERM (hilo principal) el lock podría estar tomado
     if not _db_lock.acquire(timeout=timeout): return
@@ -102,6 +160,10 @@ def db_flush(timeout=3):
     except Exception as e: log.error(f"db_flush: {e}")
     finally: _db_lock.release()
 
+# Agrega una lectura al búfer. Escribe de inmediato si el UPS NO está en línea (batería, carga baja…), porque
+# en ese momento es cuando más importa no perder datos. Si el disco falla, el búfer se limita a 5000 filas.
+# EN: Add a reading to the buffer. It writes immediately if the UPS is NOT online (battery, low charge…), because
+#     that is when losing data matters most. If the disk fails, the buffer is capped at 5000 rows.
 def db_insert(srv_id, ups, entry, urgent=False):
     with _db_lock:
         _ins_buf.append((srv_id, ups,
@@ -113,6 +175,10 @@ def db_insert(srv_id, ups, entry, urgent=False):
             try: _flush_locked()
             except Exception as e: log.error(f"db flush: {e}")
 
+# Historial de un UPS reducido a unos `limit` puntos: agrupa por intervalos iguales de tiempo y promedia
+# cada uno. Es el único acceso de lectura al historial.
+# EN: History of one UPS reduced to about `limit` points: groups by equal time intervals and averages
+#     each one. It is the only read access to the history.
 def db_query(srv_id, ups, since_ts=0, limit=4320):
     """Historial de un UPS reducido a como máximo ~`limit` puntos.
 
@@ -121,6 +187,12 @@ def db_query(srv_id, ups, since_ts=0, limit=4320):
     reciente y no depende de los ids de fila, que se comparten entre todos los UPS.
     (Elegir filas con `id % paso` dejaba sin ningún punto a un UPS cuando había
     dos o más y el paso era par.)
+
+    EN: History of one UPS reduced to at most ~`limit` points. Groups by equal time intervals and
+    averages each one (the last point keeps its real timestamp). This makes the sample even, reaches
+    the most recent data and does not depend on row ids, which are shared by all the UPS units.
+    (Picking rows with `id % step` left a UPS with no points at all when there were two or more
+    and the step was even.)
     """
     with _db_lock:
         conn = db_connect()
@@ -144,6 +216,8 @@ def db_query(srv_id, ups, since_ts=0, limit=4320):
         finally:
             conn.close()
 
+# Borra registros de más de 1 año y compacta el diario WAL. Se llama periódicamente desde un hilo aparte.
+# EN: Delete records older than 1 year and compact the WAL journal. Called periodically from a separate thread.
 def db_prune():
     """Elimina registros de más de 1 año. Llamar periódicamente."""
     cutoff = int(time.time()) - 365 * 86400
@@ -155,15 +229,23 @@ def db_prune():
             conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         finally:
             conn.close()     # always release the connection (an open one keeps the DB locked)
-    if deleted: log.info(f"DB pruned: {deleted} registros >1 año eliminados")
+    if deleted: log.info(f"DB pruned: {deleted} records older than 1 year deleted")
 
+# Envoltorio que registra el error en vez de dejar morir el hilo.
+# EN: Wrapper that logs the error instead of letting the thread die.
 def _db_prune_safe():
     try: db_prune()
     except Exception as e: log.error(f"db_prune: {e}")
 
 # ─── Servidores ───────────────────────────────────────────────────────────────
+# Candado de la lista de servidores. Regla: cargar → modificar → guardar dentro de este candado.
+# EN: Lock of the server list. Rule: load → modify → save inside this lock.
 _srv_lock = threading.RLock()     # hold around load_servers() → modify → save_servers()
 
+# Lista de servidores NUT. Si el archivo nunca existió (instalación nueva) se crea uno «Local» en 127.0.0.1:3493;
+# una lista vacía es válida (el usuario los borró todos). Si el archivo está dañado, se usa la copia .bak.
+# EN: List of NUT servers. If the file never existed (fresh install) a "Local" one is created at 127.0.0.1:3493;
+#     an empty list is valid (the user deleted them all). If the file is damaged, the .bak copy is used.
 def load_servers():
     # A missing file means a fresh install (default local server); an existing but empty
     # list is valid (the user deleted every server). Damaged file → last good copy.
@@ -171,11 +253,21 @@ def load_servers():
         return [{"id": "local", "name": "Local", "host": "127.0.0.1", "port": 3493}]
     return auth.read_json(DATA_FILE, [], list)
 
+# Guarda la lista de servidores de forma atómica.
+# EN: Save the server list atomically.
 def save_servers(s):
     with _srv_lock:
         auth.write_json(DATA_FILE, s, mode=0o644)
 
 # ─── Watts ────────────────────────────────────────────────────────────────────
+# Estima la potencia en vatios probando de la más fiable a la menos fiable:
+#   1) ups.realpower (el UPS la informa) · 2) VA × factor de potencia · 3) voltaje × corriente de salida
+#   4) VA × carga% × 0,8 · 5) potencia nominal × carga%
+# Si ninguna sirve, devuelve 0. Hay UPS (como el APC Easy SRV) que no reportan vatios directamente.
+# EN: Estimate power in watts, trying from the most to the least reliable source:
+#       1) ups.realpower (reported by the UPS) · 2) VA × power factor · 3) output voltage × current
+#       4) VA × load% × 0.8 · 5) nominal power × load%
+#     If none works, returns 0. Some UPS units (like the APC Easy SRV) do not report watts directly.
 def _calc_watts(vars_):
     try:
         rp = float(vars_.get("ups.realpower") or 0)
@@ -205,14 +297,20 @@ def _calc_watts(vars_):
     return 0.0
 
 # ─── NUT Client ───────────────────────────────────────────────────────────────
+# Cliente del protocolo de texto de upsd. Abre una conexión corta por consulta.
+# EN: Client of upsd's text protocol. Opens a short connection per query.
 class NUTClient:
     def __init__(self, host, port, timeout=5.0):
         self.host = host; self.port = int(port); self.timeout = timeout
 
+    # Abre el socket TCP hacia upsd con tiempo límite.
+    # EN: Open the TCP socket to upsd with a timeout.
     def _conn(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(self.timeout); s.connect((self.host, self.port)); return s
 
+    # Lee una línea de la respuesta (hasta el salto de línea).
+    # EN: Read one line of the reply (up to the line break).
     def _readline(self, sock):
         buf = b""
         while True:
@@ -221,6 +319,10 @@ class NUTClient:
             buf += ch
         return buf.decode(errors="replace").strip()
 
+    # Envía un comando y junta las líneas de respuesta. Un «LIST …» termina en «END LIST»; los demás comandos
+    # terminan con la primera línea VAR/VER/OK/ERR.
+    # EN: Send a command and collect the reply lines. A "LIST …" ends at "END LIST"; the other commands
+    #     end with the first VAR/VER/OK/ERR line.
     def _cmd(self, sock, cmd):
         sock.sendall((cmd + "\n").encode())
         lines = []; is_list = cmd.strip().upper().startswith("LIST")
@@ -235,6 +337,8 @@ class NUTClient:
                    line.startswith("ERR") or line.startswith("OK"): break
         return lines
 
+    # Si upsd responde un error (por ejemplo DATA-STALE: el driver dejó de enviar datos), se levanta una excepción en vez de tratarlo como «sin datos».
+    # EN: If upsd answers with an error (for example DATA-STALE: the driver stopped sending data), an exception is raised instead of treating it as "no data".
     @staticmethod
     def _check(lines):
         """upsd answers errors as `ERR <CODE>` (e.g. DATA-STALE): raise instead of treating it as empty data."""
@@ -243,16 +347,22 @@ class NUTClient:
                 raise RuntimeError(f"upsd: {l[3:].strip() or 'error'}")
         return lines
 
+    # Nombres y descripciones de los UPS que expone el servidor.
+    # EN: Names and descriptions of the UPS units the server exposes.
     def list_ups(self):
         with self._conn() as s: lines = self._check(self._cmd(s, "LIST UPS"))
         return [{"name": m.group(1), "desc": m.group(2)}
                 for line in lines for m in [re.match(r'^UPS (\S+) "(.*)"$', line)] if m]
 
+    # Todas las variables de un UPS (battery.charge, input.voltage, ups.status, …) como diccionario.
+    # EN: All the variables of a UPS (battery.charge, input.voltage, ups.status, …) as a dictionary.
     def get_vars(self, ups):
         with self._conn() as s: lines = self._check(self._cmd(s, f"LIST VAR {ups}"))
         return {m.group(1): m.group(2)
                 for line in lines for m in [re.match(r'^VAR \S+ (\S+) "(.*)"$', line)] if m}
 
+    # Direcciones de los equipos conectados a este UPS (los clientes upsmon, p. ej. los Synology y servidores). Si falla, lista vacía.
+    # EN: Addresses of the machines connected to this UPS (upsmon clients, e.g. Synology units and servers). Empty list on failure.
     def list_clients(self, ups):
         try:
             with self._conn() as s: lines = self._cmd(s, f"LIST CLIENT {ups}")
@@ -261,6 +371,8 @@ class NUTClient:
         except Exception as e:
             log.debug(f"list_clients: {e}"); return []
 
+    # Versión del servidor NUT.
+    # EN: NUT server version.
     def get_version(self):
         try:
             with self._conn() as s: lines = self._cmd(s, "VER")
@@ -268,17 +380,27 @@ class NUTClient:
         except: return ""
 
 # ─── Cache en memoria (solo estado actual) ────────────────────────────────────
+# Estado actual en memoria de un servidor NUT: variables de cada UPS, clientes, último error y última lectura buena.
+# Solo guarda el «ahora»; el historial vive en SQLite.
+# EN: Current in-memory state of a NUT server: variables of each UPS, clients, last error and last good reading.
+#     It only keeps the "now"; the history lives in SQLite.
 class SCache:
     def __init__(self, sid):
         self.id = sid; self._lock = threading.RLock()
         self._ups = {}; self._clients = {}
         self._error = None; self._last_ok = None; self._ver = ""
 
+    # Borra el estado (por ejemplo cuando el usuario cambia la dirección del servidor).
+    # EN: Clear the state (for example when the user changes the server address).
     def reset(self):
         with self._lock:
             self._ups = {}; self._clients = {}
             self._error = None; self._last_ok = None; self._ver = ""
 
+    # Guarda una lectura nueva y la anota en el historial (fuera del candado). Convierte las variables NUT a números
+    # seguros y calcula los vatios. Si el estado no empieza con «OL» se escribe a disco de inmediato.
+    # EN: Store a new reading and record it in the history (outside the lock). Converts the NUT variables to safe
+    #     numbers and computes watts. If the status does not start with "OL" it is written to disk immediately.
     def update(self, name, vars_, clients=None, ver=""):
         with self._lock:
             self._ups[name]     = {**vars_, "_ts": time.time()}
@@ -304,9 +426,15 @@ class SCache:
         except Exception as e:
             log.debug(f"db_insert error: {e}")
 
+    # Guarda el último error de conexión para mostrarlo en la página.
+    # EN: Store the last connection error to show it on the page.
     def set_error(self, msg):
         with self._lock: self._error = msg
 
+    # Instantánea para la API: estado actual más historial según el rango pedido (1h, 1d, 1w, 1mo, all).
+    # Con range=none solo se devuelve el estado actual y no se toca la base (así refresca la página sin costo).
+    # EN: Snapshot for the API: current state plus history for the requested range (1h, 1d, 1w, 1mo, all).
+    #     With range=none only the current state is returned and the database is not touched (so the page refreshes at no cost).
     def snap(self, range_="all"):
         """Devuelve estado actual + historial según rango."""
         with self._lock:
@@ -337,8 +465,12 @@ class SCache:
                 "history": history, "error": error, "last_ok": last_ok,
                 "version": ver, "ts": time.time()}
 
+# Tablas globales: caché, hilo y evento de despertar por servidor, protegidas por _gl.
+# EN: Global tables: cache, thread and wake-up event per server, protected by _gl.
 _caches: dict = {}; _pollers: dict = {}; _wake: dict = {}; _gl = threading.Lock()
 
+# Garantiza que haya un hilo de consulta vivo para el servidor; si ya existía, lo despierta para consultar de inmediato (por ejemplo tras editarlo).
+# EN: Guarantee a live polling thread for the server; if it already existed, wake it to query at once (for example after editing it).
 def ensure_poller(server):
     sid = server["id"]
     with _gl:
@@ -350,9 +482,17 @@ def ensure_poller(server):
             _pollers[sid] = t; t.start()
             log.info(f"Poller → {server['name']} ({server['host']}:{server['port']})")
 
+# Olvida un servidor eliminado; su hilo termina solo al ver que ya no está en la lista.
+# EN: Forget a deleted server; its thread ends on its own when it sees it is no longer in the list.
 def remove_poller(sid):
     with _gl: _caches.pop(sid, None); _pollers.pop(sid, None); _wake.pop(sid, None)
 
+# Bucle del hilo de consulta de un servidor: cada POLL_SEC segundos pregunta a upsd versión, UPS y variables,
+# y actualiza la caché. Si el usuario edita host o puerto, se reconecta y descarta lo viejo; si lo elimina, el hilo termina.
+# Un error de conexión nunca mata el hilo: se anota y se reintenta. Cada ~4 h lanza la limpieza del historial.
+# EN: Loop of a server's polling thread: every POLL_SEC seconds it asks upsd for version, UPS list and variables,
+#     and updates the cache. If the user edits host or port, it reconnects and drops the old data; if the server is deleted, the thread ends.
+#     A connection error never kills the thread: it is logged and retried. About every 4 h it triggers history cleanup.
 def _poll(server):
     sid = server["id"]; nut = NUTClient(server["host"], server["port"])
     cache = _caches.get(sid)
@@ -383,7 +523,7 @@ def _poll(server):
                 vars_["_serial"] = vars_.get("ups.serial") or vars_.get("device.serial") or ""
                 cache.update(u["name"], vars_, clients, ver)
         except ConnectionRefusedError:
-            cache.set_error(f"upsd no disponible en {server['host']}:{server['port']}")
+            cache.set_error(f"upsd not available at {server['host']}:{server['port']}")
         except socket.timeout:
             cache.set_error("Timeout connecting to upsd")
         except Exception as e:
@@ -396,15 +536,23 @@ def _poll(server):
         if ev: ev.wait(POLL_SEC); ev.clear()
         else: time.sleep(POLL_SEC)
 
+# Lista de servidores que nunca lanza excepción (devuelve vacío ante un error de lectura).
+# EN: Server list that never raises (returns empty on a read error).
 def _safe_servers():
     try: return load_servers()
     except Exception: return []
 
+# Al arrancar: prepara la base y lanza un hilo de consulta por servidor.
+# EN: On startup: prepare the database and launch one polling thread per server.
 def start_all():
     db_init()
     for s in load_servers(): ensure_poller(s)
 
 # ─── Health ───────────────────────────────────────────────────────────────────
+# Chequeos de salud de UPS Monitor: archivo de servidores, base abierta y no bloqueada, escritura de historial al día,
+# hilos vivos, que cada upsd responda con datos frescos, y que lo que está en memoria realmente llegue al historial.
+# EN: UPS Monitor health checks: servers file, database open and not locked, history writes up to date,
+#     threads alive, each upsd answering with fresh data, and that what is in memory really reaches the history.
 def health_report(detailed=False):
     c = auth.check_common()
     c["servers_file"] = auth.check_file(DATA_FILE)
@@ -462,6 +610,8 @@ def health_report(detailed=False):
     return auth.health_reply("nut", c, detailed)
 
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
+# Manejador HTTP. Cada petición se atiende en su propio hilo.
+# EN: HTTP handler. Each request is served in its own thread.
 class H(BaseHTTPRequestHandler):
     timeout = 30      # a stalled client must not hold a thread forever
     def log_message(self, fmt, *a):
@@ -497,10 +647,16 @@ class H(BaseHTTPRequestHandler):
             self.end_headers(); self.wfile.write(c)
         except FileNotFoundError: self._json(404, {"error": "Not found"})
 
+    # Rango pedido por la página (?range=1h|1d|1w|1mo|all).
+    # EN: Range requested by the page (?range=1h|1d|1w|1mo|all).
     def _range_param(self):
         qs = parse_qs(urlparse(self.path).query)
         return qs.get("range", ["all"])[0]
 
+    # GET: página, versión y salud son públicos; el resto exige sesión con UPS «readonly».
+    # Rutas: /api/config, /api/servers, /api/ups, /api/history, /api/export/csv, /api/me.
+    # EN: GET: page, version and health are public; the rest requires a session with UPS "readonly".
+    #     Routes: /api/config, /api/servers, /api/ups, /api/history, /api/export/csv, /api/me.
     def do_GET(self):
         path = urlparse(self.path).path.rstrip("/") or "/"
         tok  = self._token()
@@ -512,6 +668,8 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/health":      # public: levels only; details need a valid session
             code, body = health_report(auth.get_session(tok) is not None)
             return self._json(code, body)
+        # En GET siempre responde ok: la página lo usa para saber que el servicio está vivo.
+        # EN: On GET it always answers ok: the page uses it to know the service is alive.
         if path == "/api/login":
             return self._json(200, {"ok": True})
 
@@ -520,6 +678,8 @@ class H(BaseHTTPRequestHandler):
 
         if path == "/api/config":
             self._json(200, {"poll_sec": POLL_SEC})
+        # Servidores con su estado actual e historial del rango pedido; revive hilos de consulta que hayan muerto.
+        # EN: Servers with their current state and history for the requested range; revives polling threads that died.
         elif path == "/api/servers":
             range_ = self._range_param()
             srvs   = load_servers()
@@ -532,6 +692,8 @@ class H(BaseHTTPRequestHandler):
         elif path == "/api/ups":
             range_ = self._range_param()
             self._json(200, {sid: c.snap(range_) for sid, c in _caches.items()})
+        # Historial de un solo UPS para un rango (el gráfico lo pide al cambiar de rango).
+        # EN: History of a single UPS for a range (the chart requests it when the range changes).
         elif path == "/api/history":
             # Historial de un UPS concreto para un rango (resolucion propia del rango)
             qs     = parse_qs(urlparse(self.path).query)
@@ -542,6 +704,8 @@ class H(BaseHTTPRequestHandler):
             since = int(time.time()) - range_secs[range_] if range_ in range_secs else 0
             rows  = db_query(sid, ups, since_ts=since, limit=RANGE_LIMIT.get(range_, 4320))
             self._json(200, {"history": rows})
+        # Exporta el historial de un UPS como archivo CSV descargable (hasta 8640 puntos).
+        # EN: Export a UPS history as a downloadable CSV file (up to 8640 points).
         elif path == "/api/export/csv":
             # Export CSV del historial de un UPS específico
             qs    = parse_qs(urlparse(self.path).query)
@@ -580,12 +744,16 @@ class H(BaseHTTPRequestHandler):
         else:
             self._json(404, {"error": "Not found"})
 
+    # POST: login/logout, alta de servidor y prueba de conexión. Alta y prueba requieren nivel «admin» de UPS.
+    # EN: POST: login/logout, add server and connection test. Adding and testing require UPS "admin" level.
     def do_POST(self):
         path = urlparse(self.path).path.rstrip("/")
         tok  = self._token()
         body = self._body()
         if body is None: return self._json(400, {"error": "Invalid request body"})
 
+        # Login con límite de intentos (auth.login); la cookie es HttpOnly y SameSite=Strict.
+        # EN: Login with attempt limiting (auth.login); the cookie is HttpOnly and SameSite=Strict.
         if path == "/api/login":
             u, err = auth.login(self, body.get("username",""), body.get("password",""))
             if not u: return self._json(err[0], {"error": err[1]})
@@ -609,14 +777,16 @@ class H(BaseHTTPRequestHandler):
         if not auth.check_permission(tok, "nut", "readonly"):
             return self._json(401, {"error": "Unauthorized"})
 
+        # Alta de servidor NUT: valida host, nombre y puerto, rechaza host:puerto duplicado y lanza su hilo de consulta.
+        # EN: Add a NUT server: validates host, name and port, rejects a duplicate host:port and starts its polling thread.
         if path == "/api/servers":
             if not auth.check_permission(tok, "nut", "admin"):
-                return self._json(403, {"error": "Requiere permiso admin"})
+                return self._json(403, {"error": "Admin permission required"})
             host = (body.get("host") or "").strip()
             name = (body.get("name") or "").strip()
             try: port = int(body.get("port") or 3493)
             except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
-            if not host or not name: return self._json(400, {"error": "host y name requeridos"})
+            if not host or not name: return self._json(400, {"error": "host and name are required"})
             if not 1 <= port <= 65535: return self._json(400, {"error": "Invalid port"})
             import uuid
             with _srv_lock:
@@ -627,9 +797,11 @@ class H(BaseHTTPRequestHandler):
                 srvs.append(server); save_servers(srvs)
             ensure_poller(server)
             self._json(201, {"server": server})
+        # Prueba de conexión a un upsd sin guardarlo: devuelve los UPS que encuentra o el error.
+        # EN: Connection test to an upsd without saving it: returns the UPS units it finds or the error.
         elif path == "/api/test":
             if not auth.check_permission(tok, "nut", "admin"):
-                return self._json(403, {"error": "Requiere permiso admin"})
+                return self._json(403, {"error": "Admin permission required"})
             host = (body.get("host") or "").strip()
             try: port = int(body.get("port") or 3493)
             except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
@@ -643,11 +815,13 @@ class H(BaseHTTPRequestHandler):
         else:
             self._json(404, {"error": "Not found"})
 
+    # PUT /api/servers/<id>: edita nombre, host o puerto de un servidor (solo admin); el hilo se reconecta solo.
+    # EN: PUT /api/servers/<id>: edit name, host or port of a server (admin only); the thread reconnects by itself.
     def do_PUT(self):
         path = urlparse(self.path).path.rstrip("/")
         tok  = self._token()
         if not auth.check_permission(tok, "nut", "admin"):
-            return self._json(403, {"error": "Requiere permiso admin"})
+            return self._json(403, {"error": "Admin permission required"})
         m = re.match(r'^/api/servers/([a-zA-Z0-9\-]+)$', path)
         if not m: return self._json(400, {"error": "Invalid ID"})
         body = self._body()
@@ -657,7 +831,7 @@ class H(BaseHTTPRequestHandler):
         name = (body.get("name") or "").strip()
         try: port = int(body.get("port") or 3493)
         except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
-        if not host or not name: return self._json(400, {"error": "host y name requeridos"})
+        if not host or not name: return self._json(400, {"error": "host and name are required"})
         if not 1 <= port <= 65535: return self._json(400, {"error": "Invalid port"})
         with _srv_lock:
             srvs = load_servers()
@@ -670,11 +844,13 @@ class H(BaseHTTPRequestHandler):
         ensure_poller(srv)
         self._json(200, {"server": srv})
 
+    # DELETE /api/servers/<id>: elimina un servidor y detiene su consulta (solo admin).
+    # EN: DELETE /api/servers/<id>: remove a server and stop its polling (admin only).
     def do_DELETE(self):
         path = urlparse(self.path).path
         tok  = self._token()
         if not auth.check_permission(tok, "nut", "admin"):
-            return self._json(403, {"error": "Requiere permiso admin"})
+            return self._json(403, {"error": "Admin permission required"})
         m = re.match(r'^/api/servers/([a-zA-Z0-9\-]+)$', path)
         if not m: return self._json(400, {"error": "Invalid ID"})
         sid = m.group(1)
@@ -685,6 +861,10 @@ class H(BaseHTTPRequestHandler):
             save_servers(new)
         remove_poller(sid); self._json(200, {"ok": True})
 
+# Arranque: inicia los hilos de consulta y asegura que el búfer del historial se escriba al salir.
+# systemd detiene el servicio con SIGTERM, por eso se instala un manejador que vacía el búfer antes de terminar.
+# EN: Startup: starts the polling threads and makes sure the history buffer is written on exit.
+#     systemd stops the service with SIGTERM, so a handler is installed that empties the buffer before finishing.
 if __name__ == "__main__":
     import signal, atexit
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
