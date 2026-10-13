@@ -837,6 +837,9 @@ async function startScan(){
     const d=await r.json();
     if(!r.ok)throw new Error(d.error);
     toast(t('scanStarted',d.message));
+    // Mismo efecto inmediato venga el clic del botón superior o del «escaneo inicial»: barra de progreso, botón ocupado y lista vacía en «Escaneando…» sin esperar a la primera consulta de estado.
+    // EN: Same immediate effect whether the click comes from the top button or the "initial scan" one: progress bar, busy button and the empty list showing "Scanning…" without waiting for the first status poll.
+    updateScanBar({running:true,progress:0,total:0});
     setTimeout(fetchData,600);   // show progress right away and switch to the fast poll (3 s) while scanning
   }catch(e){toast(e.message,true);btn.disabled=false;btn.innerHTML=`<svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> ${t('scanBtn')}`;}
 }
