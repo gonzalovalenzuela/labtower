@@ -15,7 +15,7 @@ Primer release de la serie 1.2. Reúne todo lo hecho desde 1.1.8 y deja el códi
 **Actualizar desde cualquier 1.1.x**
 ```bash
 wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0_all.deb?n=$RANDOM" -O pi-console_1.2.0_all.deb
-sudo dpkg -i pi-console_1.2.0_all.deb
+sudo apt-get install -y ./pi-console_1.2.0_all.deb
 pi-console-health
 ```
 Los datos (`/var/lib/pi-console`) se conservan; el instalador además guarda una copia en `/var/backups/pi-console`.
@@ -37,7 +37,7 @@ First release of the 1.2 series. It gathers everything done since 1.1.8 and leav
 **Upgrade from any 1.1.x**
 ```bash
 wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0_all.deb?n=$RANDOM" -O pi-console_1.2.0_all.deb
-sudo dpkg -i pi-console_1.2.0_all.deb
+sudo apt-get install -y ./pi-console_1.2.0_all.deb
 pi-console-health
 ```
 Data in `/var/lib/pi-console` is kept; the installer also saves a copy in `/var/backups/pi-console`.
