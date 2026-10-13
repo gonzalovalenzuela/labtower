@@ -11,11 +11,13 @@ Primer release de la serie 1.2. Reúne todo lo hecho desde 1.1.8 y deja el códi
 - **Robustez:** servidores HTTP multihilo, escritura atómica con copia `.bak`, bloqueo entre procesos, sesiones que se cierran al quitar o reducir permisos, corrección del historial de UPS que dejaba de guardarse.
 - **Interfaz:** menú móvil, pie con la versión, mejoras para móvil/tablet/laptop, columnas Net Monitor y Proxmox en el Admin Panel, impresoras y tablets en Net Monitor, edición de servidores NUT.
 - Mensajes de error y de log del backend en inglés.
+- **Instalación nueva más limpia:** el primer ingreso con `admin`/`admin` obliga a cambiar la contraseña antes de usar cualquier módulo; UPS Monitor empieza sin servidores (no exige tener una UPS); Net Monitor no escanea nada hasta que lo pides («Hacer escaneo inicial», con la lista llenándose en vivo) y autodetecta tu red; `snmp` es dependencia; los ejemplos usan IP neutras; menú por defecto: UPS, Net, Proxmox, WOL, Admin.
+- **Permisos entre módulos:** un admin solo da o quita permisos en los módulos donde él mismo tiene ese nivel, y los respaldos (Teleporter) los maneja solo quien administra todos los módulos. Proxmox avisa de forma permanente de los clusters sin certificado fijado. Cookie `Secure` opcional (`PICONSOLE_SECURE_COOKIE=1`) y sección *Seguridad* en el README.
 
 **Actualizar desde cualquier 1.1.x**
 ```bash
-wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0e_all.deb?n=$RANDOM" -O pi-console_1.2.0e_all.deb
-sudo apt-get install -y ./pi-console_1.2.0e_all.deb
+wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0_all.deb?n=$RANDOM" -O pi-console_1.2.0_all.deb
+sudo apt-get install -y ./pi-console_1.2.0_all.deb
 pi-console-health
 ```
 Los datos (`/var/lib/pi-console`) se conservan; el instalador además guarda una copia en `/var/backups/pi-console`.
@@ -33,11 +35,13 @@ First release of the 1.2 series. It gathers everything done since 1.1.8 and leav
 - **Robustness:** multi-threaded HTTP servers, atomic writes with `.bak` copy, cross-process locking, sessions closed when permissions are removed or reduced, fix for the UPS history that stopped being saved.
 - **UI:** mobile menu, version footer, phone/tablet/laptop improvements, Net Monitor and Proxmox columns in the Admin Panel, printers and tablets in Net Monitor, editable NUT servers.
 - Backend error and log messages in English.
+- **Cleaner fresh install:** the first login with `admin`/`admin` forces a password change before any module can be used; UPS Monitor starts with no servers (no UPS required); Net Monitor scans nothing until you ask ("Run initial scan", with the list filling in live) and autodetects your network; `snmp` is a dependency; examples use neutral IPs; default menu: UPS, Net, Proxmox, WOL, Admin.
+- **Cross-module permissions:** an admin can only grant or remove permissions on the modules where they hold that level themselves, and backups (Teleporter) are handled only by someone who administers every module. Proxmox permanently warns about clusters without a pinned certificate. Optional `Secure` cookie (`PICONSOLE_SECURE_COOKIE=1`) and a *Security* section in the README.
 
 **Upgrade from any 1.1.x**
 ```bash
-wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0e_all.deb?n=$RANDOM" -O pi-console_1.2.0e_all.deb
-sudo apt-get install -y ./pi-console_1.2.0e_all.deb
+wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0_all.deb?n=$RANDOM" -O pi-console_1.2.0_all.deb
+sudo apt-get install -y ./pi-console_1.2.0_all.deb
 pi-console-health
 ```
 Data in `/var/lib/pi-console` is kept; the installer also saves a copy in `/var/backups/pi-console`.
