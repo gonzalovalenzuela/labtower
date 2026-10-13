@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0b — 2026-10-13
+
+### Instalación nueva
+- **UPS Monitor ya no crea un servidor «Local» por defecto**: una instalación nueva empieza sin servidores (no hace falta tener una UPS); se agrega uno desde la página. Las instalaciones existentes conservan los suyos.
+- **`snmp` pasa a ser dependencia** del paquete (antes solo sugerida), para que la fuente SNMP de Net Monitor funcione sin pasos extra.
+- **Net Monitor**: la red a escanear por defecto es la /24 de la IP de la máquina (antes fijaba `192.168.0.0/24`); se puede cambiar con `SCAN_NETWORK`. Los servidores Pi-hole ya no vienen precargados.
+- Los ejemplos (placeholders) de IP en WOL, UPS, Net Monitor y Proxmox usan direcciones de documentación (`192.0.2.x`) en lugar de IP de una red real.
+- Orden de navegación por defecto en todas las páginas: UPS Monitor, Net Monitor, Proxmox, WOL Console, Admin Panel (quien ya reordenó el menú conserva su orden).
+
 ## 1.2.0a — 2026-10-13
 
 ### Correcciones

@@ -242,15 +242,13 @@ def _db_prune_safe():
 # EN: Lock of the server list. Rule: load → modify → save inside this lock.
 _srv_lock = threading.RLock()     # hold around load_servers() → modify → save_servers()
 
-# Lista de servidores NUT. Si el archivo nunca existió (instalación nueva) se crea uno «Local» en 127.0.0.1:3493;
+# Lista de servidores NUT. Una instalación nueva empieza SIN servidores (la UPS es opcional; se agrega desde la página);
 # una lista vacía es válida (el usuario los borró todos). Si el archivo está dañado, se usa la copia .bak.
-# EN: List of NUT servers. If the file never existed (fresh install) a "Local" one is created at 127.0.0.1:3493;
+# EN: List of NUT servers. A fresh install starts with NO servers (a UPS is optional; add one from the page);
 #     an empty list is valid (the user deleted them all). If the file is damaged, the .bak copy is used.
 def load_servers():
-    # A missing file means a fresh install (default local server); an existing but empty
-    # list is valid (the user deleted every server). Damaged file → last good copy.
-    if not DATA_FILE.exists() and not DATA_FILE.with_name(DATA_FILE.name + ".bak").exists():
-        return [{"id": "local", "name": "Local", "host": "127.0.0.1", "port": 3493}]
+    # No default server: a fresh install starts with an empty list (a UPS is optional) and the
+    # user adds one from the page. Damaged file → last good copy (auth.read_json).
     return auth.read_json(DATA_FILE, [], list)
 
 # Guarda la lista de servidores de forma atómica.

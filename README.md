@@ -72,10 +72,9 @@ Cada módulo es un servidor HTTP Python 3 independiente. La autenticación se co
 - nginx
 - NUT (`nut`, `nut-client`) — para el módulo UPS Monitor
 - `sudo` — para respaldo/restauración desde el panel de administración
-- `nmap` — para el módulo Net Monitor
-- Opcionales (`Suggests` en el `.deb`):
+- `snmp` — comando `snmpwalk`, para la fuente SNMP de Net Monitor (Net Monitor no usa `nmap`)
+- Opcional (`Suggests` en el `.deb`):
   - `ieee-data` — base local de vendors por MAC (respaldo si no hay descarga de Wireshark `manuf`)
-  - `snmp` — comando `snmpwalk`, necesario solo para la fuente SNMP de Net Monitor
 
 Ver [CHANGELOG.md](CHANGELOG.md) para el detalle de cambios por versión.
 
@@ -89,11 +88,11 @@ El código fuente está comentado en español e inglés (los comentarios en ingl
 
 ```bash
 # Descargar el .deb desde Releases
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0/pi-console_1.2.0a_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0/pi-console_1.2.0b_all.deb
 
 # Instalar (apt resuelve e instala las dependencias: python3, nginx, nut, nut-client…)
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.0a_all.deb
+sudo apt-get install -y ./pi-console_1.2.0b_all.deb
 ```
 
 El instalador:
