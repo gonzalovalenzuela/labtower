@@ -743,6 +743,9 @@ async function doLogin() {
     });
     const d = await r.json();
     if (!r.ok || !d.ok) { err.textContent = d.error||t('loginErr'); err.className='login-err show'; return; }
+    // Contraseña por cambiar (admin/admin inicial): pantalla obligatoria antes de entrar.
+    // EN: Password to change (initial admin/admin): mandatory screen before entering.
+    if (d.must_change_password) { location.href = 'change-password?next=' + encodeURIComponent(location.pathname); return; }
     await loadMe();
     await loadUsers();
     document.getElementById('login-screen').style.display = 'none';

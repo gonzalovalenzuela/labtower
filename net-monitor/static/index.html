@@ -177,6 +177,8 @@ td{padding:10px 14px;vertical-align:middle}
 .alias-input:focus{border-color:var(--teal);box-shadow:0 0 0 2px var(--teal-dim)}
 /* Empty */
 .empty-state{padding:50px 24px;text-align:center;color:var(--text-dim)}
+.empty-offer{margin-top:18px;display:flex;flex-direction:column;align-items:center;gap:10px}
+.empty-net{font-size:12px;color:var(--text-dim);font-family:'DM Mono',monospace}
 .empty-state strong{display:block;font-size:14px;font-weight:600;color:var(--text-mid);margin-bottom:8px}
 /* OS edit dropdown */
 .os-select{background:var(--surface);border:1px solid var(--teal);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:11px;padding:3px 6px;outline:none;cursor:pointer;transition:all .15s}
@@ -504,6 +506,7 @@ const LANG={
     scanProgress:(p,t)=>`Scanning ${p}/${t} hosts…`,scanBtn:'Scan network',
     noResults:'No results',noHosts2:'No hosts discovered',filterHint:'Try a different filter.',
     startScanHint:'Start a scan to discover hosts on the network.',
+    initialScanNet:(n)=>`Nothing has been scanned yet. Network detected: ${n}`,initialScanBtn:'Run initial scan',
     uptimeEmpty:'No events recorded yet',uptimeStats:(h,d)=>`${h}h monitored · ${d} outage${d!==1?'s':''}`,
     availHistory:'Availability history',
     chartMonitoring:'Monitoring — data will appear after several scans',
@@ -534,6 +537,7 @@ const LANG={
     scanProgress:(p,tt)=>`Escaneando ${p}/${tt} hosts…`,scanBtn:'Escanear red',
     noResults:'Sin resultados',noHosts2:'Sin hosts descubiertos',filterHint:'Prueba otro filtro.',
     startScanHint:'Inicia un escaneo para descubrir hosts en la red.',
+    initialScanNet:(n)=>`Aún no se ha escaneado nada. Red detectada: ${n}`,initialScanBtn:'Hacer escaneo inicial',
     uptimeEmpty:'Sin eventos registrados aún',uptimeStats:(h,d)=>`${h}h monitoreado · ${d} caída${d!==1?'s':''}`,
     availHistory:'Historial de disponibilidad',
     chartMonitoring:'Monitoreando — los datos aparecerán tras varios escaneos',
@@ -573,7 +577,7 @@ function setLang(l){
 
 // Estado: sesión, equipos, filtros activos, búsqueda y equipo expandido.
 // EN: State: session, devices, active filters, search and expanded device.
-let ME=null, hosts=[], filterOs='ALL', filterType='ALL', filterStatus='ALL', searchQ='', expanded=null, pollTimer=null;
+let ME=null, scanNetwork='', scanRunning=false, hosts=[], filterOs='ALL', filterType='ALL', filterStatus='ALL', searchQ='', expanded=null, pollTimer=null;
 let sortKeyName=null, sortDir=1;   // null = orden por defecto (online primero, luego IP)
 try{const sv=JSON.parse(localStorage.getItem('pi-net-sort')||'null');if(sv&&['status','ip','os','vendor','ports','latency','seen'].includes(sv.k)){sortKeyName=sv.k;sortDir=sv.d===-1?-1:1;}}catch(e){}
 // Refresco en reposo cada 30 s; durante un escaneo baja a 3 s para mostrar el progreso (ver fetchData).
@@ -667,6 +671,9 @@ async function doLogin(){
     const r=await fetch('api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
     const d=await r.json();
     if(!r.ok||!d.ok){err.textContent=d.error||'Credenciales incorrectas';err.className='login-err show';return;}
+    // Cuenta con contraseña por cambiar (admin/admin inicial): se va a la pantalla obligatoria antes de entrar.
+    // EN: Account with a password to change (initial admin/admin): go to the mandatory screen before entering.
+    if(d.must_change_password){location.href='/admin/change-password?next='+encodeURIComponent(location.pathname);return;}
     ME=d;applyPermissions();await initApp();
     const ls=document.getElementById('login-screen');ls.style.opacity='0';setTimeout(()=>ls.style.display='none',150);
   }catch(e){err.textContent='Error: '+e.message;err.className='login-err show';}
@@ -701,6 +708,7 @@ async function initApp(){
   try{
     const cfg = await fetch('api/config').then(r=>r.json());
     if(cfg.scan_interval !== undefined) loadIntervalFields(cfg.scan_interval);
+    scanNetwork=cfg.network||'';
   }catch(e){}
   await fetchData();
   pollTimer=setInterval(fetchData,POLL);
@@ -847,6 +855,8 @@ async function rescanHost(ip){
 // EN: Progress bar of the scan in progress.
 function updateScanBar(scan){
   if(!scan)return;
+  const wasRunning=scanRunning; scanRunning=!!scan.running;
+  if(wasRunning!==scanRunning&&!hosts.length)renderTable();   // refresh the empty-state offer
   const bar=document.getElementById('scan-bar');
   const btn=document.getElementById('btn-scan');
   if(scan.running){
@@ -1025,6 +1035,7 @@ function renderTable(){
     tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state">
       <strong>${hosts.length?t('noResults'):t('noHosts2')}</strong>
       ${hosts.length?t('filterHint'):t('startScanHint')}
+      ${(!hosts.length&&!scanRunning)?`<div class="empty-offer">${scanNetwork?`<div class="empty-net">${esc(t('initialScanNet',scanNetwork))}</div>`:''}<button class="btn-scan" onclick="startScan()">${esc(t('initialScanBtn'))}</button></div>`:''}
     </div></td></tr>`;
     return;
   }
