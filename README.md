@@ -22,21 +22,18 @@ La página de inicio (`/`) sirve desde `/opt/pi-console-home/` vía nginx.
 
 ## Capturas
 
-Datos de demostración. Todas las pantallas, en tema claro y oscuro y en 4 resoluciones (1920×1080, 1366×768, tablet y móvil), están en [`docs/screenshots/`](docs/screenshots/).
+Todas las pantallas, en tema claro y oscuro y en 4 resoluciones (1920×1080, 1366×768, tablet y móvil), están en [`docs/screenshots/`](docs/screenshots/).
 
 | Módulo | Claro | Oscuro |
 |---|---|---|
-| **WOL Console** | <img src="docs/screenshots/1920x1080/light/wol.png" width="420"> | <img src="docs/screenshots/1920x1080/dark/wol.png" width="420"> |
+
 | **UPS Monitor** | <img src="docs/screenshots/1920x1080/light/ups.png" width="420"> | <img src="docs/screenshots/1920x1080/dark/ups.png" width="420"> |
-| **Net Monitor** | <img src="docs/screenshots/1920x1080/light/net.png" width="420"> | <img src="docs/screenshots/1920x1080/dark/net.png" width="420"> |
-| **Proxmox Monitor** | <img src="docs/screenshots/1920x1080/light/proxmox.png" width="420"> | <img src="docs/screenshots/1920x1080/dark/proxmox.png" width="420"> |
-| **Admin Panel** | <img src="docs/screenshots/1920x1080/light/admin.png" width="420"> | <img src="docs/screenshots/1920x1080/dark/admin.png" width="420"> |
 
 **Móvil (390×844)**
 
 | | | | |
 |---|---|---|---|
-| <img src="docs/screenshots/390x844/light/wol.png" width="180"> | <img src="docs/screenshots/390x844/light/menu.png" width="180"> | <img src="docs/screenshots/390x844/dark/ups.png" width="180"> | <img src="docs/screenshots/390x844/dark/proxmox.png" width="180"> |
+|<img src="docs/screenshots/390x844/light/menu.png" width="180"> | <img src="docs/screenshots/390x844/dark/ups.png" width="180"> |
 
 ---
 
