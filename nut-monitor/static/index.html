@@ -355,7 +355,7 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
   <div class="login-box">
     <div class="login-logo">
       <div class="login-logo-ico"><svg viewBox="0 0 24 24"><path d="M5 9V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><rect x="3" y="9" width="18" height="11" rx="2"/><line x1="12" y1="13" x2="12" y2="16"/></svg></div>
-      <div><div style="font-size:15px;font-weight:600">UPS Monitor</div><div style="font-size:10px;color:var(--text-dim);font-family:var(--mono)">NUT · APC · Eaton</div></div>
+      <div><div style="font-size:15px;font-weight:600">UPS Monitor</div><div style="font-size:10px;color:var(--text-dim);font-family:var(--mono)">NUT UPS</div></div>
     </div>
     <div class="login-title" data-i18n="loginTitle">Sign in</div>
     <div class="login-sub" data-i18n="loginSub">Enter your credentials to continue.</div>
@@ -370,7 +370,7 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
 <aside class="sidebar">
   <div class="sb-logo">
     <div class="sb-icon"><svg viewBox="0 0 24 24"><path d="M5 9V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><rect x="3" y="9" width="18" height="11" rx="2"/><line x1="12" y1="13" x2="12" y2="16"/></svg></div>
-    <div><div class="sb-name">UPS Monitor</div><div class="sb-ver">NUT · APC · Eaton</div></div>
+    <div><div class="sb-name">UPS Monitor</div><div class="sb-ver">NUT UPS</div></div>
   </div>
   <div class="sb-sec">
     <div class="sb-lbl" data-i18n="navSection">Navigation</div>
@@ -553,6 +553,7 @@ const LANG={
     addServerPort:'Port',addServerTest:'Test',addServerBtn:'Add',
     deleteServerTitle:'Delete server',deleteServerConfirm:(name)=>`Delete server "${name}"? Monitoring will stop.`,
     noUPSDetail:'No UPS found. Add a NUT server or verify upsd is running.',
+    connectingSrv:'Connecting to the NUT server…',
     upsCountMsg:(ups,srv)=>`${ups} UPS on ${srv} server${srv!==1?'s':''}`,
     serverAdded:(name)=>`${name} added`,serverDeleted:(name)=>`${name} deleted`,
     serverAddedLog:(name)=>`Server added: ${name}`,serverDeletedLog:(name)=>`Server deleted: ${name}`,
@@ -598,6 +599,7 @@ const LANG={
     addServerPort:'Puerto',addServerTest:'Probar',addServerBtn:'Agregar',
     deleteServerTitle:'Eliminar servidor',deleteServerConfirm:(name)=>`¿Eliminar el servidor "${name}"? Se detendrá el monitoreo.`,
     noUPSDetail:'Sin UPS. Agrega un servidor NUT o verifica que upsd esté activo.',
+    connectingSrv:'Conectando con el servidor NUT…',
     upsCountMsg:(ups,srv)=>`${ups} UPS en ${srv} servidor${srv!==1?'es':''}`,
     serverAdded:(name)=>`${name} agregado`,serverDeleted:(name)=>`${name} eliminado`,
     serverAddedLog:(name)=>`Servidor agregado: ${name}`,serverDeletedLog:(name)=>`Servidor eliminado: ${name}`,
@@ -932,9 +934,11 @@ function renderDashboard(){
   document.getElementById('ups-count').textContent = t('upsCountMsg',rows.length,servers.length);
 
   if(!rows.length){
+    // A server was just added and upsd has not answered yet: say so instead of "No UPS found".
+    const connecting=servers.some(sv=>{const sn=allData[sv.id];return !sn||(!sn.last_ok&&!sn.error);});
     tbody.innerHTML=`<tr><td colspan="7" style="padding:40px;text-align:center;color:var(--text-dim);font-size:13px">
-      <strong style="display:block;color:var(--text-mid);margin-bottom:6px" data-i18n="noUPS">${t('noUPS')}</strong>
-      ${t('noUPSDetail')}</td></tr>`;
+      <strong style="display:block;color:var(--text-mid);margin-bottom:6px" data-i18n="noUPS">${connecting?t('connectingSrv'):t('noUPS')}</strong>
+      ${connecting?'':t('noUPSDetail')}</td></tr>`;
     return;
   }
 
@@ -1510,8 +1514,20 @@ async function saveServer(){
     if(ed){log('OK',t('serverEditedLog',name));toast(t('serverEdited',name),false);}
     else{log('OK',t('serverAddedLog',name));toast(t('serverAdded',name),false);}
     closeAddServer();await fetchAll();
+    fastRefresh();   // the first poll of a new server takes a few seconds: refresh quickly until its data arrives
   }catch(e){log('ERR',e.message);toast(e.message,true);}
   finally{btn.disabled=false;setServerForm();}
+}
+
+// Tras agregar un servidor, repite la descarga cada 1,5 s (hasta ~20 s) hasta que llegue algún dato, en vez de esperar al refresco normal de 5 s.
+// EN: After adding a server, repeat the download every 1.5 s (up to ~20 s) until some data arrives, instead of waiting for the normal 5 s refresh.
+function fastRefresh(n=13){
+  if(n<=0)return;
+  setTimeout(async()=>{
+    await fetchAll();
+    const has=Object.values(allData).some(sn=>sn&&Object.keys(sn.ups||{}).length);
+    if(!has)fastRefresh(n-1);
+  },1500);
 }
 
 // Pide confirmación y borra un servidor (admin).

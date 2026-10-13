@@ -131,6 +131,7 @@ _INSERT_SQL = """
 # EN: Buffer of rows waiting to be written, time of the last write and last error (used by /api/health).
 _ins_buf = []
 _ins_last = time.time()
+_first_rows = {}             # readings seen per (server, UPS) since startup; the first ones are written at once
 _flush_err = None            # last history-write error (None once a write succeeds), for /api/health
 
 # Escribe el búfer completo en una sola transacción. Debe llamarse con el candado de la base tomado.
@@ -166,6 +167,11 @@ def db_flush(timeout=3):
 #     that is when losing data matters most. If the disk fails, the buffer is capped at 5000 rows.
 def db_insert(srv_id, ups, entry, urgent=False):
     with _db_lock:
+        # Las dos primeras lecturas de cada UPS desde el arranque (o desde que se agrega el servidor) se escriben de inmediato: así el gráfico ya tiene dos puntos a los pocos segundos en vez de esperar un lote completo (DB_FLUSH_SEC).
+        # EN: The first two readings of each UPS since startup (or since the server is added) are written immediately: so the chart already has two points after a few seconds instead of waiting for a whole batch (DB_FLUSH_SEC).
+        k = (srv_id, ups)
+        _first_rows[k] = _first_rows.get(k, 0) + 1
+        if _first_rows[k] <= 2: urgent = True
         _ins_buf.append((srv_id, ups,
                          entry["ts"], entry["charge"], entry["runtime"], entry["load"],
                          entry["vin"], entry["vout"], entry["watts"], entry["temp"]))

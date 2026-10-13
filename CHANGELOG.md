@@ -7,6 +7,11 @@
 - **Se aplica en el servidor, no solo en la página**: mientras la contraseña esté pendiente, la sesión no sirve en ningún módulo (todas las llamadas dan 401) salvo para cambiarla (`/admin/change-password`). Funciona con cualquier usuario, también sin permisos de administrador. Al cambiarla se cierran las demás sesiones de esa cuenta.
 - **Net Monitor no escanea nada por defecto** en una instalación nueva: arranca en modo manual (intervalo 0) y, cuando no hay equipos, la página muestra la red detectada y el botón **«Hacer escaneo inicial»**. Se puede activar el escaneo automático en Ajustes. Las instalaciones existentes conservan su intervalo.
 - En modo manual (intervalo 0) Net Monitor tampoco escanea al arrancar el servicio; antes lo hacía siempre una vez.
+- **El escaneo va poblando la lista**: cada equipo encontrado se guarda enseguida (como máximo cada 2 s) y la página se refresca cada 3 s durante el escaneo, sin esperar a que termine toda la red. Mientras escanea con la lista vacía muestra «Escaneando…».
+
+### UPS Monitor
+- **Primera UPS recién agregada**: la tabla muestra «Conectando con el servidor NUT…» (en vez de «No UPS found») y la página refresca cada 1,5 s hasta que llegan los datos, sin recargar a mano. Las dos primeras lecturas de cada UPS se guardan de inmediato, así los gráficos tienen puntos a los pocos segundos en vez de esperar hasta 60 s.
+- El subtítulo «NUT · APC · Eaton» pasa a «NUT UPS».
 
 ## 1.2.0b — 2026-10-13
 

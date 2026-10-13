@@ -950,13 +950,16 @@ def run_scan(network: str = None, single_ip: str = None):
 
     try:
         completed = 0
+        _last_save = 0.0
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
             futures = {ex.submit(scan_one, ip): ip for ip in ips}
             for future in as_completed(futures):
                 completed += 1
                 _scan_status["progress"] = completed
+                found = False
                 try:
                     ip_str, result = future.result()
+                    found = bool(result)
                     with _hosts_lock:
                         if result:
                             existing = hosts.get(ip_str, {})
@@ -1001,10 +1004,10 @@ def run_scan(network: str = None, single_ip: str = None):
                 except Exception as e:
                     log.error(f"Scan error: {e}")
 
-                # Guardado parcial: si el servicio se corta a mitad de escaneo, no se pierde todo.
-                # EN: Partial save: if the service stops mid-scan, not everything is lost.
-                if completed % 20 == 0:
-                    save_hosts(hosts)
+                # Guardado parcial: si el servicio se corta a mitad de escaneo, no se pierde todo. Además, cada equipo encontrado se guarda enseguida (como máximo una vez cada 2 s) para que la página vaya mostrando la lista mientras el escaneo avanza, sin esperar a que termine toda la red.
+                # EN: Partial save: if the service stops mid-scan, not everything is lost. In addition, each device found is saved right away (at most once every 2 s) so the page fills the list as the scan advances, without waiting for the whole network to finish.
+                if (found and time.time() - _last_save >= 2) or completed % 20 == 0:
+                    save_hosts(hosts); _last_save = time.time()
 
         with _hosts_lock:
             save_hosts(hosts)
