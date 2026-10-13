@@ -191,6 +191,18 @@ class H(BaseHTTPRequestHandler):
         if path in ("/", "/index.html"):
             return self._file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
 
+        # Pantalla de cambio obligatorio de contraseña: pública (la sesión pendiente no es válida para nada más).
+        # EN: Mandatory password-change screen: public (a pending session is not valid for anything else).
+        if path in ("/change-password", "/change-password.html"):
+            return self._file(STATIC_DIR / "change-password.html", "text/html; charset=utf-8")
+
+        # Quién es la sesión pendiente de cambiar contraseña (la página lo usa para saludar o volver al login).
+        # EN: Who the session pending a password change is (the page uses it to greet or go back to the login).
+        if path == "/api/self":
+            sess = auth.get_session(tok, allow_pending=True)
+            return self._json(200, {"username": sess["username"],
+                                    "must_change_password": sess["must_change_password"]} if sess else {})
+
         if path == "/api/version":     # public: shown in the page footer
             return self._json(200, {"version": auth.version()})
         if path == "/api/health":      # public: levels only; details need a valid session
@@ -260,6 +272,32 @@ class H(BaseHTTPRequestHandler):
 
         if path == "/api/logout":
             auth.delete_session(tok); return self._json(200, {"ok": True})
+
+        # Cambio de la propia contraseña, disponible para cualquier usuario con sesión (también la pendiente de cambio obligatorio, que no sirve para nada más). Pide la contraseña actual y exige una distinta.
+        # EN: Change of one's own password, available to any user with a session (including the one pending a mandatory change, which is valid for nothing else). It asks for the current password and requires a different one.
+        if path == "/api/self_password":
+            sess = auth.get_session(tok, allow_pending=True)
+            if not sess: return self._json(401, {"error": "Unauthorized"})
+            me_  = sess["username"]
+            cur  = body.get("current_password")
+            new_ = body.get("new_password")
+            if not isinstance(cur, str) or not isinstance(new_, str):
+                return self._json(400, {"error": "Invalid request body"})
+            if len(new_.strip()) < 6:
+                return self._json(400, {"error": "Password must be at least 6 characters"})
+            if new_ == cur:
+                return self._json(400, {"error": "The new password must be different from the current one"})
+            if auth.authenticate(me_, cur) is None:
+                return self._json(403, {"error": "Current password is incorrect"})
+            with auth.users_lock():
+                users = auth.load_users()
+                if me_ not in users: return self._json(404, {"error": "User not found"})
+                users[me_]["password_hash"] = auth._hash(new_.strip())
+                users[me_]["must_change_password"] = False
+                auth.save_users(users)
+            auth.delete_user_sessions(me_, keep=tok)
+            log.info(f"Password changed by the user themselves: {me_}")
+            return self._json(200, {"ok": True})
 
         if not auth.check_permission(tok, "wol", "admin") and \
            not auth.check_permission(tok, "nut", "admin"):

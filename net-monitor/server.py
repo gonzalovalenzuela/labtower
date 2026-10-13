@@ -895,6 +895,15 @@ _scan_status      = {"running": False, "progress": 0, "total": 0,
 _scan_timer       = None
 _saved            = load_config()
 _current_interval = _saved.get("scan_interval", SCAN_INTERVAL)
+# Instalación nueva (sin escaneos previos, sin intervalo guardado y sin SCAN_INTERVAL en el entorno): modo manual, no se escanea nada hasta que el usuario lo pida desde la página. Se guarda scan_interval=0 para que los reinicios no vuelvan al escaneo automático.
+# EN: Fresh install (no previous scan, no saved interval and no SCAN_INTERVAL in the environment): manual mode, nothing is scanned until the user asks from the page. scan_interval=0 is saved so restarts do not go back to automatic scanning.
+if "scan_interval" not in _saved and "SCAN_INTERVAL" not in os.environ and not DATA_FILE.exists():
+    _current_interval = 0
+    try:
+        with _cfg_lock:
+            _c = load_config(); _c["scan_interval"] = 0; save_config(_c)
+    except Exception as _e:
+        log.warning(f"could not save the default manual scan mode: {_e}")
 # Cargar credenciales Pi-hole guardadas
 # Credenciales de Pi-hole guardadas desde la página; una variable de entorno tiene prioridad.
 # EN: Pi-hole credentials saved from the page; an environment variable takes priority.
@@ -1039,7 +1048,12 @@ def start_auto_scan():
     # Cargar cache de Pi-hole antes del primer escaneo
     if PIHOLE_PASS:
         threading.Thread(target=refresh_pihole_cache, daemon=True).start()
-    threading.Thread(target=run_scan, daemon=True).start()
+    # Con intervalo 0 (modo manual) no se escanea al arrancar: solo cuando el usuario lo pide.
+    # EN: With interval 0 (manual mode) nothing is scanned at startup: only when the user asks.
+    if _current_interval > 0:
+        threading.Thread(target=run_scan, daemon=True).start()
+    else:
+        log.info("Auto-scan disabled (manual mode): no scan at startup")
 
 # ─── Health ───────────────────────────────────────────────────────────────────
 # Chequeos de salud de Net Monitor: archivos de datos, escáner (¿atascado más de 2 h?) y que el temporizador automático esté armado y al día.
@@ -1372,7 +1386,7 @@ if __name__ == "__main__":
         log.warning(f"Could not update permissions: {e}")
 
     log.info(f"Net Monitor at http://{HOST}:{PORT}")
-    log.info(f"Network: {NETWORK} | Workers: {MAX_WORKERS} | Auto-scan: {SCAN_INTERVAL//60}min")
+    log.info(f"Network: {NETWORK} | Workers: {MAX_WORKERS} | Auto-scan: {_current_interval//60}min (0 = manual)")
     log.info("Detection: TTL + Python ports + HTTP banner (no nmap)")
     start_auto_scan()
     try:

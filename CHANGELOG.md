@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0c — 2026-10-13
+
+### Instalación nueva
+- **Cambio de contraseña obligatorio en el primer ingreso.** La cuenta inicial `admin`/`admin` (y cualquier cuenta marcada «debe cambiar contraseña» desde el Admin Panel) pasa por una pantalla de cambio de contraseña antes de entrar a cualquier módulo; al guardarla vuelve al módulo desde el que ingresó y ya puede navegar a los demás. Se exige la contraseña actual, una nueva de al menos 6 caracteres y distinta de la actual.
+- **Se aplica en el servidor, no solo en la página**: mientras la contraseña esté pendiente, la sesión no sirve en ningún módulo (todas las llamadas dan 401) salvo para cambiarla (`/admin/change-password`). Funciona con cualquier usuario, también sin permisos de administrador. Al cambiarla se cierran las demás sesiones de esa cuenta.
+- **Net Monitor no escanea nada por defecto** en una instalación nueva: arranca en modo manual (intervalo 0) y, cuando no hay equipos, la página muestra la red detectada y el botón **«Hacer escaneo inicial»**. Se puede activar el escaneo automático en Ajustes. Las instalaciones existentes conservan su intervalo.
+- En modo manual (intervalo 0) Net Monitor tampoco escanea al arrancar el servicio; antes lo hacía siempre una vez.
+
 ## 1.2.0b — 2026-10-13
 
 ### Instalación nueva

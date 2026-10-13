@@ -460,7 +460,9 @@ def create_session(username: str, permissions: dict) -> str:
 #       · if the user no longer exists, it is deleted (removing a user cuts their session at once);
 #       · the permissions returned are always the CURRENT ones from users.json, not the ones at login;
 #       · the 24 h window is renewed, but written to disk only if more than RENEW_EVERY seconds passed.
-def get_session(token: str) -> dict | None:
+# Devuelve la sesión del token (o None). Si la cuenta tiene must_change_password (primer ingreso con admin/admin, o marcada por un admin), la sesión NO es válida para nada, salvo para cambiar la contraseña (allow_pending=True): así ningún módulo da acceso hasta que se cambie.
+# EN: Return the session of the token (or None). If the account has must_change_password (first login with admin/admin, or flagged by an admin), the session is NOT valid for anything except changing the password (allow_pending=True): no module grants access until it is changed.
+def get_session(token: str, allow_pending: bool = False) -> dict | None:
     if not token: return None
     with _sessions_lock:
         sessions = _load_sessions()
@@ -480,7 +482,10 @@ def get_session(token: str) -> dict | None:
             s["expires"] = now + SESSION_TTL
             sessions[token] = s
             _save_sessions(sessions)
-        return {**s, "permissions": dict(user.get("permissions", {}))}
+        if user.get("must_change_password") and not allow_pending:
+            return None
+        return {**s, "permissions": dict(user.get("permissions", {})),
+                "must_change_password": bool(user.get("must_change_password"))}
 
 # Cierre de sesión (logout).
 # EN: Logout.
