@@ -837,6 +837,7 @@ async function startScan(){
     const d=await r.json();
     if(!r.ok)throw new Error(d.error);
     toast(t('scanStarted',d.message));
+    setTimeout(fetchData,600);   // show progress right away and switch to the fast poll (3 s) while scanning
   }catch(e){toast(e.message,true);btn.disabled=false;btn.innerHTML=`<svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> ${t('scanBtn')}`;}
 }
 
@@ -1033,8 +1034,8 @@ function renderTable(){
 
   if(!list.length){
     tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state">
-      <strong>${hosts.length?t('noResults'):t('noHosts2')}</strong>
-      ${hosts.length?t('filterHint'):t('startScanHint')}
+      <strong>${hosts.length?t('noResults'):(scanRunning?t('scanning'):t('noHosts2'))}</strong>
+      ${hosts.length?t('filterHint'):(scanRunning?'':t('startScanHint'))}
       ${(!hosts.length&&!scanRunning)?`<div class="empty-offer">${scanNetwork?`<div class="empty-net">${esc(t('initialScanNet',scanNetwork))}</div>`:''}<button class="btn-scan" onclick="startScan()">${esc(t('initialScanBtn'))}</button></div>`:''}
     </div></td></tr>`;
     return;
