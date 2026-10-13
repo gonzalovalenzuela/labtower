@@ -1,57 +1,61 @@
 # Changelog
 
-## 1.2.0e — 2026-10-13
+## 1.2.0 — 2026-10-13
 
-### Net Monitor
+Release final de la serie 1.2: reúne la base 1.2.0 (12-oct) y las compilaciones de prueba de instalación nueva 1.2.0a a 1.2.0e, que se reemplazan por esta versión. Resumen por compilación, de la más nueva a la más antigua:
+
+### Compilación 1.2.0e (2026-10-13)
+
+#### Net Monitor
 - **El «Hacer escaneo inicial» se comporta igual que el botón «Escanear red»**: ambos llaman a la misma función, pero el botón inicial tardaba ~1,5 s en reaccionar (seguía clicable y mostrando «Sin hosts descubiertos» hasta la primera consulta de estado). Ahora, venga de donde venga el clic, al instante se muestran la barra de progreso, el botón superior ocupado y la lista vacía en «Escaneando…».
 
-## 1.2.0d — 2026-10-13
+### Compilación 1.2.0d (2026-10-13)
 
-### Seguridad
+#### Seguridad
 - **Permisos entre módulos («solo das lo que tienes»).** En el Admin Panel, un administrador solo puede dar o quitar permisos en los módulos donde él mismo tiene ese nivel (un admin de WOL ya no puede dar ni quitar permisos en Net o Proxmox) y no puede borrar ni cambiar la contraseña de un usuario con más permisos que él. Los valores por defecto al crear un usuario se limitan a lo que el admin puede dar.
 - **Respaldos (Teleporter) solo para admins de todos los módulos**: contienen hashes de contraseñas, tokens de Proxmox y la configuración completa. A los demás admins la tarjeta se les oculta y la API responde 403.
 - **Proxmox: aviso permanente de certificado sin verificar** en cada cluster sin huella fijada (con el botón «Fijar certificado» para admins), y una advertencia en el log al arrancar el servicio.
 - **Cookie de sesión `Secure` opcional**: con `PICONSOLE_SECURE_COOKIE=1` en `/etc/default/pi-console` (leído por las 5 unidades systemd) la cookie lleva `Secure`. Apagado por defecto: Pi Console se usa por HTTP en la LAN.
 - README: nueva sección **Seguridad** (uso en LAN de confianza por HTTP, HTTPS opcional delante, permisos por módulo, certificados de Proxmox).
 
-## 1.2.0c — 2026-10-13
+### Compilación 1.2.0c (2026-10-13)
 
-### Instalación nueva
+#### Instalación nueva
 - **Cambio de contraseña obligatorio en el primer ingreso.** La cuenta inicial `admin`/`admin` (y cualquier cuenta marcada «debe cambiar contraseña» desde el Admin Panel) pasa por una pantalla de cambio de contraseña antes de entrar a cualquier módulo; al guardarla vuelve al módulo desde el que ingresó y ya puede navegar a los demás. Se exige la contraseña actual, una nueva de al menos 6 caracteres y distinta de la actual.
 - **Se aplica en el servidor, no solo en la página**: mientras la contraseña esté pendiente, la sesión no sirve en ningún módulo (todas las llamadas dan 401) salvo para cambiarla (`/admin/change-password`). Funciona con cualquier usuario, también sin permisos de administrador. Al cambiarla se cierran las demás sesiones de esa cuenta.
 - **Net Monitor no escanea nada por defecto** en una instalación nueva: arranca en modo manual (intervalo 0) y, cuando no hay equipos, la página muestra la red detectada y el botón **«Hacer escaneo inicial»**. Se puede activar el escaneo automático en Ajustes. Las instalaciones existentes conservan su intervalo.
 - En modo manual (intervalo 0) Net Monitor tampoco escanea al arrancar el servicio; antes lo hacía siempre una vez.
 - **El escaneo va poblando la lista**: cada equipo encontrado se guarda enseguida (como máximo cada 2 s) y la página se refresca cada 3 s durante el escaneo, sin esperar a que termine toda la red. Mientras escanea con la lista vacía muestra «Escaneando…».
 
-### UPS Monitor
+#### UPS Monitor
 - **Primera UPS recién agregada**: la tabla muestra «Conectando con el servidor NUT…» (en vez de «No UPS found») y la página refresca cada 1,5 s hasta que llegan los datos, sin recargar a mano. Las dos primeras lecturas de cada UPS se guardan de inmediato, así los gráficos tienen puntos a los pocos segundos en vez de esperar hasta 60 s.
 - El subtítulo «NUT · APC · Eaton» pasa a «NUT UPS».
 
-## 1.2.0b — 2026-10-13
+### Compilación 1.2.0b (2026-10-13)
 
-### Instalación nueva
+#### Instalación nueva
 - **UPS Monitor ya no crea un servidor «Local» por defecto**: una instalación nueva empieza sin servidores (no hace falta tener una UPS); se agrega uno desde la página. Las instalaciones existentes conservan los suyos.
 - **`snmp` pasa a ser dependencia** del paquete (antes solo sugerida), para que la fuente SNMP de Net Monitor funcione sin pasos extra.
 - **Net Monitor**: la red a escanear por defecto es la /24 de la IP de la máquina (antes fijaba `192.168.0.0/24`); se puede cambiar con `SCAN_NETWORK`. Los servidores Pi-hole ya no vienen precargados.
 - Los ejemplos (placeholders) de IP en WOL, UPS, Net Monitor y Proxmox usan direcciones de documentación (`192.0.2.x`) en lugar de IP de una red real.
 - Orden de navegación por defecto en todas las páginas: UPS Monitor, Net Monitor, Proxmox, WOL Console, Admin Panel (quien ya reordenó el menú conserva su orden).
 
-## 1.2.0a — 2026-10-13
+### Compilación 1.2.0a (2026-10-13)
 
-### Correcciones
+#### Correcciones
 - **Instalación nueva: la página de inicio daba `500 Internal Server Error`.** nginx servía `/` desde `/opt/pi-console-home/`, pero el paquete instala la portada en `/opt/pi-console/home/`; la carpeta antigua solo existía en equipos con instalación manual previa. Ahora nginx usa `/opt/pi-console/home` (también en actualizaciones: la portada se actualiza con el paquete).
 - Documentación: la instalación indica `apt-get install ./pi-console_X.deb` (resuelve dependencias) en lugar de `dpkg -i`.
 
-## 1.2.0 — 2026-10-12
+### Base 1.2.0 (2026-10-12)
 
 Primer release de la serie 1.2. Reúne todos los cambios de 1.1.8b a 1.1.9j (listados abajo) y agrega el código comentado.
 
-### Código comentado en español e inglés
+#### Código comentado en español e inglés
 - Todo el código fuente lleva comentarios en **español** y, a continuación, en **inglés** (marcados con `EN:`): los 5 servicios Python, el módulo de autenticación, `teleporter.sh`, los scripts de salud y recursos, los scripts del paquete (`postinst`, `preinst`, `prerm`, `postrm`), la configuración de nginx y las 7 páginas HTML. Cada archivo empieza con un mapa de su estructura y el flujo de datos; cada función explica qué hace y, cuando importa, por qué.
 - Solo se agregaron comentarios; la lógica no cambió. Se verificó que el código sin comentarios quedara idéntico (Python por AST; shell, nginx y HTML por comparación de líneas, más `bash -n` y `node --check`).
 - Los mensajes de log y de error de los servicios que quedaban en español ahora están en inglés («Admin permission required», «Duplicate MAC», «Scan finished…», etc.).
 
-### Interfaz
+#### Interfaz
 - En pantallas de hasta 960 px la barra lateral estaba oculta y no había forma de cambiar de módulo. Ahora hay un botón de menú (☰) en la barra superior que abre la navegación como panel lateral, con fondo atenuado; se cierra al tocar el fondo, un enlace o con Esc. Aplica a WOL Console, UPS Monitor, Net Monitor, Proxmox y Admin Panel.
 - La barra superior pasa a varias filas en móvil para que todos sus controles (idioma, tema, usuario, escaneo) sean alcanzables.
 - Todas las páginas (WOL, UPS, Net Monitor, Proxmox y Admin, incluida la pantalla de login) muestran *Pi Console vX.Y.Z* en el pie. La versión sale del archivo `/opt/pi-console/VERSION` que instala el paquete, vía `GET /api/version` de cada servicio (también aparece en `/api/health`).
@@ -61,29 +65,29 @@ Primer release de la serie 1.2. Reúne todos los cambios de 1.1.8b a 1.1.9j (lis
 - Móvil: en el Admin Panel la lista de usuarios y la de backups pasan a tarjetas (una por usuario/backup), sin columnas cortadas ni desplazamiento lateral.
 - Tablets (≈800–1280 px, p. ej. iPad horizontal): en WOL Console el panel *Add device* pasa debajo de la tabla y el botón *Wake* ya no queda cortado; en Net Monitor el vendor/MAC se muestra solo en la fila expandida, los nombres largos se parten y la tabla cabe sin desplazarse aunque haya muchos puertos abiertos.
 
-### WOL Console
+#### WOL Console
 - Lee los hosts de Net Monitor (`net-monitor/hosts.json`, solo lectura): en *Add device* aparece **From Net Monitor** (solo admin con acceso a Net Monitor) para elegir un host detectado; rellena nombre, MAC, IP y categoría (computer→PC, storage→NAS, el resto→OTHER). Los ya agregados aparecen deshabilitados.
 - Si Net Monitor conoce otra IP para la misma MAC (DHCP), la tabla muestra la IP de Net Monitor (la guardada queda tachada) y *Wake* la usa para comprobar si el equipo ya está encendido.
 - Nuevo endpoint `GET /api/netmonitor/hosts` (requiere permiso `net` de lectura). Variables opcionales: `NET_HOSTS_FILE` (WOL) y `WOL_DEVICES_FILE` (Net Monitor).
 
-### UPS Monitor
+#### UPS Monitor
 - Los servidores NUT ahora se pueden **editar** (nombre, host y puerto) desde el botón de lápiz de la barra lateral, además de eliminarlos. Al cambiar host o puerto se reconecta de inmediato y se descartan los datos del destino anterior; el historial se conserva. Nuevo endpoint `PUT /api/servers/<id>` (solo admin).
 - La cabecera de los dos gráficos (voltaje y consumo) ahora tiene el mismo diseño: título a la izquierda, rangos 1h/1d/1mo/All a la derecha y la leyenda entre ambos; en pantallas de hasta 700 px, título y rangos en la primera línea y la leyenda debajo, igual en los dos. Antes el gráfico de voltaje pasaba los rangos a una segunda línea y el de consumo no.
 - Se pueden eliminar todos los servidores, incluido el *Local*. Sin servidores el panel muestra "No UPS found" y el resto de los módulos no se ve afectado; la lista vacía se conserva tras reiniciar y se puede volver a agregar un servidor cuando se quiera. Antes solo el servidor Local no se podía eliminar.
 
-### Net Monitor
+#### Net Monitor
 - Nuevos tipos de dispositivo **printer** (impresora) y **tablet**. Impresoras: fabricantes (Brother, Canon, Epson, Lexmark, Xerox, Ricoh, Kyocera…), nombres de host (NPI…, LaserJet, MFC…), puertos 9100/515/631 y banners. Tablets: iPad, Galaxy Tab, Kindle, MiPad, etc.; un iPhone/Android sigue siendo *phone*. Disponibles en filtros y en la edición manual.
 - Los hosts que están registrados en WOL Console (misma MAC) muestran la etiqueta **WOL**.
 - La tabla de hosts ya no se desborda en pantallas angostas: hasta 700 px se ocultan las columnas Vendor/MAC, puertos, latencia y último visto, y hasta 480 px también OS. Todo eso sigue disponible al expandir la fila (toca el nombre del host).
 
-### Módulo de salud
+#### Módulo de salud
 - Cada servicio expone `GET /api/health` (sin login: solo niveles ok/warn/fail; con sesión, el detalle) y responde 503 si algo falla. Revisa archivos de datos legibles/escribibles, espacio en disco, y por módulo: WOL (red y lista de Net Monitor), UPS (base de datos, que el historial **realmente se esté guardando**, pollers vivos, upsd respondiendo), Net Monitor (escaneo trabado, temporizador de auto-escaneo armado) y Proxmox (pollers vivos, clusters respondiendo).
 - El Admin Panel agrega la salud de todos los módulos en una tarjeta **Salud del sistema** (se refresca cada 30 s) y en `GET /admin/api/health`.
 - Cada módulo de la tarjeta se expande al hacer clic y muestra todo lo que se revisa: cada chequeo con su descripción, su nivel (verde/naranja/rojo) y el detalle (espacio libre, filas pendientes, error exacto, tiempo activo). Se mantiene abierto al refrescar.
 - Nuevo comando `pi-console-health` (código de salida 0 = ok, 1 = degradado, 2 = falla; `-j` muestra el JSON), útil para cron o monitoreo externo.
 - **Fuente de la Raspberry Pi:** el Admin Panel y `pi-console-health` muestran el chequeo `power` con aviso cuando la Pi registra subtensión o limitación (por fuente o cable insuficiente), sea ahora o desde el arranque. Solo aparece en una Raspberry Pi: en una VM u otro equipo no se muestra. Los eventos «desde el arranque» solo se borran al reiniciar. El instalador agrega al usuario del servicio al grupo `video` en una Pi para poder leer `vcgencmd get_throttled`.
 
-### Revisión de código: bloqueos, concurrencia y robustez
+#### Revisión de código: bloqueos, concurrencia y robustez
 - **Servidores HTTP multihilo con timeout** (WOL, UPS, Net Monitor, Proxmox, Admin): antes eran de un solo hilo, así que un cliente lento o colgado bloqueaba todo el módulo. Ahora cada conexión tiene su hilo y un timeout.
 - **`users.json` y `sessions.json` compartidos por 5 procesos**: lectura-modificación-escritura bajo `flock`, escritura atómica (fsync + rename, archivo temporal propio) y copia `.bak` de la última versión válida. Archivos con permisos 0600. Un `users.json` dañado ya no reactiva `admin/admin`: se usa la copia `.bak` o, sin ella, no entra nadie hasta borrar el archivo.
 - **Sesiones**: usuarios eliminados o con permisos reducidos pierden el acceso de inmediato (antes seguía vigente hasta 24 h); al cambiar contraseña o eliminar un usuario se cierran sus otras sesiones.
@@ -93,21 +97,21 @@ Primer release de la serie 1.2. Reúne todos los cambios de 1.1.8b a 1.1.9j (lis
 - **WOL Console**: envío del magic packet nativo (ya no depende del paquete `wakeonlan`, que no estaba declarado) y respeta el puerto del dispositivo; `/api/ping` valida el host (no acepta opciones de línea de comandos); contador de rate-limit con bloqueo y limpieza.
 - **Proxmox**: `/api/test` requiere admin; el token API no se devuelve al crear un cluster; el hilo de consulta no muere por un error de lectura de configuración.
 
-### Correcciones
+#### Correcciones
 - **UPS Monitor dejaba de guardar el historial (gráficos de consumo sin datos nuevos)**: aproximadamente 4 horas después de iniciar el servicio, la limpieza periódica de la base (`db_prune`) fallaba con `database table is locked` y dejaba abierta su conexión; desde ese momento todos los guardados fallaban con `database is locked` hasta reiniciar el servicio. Ahora la limpieza cierra la transacción antes de compactar el WAL, siempre libera la conexión y un error ahí ya no afecta al resto.
 - Los servicios aceptan ráfagas de conexiones simultáneas (cola de escucha de 5 a 128): antes, 30 peticiones a la vez podían terminar con la conexión reiniciada.
 
-### Documentación
+#### Documentación
 - Capturas de pantalla de todos los módulos (claro/oscuro, 4 resoluciones) en `docs/screenshots/` y galería en el README.
 
-### Idioma
+#### Idioma
 - Quedaban textos en español con la interfaz en inglés en WOL Console (filtro «Todos», tooltips, avisos y el «hace 8m»), UPS Monitor (tooltips y campo de servidor) y Proxmox Monitor («Conectando…», «Sin nodos»): ahora siguen el idioma elegido. Las fechas usan el formato del idioma.
 - Mensajes de error del backend traducidos al inglés («User already exists», «Device not found», «Not found», «That host:port already exists», «Magic packet sent to …»).
 
-### Herramientas
+#### Herramientas
 - Nuevo comando `pi-console-resources`: memoria (RSS) y CPU de cada servicio, de nginx y RAM libre del sistema (`-w` para verlo en vivo). Sirve para decidir si hace falta mover Pi Console fuera de la Pi.
 
-### Seguridad
+#### Seguridad
 - Contraseñas: ahora se guardan con **scrypt** y una sal aleatoria por usuario (antes SHA-256 con una sal fija). Los usuarios existentes se migran solos en su próximo inicio de sesión; los respaldos antiguos siguen funcionando.
 - Inicio de sesión: tras 5 intentos fallidos desde la misma IP se bloquea el acceso durante 5 minutos (respuesta 429). Cada fallo añade una pequeña espera, y un usuario inexistente tarda lo mismo que uno real. Los contadores son por servicio y se reinician al reiniciarlo.
 - nginx: cabeceras `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` y una política `Content-Security-Policy` básica.
@@ -118,7 +122,7 @@ Primer release de la serie 1.2. Reúne todos los cambios de 1.1.8b a 1.1.9j (lis
 - **Restore de NUT y nginx solo por consola (SEC-03):** el panel ya no ofrece restaurar `/etc/nut` ni el sitio nginx (corrían como root vía sudo); `teleporter restore --nut` / `--nginx` sigue disponible en la consola. `teleporter.sh gui-restore` rechaza esas opciones.
 - **Bloqueo entre procesos (CON-01):** si no se puede obtener el bloqueo de archivo, la operación falla con error en lugar de continuar sin él.
 
-### Instalación
+#### Instalación
 - Los mensajes de instalación, actualización y desinstalación (`postinst`, `preinst`, `prerm`, `postrm`) ahora están en inglés.
 
 ## 1.1.8 — 2026-10-10

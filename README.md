@@ -88,11 +88,11 @@ El código fuente está comentado en español e inglés (los comentarios en ingl
 
 ```bash
 # Descargar el .deb desde Releases
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0/pi-console_1.2.0e_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0/pi-console_1.2.0_all.deb
 
 # Instalar (apt resuelve e instala las dependencias: python3, nginx, nut, nut-client…)
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.0e_all.deb
+sudo apt-get install -y ./pi-console_1.2.0_all.deb
 ```
 
 El instalador:
