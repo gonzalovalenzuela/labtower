@@ -40,7 +40,7 @@ print(f"{'nginx':<17}{ng:>8.1f}")
 mem = dict(l.split(":") for l in open("/proc/meminfo"))
 mb = lambda k: int(mem[k].split()[0]) / 1024
 print(f"\nSystem: {mb('MemTotal'):.0f} MB total, {mb('MemAvailable'):.0f} MB free, swap used {mb('SwapTotal')-mb('SwapFree'):.0f} MB, load {' '.join(open('/proc/loadavg').read().split()[:3])}")
-dirs = [d for d in ("/opt/pi-console", "/opt/pi-console-home") if os.path.isdir(d)]
+dirs = [d for d in ("/opt/pi-console",) if os.path.isdir(d)]
 if dirs:
     out = subprocess.run(["du", "-sh"] + dirs, capture_output=True, text=True).stdout.split("\n")
     print("Disk:  " + ", ".join(l.replace("\t", " ") for l in out if l))

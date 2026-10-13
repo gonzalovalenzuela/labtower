@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0a — 2026-10-13
+
+### Correcciones
+- **Instalación nueva: la página de inicio daba `500 Internal Server Error`.** nginx servía `/` desde `/opt/pi-console-home/`, pero el paquete instala la portada en `/opt/pi-console/home/`; la carpeta antigua solo existía en equipos con instalación manual previa. Ahora nginx usa `/opt/pi-console/home` (también en actualizaciones: la portada se actualiza con el paquete).
+- Documentación: la instalación indica `apt-get install ./pi-console_X.deb` (resuelve dependencias) en lugar de `dpkg -i`.
+
 ## 1.2.0 — 2026-10-12
 
 Primer release de la serie 1.2. Reúne todos los cambios de 1.1.8b a 1.1.9j (listados abajo) y agrega el código comentado.
