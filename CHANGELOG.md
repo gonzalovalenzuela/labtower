@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.0b — 2026-10-13
+
+Compilación de documentación y pulido sobre la 1.2.0 (no cambia el comportamiento de los módulos).
+
+### Documentación
+- README reordenado (descripción, capturas, módulos, requisitos, instalación, actualizar, uso por módulo, operación, seguridad, estructura, licencia) y actualizado: primer ingreso con cambio de contraseña obligatorio, sección *Actualizar*, tabla de variables de entorno (`/etc/default/pi-console`), operación (`journalctl`, servicios, `remove`/`purge`), límite de intentos de login, requisitos (Raspberry Pi OS, DietPi o Debian 12+), estructura del repositorio y diagrama de arquitectura al día.
+- Nuevo `README.en.md` (resumen en inglés) y archivo `LICENSE` (MIT).
+- Capturas regeneradas para los 5 módulos en claro/oscuro y 4 resoluciones, más «Primer ingreso» y «Net Monitor vacío»; se quitaron las imágenes sueltas de la raíz.
+- `docs/APT.md` indica que el repositorio APT está preparado pero sin publicar.
+
+### Cambios menores
+- **WOL Console:** la clave CSRF (`WOL_SECRET`) ahora es aleatoria y se guarda con permisos 600 en `wol-console/.csrf-secret`; ya no hay un valor por defecto conocido.
+- **Página de inicio:** tarjetas en el orden del menú (UPS, Net, Proxmox, WOL) y nueva tarjeta de Admin Panel.
+- Se eliminó `auth/static/login.html` (código muerto, sin referencias).
+
 ## 1.2.0 — 2026-10-13
 
 Release final de la serie 1.2: reúne la base 1.2.0 (12-oct) y las compilaciones de prueba de instalación nueva 1.2.0a a 1.2.0e, que se reemplazan por esta versión. Resumen por compilación, de la más nueva a la más antigua:

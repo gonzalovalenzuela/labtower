@@ -42,9 +42,26 @@ LOG_FILE   = Path(__file__).parent / "wake_log.json"
 # EN: Net Monitor host table (read-only here): lets devices be autocompleted and shows whether they are online.
 NET_HOSTS_FILE = Path(os.environ.get("NET_HOSTS_FILE", str(Path(__file__).parent.parent / "net-monitor" / "hosts.json")))
 STATIC_DIR = Path(__file__).parent / "static"
-# Clave para firmar los tokens CSRF; se puede cambiar con la variable de entorno WOL_SECRET.
-# EN: Key used to sign CSRF tokens; can be changed with the WOL_SECRET environment variable.
-WOL_SECRET = os.environ.get("WOL_SECRET", "cambiar-esta-clave")
+# Clave para firmar los tokens CSRF. Se puede fijar con la variable de entorno WOL_SECRET; si no está, se genera una clave aleatoria la primera vez y se guarda (permisos 600) junto al servicio, para que no cambie al reiniciar. Ya no existe una clave por defecto conocida.
+# EN: Key used to sign CSRF tokens. It can be set with the WOL_SECRET environment variable; if absent, a random key is generated the first time and saved (permissions 600) next to the service, so it does not change on restart. There is no longer a well-known default key.
+def _load_secret() -> str:
+    env = os.environ.get("WOL_SECRET", "").strip()
+    if env: return env
+    f = Path(__file__).parent / ".csrf-secret"
+    try:
+        v = f.read_text().strip()
+        if len(v) >= 32: return v
+    except OSError:
+        pass
+    import secrets
+    v = secrets.token_hex(32)
+    try:
+        fd = os.open(f, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as fh: fh.write(v)
+    except OSError as e:
+        logging.getLogger("wol").warning(f"could not save the CSRF key ({e}); using one valid until restart")
+    return v
+WOL_SECRET = _load_secret()
 # Máximo de encendidos por minuto y por IP (evita que un cliente descontrolado inunde la red con paquetes).
 # EN: Maximum wake-ups per minute and per IP (stops a runaway client from flooding the network with packets).
 RATE_LIMIT  = 10
