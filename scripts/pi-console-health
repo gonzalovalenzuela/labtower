@@ -1,7 +1,11 @@
 #!/bin/bash
 # pi-console-health — show the health of every Pi Console module (no login needed).
 # Exit code: 0 = all ok, 1 = degraded, 2 = failing/unreachable.   Use -j for raw JSON.
+# Consulta el /api/health del panel de administración, que ya reúne la salud de todos los módulos. No necesita sesión (sin ella solo trae niveles).
+# EN: Query the admin panel's /api/health, which already gathers the health of every module. No session needed (without one it only returns levels).
 URL="${PICONSOLE_HEALTH_URL:-http://127.0.0.1:8082/api/health}"
+# Si el panel no responde, el sistema completo se considera caído (código de salida 2).
+# EN: If the panel does not answer, the whole system is considered down (exit code 2).
 if ! out=$(curl -sS --max-time 10 "$URL" 2>&1); then echo "FAIL: admin service not answering ($out)"; exit 2; fi
 if [ "$1" = "-j" ]; then echo "$out"; fi
 python3 - "$out" <<'PY'

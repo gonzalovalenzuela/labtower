@@ -31,6 +31,8 @@ input.err{border-color:var(--red);box-shadow:0 0 0 3px var(--red-dim)}
 </style>
 </head>
 <body>
+<!-- Formulario de inicio de sesión compartido por los módulos. Cada módulo lo abre indicando a dónde volver (dest), a qué endpoint enviar las credenciales (endpoint) y su nombre y color (app, color). -->
+<!-- EN: Login form shared by the modules. Each module opens it saying where to return to (dest), which endpoint to send the credentials to (endpoint) and its name and color (app, color). -->
 <div class="box">
   <div class="logo">
     <div class="logo-ico" id="logo-ico" style="background:var(--blue)">
@@ -60,6 +62,8 @@ document.getElementById('password').addEventListener('keydown', e => {
   if (e.key === 'Enter') doLogin();
 });
 
+// Envía usuario y contraseña por POST. Si el servidor responde ok, redirige al destino; si exige cambiar la contraseña añade ?must_change=1. El servidor es quien decide: aquí no se valida nada de seguridad.
+// EN: Send username and password by POST. If the server answers ok, redirect to the destination; if a password change is required it adds ?must_change=1. The server decides: no security validation happens here.
 async function doLogin() {
   const btn = document.getElementById('btn-login');
   const err = document.getElementById('err');
@@ -88,6 +92,8 @@ async function doLogin() {
   }
 }
 
+// Muestra un mensaje de error encima del formulario.
+// EN: Show an error message above the form.
 function showErr(msg) {
   const el = document.getElementById('err');
   el.textContent = msg; el.className = 'error-msg show';

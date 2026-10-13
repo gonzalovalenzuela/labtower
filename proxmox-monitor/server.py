@@ -3,6 +3,33 @@
 Proxmox Monitor — Dashboard de nodos, VMs y CTs
 API REST de Proxmox VE — sin dependencias externas
 """
+# Proxmox Monitor (puerto 8084): muestra nodos, VMs, contenedores, almacenamiento y Ceph de uno o varios
+# clusters Proxmox VE, hablando con su API REST (HTTPS, puerto 8006) con un token de API.
+#
+# Flujo de datos:
+#   un hilo «poller» por cluster → PVEClient consulta la API → ClusterCache guarda la última lectura
+#   → la página la pide a /api/clusters. El hilo consulta rápido (5 s) mientras alguien mira la
+#   página y lento (60 s) cuando nadie la tiene abierta, para no gastar CPU en la Pi.
+#
+# Seguridad del certificado: Proxmox usa por defecto un certificado propio, así que no se puede
+# validar contra una autoridad pública. En su lugar se «fija» la huella SHA-256 del certificado al
+# agregar el cluster (el usuario la confirma) y cada conexión comprueba que siga siendo la misma
+# ANTES de enviar el token.
+#
+# Estructura: cliente de la API · configuración de clusters · caché e historial · poller · salud · HTTP.
+# EN: Proxmox Monitor (port 8084): shows nodes, VMs, containers, storage and Ceph of one or more Proxmox VE
+#     clusters, talking to their REST API (HTTPS, port 8006) with an API token.
+#
+#     Data flow:
+#       one "poller" thread per cluster → PVEClient queries the API → ClusterCache keeps the last reading
+#       → the page requests it from /api/clusters. The thread polls fast (5 s) while someone is looking at the
+#       page and slowly (60 s) when nobody has it open, so the Pi does not waste CPU.
+#
+#     Certificate security: Proxmox uses its own certificate by default, so it cannot be validated against a
+#     public authority. Instead the SHA-256 fingerprint of the certificate is "pinned" when the cluster is added
+#     (the user confirms it) and every connection checks it is still the same BEFORE sending the token.
+#
+#     Structure: API client · cluster configuration · cache and history · poller · health · HTTP.
 import json, os, re, ssl, sys, time, logging, threading, http.client, hashlib, socket
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
@@ -11,18 +38,34 @@ from urllib.request import urlopen, Request
 from urllib.error import URLError
 from pathlib import Path
 
+# Módulo compartido de autenticación (carpeta hermana /auth).
+# EN: Shared authentication module (sibling folder /auth).
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
 
+# Solo loopback; el acceso desde la red pasa por nginx.
+# EN: Loopback only; network access goes through nginx.
 HOST       = "127.0.0.1"
 PORT       = 8084
 STATIC_DIR = Path(__file__).parent / "static"
+# clusters.json: clusters configurados, con su token de API (por eso el archivo es privado, modo 0600).
+# EN: clusters.json: configured clusters, with their API token (so the file is private, mode 0600).
 DATA_FILE  = Path(__file__).parent / "clusters.json"
+# Ritmos de consulta: rápido cuando hay alguien mirando, lento cuando no (variables PVE_POLL_*).
+# EN: Polling rates: fast when someone is looking, slow when not (PVE_POLL_* variables).
 POLL_ACTIVE = float(os.environ.get("PVE_POLL_ACTIVE", 5))    # seconds, while someone is watching
 POLL_IDLE   = float(os.environ.get("PVE_POLL_IDLE", 60))     # seconds, when nobody has the page open
+# Una página abierta cuenta como «mirando» durante este tiempo desde su última petición.
+# EN: An open page counts as "looking" for this long after its last request.
 VIEW_GRACE  = 30                                              # a viewer counts as active for this long
+# Versión de Proxmox y estado de Ceph cambian poco: se refrescan solo una vez por minuto.
+# EN: Proxmox version and Ceph state change little: they are refreshed only once a minute.
 SLOW_EVERY  = 60                                              # version / ceph refresh period
+# Cada cuántos segundos se guarda una muestra de CPU/RAM por nodo para los gráficos.
+# EN: How often, in seconds, a CPU/RAM sample per node is stored for the charts.
 HIST_EVERY  = 30                                              # node history sampling period
+# Instante de la última petición de un navegador (decide el ritmo de consulta).
+# EN: Time of the last browser request (decides the polling rate).
 _last_view  = 0.0                                             # last time a browser asked for data
 
 logging.basicConfig(level=logging.INFO,
@@ -30,22 +73,32 @@ logging.basicConfig(level=logging.INFO,
 log = logging.getLogger("pve")
 
 # ─── Proxmox API client ────────────────────────────────────────────────────────
+# Error HTTP devuelto por la API de Proxmox; guarda el código para decidir si reintentar o cambiar de método.
+# EN: HTTP error returned by the Proxmox API; keeps the code to decide whether to retry or switch method.
 class PVEHTTPError(RuntimeError):
     def __init__(self, status, reason=""):
         super().__init__(f"HTTP {status}: {reason}")
         self.status = status
 
+# El certificado presentado no coincide con la huella fijada (posible cambio legítimo o intento de suplantación).
+# EN: The presented certificate does not match the pinned fingerprint (a legitimate change or a spoofing attempt).
 class PVECertError(Exception):
     pass
 
+# Normaliza una huella SHA-256 a 64 caracteres hexadecimales en minúscula; devuelve '' si no es válida.
+# EN: Normalise a SHA-256 fingerprint to 64 lowercase hex characters; returns '' if invalid.
 def _fp_norm(fp) -> str:
     """Normalise a SHA-256 fingerprint to 64 lowercase hex chars ('' if it is not one)."""
     h = re.sub(r"[^0-9a-fA-F]", "", fp or "").lower() if isinstance(fp, str) else ""
     return h if len(h) == 64 else ""
 
+# Formato legible de la huella: pares hexadecimales en mayúscula separados por «:» (como la muestra Proxmox).
+# EN: Readable fingerprint format: uppercase hex pairs separated by ":" (as Proxmox shows it).
 def _fp_fmt(h: str) -> str:
     return ":".join(h[i:i + 2] for i in range(0, 64, 2)).upper()
 
+# Obtiene la huella del certificado que presenta un servidor, SIN enviar el token (se usa para que el usuario la confirme).
+# EN: Get the fingerprint of the certificate a server presents, WITHOUT sending the token (so the user can confirm it).
 def fetch_fingerprint(host, port, timeout=8) -> str:
     """SHA-256 of the certificate the server presents (no token is sent). Normalised hex."""
     ctx = ssl.create_default_context()
@@ -55,6 +108,10 @@ def fetch_fingerprint(host, port, timeout=8) -> str:
         with ctx.wrap_socket(raw, server_hostname=host) as tls:
             return hashlib.sha256(tls.getpeercert(binary_form=True)).hexdigest()
 
+# Cliente de la API de Proxmox con una conexión HTTPS persistente (evita repetir el handshake TLS en cada consulta).
+# Autentica con el token de API en la cabecera Authorization.
+# EN: Proxmox API client with a persistent HTTPS connection (avoids repeating the TLS handshake on every query).
+#     Authenticates with the API token in the Authorization header.
 class PVEClient:
     """PVE API client with a persistent HTTPS connection (avoids a TLS handshake on every poll)."""
     def __init__(self, host, port, user, token_name, token_value, verify_ssl=False, fingerprint=None):
@@ -71,6 +128,8 @@ class PVEClient:
         self._conn = None
         self._lock = threading.Lock()
 
+    # Cierra la conexión actual (la siguiente consulta abre una nueva).
+    # EN: Close the current connection (the next query opens a new one).
     def close(self):
         try:
             if self._conn: self._conn.close()
@@ -78,6 +137,10 @@ class PVEClient:
             pass
         self._conn = None
 
+    # GET a la API. Si hay huella fijada, se comprueba apenas se abre la conexión y antes de enviar el token.
+    # Si una conexión persistente quedó vieja, se reabre y se reintenta una vez.
+    # EN: GET to the API. If a fingerprint is pinned, it is checked as soon as the connection opens and before the token is sent.
+    #     If a persistent connection went stale, it is reopened and retried once.
     def get(self, path: str) -> dict:
         with self._lock:
             for attempt in (1, 2):
@@ -104,6 +167,8 @@ class PVEClient:
                     if attempt == 2:
                         raise
 
+    # Una sola llamada trae nodos, VMs, contenedores y almacenamientos de todo el cluster.
+    # EN: A single call brings nodes, VMs, containers and storage of the whole cluster.
     def resources(self) -> list:
         """One call for nodes, VMs, CTs and storages of the whole cluster."""
         return self.get("/cluster/resources").get("data", [])
@@ -123,12 +188,16 @@ class PVEClient:
     def storage(self, node: str) -> list:
         return self.get(f"/nodes/{node}/storage").get("data", [])
 
+    # Estado del cluster (quórum, miembros); si falla devuelve lista vacía.
+    # EN: Cluster status (quorum, members); returns an empty list on failure.
     def cluster_status(self) -> list:
         try:
             return self.get("/cluster/status").get("data", [])
         except Exception:
             return []
 
+    # Versión de Proxmox VE; si falla devuelve cadena vacía.
+    # EN: Proxmox VE version; returns an empty string on failure.
     def version(self) -> str:
         try:
             return self.get("/version").get("data", {}).get("version", "")
@@ -136,28 +205,42 @@ class PVEClient:
             return ""
 
 # ─── Clusters config ──────────────────────────────────────────────────────────
+# Candado de la lista de clusters. Regla: cargar → modificar → guardar dentro de este candado.
+# EN: Lock of the cluster list. Rule: load → modify → save inside this lock.
 _cl_lock = threading.RLock()      # hold around load_clusters() → modify → save_clusters()
 
+# Lee clusters.json (con la red de seguridad de auth.read_json).
+# EN: Read clusters.json (with the safety net of auth.read_json).
 def load_clusters() -> list:
     return auth.read_json(DATA_FILE, [], list)
 
+# Guarda clusters.json de forma atómica y con permisos 0600 (contiene tokens).
+# EN: Save clusters.json atomically with 0600 permissions (it contains tokens).
 def save_clusters(c: list):
     # clusters.json holds the Proxmox API tokens: private to the service (0600)
     with _cl_lock:
         auth.write_json(DATA_FILE, c)
 
 # ─── Cache ────────────────────────────────────────────────────────────────────
+# Última lectura por cluster y hilo de consulta por cluster (protegidos por _glock).
+# EN: Last reading per cluster and polling thread per cluster (protected by _glock).
 _cache:   dict = {}   # { cluster_id: snapshot }
 _pollers: dict = {}
 _glock = threading.Lock()
 
 # ─── Ring buffer de historial CPU/RAM por nodo ────────────────────────────────
+# Historial de CPU y RAM por nodo en memoria: un «buffer circular» de ~12 horas (1 muestra cada 30 s).
+# Se pierde al reiniciar el servicio; es solo para los gráficos pequeños de cada nodo.
+# EN: In-memory CPU and RAM history per node: a ~12-hour "circular buffer" (1 sample every 30 s).
+#     It is lost when the service restarts; it is only for the small charts of each node.
 from collections import deque as _deque
 
 _NODE_HISTORY: dict = {}   # { "cid:node": deque of {ts, cpu, mem_pct} }
 _HIST_MAX = 1440           # ~12h a 30s
 _hist_lock = threading.Lock()
 
+# Agrega una muestra de CPU/RAM de un nodo; fija el muestreo en 30 s aunque se consulte más rápido.
+# EN: Add a CPU/RAM sample of a node; sampling is fixed at 30 s even if polling is faster.
 def push_node_history(cid: str, node_name: str, cpu: float, mem: int, maxmem: int):
     key = f"{cid}:{node_name}"
     mem_pct = round(mem / maxmem * 100, 1) if maxmem > 0 else 0
@@ -168,12 +251,16 @@ def push_node_history(cid: str, node_name: str, cpu: float, mem: int, maxmem: in
             return                         # fixed 30 s sampling even when polling faster
         _NODE_HISTORY[key].append({"ts": int(time.time()), "cpu": round(cpu*100, 1), "mem": mem_pct})
 
+# Muestras guardadas de un nodo.
+# EN: Stored samples of a node.
 def get_node_history(cid: str, node_name: str) -> list:
     key = f"{cid}:{node_name}"
     with _hist_lock:
         return list(_NODE_HISTORY.get(key, []))
 
 
+# Última lectura de un cluster (datos, error y hora). El evento «wake» obliga al poller a refrescar de inmediato.
+# EN: Last reading of a cluster (data, error and time). The "wake" event forces the poller to refresh at once.
 class ClusterCache:
     def __init__(self, cid):
         self.id    = cid
@@ -198,10 +285,14 @@ class ClusterCache:
             return {"id": self.id, "data": dict(self._data),
                     "error": self._err, "ts": self._ts}
 
+# Orden «natural» (pve2 antes que pve10) para que el orden de los nodos no cambie entre consultas.
+# EN: "Natural" order (pve2 before pve10) so the node order does not change between queries.
 def _natural(s: str):
     """Natural sort key (pve2 < pve10) so the default node order never changes between polls."""
     return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", s or "")]
 
+# Plan B cuando /cluster/resources no está disponible (nodo suelto o token con pocos permisos): una consulta por nodo.
+# EN: Plan B when /cluster/resources is unavailable (standalone node or token with few permissions): one query per node.
 def _fetch_legacy(client, name):
     """Fallback when /cluster/resources is unavailable (standalone node, limited token): per-node calls."""
     nodes_data = []
@@ -217,6 +308,8 @@ def _fetch_legacy(client, name):
         nodes_data.append(info)
     return sorted(nodes_data, key=lambda x: _natural(x["name"]))
 
+# Convierte la respuesta de /cluster/resources al formato que usa la página: agrupa VMs, contenedores y almacenamientos por nodo.
+# EN: Convert the /cluster/resources response to the format the page uses: groups VMs, containers and storage by node.
 def _build_from_resources(res: list) -> list:
     """Group /cluster/resources by node, mapped to the shape the UI already uses."""
     nodes, order = {}, []
@@ -252,6 +345,12 @@ def _build_from_resources(res: list) -> list:
             nd["vms"], nd["cts"], nd["storage"] = [], [], []
     return [nodes[n] for n in sorted(order, key=_natural)]
 
+# Bucle del hilo de consulta de un cluster. En cada vuelta: vuelve a leer la configuración (si el cluster se borró, el
+# hilo termina; si se fijó una huella, la adopta), consulta la API, guarda la lectura y duerme según haya o no alguien mirando.
+# Un error se anota y se reintenta: el hilo nunca muere por un fallo de red.
+# EN: Loop of a cluster's polling thread. On each pass: re-read the configuration (if the cluster was deleted the
+#     thread ends; if a fingerprint was pinned, it adopts it), query the API, store the reading and sleep depending on whether someone is looking.
+#     An error is logged and retried: the thread never dies because of a network failure.
 def _poll_cluster(cluster):
     cid = cluster["id"]
     cache = _cache.get(cid)
@@ -320,6 +419,8 @@ def _poll_cluster(cluster):
         cache.wake.wait(POLL_ACTIVE if active else POLL_IDLE)
         cache.wake.clear()
 
+# Garantiza que haya un hilo de consulta vivo para el cluster.
+# EN: Guarantee a live polling thread for the cluster.
 def ensure_poller(cluster):
     cid = cluster["id"]
     with _glock:
@@ -330,16 +431,22 @@ def ensure_poller(cluster):
             _pollers[cid] = t; t.start()
             log.info(f"Poller → {cluster['name']} ({cluster['host']})")
 
+# Olvida un cluster eliminado; su hilo termina solo.
+# EN: Forget a deleted cluster; its thread ends by itself.
 def remove_poller(cid):
     with _glock:
         _cache.pop(cid, None)
         _pollers.pop(cid, None)
 
+# Al arrancar: un hilo de consulta por cada cluster configurado.
+# EN: On startup: one polling thread for each configured cluster.
 def start_all():
     for c in load_clusters():
         ensure_poller(c)
 
 # ─── Health ───────────────────────────────────────────────────────────────────
+# Chequeos de salud de Proxmox: archivo de clusters, hilos vivos y que cada cluster responda con datos recientes.
+# EN: Proxmox health checks: clusters file, live threads and that each cluster answers with recent data.
 def health_report(detailed=False):
     c = auth.check_common()
     c["clusters_file"] = auth.check_file(DATA_FILE)
@@ -361,6 +468,8 @@ def health_report(detailed=False):
     return auth.health_reply("pve", c, detailed)
 
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
+# Manejador HTTP. Cada petición se atiende en su propio hilo.
+# EN: HTTP handler. Each request is served in its own thread.
 class H(BaseHTTPRequestHandler):
     timeout = 30      # a stalled client must not hold a thread forever
     def log_message(self, fmt, *a):
@@ -395,6 +504,10 @@ class H(BaseHTTPRequestHandler):
             self.end_headers(); self.wfile.write(c)
         except FileNotFoundError: self._json(404, {"error": "Not found"})
 
+    # GET: página, versión y salud son públicos; el resto exige sesión con Proxmox «readonly».
+    # Rutas: /api/clusters, /api/debug, /api/me.
+    # EN: GET: page, version and health are public; the rest requires a session with Proxmox "readonly".
+    #     Routes: /api/clusters, /api/debug, /api/me.
     def do_GET(self):
         path = urlparse(self.path).path.rstrip("/") or "/"
         tok  = self._tok()
@@ -411,6 +524,10 @@ class H(BaseHTTPRequestHandler):
         if not auth.check_permission(tok, "pve", "readonly"):
             return self._json(401, {"error": "Unauthorized"})
 
+        # Lista de clusters con su última lectura, historial por nodo y alertas (CPU > 80 % o RAM > 90 %).
+        # Nunca se envía el token de API al navegador. Pedir esta ruta marca «alguien mira» y despierta a los pollers.
+        # EN: Cluster list with their last reading, per-node history and alerts (CPU > 80 % or RAM > 90 %).
+        #     The API token is never sent to the browser. Requesting this route marks "someone is looking" and wakes the pollers.
         if path == "/api/clusters":
             global _last_view
             was_idle = (time.time() - _last_view) >= VIEW_GRACE
@@ -453,6 +570,8 @@ class H(BaseHTTPRequestHandler):
                 out.append({**pub, "snap": snap, "alerts": alerts})
             self._json(200, {"clusters": out})
 
+        # Resumen técnico del estado de cada cluster, útil para diagnosticar.
+        # EN: Technical summary of each cluster's state, useful for diagnosis.
         elif path == "/api/debug":
             out = []
             for cid, cc in _cache.items():
@@ -482,12 +601,18 @@ class H(BaseHTTPRequestHandler):
         else:
             self._json(404, {"error": "Not found"})
 
+    # POST: login/logout, orden de nodos, alta de cluster, huella del certificado, fijar certificado y prueba de conexión.
+    # Las acciones de administración exigen nivel «admin» de Proxmox.
+    # EN: POST: login/logout, node order, add cluster, certificate fingerprint, pin certificate and connection test.
+    #     Administration actions require Proxmox "admin" level.
     def do_POST(self):
         path = urlparse(self.path).path.rstrip("/")
         tok  = self._tok()
         body = self._body()
         if body is None: return self._json(400, {"error": "Invalid request body"})
 
+        # Login con límite de intentos (auth.login); la cookie es HttpOnly y SameSite=Strict.
+        # EN: Login with attempt limiting (auth.login); the cookie is HttpOnly and SameSite=Strict.
         if path == "/api/login":
             u, err = auth.login(self, body.get("username",""), body.get("password",""))
             if not u: return self._json(err[0], {"error": err[1]})
@@ -507,6 +632,8 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/logout":
             auth.delete_session(tok); return self._json(200, {"ok": True})
 
+        # Orden manual de los nodos y cuáles están fijados; se guarda con el cluster, así lo ven todos los navegadores.
+        # EN: Manual node order and which ones are pinned; stored with the cluster, so every browser sees it.
         m = re.match(r"^/api/clusters/([a-zA-Z0-9\-]+)/layout$", path)
         if m:
             # Manual node order and pins, stored with the cluster (shared by every browser, survives restarts/upgrades)
@@ -529,6 +656,10 @@ class H(BaseHTTPRequestHandler):
         if not auth.check_permission(tok, "pve", "readonly"):
             return self._json(401, {"error": "Unauthorized"})
 
+        # Alta de cluster: valida los campos y EXIGE la huella del certificado confirmada por el usuario (flujo «Probar» dos
+        # veces en la página). Rechaza host:puerto duplicado y nunca devuelve el token.
+        # EN: Add a cluster: validates the fields and REQUIRES the certificate fingerprint confirmed by the user (the "Test" two-step
+        #     flow on the page). Rejects a duplicate host:port and never returns the token.
         if path == "/api/clusters":
             if not auth.check_permission(tok, "pve", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
@@ -559,6 +690,8 @@ class H(BaseHTTPRequestHandler):
             # never echo the API token back
             self._json(201, {"cluster": {k: v for k, v in cluster.items() if k != "token_value"}})
 
+        # Paso 1 del alta: devuelve la huella del certificado que presenta el servidor (no se envía ningún token).
+        # EN: Step 1 of adding: returns the fingerprint of the certificate the server presents (no token is sent).
         elif path == "/api/fingerprint":
             if not auth.check_permission(tok, "pve", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
@@ -571,6 +704,10 @@ class H(BaseHTTPRequestHandler):
             except Exception as e:
                 self._json(200, {"ok": False, "error": str(e)})
 
+        # Fijar el certificado de un cluster ya existente en dos pasos: sin huella devuelve la actual para que el usuario la
+        # vea; con huella la guarda solo si coincide con la que el servidor presenta en ese momento.
+        # EN: Pin the certificate of an already existing cluster in two steps: without a fingerprint it returns the current one so the user
+        #     can see it; with a fingerprint it saves it only if it matches what the server presents at that moment.
         elif re.match(r'^/api/clusters/[a-zA-Z0-9\-]+/pin$', path):
             if not auth.check_permission(tok, "pve", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
@@ -595,6 +732,8 @@ class H(BaseHTTPRequestHandler):
                 save_clusters(clusters)
             self._json(200, {"ok": True, "pinned": True})
 
+        # Prueba de conexión (con la huella fijada) sin guardar el cluster: devuelve la versión y la cantidad de nodos.
+        # EN: Connection test (with the pinned fingerprint) without saving the cluster: returns the version and the number of nodes.
         elif path == "/api/test":
             if not auth.check_permission(tok, "pve", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
@@ -619,6 +758,8 @@ class H(BaseHTTPRequestHandler):
         else:
             self._json(404, {"error": "Not found"})
 
+    # DELETE /api/clusters/<id>: elimina un cluster y detiene su consulta (solo admin).
+    # EN: DELETE /api/clusters/<id>: remove a cluster and stop its polling (admin only).
     def do_DELETE(self):
         path = urlparse(self.path).path
         tok  = self._tok()
@@ -634,13 +775,15 @@ class H(BaseHTTPRequestHandler):
         remove_poller(m.group(1))
         self._json(200, {"ok": True})
 
+# Arranque: completa el permiso «pve» de usuarios antiguos (una vez), lanza los hilos de consulta y sirve en loopback.
+# EN: Startup: fills in the "pve" permission of old users (once), starts the polling threads and serves on loopback.
 if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     # Explicit 'pve' level for users that predate the module (one-time migration)
     try:
-        if auth.ensure_permissions(("pve",)): log.info("Permisos 'pve' actualizados")
+        if auth.ensure_permissions(("pve",)): log.info("'pve' permissions updated")
     except Exception as e:
-        log.warning(f"Permisos: {e}")
+        log.warning(f"Permissions: {e}")
 
     log.info(f"Proxmox Monitor en http://{HOST}:{PORT} — poll {POLL_ACTIVE:g}s active / {POLL_IDLE:g}s idle")
     start_all()

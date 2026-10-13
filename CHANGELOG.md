@@ -1,8 +1,13 @@
 # Changelog
 
-## 1.1.9j — 2026-10-12
+## 1.2.0 — 2026-10-12
 
-Reúne los cambios de 1.1.8b y 1.1.8c.
+Primer release de la serie 1.2. Reúne todos los cambios de 1.1.8b a 1.1.9j (listados abajo) y agrega el código comentado.
+
+### Código comentado en español e inglés
+- Todo el código fuente lleva comentarios en **español** y, a continuación, en **inglés** (marcados con `EN:`): los 5 servicios Python, el módulo de autenticación, `teleporter.sh`, los scripts de salud y recursos, los scripts del paquete (`postinst`, `preinst`, `prerm`, `postrm`), la configuración de nginx y las 7 páginas HTML. Cada archivo empieza con un mapa de su estructura y el flujo de datos; cada función explica qué hace y, cuando importa, por qué.
+- Solo se agregaron comentarios; la lógica no cambió. Se verificó que el código sin comentarios quedara idéntico (Python por AST; shell, nginx y HTML por comparación de líneas, más `bash -n` y `node --check`).
+- Los mensajes de log y de error de los servicios que quedaban en español ahora están en inglés («Admin permission required», «Duplicate MAC», «Scan finished…», etc.).
 
 ### Interfaz
 - En pantallas de hasta 960 px la barra lateral estaba oculta y no había forma de cambiar de módulo. Ahora hay un botón de menú (☰) en la barra superior que abre la navegación como panel lateral, con fondo atenuado; se cierra al tocar el fondo, un enlace o con Esc. Aplica a WOL Console, UPS Monitor, Net Monitor, Proxmox y Admin Panel.

@@ -1,22 +1,42 @@
 """Teleporter helpers for the admin panel: list, create, upload, verify and restore
 backups. Privileged work is done by /usr/local/bin/teleporter.sh through sudo; this
 module only validates names/sizes and talks to that script."""
+# Flujo: el panel (usuario sin privilegios «pi-console») NO toca los respaldos directamente. Todo lo que
+# requiere root (crear, restaurar) lo hace /usr/local/bin/teleporter.sh vía sudo con una regla muy
+# acotada en sudoers; aquí solo se validan nombres y tamaños y se habla con ese script.
+# EN: Flow: the panel (unprivileged user "pi-console") does NOT touch backups directly. Everything that
+#     needs root (create, restore) is done by /usr/local/bin/teleporter.sh through sudo with a very narrow
+#     sudoers rule; here only names and sizes are validated and the script is called.
 import os, re, subprocess, time
 from pathlib import Path
 
+# Rutas y límites; las variables TELEPORTER_* permiten cambiarlos en las pruebas.
+# EN: Paths and limits; the TELEPORTER_* variables let tests change them.
 BIN        = os.environ.get("TELEPORTER_BIN", "/usr/local/bin/teleporter.sh")
 SUDO       = os.environ.get("TELEPORTER_SUDO", "sudo -n").split()
 SPOOL      = Path(os.environ.get("TELEPORTER_SPOOL", "/var/lib/pi-console/teleporter"))
 MAX_UPLOAD = int(os.environ.get("TELEPORTER_MAX_UPLOAD", 200 * 1024 * 1024))
+# Nombres de respaldo permitidos: «pi-console-<texto seguro>.tar.gz» (creados por el sistema) o
+# «upload-AAAAMMDD_HHMMSS.tar.gz» (subidos). Cualquier otro nombre se rechaza: evita rutas con «../».
+# EN: Allowed backup names: "pi-console-<safe text>.tar.gz" (created by the system) or
+#     "upload-YYYYMMDD_HHMMSS.tar.gz" (uploaded). Any other name is rejected: this prevents "../" paths.
 NAME_RE    = re.compile(r"^(pi-console-[A-Za-z0-9._-]{1,80}|upload-\d{8}_\d{6})\.tar\.gz$")
+# El script de restauración termina su registro con «RESULT: ok|errors|failed»; así se sabe cómo terminó.
+# EN: The restore script ends its log with "RESULT: ok|errors|failed"; that is how we know how it ended.
 RESULT_RE  = re.compile(r"^RESULT: (\w+)\s*$", re.M)
+# Máximo de caracteres de salida que se devuelven al navegador.
+# EN: Maximum number of output characters returned to the browser.
 OUT_LIMIT  = 20000
 
 
+# ¿El nombre cumple el patrón permitido?
+# EN: Does the name match the allowed pattern?
 def valid_name(name):
     return isinstance(name, str) and bool(NAME_RE.match(name))
 
 
+# Ruta real de un respaldo, solo si el nombre es válido y es un archivo normal (nunca un enlace simbólico).
+# EN: Real path of a backup, only if the name is valid and it is a regular file (never a symbolic link).
 def path_of(name):
     """Return the spool path for a validated name (never follows symlinks)."""
     if not valid_name(name):
@@ -25,14 +45,22 @@ def path_of(name):
     return p if p.is_file() and not p.is_symlink() else None
 
 
+# ¿Está instalado teleporter.sh?
+# EN: Is teleporter.sh installed?
 def available():
     return os.path.isfile(BIN)
 
 
+# Recorta la salida larga conservando el final, que es lo que suele importar.
+# EN: Trim long output keeping the end, which is usually what matters.
 def _tail(text, limit=OUT_LIMIT):
     return text if len(text) <= limit else "…" + text[-limit:]
 
 
+# Ejecuta teleporter.sh (con sudo si hace falta) y devuelve (éxito, salida). Cubre los fallos típicos:
+# tiempo agotado, script ausente o error al lanzarlo.
+# EN: Run teleporter.sh (with sudo if needed) and return (success, output). Covers the typical failures:
+#     timeout, missing script or error when launching it.
 def run(args, sudo=False, timeout=180):
     cmd = (SUDO if sudo else []) + [BIN] + args
     try:
@@ -47,6 +75,8 @@ def run(args, sudo=False, timeout=180):
     return p.returncode == 0, _tail(out.strip())
 
 
+# Lista los respaldos de la carpeta de intercambio, del más nuevo al más viejo, ignorando todo lo que no tenga nombre válido.
+# EN: List the backups in the exchange folder, newest first, ignoring anything without a valid name.
 def list_backups():
     items = []
     try:
@@ -62,6 +92,8 @@ def list_backups():
     return items
 
 
+# Pide a teleporter.sh crear un respaldo (como root) y lee de su salida el nombre del archivo generado.
+# EN: Ask teleporter.sh to create a backup (as root) and read the generated file name from its output.
 def create_backup():
     ok, out = run(["gui-backup"], sudo=True, timeout=300)
     name = None
@@ -71,6 +103,10 @@ def create_backup():
     return ok and name is not None, name, out
 
 
+# Guarda un respaldo subido, leyéndolo por bloques de 1 MB a un temporal privado (0600). Comprueba tamaño,
+# que llegue completo y que empiece con la firma de gzip; solo entonces lo renombra a «upload-<fecha>».
+# EN: Save an uploaded backup, reading it in 1 MB blocks into a private temp file (0600). Checks the size,
+#     that it arrives complete and that it starts with the gzip signature; only then renames it to "upload-<date>".
 def save_upload(rfile, length):
     """Stream `length` bytes from rfile into the spool. Returns (name, error)."""
     if length <= 0:
@@ -116,6 +152,8 @@ def save_upload(rfile, length):
         return None, f"Could not save the upload: {e}"
 
 
+# Verifica un respaldo sin cambiar nada (no necesita root).
+# EN: Verify a backup without changing anything (no root needed).
 def verify(name):
     p = path_of(name)
     if not p:
@@ -123,6 +161,8 @@ def verify(name):
     return run(["check", str(p)], sudo=False, timeout=180)
 
 
+# Lanza la restauración como proceso aparte. El panel se reinicia durante ella, por eso no se espera el resultado.
+# EN: Start the restore as a separate process. The panel restarts during it, so the result is not awaited.
 def start_restore(name):
     """Restore from the panel. NUT and nginx are never restored here (CLI only: see teleporter.sh)."""
     if not path_of(name):
@@ -131,6 +171,8 @@ def start_restore(name):
     return ok and "RESTORE_STARTED=1" in out, out
 
 
+# Borra un respaldo (solo con nombre válido).
+# EN: Delete a backup (only with a valid name).
 def delete(name):
     p = path_of(name)
     if not p:
@@ -142,6 +184,10 @@ def delete(name):
         return False
 
 
+# Estado de la última restauración leyendo restore.log: idle (nunca), running (reciente y sin resultado),
+# ok / errors / failed (según el RESULT final) o failed si pasaron 15 min sin terminar.
+# EN: State of the last restore read from restore.log: idle (never), running (recent and no result),
+#     ok / errors / failed (from the final RESULT) or failed if 15 min passed without finishing.
 def restore_status():
     log = SPOOL / "restore.log"
     try:

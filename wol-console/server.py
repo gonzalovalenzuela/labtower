@@ -1,22 +1,52 @@
 #!/usr/bin/env python3
 """WOL Console — Backend con auth compartido."""
+# WOL Console (puerto 8080): lista de equipos y envío de «magic packets» Wake-on-LAN.
+#
+# Cómo funciona un magic packet: un datagrama UDP de broadcast con 6 bytes 0xFF seguidos de la MAC
+# del equipo repetida 16 veces. La tarjeta de red del equipo apagado lo reconoce y enciende la placa.
+#
+# Estructura del archivo:
+#   · utilidades (límite de tasa, token CSRF, validación de MAC, broadcast, ping)
+#   · envío del paquete y registro de encendidos (wake_log.json)
+#   · lista de equipos (devices.json) y datos compartidos con Net Monitor
+#   · salud (/api/health) y manejador HTTP (GET, POST, DELETE)
+# EN: WOL Console (port 8080): device list and sending Wake-on-LAN "magic packets".
+#
+#     How a magic packet works: a broadcast UDP datagram with 6 bytes of 0xFF followed by the device's
+#     MAC repeated 16 times. The network card of the powered-off device recognises it and switches the board on.
+#
+#     File structure:
+#       · utilities (rate limit, CSRF token, MAC validation, broadcast, ping)
+#       · packet sending and wake log (wake_log.json)
+#       · device list (devices.json) and data shared with Net Monitor
+#       · health (/api/health) and HTTP handler (GET, POST, DELETE)
 import json, os, socket, re, sys, time, logging, hashlib, hmac, threading
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
 from urllib.parse import urlparse
 from pathlib import Path
 
+# El módulo compartido de autenticación está en la carpeta hermana /auth.
+# EN: The shared authentication module is in the sibling folder /auth.
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
 
+# Configuración y rutas de datos. HOST es solo loopback: el acceso desde la red pasa por nginx.
+# EN: Configuration and data paths. HOST is loopback only: network access goes through nginx.
 PORT       = 8080
 HOST       = "127.0.0.1"
 DATA_FILE  = Path(__file__).parent / "devices.json"
 LOG_FILE   = Path(__file__).parent / "wake_log.json"
 # Net Monitor host table (shared info: MAC, IP, name, type). Read-only here.
+# Tabla de hosts de Net Monitor (solo lectura aquí): permite autocompletar equipos y mostrar si están en línea.
+# EN: Net Monitor host table (read-only here): lets devices be autocompleted and shows whether they are online.
 NET_HOSTS_FILE = Path(os.environ.get("NET_HOSTS_FILE", str(Path(__file__).parent.parent / "net-monitor" / "hosts.json")))
 STATIC_DIR = Path(__file__).parent / "static"
+# Clave para firmar los tokens CSRF; se puede cambiar con la variable de entorno WOL_SECRET.
+# EN: Key used to sign CSRF tokens; can be changed with the WOL_SECRET environment variable.
 WOL_SECRET = os.environ.get("WOL_SECRET", "cambiar-esta-clave")
+# Máximo de encendidos por minuto y por IP (evita que un cliente descontrolado inunde la red con paquetes).
+# EN: Maximum wake-ups per minute and per IP (stops a runaway client from flooding the network with packets).
 RATE_LIMIT  = 10
 
 logging.basicConfig(level=logging.INFO,
@@ -24,8 +54,12 @@ logging.basicConfig(level=logging.INFO,
 log = logging.getLogger("wol")
 
 # ─── Rate limiting ────────────────────────────────────────────────────────────
+# Contadores de encendidos recientes por IP.
+# EN: Counters of recent wake-ups per IP.
 _rate: dict = {}
 _rate_lock = threading.Lock()
+# True si la IP aún puede encender equipos este minuto. Registra el intento y limpia clientes viejos para que la tabla no crezca.
+# EN: True if the IP can still wake devices this minute. Records the attempt and cleans old clients so the table does not grow.
 def check_rate(ip):
     now = time.time()
     with _rate_lock:
@@ -38,10 +72,14 @@ def check_rate(ip):
         return True
 
 # ─── CSRF token ───────────────────────────────────────────────────────────────
+# Token CSRF: HMAC del bloque de 5 minutos actual. No se guarda nada; basta recalcularlo.
+# EN: CSRF token: HMAC of the current 5-minute block. Nothing is stored; it is simply recomputed.
 def gen_token():
     ts = str(int(time.time()//300))
     return hmac.new(WOL_SECRET.encode(), ts.encode(), hashlib.sha256).hexdigest()[:32]
 
+# Acepta el token del bloque actual y el anterior, para que no falle justo en el cambio de bloque.
+# EN: Accepts the token of the current and the previous block, so it does not fail right at the block change.
 def valid_token(t):
     for d in (0,-1):
         ts = str(int(time.time()//300)+d)
@@ -50,27 +88,41 @@ def valid_token(t):
     return False
 
 # ─── MAC validation ───────────────────────────────────────────────────────────
+# MAC válida: 6 pares hexadecimales separados por «:» o «-».
+# EN: Valid MAC: 6 hexadecimal pairs separated by ":" or "-".
 _MAC = re.compile(r'^([0-9A-Fa-f]{2}[:\-]){5}[0-9A-Fa-f]{2}$')
+# Normaliza a MAYÚSCULAS con «:»; devuelve None si no es una MAC válida.
+# EN: Normalise to UPPERCASE with ":"; returns None if it is not a valid MAC.
 def norm_mac(raw):
     raw = raw.strip()
     return raw.upper().replace("-",":") if _MAC.match(raw) else None
 
 # ─── Broadcast IP ─────────────────────────────────────────────────────────────
+# IP de este equipo en la LAN: se abre un socket UDP hacia afuera (sin enviar nada) y se lee la IP de origen que eligió el sistema.
+# EN: This machine's LAN IP: a UDP socket is opened outwards (nothing is sent) and the source IP chosen by the system is read.
 def _local_ip():
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.connect(("8.8.8.8", 80)); return s.getsockname()[0]
     except: return "127.0.0.1"
 
+# Dirección de broadcast de la subred, suponiendo /24 (x.x.x.255). Se puede forzar con WOL_BROADCAST.
+# EN: Broadcast address of the subnet, assuming /24 (x.x.x.255). Can be forced with WOL_BROADCAST.
 def _broadcast():
     return _local_ip().rsplit(".",1)[0] + ".255"
 
 # ─── Ping (para verificar si ya está online) ──────────────────────────────────
+# Host permitido para hacer ping: debe empezar con letra o número, así nunca se interpreta como opción de línea de comandos.
+# EN: Host allowed for ping: must start with a letter or digit, so it is never interpreted as a command-line option.
 _HOST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.\-]{0,252}$")
+# True si el texto es una IP o nombre de host razonable.
+# EN: True if the text is a reasonable IP or host name.
 def valid_host(h) -> bool:
     """IPv4 or hostname; never something that could be read as a command-line option."""
     return isinstance(h, str) and bool(_HOST_RE.match(h))
 
+# Un solo ping con tiempo límite. Se usa para saber si un equipo ya está encendido antes de despertarlo.
+# EN: A single ping with a timeout. Used to know whether a device is already on before waking it.
 def ping_host(ip: str, timeout: float = 1.0) -> bool:
     """Retorna True si el host responde a ping."""
     if not valid_host(ip): return False
@@ -83,6 +135,10 @@ def ping_host(ip: str, timeout: float = 1.0) -> bool:
         return False
 
 # ─── WOL ──────────────────────────────────────────────────────────────────────
+# Arma y envía el magic packet sin dependencias externas. Se manda al broadcast de la subred y a 255.255.255.255 por el
+# puerto UDP del equipo (normalmente 9). Falla solo si NO se pudo enviar a ningún destino.
+# EN: Build and send the magic packet with no external dependencies. It goes to the subnet broadcast and to 255.255.255.255 on
+#     the device's UDP port (normally 9). Fails only if it could NOT be sent to any destination.
 def send_wol(mac, port):
     """Send a magic packet natively (no external `wakeonlan` package needed).
 
@@ -111,11 +167,17 @@ def send_wol(mac, port):
     log.info(f"Magic packet → MAC={hexmac} {','.join(dict.fromkeys(targets))}:{port}")
 
 # ─── Wake log ─────────────────────────────────────────────────────────────────
+# El registro de encendidos guarda las últimas 500 entradas; el candado evita que dos hilos lo escriban a la vez.
+# EN: The wake log keeps the last 500 entries; the lock stops two threads from writing it at once.
 _log_lock = threading.Lock()
 
+# Lee wake_log.json (con la red de seguridad de auth.read_json).
+# EN: Read wake_log.json (with the safety net of auth.read_json).
 def load_wake_log() -> list:
     return auth.read_json(LOG_FILE, [], list)
 
+# Agrega una entrada y conserva solo las últimas 500.
+# EN: Add an entry and keep only the last 500.
 def append_wake_log(entry: dict):
     with _log_lock:
         entries = load_wake_log()
@@ -124,20 +186,32 @@ def append_wake_log(entry: dict):
         auth.write_json(LOG_FILE, entries, mode=0o644)
 
 # ─── Devices ──────────────────────────────────────────────────────────────────
+# Candado de la lista de equipos. Regla: cargar → modificar → guardar siempre dentro de este candado.
+# EN: Lock of the device list. Rule: load → modify → save always inside this lock.
 _dev_lock = threading.RLock()     # hold around load_devices() → modify → save_devices()
 
+# Lee devices.json (lista vacía si no existe).
+# EN: Read devices.json (empty list if missing).
 def load_devices():
     return auth.read_json(DATA_FILE, [], list)
 
+# Guarda la lista de equipos de forma atómica.
+# EN: Save the device list atomically.
 def save_devices(devs):
     with _dev_lock:
         auth.write_json(DATA_FILE, devs, mode=0o644)
 
 # ─── Net Monitor (shared host info) ───────────────────────────────────────────
+# MAC reducida a 12 dígitos hexadecimales en minúscula, sirve de clave para cruzar equipos con hosts de Net Monitor.
+# EN: MAC reduced to 12 lowercase hex digits; used as the key to match devices with Net Monitor hosts.
 def mac_key(raw):
     h = re.sub(r"[^0-9a-fA-F]", "", raw or "").lower()
     return h if len(h) == 12 else ""
 
+# Hosts de Net Monitor que tienen MAC, indexados por mac_key, con nombre, IP, fabricante, tipo y si están en línea.
+# Devuelve None si el archivo no está disponible (Net Monitor es opcional).
+# EN: Net Monitor hosts that have a MAC, indexed by mac_key, with name, IP, vendor, type and whether they are online.
+#     Returns None if the file is not available (Net Monitor is optional).
 def load_net_hosts():
     """Hosts known to Net Monitor that have a MAC, as {mac_key: info}. Empty if unavailable."""
     try:
@@ -156,6 +230,8 @@ def load_net_hosts():
                   "online": bool(h.get("online"))}
     return out
 
+# Valida un equipo nuevo: nombre no vacío, MAC válida, puerto 1-65535 y categoría conocida. Devuelve (ok, mensaje).
+# EN: Validate a new device: non-empty name, valid MAC, port 1-65535 and known category. Returns (ok, message).
 def validate_device(d):
     if not isinstance(d.get("name"), str) or not d["name"].strip():
         return False, "Invalid name"
@@ -169,6 +245,8 @@ def validate_device(d):
     return True, ""
 
 # ─── Health ───────────────────────────────────────────────────────────────────
+# Chequeos de salud de WOL: archivos de datos, tabla de Net Monitor (opcional) y que la máquina tenga una IP de LAN.
+# EN: WOL health checks: data files, Net Monitor table (optional) and that the machine has a LAN IP.
 def health_report(detailed=False):
     c = auth.check_common()
     c["devices"]  = auth.check_file(DATA_FILE)
@@ -181,12 +259,16 @@ def health_report(detailed=False):
     return auth.health_reply("wol", c, detailed)
 
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
+# Manejador HTTP. Cada petición se atiende en su propio hilo.
+# EN: HTTP handler. Each request is served in its own thread.
 class H(BaseHTTPRequestHandler):
     timeout = 30      # a stalled client must not hold a thread forever
 
     def log_message(self, fmt, *a):
         if int(a[1]) >= 400: log.warning(f"{self.client_address[0]} {a[1]}")
 
+    # IP del cliente (nginx la pasa en X-Forwarded-For); se usa para el límite de encendidos.
+    # EN: Client IP (nginx passes it in X-Forwarded-For); used for the wake-up limit.
     def _ip(self):
         fwd = self.headers.get("X-Forwarded-For")
         return fwd.split(",")[0].strip() if fwd else self.client_address[0]
@@ -221,6 +303,10 @@ class H(BaseHTTPRequestHandler):
             self.end_headers(); self.wfile.write(c)
         except FileNotFoundError: self._json(404, {"error": "Not found"})
 
+    # GET: página, versión, token CSRF y salud son públicos; el resto exige sesión con WOL «readonly».
+    # Rutas: /api/devices, /api/netmonitor/hosts, /api/wake_log, /api/config, /api/me.
+    # EN: GET: page, version, CSRF token and health are public; the rest requires a session with WOL "readonly".
+    #     Routes: /api/devices, /api/netmonitor/hosts, /api/wake_log, /api/config, /api/me.
     def do_GET(self):
         path = urlparse(self.path).path.rstrip("/") or "/"
         tok  = self._tok()
@@ -240,6 +326,10 @@ class H(BaseHTTPRequestHandler):
         if not auth.check_permission(tok, "wol", "readonly"):
             return self._json(401, {"error": "Unauthorized"})
 
+        # Lista de equipos. A cada uno se le agrega cuándo y quién lo despertó por última vez (desde wake_log) y,
+        # si el usuario tiene permiso de Net Monitor, su estado de red.
+        # EN: Device list. Each one gets when and by whom it was last woken (from wake_log) and,
+        #     if the user has Net Monitor permission, its network state.
         if path == "/api/devices":
             devs = load_devices()
             wake_log = load_wake_log()
@@ -260,6 +350,8 @@ class H(BaseHTTPRequestHandler):
                     if n: d["net"] = {k: n[k] for k in ("ip", "name", "online", "device_type", "vendor")}
             self._json(200, {"devices": devs})
 
+        # Hosts de Net Monitor para agregarlos como equipos WOL; marca cuáles ya están en la lista.
+        # EN: Net Monitor hosts to add them as WOL devices; marks which are already in the list.
         elif path == "/api/netmonitor/hosts":
             if not auth.check_permission(tok, "net", "readonly"):
                 return self._json(403, {"error": "Net Monitor permission required"})
@@ -271,10 +363,14 @@ class H(BaseHTTPRequestHandler):
             hosts.sort(key=lambda h: (h["in_wol"], (h["name"] or h["ip"]).lower()))
             self._json(200, {"available": True, "hosts": hosts})
 
+        # Últimos 100 encendidos, del más reciente al más antiguo.
+        # EN: Last 100 wake-ups, newest first.
         elif path == "/api/wake_log":
             entries = load_wake_log()
             self._json(200, {"log": list(reversed(entries[-100:]))})
 
+        # Datos que la página muestra en el instructivo (IP y puerto del servidor).
+        # EN: Data the page shows in the help section (server IP and port).
         elif path == "/api/config":
             self._json(200, {"server_host": _local_ip(), "port": PORT})
 
@@ -285,12 +381,18 @@ class H(BaseHTTPRequestHandler):
         else:
             self._json(404, {"error": "Not found"})
 
+    # POST: login/logout, alta de equipos, ping, encendido de uno y encendido de todos.
+    # Orden: login (público) → exigir sesión → rutas protegidas según el nivel necesario.
+    # EN: POST: login/logout, add device, ping, wake one and wake all.
+    #     Order: login (public) → require a session → protected routes according to the level needed.
     def do_POST(self):
         path = urlparse(self.path).path.rstrip("/")
         tok  = self._tok()
         body = self._body()
         if body is None: return self._json(400, {"error": "Invalid request body"})
 
+        # Login con límite de intentos (auth.login); la cookie es HttpOnly y SameSite=Strict.
+        # EN: Login with attempt limiting (auth.login); the cookie is HttpOnly and SameSite=Strict.
         if path == "/api/login":
             u, err = auth.login(self, body.get("username",""), body.get("password",""))
             if not u: return self._json(err[0], {"error": err[1]})
@@ -313,9 +415,11 @@ class H(BaseHTTPRequestHandler):
         if not auth.check_permission(tok, "wol", "readonly"):
             return self._json(401, {"error": "Unauthorized"})
 
+        # Alta de equipo (solo admin): valida, normaliza la MAC y rechaza duplicados. Bajo el candado para no pisar cambios.
+        # EN: Add a device (admin only): validates, normalises the MAC and rejects duplicates. Under the lock so changes are not overwritten.
         if path == "/api/devices":
             if not auth.check_permission(tok, "wol", "admin"):
-                return self._json(403, {"error": "Requiere permiso admin"})
+                return self._json(403, {"error": "Admin permission required"})
             ok2, msg = validate_device(body)
             if not ok2: return self._json(400, {"error": msg})
             mac  = norm_mac(body["mac"])
@@ -323,7 +427,7 @@ class H(BaseHTTPRequestHandler):
             with _dev_lock:                       # load → modify → save must not interleave
                 devs = load_devices()
                 if any(d["mac"] == mac for d in devs):
-                    return self._json(409, {"error": "MAC duplicada"})
+                    return self._json(409, {"error": "Duplicate MAC"})
                 dev = {"id": str(uuid.uuid4()), "name": body["name"].strip()[:40],
                        "mac": mac, "ip": (body.get("ip") or "").strip() or None,
                        "port": int(body.get("port",9)),
@@ -331,21 +435,27 @@ class H(BaseHTTPRequestHandler):
                 devs.append(dev); save_devices(devs)
             self._json(201, {"device": dev})
 
+        # Comprueba si un equipo ya está en línea (cualquier usuario con acceso a WOL).
+        # EN: Check whether a device is already online (any user with WOL access).
         elif path == "/api/ping":
             # Verificar si un equipo ya está online antes de despertar
             if not auth.check_permission(tok, "wol", "readonly"):
                 return self._json(403, {"error": "Unauthorized"})
             ip = (body.get("ip") or "").strip()
             if not ip:
-                return self._json(400, {"error": "IP requerida"})
+                return self._json(400, {"error": "IP required"})
             if not valid_host(ip):
                 return self._json(400, {"error": "Invalid IP or host"})
             online = ping_host(ip)
             self._json(200, {"online": online, "ip": ip})
 
+        # Despierta un equipo (permiso «execute», con límite por IP). Si ya responde a ping avisa y no envía, salvo que
+        # llegue force=true. La IP de Net Monitor tiene prioridad porque es la más reciente. Cada envío queda en el registro.
+        # EN: Wake a device ("execute" permission, with a per-IP limit). If it already answers ping it warns and does not send, unless
+        #     force=true arrives. The Net Monitor IP takes priority because it is the most recent. Every send is logged.
         elif path == "/api/wake":
             if not auth.check_permission(tok, "wol", "execute"):
-                return self._json(403, {"error": "Requiere permiso execute"})
+                return self._json(403, {"error": "Execute permission required"})
             if not check_rate(self._ip()):
                 return self._json(429, {"error": "Rate limit"})
             devs = load_devices()
@@ -378,9 +488,11 @@ class H(BaseHTTPRequestHandler):
             except Exception as e:
                 log.error(f"WOL error: {e}"); self._json(500, {"error": str(e)})
 
+        # Despierta todos los equipos de la lista; devuelve cuántos se enviaron y los errores por equipo.
+        # EN: Wake every device in the list; returns how many were sent and the errors per device.
         elif path == "/api/wake_all":
             if not auth.check_permission(tok, "wol", "execute"):
-                return self._json(403, {"error": "Requiere permiso execute"})
+                return self._json(403, {"error": "Execute permission required"})
             devs = load_devices()
             sess = auth.get_session(tok)
             username = sess["username"] if sess else "?"
@@ -406,11 +518,13 @@ class H(BaseHTTPRequestHandler):
         else:
             self._json(404, {"error": "Not found"})
 
+    # DELETE /api/devices/<id>: elimina un equipo (solo admin). El id debe ser un UUID.
+    # EN: DELETE /api/devices/<id>: remove a device (admin only). The id must be a UUID.
     def do_DELETE(self):
         path = urlparse(self.path).path
         tok  = self._tok()
         if not auth.check_permission(tok, "wol", "admin"):
-            return self._json(403, {"error": "Requiere permiso admin"})
+            return self._json(403, {"error": "Admin permission required"})
         m = re.match(r'^/api/devices/([0-9a-f\-]{36})$', path)
         if not m: return self._json(400, {"error": "Invalid ID"})
         with _dev_lock:
@@ -420,6 +534,8 @@ class H(BaseHTTPRequestHandler):
             save_devices(new)
         self._json(200, {"ok": True})
 
+# Arranque del servidor en loopback, un hilo por petición; Ctrl-C termina limpio.
+# EN: Start the server on loopback, one thread per request; Ctrl-C ends cleanly.
 if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     log.info(f"WOL Console en http://{HOST}:{PORT}")

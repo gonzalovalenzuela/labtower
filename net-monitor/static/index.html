@@ -231,6 +231,8 @@ td{padding:10px 14px;vertical-align:middle}
 </head>
 <body>
 
+<!-- Net Monitor (página del módulo, servida en /net/). Estructura: login · barra lateral · filtros y estadísticas · tabla de equipos descubiertos · paneles SNMP y Pi-hole · script. -->
+<!-- EN: Net Monitor (module page, served at /net/). Structure: login · sidebar · filters and statistics · table of discovered devices · SNMP and Pi-hole panels · script. -->
 <!-- Login -->
 <div id="login-screen">
   <div class="login-box">
@@ -541,7 +543,11 @@ const LANG={
 };
 let _lang=localStorage.getItem('pi-lang')||'en';
 var _i18nReady=false;
+// Traducción: busca la clave en el idioma activo (admite textos con función para incluir valores).
+// EN: Translation: looks the key up in the active language (supports function texts that take values).
 function t(k,...args){const v=(LANG[_lang]||LANG.en)[k]||(LANG.en)[k]||k;return typeof v==='function'?v(...args):v;}
+// Tipos de dispositivo y su ícono/color. devType() cae en «other» si el servidor envía un tipo que esta página no conoce.
+// EN: Device types and their icon/color. devType() falls back to "other" if the server sends a type this page does not know.
 const DEVICE_TYPES=['computer','phone','router','switch','ap','storage','tv','camera','appliance','printer','tablet','other'];
 const TYPE_META={computer:{icon:'💻',key:'tComputer',color:'#4361ee'},router:{icon:'🌐',key:'tRouter',color:'#f4a261'},
   switch:{icon:'🔀',key:'tSwitch',color:'#2a9d8f'},ap:{icon:'📡',key:'tAp',color:'#9b5de5'},
@@ -549,7 +555,11 @@ const TYPE_META={computer:{icon:'💻',key:'tComputer',color:'#4361ee'},router:{
   tv:{icon:'📺',key:'tTv',color:'#e63946'},camera:{icon:'📷',key:'tCamera',color:'#6c757d'},appliance:{icon:'🏠',key:'tAppliance',color:'#d4a017'},printer:{icon:'🖨️',key:'tPrinter',color:'#7b2cbf'},tablet:{icon:'📲',key:'tTablet',color:'#2a9d8f'},other:{icon:'❔',key:'tOther',color:'#8d99ae'}};
 const devType=h=>TYPE_META[h.device_type]?h.device_type:'other';
 const tType=ty=>t(TYPE_META[ty].key);
+// El servidor guarda «Desconocido» en español; aquí se muestra traducido al idioma de la página.
+// EN: The server stores "Desconocido" in Spanish; here it is shown translated to the page language.
 function tOs(os){return os==='Desconocido'||os==='Unknown'?t('osUnknown'):os;}
+// Cambia el idioma, lo recuerda y vuelve a pintar los textos de la página.
+// EN: Switch the language, remember it and repaint the page texts.
 function setLang(l){
   _lang=l;localStorage.setItem('pi-lang',l);document.documentElement.lang=l;
   document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.getAttribute('data-i18n')));
@@ -561,22 +571,36 @@ function setLang(l){
 }
 (()=>setLang(_lang))();
 
+// Estado: sesión, equipos, filtros activos, búsqueda y equipo expandido.
+// EN: State: session, devices, active filters, search and expanded device.
 let ME=null, hosts=[], filterOs='ALL', filterType='ALL', filterStatus='ALL', searchQ='', expanded=null, pollTimer=null;
 let sortKeyName=null, sortDir=1;   // null = orden por defecto (online primero, luego IP)
 try{const sv=JSON.parse(localStorage.getItem('pi-net-sort')||'null');if(sv&&['status','ip','os','vendor','ports','latency','seen'].includes(sv.k)){sortKeyName=sv.k;sortDir=sv.d===-1?-1:1;}}catch(e){}
+// Refresco en reposo cada 30 s; durante un escaneo baja a 3 s para mostrar el progreso (ver fetchData).
+// EN: Idle refresh every 30 s; during a scan it drops to 3 s to show progress (see fetchData).
 const POLL=30000;
 let _lastDataHash='', _currentPoll=POLL;
 
+// Color e ícono de cada sistema operativo para las etiquetas.
+// EN: Color and icon of each operating system for the badges.
 const OS_COLORS={Windows:'#0078d4',Linux:'#f97316',macOS:'#8b5cf6',iOS:'#22c55e',IoT:'#eab308',Android:'#ef4444',BSD:'#14b8a6',Desconocido:'#94a3b8'};
 const OS_ICONS={Windows:'🪟',Linux:'🐧',macOS:'🍎',iOS:'📱',IoT:'🔌',Android:'🤖',BSD:'😈',Desconocido:'❓'};
 
 // ── Theme ────────────────────────────────────────────────────────────────────
+// Elige el tema (claro, oscuro o automático según el sistema) y lo recuerda (clave pi-theme).
+// EN: Choose the theme (light, dark or automatic following the system) and remember it (key pi-theme).
 function setTheme(t){localStorage.setItem('pi-theme',t);applyTheme(t);['light','dark','system'].forEach(x=>document.getElementById('theme-'+x)?.classList.toggle('active',x===t));}
+// Aplica el tema al documento.
+// EN: Apply the theme to the document.
 function applyTheme(t){const p=t==='system'?(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t;document.documentElement.setAttribute('data-theme',p==='dark'?'dark':'light');}
 (()=>{const t=localStorage.getItem('pi-theme')||'system';applyTheme(t);window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if((localStorage.getItem('pi-theme')||'system')==='system')applyTheme('system');});setTimeout(()=>{['light','dark','system'].forEach(x=>document.getElementById('theme-'+x)?.classList.toggle('active',x===(localStorage.getItem('pi-theme')||'system')));},0);})();
 
 // ── Nav reordenable ───────────────────────────────────────────────────────────
+// ¿Puede editar equipos y cambiar la configuración? (nivel «admin» de Net).
+// EN: Can it edit devices and change the configuration? (Net "admin" level).
 function canAdmin(){return ME&&ME.permissions?.net==='admin';}
+// Barra lateral común: los mismos accesos en todas las páginas. El usuario puede reordenarlos arrastrando (el orden se guarda en el navegador, clave pi-nav-order). «Admin» solo se muestra a administradores.
+// EN: Common sidebar: the same links on every page. The user can reorder them by dragging (the order is stored in the browser, key pi-nav-order). "Admin" is shown to administrators only.
 const _NAV_ITEMS=[
   {id:'wol',  href:'/wol/',   label:'WOL Console', svg:'<polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/>'},
   {id:'nut',  href:'/nut/',   label:'UPS Monitor', svg:'<path d="M5 9V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><rect x="3" y="9" width="18" height="11" rx="2"/><line x1="12" y1="13" x2="12" y2="16"/>'},
@@ -584,13 +608,19 @@ const _NAV_ITEMS=[
   {id:'pve',  href:'/pve/',   label:'Proxmox',     svg:'<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>'},
   {id:'admin',href:'/admin/', label:'Admin Panel', svg:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',adminOnly:true},
 ];
+// Identificador de esta página en la barra lateral (se marca como activa).
+// EN: Identifier of this page in the sidebar (shown as active).
 const _NAV_SELF='net';
 let _navDragSrc=null;
+// Orden guardado de los accesos; si falta alguno nuevo, se agrega al final.
+// EN: Saved order of the links; any new one missing is appended at the end.
 function _navOrder(){
   try{const s=JSON.parse(localStorage.getItem('pi-nav-order')||'[]');
     if(s.length){const ids=_NAV_ITEMS.map(i=>i.id);const o=s.filter(id=>ids.includes(id));ids.forEach(id=>{if(!o.includes(id))o.push(id);});return o;}}catch(e){}
   return _NAV_ITEMS.map(i=>i.id);
 }
+// Dibuja la barra lateral y activa el arrastrar y soltar para reordenar.
+// EN: Draw the sidebar and enable drag and drop to reorder.
 function renderNav(){
   const wrap=document.getElementById('nav-items');if(!wrap)return;
   const order=_navOrder(),isAdmin=canAdmin();
@@ -625,6 +655,8 @@ function renderNav(){
 
 // ── Login ────────────────────────────────────────────────────────────────────
 document.getElementById('l-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+// Inicio de sesión. La cookie la fija el servidor (HttpOnly): el JavaScript nunca guarda el token.
+// EN: Login. The cookie is set by the server (HttpOnly): the JavaScript never stores the token.
 async function doLogin(){
   const btn=document.getElementById('btn-l'),err=document.getElementById('login-err');
   const u=document.getElementById('l-user').value.trim(),p=document.getElementById('l-pass').value;
@@ -640,9 +672,13 @@ async function doLogin(){
   }catch(e){err.textContent='Error: '+e.message;err.className='login-err show';}
   finally{btn.disabled=false;btn.textContent='Entrar';}
 }
+// Pregunta al servidor quién es el usuario; sin sesión o sin acceso a Net devuelve false y se muestra el login.
+// EN: Ask the server who the user is; without a session or without Net access it returns false and the login is shown.
 async function checkSession(){
   try{const r=await fetch('api/me');if(!r.ok)return false;const d=await r.json();if(!d.username)return false;ME=d;return true;}catch{return false;}
 }
+// Muestra nombre y rol y oculta los controles de administración a quien no es admin.
+// EN: Show name and role and hide the admin controls from non-admins.
 function applyPermissions(){
   const _un=String(ME.username||'?');
   document.getElementById('me-name').textContent=_un;
@@ -651,9 +687,13 @@ function applyPermissions(){
   document.getElementById('me-role').textContent=_permKey?t(_permKey):'—';
   renderNav();
 }
+// Cierra la sesión en el servidor y recarga la página.
+// EN: Close the session on the server and reload the page.
 async function logout(){await fetch('api/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});location.reload();}
 
 // ── Init ─────────────────────────────────────────────────────────────────────
+// Arranque tras iniciar sesión: carga la configuración, los equipos y programa el refresco.
+// EN: Startup after login: load the configuration and devices and schedule the refresh.
 async function initApp(){
   updateClock();setInterval(updateClock,1000);
   document.getElementById('search-input').addEventListener('input',e=>{searchQ=e.target.value.trim().toLowerCase();renderTable();});
@@ -667,6 +707,8 @@ async function initApp(){
   setInterval(updateNextScan, 5000);
 }
 
+// Muestra el intervalo de escaneo guardado como número + unidad (minutos, horas…).
+// EN: Show the stored scan interval as number + unit (minutes, hours…).
 function loadIntervalFields(secs){
   const min = Math.floor(secs / 60);
   const sec = secs % 60;
@@ -677,6 +719,8 @@ function loadIntervalFields(secs){
   updateNextScan();
 }
 
+// Texto «próximo escaneo en…» calculado con la hora del último escaneo.
+// EN: "Next scan in…" text computed from the last scan time.
 function updateNextScan(){
   const el = document.getElementById('iv-next');
   if(!el) return;
@@ -685,12 +729,16 @@ function updateNextScan(){
   el.textContent = t('every') + ' ' + fmtInterval(secs);
 }
 
+// Lee el campo de intervalo y lo convierte a segundos.
+// EN: Read the interval field and convert it to seconds.
 function getIntervalSecs(){
   const min = parseInt(document.getElementById('iv-min')?.value||0)||0;
   const sec = parseInt(document.getElementById('iv-sec')?.value||0)||0;
   return min*60 + sec;
 }
 
+// Segundos a texto legible.
+// EN: Seconds to readable text.
 function fmtInterval(secs){
   if(secs === 0) return t('manual');
   if(secs < 60)  return secs+'s';
@@ -699,6 +747,8 @@ function fmtInterval(secs){
   return h+'h'+(m?' '+m+'m':'');
 }
 
+// Guarda el nuevo intervalo en el servidor (mínimo 60 s; 0 = solo manual).
+// EN: Save the new interval on the server (minimum 60 s; 0 = manual only).
 async function applyInterval(){
   const secs = getIntervalSecs();
   if(secs < 0){ toast(t('intervalNegative'), true); return; }
@@ -726,6 +776,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
 });
 
+// Descarga los equipos y el estado del escaneo. Durante un escaneo consulta cada 3 s y en reposo cada 30 s. Solo repinta si algo cambió realmente (quickHash), para no parpadear ni gastar CPU.
+// EN: Download the devices and scan state. During a scan it polls every 3 s and at rest every 30 s. It repaints only if something really changed (quickHash), to avoid flicker and wasted CPU.
 async function fetchData(){
   try{
     const r=await fetch('api/hosts');
@@ -756,6 +808,8 @@ async function fetchData(){
   }catch(e){console.error(e);}
 }
 
+// Huella barata de lo que se ve en pantalla; si no cambia entre dos consultas no hay que repintar.
+// EN: Cheap fingerprint of what is on screen; if it does not change between two queries there is nothing to repaint.
 function quickHash(hosts, scan){
   // Hash liviano: IPs online + conteo de puertos + estado del scan
   const onlineKey = hosts.filter(h=>h.online).map(h=>h.ip+h.ports?.length+h.os+h.device_type).sort().join('|');
@@ -765,6 +819,8 @@ function quickHash(hosts, scan){
 }
 
 // ── Scan ─────────────────────────────────────────────────────────────────────
+// Pide al servidor un escaneo completo de la red.
+// EN: Ask the server for a full network scan.
 async function startScan(){
   const btn=document.getElementById('btn-scan');
   btn.disabled=true;btn.innerHTML=`<span class="spin">⟳</span> ${t('scanning')}`;
@@ -776,6 +832,8 @@ async function startScan(){
   }catch(e){toast(e.message,true);btn.disabled=false;btn.innerHTML=`<svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> ${t('scanBtn')}`;}
 }
 
+// Reescanea una sola IP (botón en la fila del equipo).
+// EN: Rescan a single IP (button in the device row).
 async function rescanHost(ip){
   try{
     const r=await fetch('api/scan/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip})});
@@ -785,6 +843,8 @@ async function rescanHost(ip){
   }catch(e){toast(e.message,true);}
 }
 
+// Barra de progreso del escaneo en curso.
+// EN: Progress bar of the scan in progress.
 function updateScanBar(scan){
   if(!scan)return;
   const bar=document.getElementById('scan-bar');
@@ -804,6 +864,8 @@ function updateScanBar(scan){
 }
 
 // ── Filters ───────────────────────────────────────────────────────────────────
+// Filtros por tipo, sistema operativo y estado (en línea / fuera de línea). Se combinan entre sí y con la búsqueda.
+// EN: Filters by type, operating system and status (online / offline). They combine with each other and with the search.
 function setTypeFilter(el){
   document.querySelectorAll('.os-filter[data-type]').forEach(e=>e.classList.remove('active'));
   el.classList.add('active');
@@ -823,6 +885,8 @@ function setStatusFilter(el){
   renderTable();
 }
 
+// Aplica todos los filtros y la búsqueda a la lista de equipos.
+// EN: Apply all the filters and the search to the device list.
 function filtered(){
   return hosts.filter(h=>{
     if(filterOs!=='ALL'&&h.os!==filterOs)return false;
@@ -838,6 +902,8 @@ function filtered(){
 }
 
 // ── Ordenamiento ─────────────────────────────────────────────
+// Ordenamiento: las IP se comparan numéricamente (rellenando cada número a 3 dígitos), no como texto. Sin columna elegida: en línea primero y luego por IP.
+// EN: Sorting: IPs are compared numerically (padding each number to 3 digits), not as text. With no column chosen: online first and then by IP.
 const ipKey=ip=>String(ip).split('.').map(n=>n.padStart(3,'0')).join('');
 const SORT_VALUE={
   status: h=>h.online?0:1,
@@ -849,6 +915,8 @@ const SORT_VALUE={
   latency:h=>h.online&&h.latency?h.latency:null,   // sin dato (offline / sin respuesta) va al final
   seen:   h=>h.last_seen||null,
 };
+// Compara dos equipos según la columna activa.
+// EN: Compare two devices according to the active column.
 function compareHosts(a,b){
   if(!sortKeyName){          // por defecto: online primero, luego IP
     if(a.online!==b.online)return a.online?-1:1;
@@ -880,6 +948,8 @@ function setSort(k){
 function sortKey(e,k){if(e.key==='Enter'||e.key===' '){e.preventDefault();setSort(k);}}
 
 // ── Render ────────────────────────────────────────────────────────────────────
+// Dibuja los filtros con el conteo de equipos de cada tipo.
+// EN: Draw the filters with the count of devices of each type.
 function renderTypeFilters(){
   const c=document.getElementById('type-filters');if(!c)return;
   const counts={ALL:hosts.length};
@@ -926,6 +996,8 @@ function renderOsFilters(){
   });
 }
 
+// Contadores de la cabecera: total, en línea, fuera de línea, nuevos y estado del último escaneo.
+// EN: Header counters: total, online, offline, new and state of the last scan.
 function renderStats(scan){
   const online=hosts.filter(h=>h.online).length;
   const offline=hosts.filter(h=>!h.online).length;
@@ -942,6 +1014,8 @@ function renderStats(scan){
   }
 }
 
+// Dibuja la tabla de equipos y, si hay uno expandido, su detalle (puertos, historial de conexión, edición). Todo texto de la red pasa por esc().
+// EN: Draw the device table and, if one is expanded, its detail (ports, connection history, editing). All network text goes through esc().
 function renderTable(){
   const tbody=document.getElementById('hosts-tbody');
   const list=filtered();
@@ -1100,6 +1174,8 @@ function renderTable(){
 }
 
 // ── SNMP config ───────────────────────────────────────────────────────────────
+// SNMP: panel para configurar un switch/router que aporta la tabla ARP (MAC de equipos en otras subredes). Los secretos no se muestran: el campo vacío significa «conservar».
+// EN: SNMP: panel to configure a switch/router that provides the ARP table (MAC of devices on other subnets). Secrets are not shown: an empty field means "keep".
 let _snmpOpen=false, _snmpHas={};
 const $sn=id=>document.getElementById(id);
 function toggleSnmpPanel(){
@@ -1129,6 +1205,8 @@ function snmpDot(on){
   const d=$sn('snmp-status-dot');if(!d)return;
   d.style.background=on?'var(--teal)':'var(--border-b)';d.style.boxShadow=on?'0 0 0 2px var(--teal-dim)':'none';
 }
+// OUI: base de fabricantes por MAC. Aquí se ve cuántos prefijos hay, se fuerza la actualización y se activa o no la actualización semanal.
+// EN: OUI: MAC-to-vendor database. Here you see how many prefixes there are, force the update and turn the weekly update on or off.
 async function loadOui(){
   try{
     const r=await fetch('api/oui');const d=await r.json();if(!r.ok)return;
@@ -1149,6 +1227,8 @@ async function updateOui(){
 async function saveOuiAuto(){
   try{await fetch('api/oui',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({auto:$sn('oui-auto').checked})});}catch(e){}
 }
+// Carga la configuración SNMP guardada y si snmpwalk está instalado.
+// EN: Load the stored SNMP configuration and whether snmpwalk is installed.
 async function loadSnmp(){
   loadOui();
   try{
@@ -1182,6 +1262,8 @@ async function snmpPost(url,btnId,label){
     const d=await r.json();if(!r.ok)throw new Error(d.error||'Error');return d;
   }finally{btn.disabled=false;btn.textContent=label;}
 }
+// Prueba la configuración SNMP sin guardarla.
+// EN: Test the SNMP configuration without saving it.
 async function testSnmp(){
   snmpStatus(t('snmpTesting'),true);
   try{
@@ -1189,6 +1271,8 @@ async function testSnmp(){
     snmpStatus(`${d.count} ${t('snmpEntries')}`+(d.sample.length?' — '+d.sample.map(x=>x.ip+' '+x.mac).join(', '):''),true);
   }catch(e){snmpStatus(e.message,false);}
 }
+// Guarda la configuración SNMP.
+// EN: Save the SNMP configuration.
 async function saveSnmp(){
   try{
     await snmpPost('api/snmp','btn-sn-save',t('save'));
@@ -1201,6 +1285,8 @@ let _snmpDotDone=false;
 async function refreshSnmpDot(){if(_snmpDotDone)return;_snmpDotDone=true;try{const r=await fetch('api/snmp');if(r.ok){const d=await r.json();snmpDot(!!d.config.enabled);}}catch(e){}}
 
 // ── Pi-hole config ────────────────────────────────────────────────────────────
+// Pi-hole: panel para indicar sus direcciones y contraseña; Net Monitor le pide nombres, MAC y fabricante de cada IP.
+// EN: Pi-hole: panel to enter its addresses and password; Net Monitor asks it for names, MACs and vendors of each IP.
 let _piholeOpen=false;
 function togglePiholePanel(){
   _piholeOpen=!_piholeOpen;
@@ -1235,6 +1321,8 @@ async function loadPiholeConfig(){
   }catch(e){}
 }
 
+// Guarda la configuración de Pi-hole (la contraseña se envía al servidor y nunca se vuelve a mostrar).
+// EN: Save the Pi-hole configuration (the password is sent to the server and never shown again).
 async function savePiholeConfig(){
   const hosts=document.getElementById('ph-hosts').value.trim();
   const pass=document.getElementById('ph-pass').value;
@@ -1272,6 +1360,8 @@ function updatePiholeStatusDot(enabled){
 }
 
 // ── Uptime chart ──────────────────────────────────────────────────────────────
+// Dibuja en un canvas la línea de tiempo de conexiones y desconexiones de un equipo (historial uptime_history).
+// EN: Draw on a canvas the connect/disconnect timeline of a device (uptime_history).
 function drawUptimeChart(ip, history){
   const cid = 'uptime-'+ip.replace(/\./g,'-');
   const canvas = document.getElementById(cid);
@@ -1357,8 +1447,12 @@ function drawAllUptimeCharts(){
 }
 
 // ── Edit OS ───────────────────────────────────────────────────────────────────
+// Edición manual del sistema operativo y del alias de un equipo (admin); lo editado a mano no lo sobrescriben los escaneos siguientes.
+// EN: Manual editing of a device's operating system and alias (admin); what is edited by hand is not overwritten by later scans.
 const OS_LIST = ["Windows","Linux","macOS","iOS","IoT","Android","BSD","Desconocido"];
 
+// Cambia el SO de un equipo.
+// EN: Change a device's OS.
 async function editOs(ip){
   const host = hosts.find(h=>h.ip===ip);
   if(!host) return;
@@ -1407,6 +1501,8 @@ async function editOs(ip){
 }
 
 // ── Edit alias ────────────────────────────────────────────────────────────────
+// Cambia el alias (nombre amigable) de un equipo.
+// EN: Change a device's alias (friendly name).
 async function editAlias(ip){
   const host=hosts.find(h=>h.ip===ip);
   if(!host)return;
@@ -1421,10 +1517,14 @@ async function editAlias(ip){
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+// Escapa HTML antes de insertar texto de usuarios, equipos o la red en la página: evita inyección de código (XSS).
+// EN: Escape HTML before inserting text from users, devices or the network into the page: prevents code injection (XSS).
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function relTime(ts){const d=Math.floor((Date.now()-ts)/1000);if(d<60)return t('ago',d+'s');if(d<3600)return t('ago',Math.floor(d/60)+'m');if(d<86400)return t('ago',Math.floor(d/3600)+'h');return new Date(ts).toLocaleDateString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit'});}
 function updateClock(){const el=document.getElementById('clock');if(el)el.textContent=new Date().toTimeString().slice(0,8);}
 let _tt;
+// Aviso emergente breve (error si isErr).
+// EN: Short pop-up notice (error if isErr).
 function toast(msg,isErr=false){const el=document.getElementById('toast');el.textContent=msg;el.style.background=isErr?'var(--red)':'var(--text)';void el.offsetWidth;el.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>el.classList.remove('show'),3400);}
 
 _i18nReady=true;
@@ -1435,6 +1535,8 @@ updateSortHeaders();
 })();
 
 // ── Mobile navigation drawer ──
+// Menú lateral desplegable en pantallas pequeñas (celular y tablet).
+// EN: Slide-out side menu on small screens (phone and tablet).
 function toggleNav(force){
   const open=force!==undefined?force:!document.body.classList.contains('nav-open');
   document.body.classList.toggle('nav-open',open);
@@ -1448,6 +1550,8 @@ function toggleNav(force){
 })();
 </script>
 <script>
+// Pie con la versión instalada, leída de /api/version. Se repite igual en todas las páginas.
+// EN: Footer with the installed version, read from /api/version. Repeated identically on every page.
 /* Version footer (same snippet in every page): shows the installed Pi Console version */
 (function(){
   var st=document.createElement('style');

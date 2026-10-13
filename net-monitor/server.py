@@ -2,9 +2,36 @@
 """
 Net Monitor — Escaneo de red sin nmap + mapeo de host con mac address + evaluacion de sistema operativo y tipo de dispositivo.
 Detección: TTL + puertos Python puro + HTTP banner + mDNS
+
+EN: Network scan without nmap + host-to-MAC mapping + operating system and device type assessment.
+Detection: TTL + pure-Python ports + HTTP banner + mDNS
 """
+# Net Monitor (puerto 8083): descubre los equipos de la LAN SIN nmap, usando solo Python y utilidades básicas.
+#
+# Cómo identifica cada equipo: ping (da el TTL, que sugiere el sistema operativo), escaneo de puertos TCP,
+# banner HTTP, DNS inverso, MAC (tabla ARP, Pi-hole o SNMP de un switch/router) y fabricante por OUI.
+# Con esas pistas, identify() puntúa el tipo de dispositivo (router, NAS, cámara, teléfono…) y el SO.
+#
+# Flujo: un escaneo recorre todas las IP de la red con un pool de hilos → guarda hosts.json → la página lo lee.
+# Los escaneos se repiten solos cada SCAN_INTERVAL segundos (o solo a mano si es 0).
+#
+# Estructura: configuración · sondeos (ping, puertos, banner) · Pi-hole · SNMP · base OUI de fabricantes ·
+# reglas de identificación · escáner · salud · manejador HTTP.
+# EN: Net Monitor (port 8083): discovers LAN devices WITHOUT nmap, using only Python and basic utilities.
+#
+#     How it identifies each device: ping (gives the TTL, which hints at the operating system), TCP port scan,
+#     HTTP banner, reverse DNS, MAC (ARP table, Pi-hole or SNMP from a switch/router) and vendor from OUI.
+#     With those clues, identify() scores the device type (router, NAS, camera, phone…) and the OS.
+#
+#     Flow: a scan walks every IP of the network with a thread pool → saves hosts.json → the page reads it.
+#     Scans repeat by themselves every SCAN_INTERVAL seconds (or only by hand if it is 0).
+#
+#     Structure: configuration · probes (ping, ports, banner) · Pi-hole · SNMP · OUI vendor database ·
+#     identification rules · scanner · health · HTTP handler.
 import json, os, re, socket, struct, subprocess, sys, time, logging, threading, ipaddress, ssl
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+# Cola de conexiones pendientes más grande que la de fábrica (5), para no rechazar ráfagas.
+# EN: Larger pending-connection queue than the default (5), so bursts are not rejected.
 ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
 from urllib.parse import urlparse
 from pathlib import Path
@@ -15,24 +42,36 @@ try:
 except ImportError:
     pass
 
+# Módulo compartido de autenticación (carpeta hermana /auth).
+# EN: Shared authentication module (sibling folder /auth).
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
 
+# Solo loopback; el acceso desde la red pasa por nginx. hosts.json: equipos descubiertos. config.json: ajustes (SNMP, Pi-hole, intervalo).
+# EN: Loopback only; network access goes through nginx. hosts.json: discovered devices. config.json: settings (SNMP, Pi-hole, interval).
 HOST          = "127.0.0.1"
 PORT          = 8083
 STATIC_DIR    = Path(__file__).parent / "static"
 DATA_FILE     = Path(__file__).parent / "hosts.json"
 CONF_FILE     = Path(__file__).parent / "config.json"
 
+# Candado de config.json. Regla: cargar → modificar → guardar dentro de este candado.
+# EN: Lock of config.json. Rule: load → modify → save inside this lock.
 _cfg_lock = threading.RLock()     # hold around load_config() → modify → save_config()
 
+# Lee config.json (diccionario vacío si no existe o está dañado).
+# EN: Read config.json (empty dictionary if missing or damaged).
 def load_config() -> dict:
     return auth.read_json(CONF_FILE, {}, dict)
 
+# Guarda config.json de forma atómica.
+# EN: Save config.json atomically.
 def save_config(cfg: dict):
     # config.json holds the SNMP community and Pi-hole password: private to the service
     with _cfg_lock:
         auth.write_json(CONF_FILE, cfg)
+# Parámetros del escáner; todos se pueden cambiar con variables de entorno. NETWORK es la red a recorrer, SCAN_PORTS los puertos que se sondean por equipo, PORT_TIMEOUT cuánto se espera por puerto y MAX_WORKERS cuántos equipos se escanean a la vez.
+# EN: Scanner parameters; all can be changed with environment variables. NETWORK is the network to walk, SCAN_PORTS the ports probed per device, PORT_TIMEOUT how long to wait per port and MAX_WORKERS how many devices are scanned at once.
 NETWORK       = os.environ.get("SCAN_NETWORK",   "192.168.0.0/24")
 SCAN_PORTS    = os.environ.get("SCAN_PORTS",     "21,22,23,25,53,80,111,135,139,443,445,548,554,873,1883,2049,3260,3306,3389,5000,5001,5357,5432,5555,5900,6379,7547,8001,8002,8008,8009,8080,8291,8443,9100,27017,62078")
 SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL", 3600))
@@ -44,12 +83,16 @@ logging.basicConfig(level=logging.INFO,
 log = logging.getLogger("net")
 
 # Pi-hole v6 API
+# Pi-hole (API v6) como fuente de nombres, MAC y fabricante. Opcional: sin contraseña no se usa. La caché se refresca cada 30 min.
+# EN: Pi-hole (API v6) as a source of names, MACs and vendors. Optional: it is not used without a password. The cache is refreshed every 30 min.
 PIHOLE_HOSTS  = os.environ.get("PIHOLE_HOSTS",  "192.168.0.2,192.168.0.5")
 PIHOLE_PASS   = os.environ.get("PIHOLE_PASS",   "")
 _pihole_cache: dict = {}   # { ip: {hostname, vendor, mac} }
 _pihole_lock  = threading.Lock()
 _pihole_ts    = 0          # timestamp of last successful fetch
 
+# Nombre del servicio típico de cada puerto, para mostrarlo en la página.
+# EN: Typical service name for each port, to show on the page.
 PORT_NAMES = {
     21:"FTP", 22:"SSH", 23:"Telnet", 25:"SMTP", 53:"DNS",
     80:"HTTP", 139:"NetBIOS", 443:"HTTPS", 445:"SMB",
@@ -61,9 +104,13 @@ PORT_NAMES = {
     8001:"Tizen", 8002:"Tizen-TLS", 8008:"Cast", 8009:"Cast", 8291:"Winbox", 9100:"Print"
 }
 
+# Grupos de sistema operativo que la página ofrece para filtrar y editar.
+# EN: OS groups the page offers for filtering and editing.
 OS_GROUPS = ["Windows", "Linux", "macOS", "iOS", "IoT", "Android", "BSD", "Desconocido"]
 
 # ─── TTL → OS hint ────────────────────────────────────────────────────────────
+# El TTL inicial del ping delata la familia del SO: 64 Linux/Apple/Android, 128 Windows, 255 equipos de red.
+# EN: The initial ping TTL reveals the OS family: 64 Linux/Apple/Android, 128 Windows, 255 network equipment.
 def ttl_os_hint(ttl: int) -> str:
     if ttl <= 0:   return ""
     if ttl <= 64:  return "linux_or_apple"   # Linux / macOS / iOS / Android
@@ -71,6 +118,8 @@ def ttl_os_hint(ttl: int) -> str:
     return "network_device"                   # routers, IoT
 
 # ─── Ping con TTL ─────────────────────────────────────────────────────────────
+# Un ping con tiempo límite: devuelve (responde, TTL, latencia en ms). Se usa el comando del sistema porque enviar ICMP directo requiere root.
+# EN: One ping with a timeout: returns (alive, TTL, latency in ms). The system command is used because sending ICMP directly requires root.
 def ping_ttl(ip: str) -> tuple[bool, int, float]:
     """Retorna (alive, ttl, latency_ms). TTL=0, latency=0 si no responde."""
     try:
@@ -91,6 +140,8 @@ def ping_ttl(ip: str) -> tuple[bool, int, float]:
         return False, 0, 0.0
 
 # ─── Port scan (Python puro) ──────────────────────────────────────────────────
+# ¿Acepta conexiones TCP el puerto? (conexión completa, sin paquetes especiales).
+# EN: Does the port accept TCP connections? (full connection, no special packets).
 def check_port(ip: str, port: int) -> bool:
     try:
         with socket.create_connection((ip, port), timeout=PORT_TIMEOUT):
@@ -98,6 +149,8 @@ def check_port(ip: str, port: int) -> bool:
     except Exception:
         return False
 
+# Sondea la lista de puertos en paralelo y devuelve los abiertos, ordenados.
+# EN: Probe the list of ports in parallel and return the open ones, sorted.
 def scan_ports(ip: str, ports: list[int]) -> list[int]:
     """Escanea lista de puertos en paralelo, retorna los abiertos."""
     open_ports = []
@@ -109,6 +162,8 @@ def scan_ports(ip: str, ports: list[int]) -> list[int]:
     return sorted(open_ports)
 
 # ─── HTTP banner ──────────────────────────────────────────────────────────────
+# Pide solo las cabeceras (HEAD) y devuelve el valor de «Server:», que a menudo delata el producto (nginx, Synology…).
+# EN: Ask for the headers only (HEAD) and return the "Server:" value, which often reveals the product (nginx, Synology…).
 def http_banner(ip: str, port: int = 80) -> str:
     try:
         with socket.create_connection((ip, port), timeout=2) as s:
@@ -120,6 +175,8 @@ def http_banner(ip: str, port: int = 80) -> str:
         return ""
 
 # ─── Pi-hole v6 API ───────────────────────────────────────────────────────────
+# Llamada a la API de Pi-hole. No valida el certificado porque Pi-hole usa uno propio en la LAN.
+# EN: Call to the Pi-hole API. It does not validate the certificate because Pi-hole uses its own on the LAN.
 def _pihole_request(host: str, path: str, method: str = "GET",
                     data: bytes = None, sid: str = None) -> dict:
     url = f"https://{host}{path}"
@@ -133,6 +190,8 @@ def _pihole_request(host: str, path: str, method: str = "GET",
     with urlopen(req, context=ctx, timeout=5) as r:
         return json.loads(r.read().decode())
 
+# Abre sesión en Pi-hole y devuelve el identificador de sesión (o None).
+# EN: Log in to Pi-hole and return the session id (or None).
 def _pihole_login(host: str, password: str) -> str | None:
     try:
         d = _pihole_request(host, "/api/auth", "POST",
@@ -145,14 +204,20 @@ def _pihole_login(host: str, password: str) -> str | None:
         log.warning(f"Pi-hole login error {host}: {e}")
         return None
 
+# Cierra la sesión de Pi-hole para no dejar sesiones colgadas.
+# EN: Close the Pi-hole session so none are left hanging.
 def _pihole_logout(host: str, sid: str):
     try:
         _pihole_request(host, "/api/auth", "DELETE", sid=sid)
     except Exception:
         pass
 
+# MAC válida con formato aa:bb:cc:dd:ee:ff.
+# EN: Valid MAC in aa:bb:cc:dd:ee:ff format.
 MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
 
+# Descarga de Pi-hole los dispositivos conocidos (nombre, fabricante, MAC por IP). Usa el primer Pi-hole que responda.
+# EN: Download the known devices from Pi-hole (name, vendor, MAC per IP). Uses the first Pi-hole that answers.
 def refresh_pihole_cache():
     """Obtiene hostname+vendor+MAC de Pi-hole y llena _pihole_cache."""
     global _pihole_ts
@@ -184,7 +249,7 @@ def refresh_pihole_cache():
                             "vendor":   vendor or (oui_vendor(mac) if mac else ""),
                             "mac":      mac,
                         }
-            log.info(f"Pi-hole cache: {len(new_cache)} entradas desde {host}")
+            log.info(f"Pi-hole cache: {len(new_cache)} entries from {host}")
             break  # Usar solo el primero que responda
         except Exception as e:
             log.warning(f"Pi-hole network/devices error {host}: {e}")
@@ -196,6 +261,8 @@ def refresh_pihole_cache():
         _pihole_cache.update(new_cache)
         _pihole_ts = time.time()
 
+# Datos de una IP desde la caché; si tiene más de 30 minutos, la refresca en segundo plano sin bloquear.
+# EN: Data of an IP from the cache; if it is older than 30 minutes, it is refreshed in the background without blocking.
 def pihole_lookup(ip: str) -> dict:
     """Retorna {hostname, vendor, mac} desde cache de Pi-hole."""
     # Refrescar cache si tiene más de 30 minutos
@@ -205,6 +272,8 @@ def pihole_lookup(ip: str) -> dict:
         return _pihole_cache.get(ip, {})
 
 # ─── DNS inverso ──────────────────────────────────────────────────────────────
+# DNS inverso: nombre del equipo a partir de su IP (cadena vacía si no hay).
+# EN: Reverse DNS: device name from its IP (empty string if none).
 def resolve_dns(ip: str) -> str:
     try:
         return socket.gethostbyaddr(str(ip))[0]
@@ -212,6 +281,8 @@ def resolve_dns(ip: str) -> str:
         return ""
 
 # ─── mDNS hint (sin librería externa) ────────────────────────────────────────
+# Pista barata de que el nombre corresponde a un equipo Apple.
+# EN: Cheap hint that the name belongs to an Apple device.
 def mdns_hint(hostname: str) -> str:
     """Si el hostname termina en .local y tiene sufijo típico de Apple."""
     if not hostname:
@@ -223,18 +294,26 @@ def mdns_hint(hostname: str) -> str:
 
 # ─── SNMP: ARP table from a switch/router (MAC for hosts the Pi cannot see) ───
 import shutil, tempfile
+# SNMP: pregunta la tabla ARP de un switch/router para conocer la MAC de equipos que la Pi no ve directamente (otras subredes o VLAN). Los secretos (comunidad, claves) nunca se devuelven al navegador.
+# EN: SNMP: asks a switch/router for its ARP table to learn the MAC of devices the Pi cannot see directly (other subnets or VLANs). Secrets (community, keys) are never returned to the browser.
 SNMP_DEFAULT = {"enabled": False, "host": "", "port": 161, "version": "2c", "community": "",
                 "user": "", "level": "authPriv", "auth_proto": "SHA", "auth_pass": "",
                 "priv_proto": "AES", "priv_pass": "", "timeout": 5}
 SNMP_SECRETS = ("community", "auth_pass", "priv_pass")
+# Caché ip → MAC obtenida por SNMP y estado de la última consulta.
+# EN: Cache of ip → MAC obtained by SNMP and the state of the last query.
 _snmp_macs: dict = {}                       # { ip: mac }
 _snmp_status = {"ts": 0, "count": 0, "error": ""}
 _snmp_lock = threading.Lock()
 OID_ARP_V4  = "1.3.6.1.2.1.4.22.1.2"        # ipNetToMediaPhysAddress
+# OID de la tabla ARP: la MIB clásica (ipNetToMedia) y la más nueva (ipNetToPhysical).
+# EN: OID of the ARP table: the classic MIB (ipNetToMedia) and the newer one (ipNetToPhysical).
 OID_ARP_NEW = "1.3.6.1.2.1.4.35.1.4"        # ipNetToPhysicalPhysAddress
 RE_ARP_V4  = re.compile(r"\.?1\.3\.6\.1\.2\.1\.4\.22\.1\.2\.\d+\.(\d+\.\d+\.\d+\.\d+)\s*=\s*[A-Za-z-]+:\s*(.*)")
 RE_ARP_NEW = re.compile(r"\.?1\.3\.6\.1\.2\.1\.4\.35\.1\.4\.\d+\.1\.4\.(\d+\.\d+\.\d+\.\d+)\s*=\s*[A-Za-z-]+:\s*(.*)")
 
+# Configuración SNMP guardada. Sin include_secrets se vacían los secretos y solo se indica si existen (has_*).
+# EN: Stored SNMP configuration. Without include_secrets the secrets are blanked and only their existence is indicated (has_*).
 def snmp_config(include_secrets: bool = False) -> dict:
     cfg = dict(SNMP_DEFAULT)
     cfg.update(load_config().get("snmp", {}) or {})
@@ -244,6 +323,8 @@ def snmp_config(include_secrets: bool = False) -> dict:
             cfg[k] = ""
     return cfg
 
+# Combina la petición con lo guardado y valida cada campo. Un secreto vacío significa «conservar el actual».
+# EN: Merge the request with what is stored and validate every field. An empty secret means "keep the current one".
 def snmp_validate(body: dict, current: dict) -> dict:
     """Merge a request over the stored config and validate every field (raises ValueError)."""
     cfg = dict(current)
@@ -281,6 +362,8 @@ def snmp_validate(body: dict, current: dict) -> dict:
     if cfg["enabled"] and not cfg["host"]: raise ValueError("Host required")
     return cfg
 
+# Ejecuta snmpwalk. Las credenciales van en un snmp.conf temporal privado (0600) y NO en la línea de comandos, donde cualquier usuario las vería con ps.
+# EN: Run snmpwalk. Credentials go in a private temporary snmp.conf (0600) and NOT on the command line, where any user could see them with ps.
 def _snmp_walk(cfg: dict, oid: str, regex) -> dict:
     """Run snmpwalk (net-snmp) with credentials in a private temp snmp.conf, not on the command line."""
     exe = shutil.which("snmpwalk")
@@ -324,6 +407,8 @@ def _snmp_walk(cfg: dict, oid: str, regex) -> dict:
             out[m.group(1)] = mac
     return out
 
+# Tabla ip → MAC del equipo SNMP; prueba la MIB clásica y, si viene vacía, la nueva.
+# EN: ip → MAC table of the SNMP device; tries the classic MIB and, if empty, the new one.
 def snmp_fetch_arp(cfg: dict) -> dict:
     """ip → mac from the device's ARP table (tries the classic MIB, then the newer one)."""
     res = _snmp_walk(cfg, OID_ARP_V4, RE_ARP_V4)
@@ -332,6 +417,8 @@ def snmp_fetch_arp(cfg: dict) -> dict:
         except Exception: pass
     return res
 
+# Actualiza la caché SNMP al inicio de cada escaneo (si está habilitado). Un fallo se anota pero no detiene el escaneo.
+# EN: Update the SNMP cache at the start of each scan (if enabled). A failure is logged but does not stop the scan.
 def refresh_snmp():
     """Refresh the SNMP MAC cache (called at the start of each scan, if enabled)."""
     cfg = snmp_config(include_secrets=True)
@@ -349,8 +436,12 @@ def refresh_snmp():
         log.warning(f"SNMP error: {e}")
 
 # ─── Device identification (OS + device type, no nmap) ───────────────────────
+# Tipos de dispositivo que identify() puede asignar (y que el usuario puede elegir a mano).
+# EN: Device types identify() can assign (and the user can choose by hand).
 DEVICE_TYPES = ["computer", "phone", "router", "switch", "ap", "storage", "tv", "camera", "appliance", "printer", "tablet", "other"]
 
+# OUI = los 3 primeros bytes de una MAC identifican al fabricante. Fuentes: la lista de Wireshark (se descarga y se actualiza cada semana) y, opcional, el paquete ieee-data del sistema.
+# EN: OUI = the first 3 bytes of a MAC identify the manufacturer. Sources: the Wireshark list (downloaded and updated weekly) and, optionally, the system's ieee-data package.
 _OUI_PATHS = ["/usr/share/ieee-data/oui.txt", "/var/lib/ieee-data/oui.txt",
               "/usr/share/misc/oui.txt"]
 OUI_URL   = os.environ.get("OUI_URL", "https://www.wireshark.org/download/automated/data/manuf.gz")
@@ -361,9 +452,13 @@ _oui_ext: dict = {28: {}, 36: {}}      # longer prefixes (MA-M / MA-S blocks)
 _oui_lock = threading.Lock()
 _oui_status = {"ts": 0, "count": 0, "error": "", "source": ""}
 
+# Deja solo los dígitos hexadecimales de una MAC, en minúscula.
+# EN: Keep only the hexadecimal digits of a MAC, lowercase.
 def _hex_only(mac: str) -> str:
     return re.sub(r"[^0-9A-Fa-f]", "", mac or "").upper()
 
+# Lee el archivo manuf de Wireshark (prefijos de 24, 28 y 36 bits) y llena las tablas. Devuelve cuántas entradas leyó.
+# EN: Read Wireshark's manuf file (24, 28 and 36-bit prefixes) and fill the tables. Returns how many entries it read.
 def _parse_manuf(path: str, db: dict, ext: dict) -> int:
     """Wireshark 'manuf': `00:00:0C<TAB>Cisco<TAB>Cisco Systems, Inc` (and `AA:BB:CC:D0:00:00/28` blocks)."""
     n = 0
@@ -383,6 +478,8 @@ def _parse_manuf(path: str, db: dict, ext: dict) -> int:
                 ext[bits][h[:bits // 4]] = name; n += 1
     return n
 
+# Lee el oui.txt del paquete ieee-data; solo agrega prefijos que aún no estén.
+# EN: Read the oui.txt of the ieee-data package; only adds prefixes that are not there yet.
 def _parse_ieee(path: str, db: dict) -> int:
     n = 0
     with open(path, encoding="utf-8", errors="replace") as f:
@@ -394,6 +491,8 @@ def _parse_ieee(path: str, db: dict) -> int:
                     db[k] = name.strip(); n += 1
     return n
 
+# Carga perezosa de la base de fabricantes (la primera vez que se necesita).
+# EN: Lazy load of the vendor database (the first time it is needed).
 def _load_oui() -> dict:
     """Lazy-load: Wireshark manuf (downloaded) first, ieee-data (optional package) fills the gaps."""
     global _oui_db, _oui_ext
@@ -418,12 +517,16 @@ def _load_oui() -> dict:
         except Exception: pass
         return db
 
+# Fabricante de una MAC; se prueba primero el prefijo más específico (36 bits), luego 28 y al final 24.
+# EN: Vendor of a MAC; the most specific prefix (36 bits) is tried first, then 28 and finally 24.
 def oui_vendor(mac: str) -> str:
     m = _hex_only(mac)
     if len(m) < 6: return ""
     db = _load_oui()
     return (_oui_ext[36].get(m[:9]) or _oui_ext[28].get(m[:7]) or db.get(m[:6], ""))
 
+# Descarga la base de Wireshark (máx. 10 MB), la valida (≥ 1000 entradas) y reemplaza la caché de forma atómica; luego completa el fabricante de los equipos ya conocidos.
+# EN: Download Wireshark's database (max 10 MB), validate it (≥ 1000 entries) and replace the cache atomically; then fill in the vendor of already known devices.
 def oui_update() -> dict:
     """Download the Wireshark manuf file, validate it, replace the cache atomically, backfill hosts."""
     global _oui_db
@@ -455,6 +558,8 @@ def oui_update() -> dict:
     log.info(f"OUI database updated: {_oui_status['count']} prefixes, {filled} hosts got a vendor")
     return {"count": _oui_status["count"], "filled": filled}
 
+# Completa el fabricante de equipos que tienen MAC pero no fabricante.
+# EN: Fill in the vendor of devices that have a MAC but no vendor.
 def oui_backfill() -> int:
     """Fill the vendor of known hosts that have a MAC but no vendor."""
     n = 0
@@ -467,6 +572,8 @@ def oui_backfill() -> int:
         if n: save_hosts(hosts)
     return n
 
+# Actualización semanal automática, en un hilo aparte para no demorar el escaneo. Si falla, reintenta la semana siguiente.
+# EN: Automatic weekly update, in a separate thread so the scan is not delayed. If it fails, it retries next week.
 def oui_maybe_update():
     """Weekly auto-update (called at scan start); never blocks the scan."""
     cfg = load_config().get("oui", {})
@@ -485,12 +592,16 @@ def oui_maybe_update():
         finally: _oui_status["_busy"] = False
     threading.Thread(target=job, daemon=True).start()
 
+# Si el bit «administrada localmente» está activo, la MAC es aleatoria/privada (típico de teléfonos), y no sirve para deducir el fabricante.
+# EN: If the "locally administered" bit is set, the MAC is random/private (typical of phones) and cannot be used to deduce the vendor.
 def mac_is_private(mac: str) -> bool:
     """Locally-administered bit set → randomized / private address (phones)."""
     m = re.sub(r"[^0-9A-Fa-f]", "", mac or "")
     try:    return bool(int(m[:2], 16) & 0x02)
     except Exception: return False
 
+# MAC de una IP leyendo la tabla ARP del kernel (/proc/net/arp), que el ping recién llenó.
+# EN: MAC of an IP read from the kernel ARP table (/proc/net/arp), which the ping just filled.
 def arp_mac(ip: str) -> str:
     try:
         with open("/proc/net/arp") as f:
@@ -503,6 +614,8 @@ def arp_mac(ip: str) -> str:
     return ""
 
 _gw_cache = {"ts": 0, "ip": ""}
+# IP de la puerta de enlace (ruta por defecto en /proc/net/route); se cachea 5 min. Ayuda a reconocer al router.
+# EN: Gateway IP (default route in /proc/net/route); cached for 5 min. Helps to recognise the router.
 def default_gateway() -> str:
     if time.time() - _gw_cache["ts"] < 300:
         return _gw_cache["ip"]
@@ -519,9 +632,13 @@ def default_gateway() -> str:
     _gw_cache.update(ts=time.time(), ip=gw)
     return gw
 
+# ¿Alguna de las palabras aparece en el texto?
+# EN: Does any of the words appear in the text?
 def _has(text: str, words) -> bool:
     return any(w in text for w in words)
 
+# Palabras clave por categoría. V_* se buscan en el fabricante y H_* en el nombre del equipo (hostname). Son pistas; el puntaje final decide.
+# EN: Keywords per category. V_* are searched in the vendor and H_* in the device name (hostname). They are clues; the final score decides.
 V_STORAGE = ("synology", "qnap", "western digital", "buffalo", "asustor", "terramaster",
              "drobo", "seagate", "lacie", "ixsystems", "readynas", "thecus", "iomega", "ugreen")
 V_ROUTER  = ("mikrotik", "routerboard", "sagemcom", "technicolor", "arris", "zyxel", "tenda",
@@ -550,6 +667,8 @@ H_ROUTER  = re.compile(r"router|gateway|gw\d*\b|firewall|opnsense|pfsense|mikrot
 H_AP      = re.compile(r"(^|[-_.])(ap|uap|wap|wifi|wlan|unifi)([-_.\d]|$)|access.?point|eap\d", re.I)
 H_SWITCH  = re.compile(r"switch|(^|[-_.])(sw|usw)([-_.\d]|$)|poe", re.I)
 
+# Decide (SO, tipo) sumando puntos por cada pista: fabricante, banner, nombre, puertos abiertos y TTL. Gana el tipo con más puntos; sin pistas suficientes queda «other».
+# EN: Decide (OS, type) by adding points for each clue: vendor, banner, name, open ports and TTL. The type with the most points wins; without enough clues it stays "other".
 def identify(ip: str, open_ports: list, ttl: int, hostname: str, banner: str,
              vendor: str, mac: str) -> tuple[str, str]:
     """Return (os, device_type) from scored heuristics."""
@@ -666,6 +785,8 @@ def identify(ip: str, open_ports: list, ttl: int, hostname: str, banner: str,
     return os_name, dtype
 
 # ─── Scan host completo ───────────────────────────────────────────────────────
+# Escanea una IP: si no responde al ping, se descarta. Si responde, junta nombre (Pi-hole o DNS), puertos, banner, MAC y fabricante, y devuelve el registro completo del equipo.
+# EN: Scan one IP: if it does not answer ping, it is discarded. If it answers, it gathers name (Pi-hole or DNS), ports, banner, MAC and vendor, and returns the full device record.
 def scan_host(ip: str) -> dict | None:
     ip_str = str(ip)
     alive, ttl, latency = ping_ttl(ip_str)
@@ -720,12 +841,18 @@ def scan_host(ip: str) -> dict | None:
     }
 
 # ─── Persistencia ─────────────────────────────────────────────────────────────
+# Equipos de WOL Console (solo lectura): se usa para marcar en la página qué equipos tienen Wake-on-LAN configurado.
+# EN: WOL Console devices (read-only): used to mark on the page which devices have Wake-on-LAN configured.
 WOL_DEVICES_FILE = Path(os.environ.get("WOL_DEVICES_FILE", str(Path(__file__).parent.parent / "wol-console" / "devices.json")))
 
+# MAC reducida a 12 dígitos hexadecimales en minúscula (clave para cruzar con WOL).
+# EN: MAC reduced to 12 lowercase hex digits (key to match against WOL).
 def _mac_key(raw) -> str:
     h = re.sub(r"[^0-9a-fA-F]", "", raw or "").lower()
     return h if len(h) == 12 else ""
 
+# Conjunto de MAC registradas en WOL Console.
+# EN: Set of MACs registered in WOL Console.
 def _wol_macs() -> set:
     """MACs registered in WOL Console (shared info, read-only)."""
     try:
@@ -734,17 +861,25 @@ def _wol_macs() -> set:
     except Exception:
         return set()
 
+# Lee hosts.json: diccionario ip → registro del equipo.
+# EN: Read hosts.json: dictionary of ip → device record.
 def load_hosts() -> dict:
     return auth.read_json(DATA_FILE, {}, dict)
 
+# Candado de hosts.json. _live_hosts apunta a la tabla en memoria mientras corre un escaneo, así una edición manual y el escaneo comparten los mismos datos y no se pisan.
+# EN: Lock of hosts.json. _live_hosts points to the in-memory table while a scan runs, so a manual edit and the scan share the same data and do not overwrite each other.
 _hosts_lock = threading.RLock()
 _live_hosts = None   # the scan's in-memory table while a scan runs, so manual edits are not overwritten
 
+# Guarda hosts.json con permisos 0644, porque WOL Console (otro proceso) también lo lee.
+# EN: Save hosts.json with 0644 permissions, because WOL Console (another process) also reads it.
 def save_hosts(hosts: dict):
     with _hosts_lock:
         auth.write_json(DATA_FILE, hosts, mode=0o644)   # WOL Console reads this file
 
 # ─── Scanner ──────────────────────────────────────────────────────────────────
+# Estado del escáner (para la barra de progreso), temporizador del próximo escaneo automático e intervalo actual.
+# EN: Scanner state (for the progress bar), timer of the next automatic scan and current interval.
 _scan_lock        = threading.Lock()
 _scan_status      = {"running": False, "progress": 0, "total": 0,
                      "started": None, "finished": None, "error": None}
@@ -752,11 +887,17 @@ _scan_timer       = None
 _saved            = load_config()
 _current_interval = _saved.get("scan_interval", SCAN_INTERVAL)
 # Cargar credenciales Pi-hole guardadas
+# Credenciales de Pi-hole guardadas desde la página; una variable de entorno tiene prioridad.
+# EN: Pi-hole credentials saved from the page; an environment variable takes priority.
 if not PIHOLE_PASS and _saved.get("pihole_pass"):
     PIHOLE_PASS = _saved["pihole_pass"]
 if _saved.get("pihole_hosts"):
     PIHOLE_HOSTS = _saved["pihole_hosts"]
 
+# Escaneo completo (o de una sola IP). Reserva el escaneo de forma atómica para que dos disparos no corran a la vez, recorre las IP con un pool de hilos y mezcla cada resultado con lo ya conocido:
+# conserva alias, tipo y SO editados a mano, MAC/fabricante previos y el historial de conexión/desconexión. Guarda cada 20 equipos y al final. Pase lo que pase deja el estado en «no corriendo» y rearma el temporizador.
+# EN: Full scan (or of a single IP). It reserves the scan atomically so two triggers cannot run at once, walks the IPs with a thread pool and merges each result with what is already known:
+#     it keeps hand-edited alias, type and OS, previous MAC/vendor and the connect/disconnect history. It saves every 20 devices and at the end. Whatever happens it leaves the state as "not running" and re-arms the timer.
 def run_scan(network: str = None, single_ip: str = None):
     global _scan_timer, _live_hosts
     with _scan_lock:                      # reserve the scan atomically: two triggers can't both start
@@ -782,8 +923,10 @@ def run_scan(network: str = None, single_ip: str = None):
         return
 
     _scan_status.update({"total": len(ips)})
-    log.info(f"Iniciando escaneo: {len(ips)} hosts en {network or NETWORK}")
+    log.info(f"Starting scan: {len(ips)} hosts in {network or NETWORK}")
 
+    # Trabajo de cada hilo del pool: escanear una IP.
+    # EN: Job of each pool thread: scan one IP.
     def scan_one(ip):
         return str(ip), scan_host(str(ip))
 
@@ -838,8 +981,10 @@ def run_scan(network: str = None, single_ip: str = None):
                                 hosts[ip_str]["online"] = False
                                 hosts[ip_str]["last_seen_offline"] = int(time.time())
                 except Exception as e:
-                    log.error(f"Error escaneando: {e}")
+                    log.error(f"Scan error: {e}")
 
+                # Guardado parcial: si el servicio se corta a mitad de escaneo, no se pierde todo.
+                # EN: Partial save: if the service stops mid-scan, not everything is lost.
                 if completed % 20 == 0:
                     save_hosts(hosts)
 
@@ -848,18 +993,20 @@ def run_scan(network: str = None, single_ip: str = None):
             _live_hosts = None
         online = sum(1 for h in hosts.values() if h.get("online"))
         _scan_status.update({"running": False, "finished": int(time.time())})
-        log.info(f"Escaneo completado: {online} hosts online de {len(ips)} escaneados")
+        log.info(f"Scan finished: {online} hosts online out of {len(ips)} scanned")
 
     except BaseException as e:
         with _hosts_lock: _live_hosts = None
         _scan_status.update({"running": False, "error": str(e), "finished": int(time.time())})
-        log.error(f"Error en escaneo: {e}")
+        log.error(f"Scan failed: {e}")
     finally:
         with _hosts_lock: _live_hosts = None
         _scan_status["running"] = False                   # never leave the scanner "running"
         if not single_ip:                                 # a one-host rescan must not stack another timer
             _schedule_next_scan()
 
+# Arma el único temporizador de escaneo automático (cancela el anterior). Con intervalo 0 el modo es manual.
+# EN: Arm the single automatic-scan timer (cancelling the previous one). With interval 0 the mode is manual.
 def _schedule_next_scan():
     """(Re)arm the single automatic-scan timer."""
     global _scan_timer
@@ -873,10 +1020,12 @@ def _schedule_next_scan():
             )
             _scan_timer.daemon = True
             _scan_timer.start()
-            log.info(f"Próximo escaneo en {_current_interval//60} minutos")
+            log.info(f"Next scan in {_current_interval//60} minutes")
         else:
-            log.info("Auto-scan desactivado (modo manual)")
+            log.info("Auto-scan disabled (manual mode)")
 
+# Al arrancar: carga la caché de Pi-hole y lanza el primer escaneo en segundo plano.
+# EN: On startup: load the Pi-hole cache and launch the first scan in the background.
 def start_auto_scan():
     # Cargar cache de Pi-hole antes del primer escaneo
     if PIHOLE_PASS:
@@ -884,6 +1033,8 @@ def start_auto_scan():
     threading.Thread(target=run_scan, daemon=True).start()
 
 # ─── Health ───────────────────────────────────────────────────────────────────
+# Chequeos de salud de Net Monitor: archivos de datos, escáner (¿atascado más de 2 h?) y que el temporizador automático esté armado y al día.
+# EN: Net Monitor health checks: data files, scanner (stuck for more than 2 h?) and that the automatic timer is armed and up to date.
 def health_report(detailed=False):
     c = auth.check_common()
     c["hosts_file"]  = auth.check_file(DATA_FILE)
@@ -913,6 +1064,8 @@ def health_report(detailed=False):
     return auth.health_reply("net", c, detailed)
 
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
+# Manejador HTTP. Cada petición se atiende en su propio hilo.
+# EN: HTTP handler. Each request is served in its own thread.
 class H(BaseHTTPRequestHandler):
     timeout = 30      # a stalled client must not hold a thread forever
     def log_message(self, fmt, *a):
@@ -947,6 +1100,10 @@ class H(BaseHTTPRequestHandler):
             self.end_headers(); self.wfile.write(c)
         except FileNotFoundError: self._json(404, {"error": "Not found"})
 
+    # GET: página, versión y salud son públicos; el resto exige sesión con Net «readonly».
+    # Rutas: /api/hosts, /api/snmp, /api/oui, /api/scan/status, /api/config, /api/me.
+    # EN: GET: page, version and health are public; the rest requires a session with Net "readonly".
+    #     Routes: /api/hosts, /api/snmp, /api/oui, /api/scan/status, /api/config, /api/me.
     def do_GET(self):
         path = urlparse(self.path).path.rstrip("/") or "/"
         tok  = self._tok()
@@ -963,6 +1120,8 @@ class H(BaseHTTPRequestHandler):
         if not auth.check_permission(tok, "net", "readonly"):
             return self._json(401, {"error": "Unauthorized"})
 
+        # Lista de equipos con el estado del escaneo. Si el usuario tiene acceso a WOL, marca los que ya están configurados allí.
+        # EN: List of devices with the scan state. If the user has WOL access, it marks the ones already configured there.
         if path == "/api/hosts":
             hosts = load_hosts()
             out = list(hosts.values())
@@ -990,6 +1149,8 @@ class H(BaseHTTPRequestHandler):
         elif path == "/api/scan/status":
             self._json(200, _scan_status)
 
+        # Configuración de Pi-hole y del intervalo (la primera definición es la que se usa; la siguiente nunca se alcanza).
+        # EN: Pi-hole and interval configuration (the first definition is the one used; the next is never reached).
         elif path == "/api/config":
             cfg = load_config()
             self._json(200, {
@@ -1001,6 +1162,8 @@ class H(BaseHTTPRequestHandler):
                 "pihole_entries":  len(_pihole_cache),
             })
 
+        # Ruta duplicada heredada: queda inalcanzable, se conserva para no cambiar el código.
+        # EN: Inherited duplicate route: unreachable, kept so the code is not changed.
         elif path == "/api/config":
             self._json(200, {
                 "network":       NETWORK,
@@ -1015,12 +1178,18 @@ class H(BaseHTTPRequestHandler):
         else:
             self._json(404, {"error": "Not found"})
 
+    # POST: login/logout, iniciar escaneo y, solo para admin, OUI, SNMP, Pi-hole, editar/borrar equipos e intervalo.
+    # Orden: login (público) → exigir sesión → rutas protegidas.
+    # EN: POST: login/logout, start scan and, for admin only, OUI, SNMP, Pi-hole, edit/delete devices and interval.
+    #     Order: login (public) → require a session → protected routes.
     def do_POST(self):
         path = urlparse(self.path).path.rstrip("/")
         tok  = self._tok()
         body = self._body()
         if body is None: return self._json(400, {"error": "Invalid request body"})
 
+        # Login con límite de intentos (auth.login); la cookie es HttpOnly y SameSite=Strict.
+        # EN: Login with attempt limiting (auth.login); the cookie is HttpOnly and SameSite=Strict.
         if path == "/api/login":
             u, err = auth.login(self, body.get("username",""), body.get("password",""))
             if not u: return self._json(err[0], {"error": err[1]})
@@ -1043,6 +1212,8 @@ class H(BaseHTTPRequestHandler):
         if not auth.check_permission(tok, "net", "readonly"):
             return self._json(401, {"error": "Unauthorized"})
 
+        # Inicia un escaneo completo o de una sola IP (409 si ya hay uno corriendo).
+        # EN: Start a full scan or one of a single IP (409 if one is already running).
         if path == "/api/scan/start":
             if _scan_status["running"]:
                 return self._json(409, {"error": "Scan already running"})
@@ -1053,6 +1224,8 @@ class H(BaseHTTPRequestHandler):
             threading.Thread(target=run_scan, kwargs={"single_ip": single}, daemon=True).start()
             self._json(200, {"ok": True, "message": single or NETWORK})
 
+        # OUI: activar/desactivar la actualización automática o forzar la descarga ahora (admin).
+        # EN: OUI: enable/disable the automatic update or force the download now (admin).
         elif path in ("/api/oui", "/api/oui/update"):
             if not auth.check_permission(tok, "net", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
@@ -1067,6 +1240,8 @@ class H(BaseHTTPRequestHandler):
                 _oui_status["error"] = str(e)[:200]
                 return self._json(502, {"error": str(e)[:200]})
 
+        # SNMP: guardar la configuración o solo probarla sin guardar (admin).
+        # EN: SNMP: save the configuration or only test it without saving (admin).
         elif path in ("/api/snmp", "/api/snmp/test"):
             if not auth.check_permission(tok, "net", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
@@ -1095,6 +1270,8 @@ class H(BaseHTTPRequestHandler):
                     _snmp_macs.clear()
             self._json(200, {"ok": True})
 
+        # Guarda la contraseña y los hosts de Pi-hole y refresca la caché de inmediato (admin).
+        # EN: Save the Pi-hole password and hosts and refresh the cache immediately (admin).
         elif path == "/api/pihole/config":
             if not auth.check_permission(tok, "net", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
@@ -1112,6 +1289,8 @@ class H(BaseHTTPRequestHandler):
                 threading.Thread(target=refresh_pihole_cache, daemon=True).start()
             self._json(200, {"ok": True})
 
+        # Edita alias, SO, tipo o grupo de un equipo (admin). Lo editado a mano queda marcado para que los siguientes escaneos no lo sobrescriban.
+        # EN: Edit alias, OS, type or group of a device (admin). What is edited by hand is flagged so later scans do not overwrite it.
         elif path == "/api/hosts/update":
             if not auth.check_permission(tok, "net", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
@@ -1142,6 +1321,8 @@ class H(BaseHTTPRequestHandler):
                 save_hosts(hosts)
             self._json(200, {"ok": True})
 
+        # Cambia el intervalo de escaneo automático (mínimo 60 s, 0 = solo manual) y rearma el temporizador (admin).
+        # EN: Change the automatic scan interval (minimum 60 s, 0 = manual only) and re-arm the timer (admin).
         elif path == "/api/scan/interval":
             if not auth.check_permission(tok, "net", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
@@ -1157,6 +1338,8 @@ class H(BaseHTTPRequestHandler):
             _schedule_next_scan()
             self._json(200, {"ok": True, "interval": interval})
 
+        # Elimina un equipo de la lista (admin). Si sigue conectado, el próximo escaneo lo vuelve a descubrir.
+        # EN: Remove a device from the list (admin). If it is still connected, the next scan discovers it again.
         elif path == "/api/hosts/delete":
             if not auth.check_permission(tok, "net", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
@@ -1169,17 +1352,19 @@ class H(BaseHTTPRequestHandler):
         else:
             self._json(404, {"error": "Not found"})
 
+# Arranque: completa el permiso «net» de usuarios antiguos (una vez), lanza el primer escaneo y sirve en loopback.
+# EN: Startup: fills in the "net" permission of old users (once), launches the first scan and serves on loopback.
 if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     # Explicit 'net' level for users that predate the module (one-time migration)
     try:
-        if auth.ensure_permissions(("net",)): log.info("Permisos 'net' actualizados")
+        if auth.ensure_permissions(("net",)): log.info("'net' permissions updated")
     except Exception as e:
-        log.warning(f"No se pudo actualizar permisos: {e}")
+        log.warning(f"Could not update permissions: {e}")
 
-    log.info(f"Net Monitor en http://{HOST}:{PORT}")
-    log.info(f"Red: {NETWORK} | Workers: {MAX_WORKERS} | Auto-scan: {SCAN_INTERVAL//60}min")
-    log.info(f"Detección: TTL + puertos Python + HTTP banner (sin nmap)")
+    log.info(f"Net Monitor at http://{HOST}:{PORT}")
+    log.info(f"Network: {NETWORK} | Workers: {MAX_WORKERS} | Auto-scan: {SCAN_INTERVAL//60}min")
+    log.info("Detection: TTL + Python ports + HTTP banner (no nmap)")
     start_auto_scan()
     try:
         srv = ThreadingHTTPServer((HOST, PORT), H)
