@@ -229,10 +229,10 @@ _pollers: dict = {}
 _glock = threading.Lock()
 
 # ─── Ring buffer de historial CPU/RAM por nodo ────────────────────────────────
-# Historial de CPU y RAM por nodo en memoria: un «buffer circular» de ~12 horas (1 muestra cada 30 s).
-# Se pierde al reiniciar el servicio; es solo para los gráficos pequeños de cada nodo.
-# EN: In-memory CPU and RAM history per node: a ~12-hour "circular buffer" (1 sample every 30 s).
-#     It is lost when the service restarts; it is only for the small charts of each node.
+# Historial de CPU y RAM por nodo: un «buffer circular» de ~12 horas (1 muestra cada 30 s) para los gráficos de
+# cada nodo y del Resumen. Vive en memoria y se guarda en disco (ver «Persistencia» más abajo).
+# EN: CPU and RAM history per node: a ~12-hour "circular buffer" (1 sample every 30 s) for the per-node charts and
+#     the Overview. It lives in memory and is saved to disk (see "Persistence" below).
 from collections import deque as _deque
 
 _NODE_HISTORY: dict = {}   # { "cid:node": deque of {ts, cpu, mem_pct} }
@@ -257,6 +257,45 @@ def get_node_history(cid: str, node_name: str) -> list:
     key = f"{cid}:{node_name}"
     with _hist_lock:
         return list(_NODE_HISTORY.get(key, []))
+
+# Persistencia del historial: se guarda en history.json (junto a clusters.json) cada HIST_SAVE_EVERY segundos y al
+# cerrar el servicio, y se recarga al arrancar, así los gráficos sobreviven a reinicios y actualizaciones. Solo se
+# conservan las últimas ~12 h y los clusters que siguen configurados. Formato: {"cid:nodo": [[ts, cpu%, mem%], ...]}.
+# EN: History persistence: saved to history.json (next to clusters.json) every HIST_SAVE_EVERY seconds and when the
+#     service stops, and reloaded at startup, so the charts survive restarts and upgrades. Only the last ~12 h and the
+#     clusters that are still configured are kept. Format: {"cid:node": [[ts, cpu%, mem%], ...]}.
+HIST_FILE       = Path(os.environ.get("PVE_HISTORY", str(DATA_FILE.with_name("history.json"))))
+HIST_SAVE_EVERY = 300
+
+def _num(x):
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and x == x
+
+def load_history():
+    data = auth.read_json(HIST_FILE, {}, dict)
+    cut, now, n = time.time() - _HIST_MAX * HIST_EVERY, time.time(), 0
+    with _hist_lock:
+        for key, rows in data.items():
+            if not isinstance(key, str) or not isinstance(rows, list): continue
+            dq = _deque(maxlen=_HIST_MAX)
+            for r in rows:
+                if isinstance(r, list) and len(r) == 3 and all(_num(v) for v in r) and cut < r[0] <= now + 60:
+                    dq.append({"ts": int(r[0]), "cpu": r[1], "mem": r[2]})
+            if dq: _NODE_HISTORY[key] = dq; n += len(dq)
+    return n
+
+def save_history():
+    try: keep = {c.get("id") for c in load_clusters()}
+    except Exception: keep = None
+    with _hist_lock:
+        snap = {k: [[p["ts"], p["cpu"], p["mem"]] for p in dq]
+                for k, dq in _NODE_HISTORY.items() if keep is None or k.rsplit(":", 1)[0] in keep}
+    try: auth.write_json(HIST_FILE, snap, indent=None)
+    except Exception as e: log.warning(f"could not save the history: {e}")
+
+def _history_saver():
+    while True:
+        time.sleep(HIST_SAVE_EVERY)
+        save_history()
 
 
 # Última lectura de un cluster (datos, error y hora). El evento «wake» obliga al poller a refrescar de inmediato.
@@ -818,9 +857,16 @@ if __name__ == "__main__":
                 log.warning(f"Cluster '{_c.get('name', _c.get('id'))}' has no pinned certificate: the server identity is NOT verified. Pin it from the Proxmox page.")
     except Exception as e:
         log.warning(f"Could not check pinned certificates: {e}")
+    n = load_history()
+    if n: log.info(f"History restored: {n} samples")
     start_all()
+    threading.Thread(target=_history_saver, daemon=True, name="history-saver").start()
+    import signal
+    def _bye(*_):
+        save_history(); os._exit(0)
+    signal.signal(signal.SIGTERM, _bye)
     try:
         srv = ThreadingHTTPServer((HOST, PORT), H)
         srv.daemon_threads = True
         srv.serve_forever()
-    except KeyboardInterrupt: sys.exit(0)
+    except KeyboardInterrupt: _bye()

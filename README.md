@@ -69,11 +69,11 @@ El código fuente está comentado en español e inglés (los comentarios en ingl
 
 ```bash
 # Descargar el .deb desde Releases
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0n/pi-console_1.2.0n_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0o/pi-console_1.2.0o_all.deb
 
 # Instalar (apt resuelve e instala las dependencias: python3, nginx, nut, nut-client, snmp, sudo…)
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.0n_all.deb
+sudo apt-get install -y ./pi-console_1.2.0o_all.deb
 ```
 
 Usa `apt-get install ./archivo.deb` (no `dpkg -i`): así `apt` instala las dependencias que falten.
@@ -115,13 +115,13 @@ Está preparado el repositorio firmado para instalar y actualizar con `apt` (gu�
 ## Actualizar
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0n/pi-console_1.2.0n_all.deb
-sudo apt-get install -y ./pi-console_1.2.0n_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0o/pi-console_1.2.0o_all.deb
+sudo apt-get install -y ./pi-console_1.2.0o_all.deb
 pi-console-health
 ```
 
 - Funciona desde cualquier 1.1.x o 1.2.x anterior. Los datos (`/var/lib/pi-console`) se conservan y el instalador guarda además una copia en `/var/backups/pi-console`.
-- Si el número de versión que instalas es **menor** que el que ya tienes (por ejemplo, volver a 1.2.0 teniendo 1.2.0n), `apt` lo trata como bajar de versión y pide `--allow-downgrades`:
+- Si el número de versión que instalas es **menor** que el que ya tienes (por ejemplo, volver a 1.2.0 teniendo 1.2.0o), `apt` lo trata como bajar de versión y pide `--allow-downgrades`:
   `sudo apt-get install -y --allow-downgrades ./pi-console_1.2.0_all.deb`.
 - Los cambios de cada versión están en [CHANGELOG.md](CHANGELOG.md).
 
@@ -192,6 +192,8 @@ sudo teleporter backup ~/pi-console-$(date +%Y%m%d).tar.gz   # crear backup
 teleporter check ~/pi-console-20261009.tar.gz                # verificar (no modifica nada)
 sudo teleporter restore ~/pi-console-20261009.tar.gz         # restaurar (agregar -y para no preguntar)
 ```
+
+El respaldo incluye también los **históricos de los gráficos del Resumen**: temperatura de la UPS (dentro de `history.db`), CPU y memoria de Proxmox (`history.json`) y temperatura y bajo voltaje de la Pi (`pi-history.json`). Los dos últimos se guardan en disco cada pocos minutos y al detener el servicio, así que un respaldo puede no incluir los últimos minutos. Un respaldo hecho con una versión anterior sigue siendo válido: simplemente no trae esos archivos y se conservan los actuales.
 
 **Desde el panel de administración** (`/admin/` → *Backup & restore*) se hace lo mismo con botones: crear y descargar un respaldo, subir uno, verificarlo y restaurarlo. Solo lo ve y usa quien es administrador de **todos** los módulos (WOL, UPS, Net y Proxmox), porque el respaldo contiene usuarios, tokens de Proxmox y toda la configuración.
 
