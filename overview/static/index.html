@@ -121,14 +121,14 @@ const TXT={
   mains:'On mains',batt:'On battery',lowb:'Low battery',unreach:'Unreachable',battery:'Battery',load:'Load',runtime:'Runtime',power:'Power',nodes:'Nodes',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memory',disk:'Disk',temp:'Temp',uptime:'Uptime',
   online:'Online',known:'Known',offline:'Offline',newdev:'New devices',lastscan:'Last scan',scanning:'Scanning…',ceph:'Ceph',types:'By device type',nonew:'No new devices',
   ago:'ago',now:'now',min:'min',h:'h',d:'d',s:'s',power_uv:'Under-voltage',power_th:'Throttled',power_ok:'Power supply OK',invalid:'Invalid credentials',
-  issue_batt:'is running on battery',issue_lowb:'has low battery',issue_srv:'UPS server unreachable',issue_node:'node offline',issue_cl:'cluster unreachable',issue_cpu:'high CPU',issue_ram:'high memory',issue_ceph:'Ceph',
+  issue_batt:'is running on battery',issue_lowb:'has low battery',issue_srv:'unreachable',issue_node:'node offline',issue_cl:'cluster unreachable',issue_cpu:'high CPU',issue_ram:'high memory',issue_ceph:'Ceph',
   issue_temp:'Pi temperature high',issue_disk:'Pi disk almost full',issue_mem:'Pi memory high',issue_pwr:'Pi power supply problem',issue_scan:'scan error'},
  es:{title:'Resumen',home:'Inicio',kiosk:'Kiosko',logout:'Cerrar sesión',login:'Entrar',exitk:'Salir de kiosko',updated:'Actualizado',allok:'Todo en orden',attn:'Atención',fail:'Falla',
   ups:'UPS Monitor',pve:'Proxmox',net:'Net Monitor',pi:'Raspberry Pi',ev:'Línea de tiempo',open:'Abrir →',noups:'Sin servidores UPS configurados',nopve:'Sin clusters configurados',nonet:'Aún sin escaneo',noev:'Sin eventos todavía',
   mains:'En red eléctrica',batt:'Con batería',lowb:'Batería baja',unreach:'Sin conexión',battery:'Batería',load:'Carga',runtime:'Autonomía',power:'Consumo',nodes:'Nodos',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memoria',disk:'Disco',temp:'Temp',uptime:'Encendida',
   online:'En línea',known:'Conocidos',offline:'Apagados',newdev:'Equipos nuevos',lastscan:'Último escaneo',scanning:'Escaneando…',ceph:'Ceph',types:'Por tipo de equipo',nonew:'Sin equipos nuevos',
   ago:'hace',now:'ahora',min:'min',h:'h',d:'d',s:'s',power_uv:'Subtensión',power_th:'Limitada',power_ok:'Fuente de poder OK',invalid:'Credenciales inválidas',
-  issue_batt:'funciona con batería',issue_lowb:'tiene batería baja',issue_srv:'servidor UPS sin conexión',issue_node:'nodo caído',issue_cl:'cluster sin conexión',issue_cpu:'CPU alta',issue_ram:'memoria alta',issue_ceph:'Ceph',
+  issue_batt:'funciona con batería',issue_lowb:'tiene batería baja',issue_srv:'sin conexión',issue_node:'nodo caído',issue_cl:'cluster sin conexión',issue_cpu:'CPU alta',issue_ram:'memoria alta',issue_ceph:'Ceph',
   issue_temp:'temperatura alta de la Pi',issue_disk:'disco de la Pi casi lleno',issue_mem:'memoria de la Pi alta',issue_pwr:'problema de alimentación de la Pi',issue_scan:'error de escaneo'}
 };
 let lang='en';try{lang=localStorage.getItem('pi-lang')||''}catch(e){}
@@ -167,8 +167,9 @@ const lvl=(m)=>({readonly:1,execute:2,admin:3})[(me.permissions||{})[m]]||0;
 // ───────── UPS ─────────
 function renderUPS(d){
   const el=$('c-nut');let sev='ok',body='',n=0;
-  for(const [sid,srv] of Object.entries(d)){
-    if(srv.error&&!Object.keys(srv.ups||{}).length){sev='crit';issues.push({lv:'crit',m:'ups',t:`${srv.id||sid}: ${T('issue_srv')}`,href:'/nut/'});body+=`<div class="unit"><div class="uh">${esc(sid)} ${pill('crit',T('unreach'))}</div><div class="sub">${esc(srv.error)}</div></div>`;n++;continue}
+  for(const srv0 of (d.servers||[])){
+    const srv=srv0.status||{},sid=srv0.id,sname=srv0.name||sid,where=`${sname} (${srv0.host}:${srv0.port})`;
+    if(srv.error&&!Object.keys(srv.ups||{}).length){sev='crit';issues.push({lv:'crit',m:'ups',t:`${lang==='es'?'Servidor UPS':'UPS server'} ${where} ${T('issue_srv')}: ${srv.error}`,href:'/nut/'});body+=`<div class="unit"><div class="uh">${esc(where)} ${pill('crit',T('unreach'))}</div><div class="sub">${esc(srv.error)}</div></div>`;n++;continue}
     for(const [name,v] of Object.entries(srv.ups||{})){
       n++;const st=(v['ups.status']||'').split(/\s+/);const lb=st.includes('LB'),ob=st.includes('OB');
       const charge=parseFloat(v['battery.charge'])||0,load=parseFloat(v['ups.load'])||0,run=parseInt(v['battery.runtime'])||0;
@@ -246,10 +247,10 @@ function renderPi(s){
 }
 // ───────── Eventos / timeline ─────────
 const EVT={
- en:{ups_lowb:'{n}: low battery ({pct})',ups_batt:'{n}: on battery ({pct})',ups_mains:'{n}: mains power restored ({pct})',ups_other:'{n}: status {st}',ups_srv_down:'UPS server {n} unreachable',ups_srv_up:'UPS server {n} reachable again',
+ en:{ups_lowb:'{n}: low battery ({pct})',ups_batt:'{n}: on battery ({pct})',ups_mains:'{n}: mains power restored ({pct})',ups_other:'{n}: status {st}',ups_srv_down:'UPS server {n} unreachable: {e}',ups_srv_up:'UPS server {n} reachable again',
   pve_cl_down:'{c}: cluster unreachable',pve_cl_up:'{c}: cluster reachable again',pve_node_on:'{c}/{n}: node online',pve_node_off:'{c}/{n}: node {st}',pve_ceph:'{c}: Ceph {a} → {b}',
   net_first:'First scan: {n} hosts found',net_new:'New device: {ip} {n} {v}',net_up:'Back online: {ip} {n}',net_down:'Went offline: {ip} {n}',net_new_n:'{n} new devices',net_up_n:'{n} hosts back online',net_down_n:'{n} hosts went offline'},
- es:{ups_lowb:'{n}: batería baja ({pct})',ups_batt:'{n}: funcionando con batería ({pct})',ups_mains:'{n}: volvió la red eléctrica ({pct})',ups_other:'{n}: estado {st}',ups_srv_down:'Servidor UPS {n} sin conexión',ups_srv_up:'Servidor UPS {n} otra vez disponible',
+ es:{ups_lowb:'{n}: batería baja ({pct})',ups_batt:'{n}: funcionando con batería ({pct})',ups_mains:'{n}: volvió la red eléctrica ({pct})',ups_other:'{n}: estado {st}',ups_srv_down:'Servidor UPS {n} sin conexión: {e}',ups_srv_up:'Servidor UPS {n} otra vez disponible',
   pve_cl_down:'{c}: cluster sin conexión',pve_cl_up:'{c}: cluster otra vez disponible',pve_node_on:'{c}/{n}: nodo en línea',pve_node_off:'{c}/{n}: nodo {st}',pve_ceph:'{c}: Ceph {a} → {b}',
   net_first:'Primer escaneo: {n} equipos encontrados',net_new:'Equipo nuevo: {ip} {n} {v}',net_up:'Volvió a estar en línea: {ip} {n}',net_down:'Dejó de responder: {ip} {n}',net_new_n:'{n} equipos nuevos',net_up_n:'{n} equipos volvieron a estar en línea',net_down_n:'{n} equipos dejaron de responder'}
 };
@@ -263,7 +264,7 @@ function renderEvents(list){
 async function refresh(){
   issues=[];let sevs=[];
   const jobs={};
-  if(lvl('nut')){jobs.nut=jget('/nut/api/ups?range=none')}
+  if(lvl('nut')){jobs.nut=jget('/nut/api/servers?range=none')}
   if(lvl('pve')){jobs.pve=jget('/pve/api/clusters?hist=0')}
   if(lvl('net')){jobs.net=jget('/net/api/hosts')}
   jobs.sys=jget('api/system');jobs.ev=jget('api/events?limit=40');
@@ -273,7 +274,7 @@ async function refresh(){
   // Historial de UPS (carga y vatios): cada 60 s basta / UPS history (load and watts): every 60 s is enough
   if(R.nut&&R.nut.status==='fulfilled'&&Date.now()-histTs>60000){
     histTs=Date.now();
-    const q=[];for(const [sid,srv] of Object.entries(R.nut.value))for(const name of Object.keys(srv.ups||{}))q.push(jget(`/nut/api/history?srv=${encodeURIComponent(sid)}&ups=${encodeURIComponent(name)}&range=1d`).then(h=>{hist[sid+'|'+name]=h.history||[]}).catch(()=>{}));
+    const q=[];for(const sv of (R.nut.value.servers||[])){const sid=sv.id;for(const name of Object.keys((sv.status||{}).ups||{}))q.push(jget(`/nut/api/history?srv=${encodeURIComponent(sid)}&ups=${encodeURIComponent(name)}&range=1d`).then(h=>{hist[sid+'|'+name]=h.history||[]}).catch(()=>{}))}
     await Promise.all(q);
   }
   const card=(id,show)=>$(id).classList.toggle('hide',!show);
