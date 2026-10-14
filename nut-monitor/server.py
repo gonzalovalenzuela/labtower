@@ -212,7 +212,7 @@ def db_query(srv_id, ups, since_ts=0, limit=4320):
             rows = conn.execute("""
                 SELECT MAX(ts) AS ts, AVG(charge) AS charge, AVG(runtime) AS runtime,
                        AVG(load) AS load, AVG(vin) AS vin, AVG(vout) AS vout,
-                       AVG(watts) AS watts, AVG(temp) AS temp
+                       AVG(watts) AS watts, AVG(NULLIF(temp, 0)) AS temp
                 FROM history
                 WHERE srv_id=? AND ups=? AND ts>=?
                 GROUP BY (ts - ?) / ?

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0q — 2026-10-14
+
+- **UPS Monitor: gráfico de temperatura de la UPS.** En el detalle de cada UPS aparece, junto a los de voltaje y consumo, el gráfico de temperatura con los mismos rangos (1 h, 1 día, 1 mes, todo), cursor con valor y modo claro/oscuro. Solo se muestra si la UPS informa `ups.temperature` o `battery.temperature`; si no, no aparece. Usa el historial que ya se guardaba en `history.db`, así que muestra de inmediato lo registrado antes.
+- En los rangos largos se promedian solo las lecturas con temperatura (antes un 0 por «sin dato» bajaba el promedio) y la línea se corta donde no hubo lectura.
+
 ## 1.2.0p — 2026-10-14
 
 ### Históricos en base de datos (SQLite)

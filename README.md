@@ -17,7 +17,7 @@ Orden del menú por defecto (cada usuario puede reordenarlo):
 | Módulo | Puerto | Ruta | Descripción |
 |--------|--------|------|-------------|
 | **Resumen** | 8085 | `/overview/` | Una pantalla con lo principal de UPS, Proxmox y red, el estado de la Pi y una línea de tiempo de eventos; modo kiosko |
-| **UPS Monitor** | 8081 | `/nut/` | Monitor de UPS vía NUT — batería, carga, autonomía, consumo, voltajes, clientes, historial con gráficos y exportación CSV |
+| **UPS Monitor** | 8081 | `/nut/` | Monitor de UPS vía NUT — batería, carga, autonomía, consumo, voltajes, temperatura (si la UPS la informa), clientes, historial con gráficos y exportación CSV |
 | **Net Monitor** | 8083 | `/net/` | Escáner de red — hosts, tipo de dispositivo, OS, puertos, MAC/vendor (ARP, Pi-hole, SNMP) |
 | **Proxmox Monitor** | 8084 | `/pve/` | Dashboard de clusters Proxmox VE — nodos, VMs, CTs y Ceph; orden manual y pin de nodos |
 | **WOL Console** | 8080 | `/wol/` | Wake-on-LAN — enciende equipos remotamente |
@@ -69,11 +69,11 @@ El código fuente está comentado en español e inglés (los comentarios en ingl
 
 ```bash
 # Descargar el .deb desde Releases
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0p/pi-console_1.2.0p_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0q/pi-console_1.2.0q_all.deb
 
 # Instalar (apt resuelve e instala las dependencias: python3, nginx, nut, nut-client, snmp, sudo…)
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.0p_all.deb
+sudo apt-get install -y ./pi-console_1.2.0q_all.deb
 ```
 
 Usa `apt-get install ./archivo.deb` (no `dpkg -i`): así `apt` instala las dependencias que falten.
@@ -115,13 +115,13 @@ Está preparado el repositorio firmado para instalar y actualizar con `apt` (gu�
 ## Actualizar
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0p/pi-console_1.2.0p_all.deb
-sudo apt-get install -y ./pi-console_1.2.0p_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0q/pi-console_1.2.0q_all.deb
+sudo apt-get install -y ./pi-console_1.2.0q_all.deb
 pi-console-health
 ```
 
 - Funciona desde cualquier 1.1.x o 1.2.x anterior. Los datos (`/var/lib/pi-console`) se conservan y el instalador guarda además una copia en `/var/backups/pi-console`.
-- Si el número de versión que instalas es **menor** que el que ya tienes (por ejemplo, volver a 1.2.0 teniendo 1.2.0p), `apt` lo trata como bajar de versión y pide `--allow-downgrades`:
+- Si el número de versión que instalas es **menor** que el que ya tienes (por ejemplo, volver a 1.2.0 teniendo 1.2.0q), `apt` lo trata como bajar de versión y pide `--allow-downgrades`:
   `sudo apt-get install -y --allow-downgrades ./pi-console_1.2.0_all.deb`.
 - Los cambios de cada versión están en [CHANGELOG.md](CHANGELOG.md).
 
@@ -193,7 +193,7 @@ teleporter check ~/pi-console-20261009.tar.gz                # verificar (no mod
 sudo teleporter restore ~/pi-console-20261009.tar.gz         # restaurar (agregar -y para no preguntar)
 ```
 
-El respaldo incluye también los **históricos de los gráficos del Resumen**: temperatura de la UPS (en su `history.db`) y CPU y memoria de Proxmox y temperatura y bajo voltaje de la Pi (en `metrics.db`). Los respaldos de la versión 1.2.0p (que guardaban esos datos en JSON) también se restauran y los datos se importan solos. Un respaldo antiguo sin esos archivos sigue siendo válido: se conservan los actuales.
+El respaldo incluye también los **históricos de los gráficos del Resumen**: temperatura de la UPS (en su `history.db`) y CPU y memoria de Proxmox y temperatura y bajo voltaje de la Pi (en `metrics.db`). Los respaldos de la versión 1.2.0q (que guardaban esos datos en JSON) también se restauran y los datos se importan solos. Un respaldo antiguo sin esos archivos sigue siendo válido: se conservan los actuales.
 
 **Desde el panel de administración** (`/admin/` → *Backup & restore*) se hace lo mismo con botones: crear y descargar un respaldo, subir uno, verificarlo y restaurarlo. Solo lo ve y usa quien es administrador de **todos** los módulos (WOL, UPS, Net y Proxmox), porque el respaldo contiene usuarios, tokens de Proxmox y toda la configuración.
 
