@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0f — 2026-10-14
+
+### Resumen
+- **Modo kiosko:** el botón «Salir de kiosko» (arriba a la derecha) se sobreponía al texto «Actualizado hace…»; ahora la barra superior le deja sitio.
+
 ## 1.2.0d — 2026-10-14
 
 ### Resumen
