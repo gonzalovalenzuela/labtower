@@ -1,6 +1,6 @@
 # Capturas de pantalla
 
-Capturas de Pi Console 1.2.0b con datos de demostración (ficticios), en tema claro y oscuro y en cuatro resoluciones.
+Capturas de Pi Console 1.2.0c con datos de demostración (ficticios), en tema claro y oscuro y en cuatro resoluciones.
 
 Carpetas: `<resolución>/<tema>/<pantalla>.png`. En tablet y móvil la captura es de página completa; en escritorio, del área visible.
 
@@ -9,6 +9,7 @@ Carpetas: `<resolución>/<tema>/<pantalla>.png`. En tablet y móvil la captura e
 | Pantalla | Claro | Oscuro |
 |---|---|---|
 | Inicio de sesión | [login.png](1920x1080/light/login.png) | [login.png](1920x1080/dark/login.png) |
+| Resumen | [overview.png](1920x1080/light/overview.png) | [overview.png](1920x1080/dark/overview.png) |
 | WOL Console | [wol.png](1920x1080/light/wol.png) | [wol.png](1920x1080/dark/wol.png) |
 | UPS Monitor | [ups.png](1920x1080/light/ups.png) | [ups.png](1920x1080/dark/ups.png) |
 | Net Monitor | [net.png](1920x1080/light/net.png) | [net.png](1920x1080/dark/net.png) |
@@ -22,6 +23,7 @@ Carpetas: `<resolución>/<tema>/<pantalla>.png`. En tablet y móvil la captura e
 | Pantalla | Claro | Oscuro |
 |---|---|---|
 | Inicio de sesión | [login.png](1366x768/light/login.png) | [login.png](1366x768/dark/login.png) |
+| Resumen | [overview.png](1366x768/light/overview.png) | [overview.png](1366x768/dark/overview.png) |
 | WOL Console | [wol.png](1366x768/light/wol.png) | [wol.png](1366x768/dark/wol.png) |
 | UPS Monitor | [ups.png](1366x768/light/ups.png) | [ups.png](1366x768/dark/ups.png) |
 | Net Monitor | [net.png](1366x768/light/net.png) | [net.png](1366x768/dark/net.png) |
@@ -35,6 +37,7 @@ Carpetas: `<resolución>/<tema>/<pantalla>.png`. En tablet y móvil la captura e
 | Pantalla | Claro | Oscuro |
 |---|---|---|
 | Inicio de sesión | [login.png](820x1180/light/login.png) | [login.png](820x1180/dark/login.png) |
+| Resumen | [overview.png](820x1180/light/overview.png) | [overview.png](820x1180/dark/overview.png) |
 | WOL Console | [wol.png](820x1180/light/wol.png) | [wol.png](820x1180/dark/wol.png) |
 | UPS Monitor | [ups.png](820x1180/light/ups.png) | [ups.png](820x1180/dark/ups.png) |
 | Net Monitor | [net.png](820x1180/light/net.png) | [net.png](820x1180/dark/net.png) |
@@ -49,6 +52,7 @@ Carpetas: `<resolución>/<tema>/<pantalla>.png`. En tablet y móvil la captura e
 | Pantalla | Claro | Oscuro |
 |---|---|---|
 | Inicio de sesión | [login.png](390x844/light/login.png) | [login.png](390x844/dark/login.png) |
+| Resumen | [overview.png](390x844/light/overview.png) | [overview.png](390x844/dark/overview.png) |
 | WOL Console | [wol.png](390x844/light/wol.png) | [wol.png](390x844/dark/wol.png) |
 | UPS Monitor | [ups.png](390x844/light/ups.png) | [ups.png](390x844/dark/ups.png) |
 | Net Monitor | [net.png](390x844/light/net.png) | [net.png](390x844/dark/net.png) |

@@ -64,7 +64,7 @@ PERM_KEYS = ("wol", "nut", "net", "pve")          # one explicit level per modul
 # ─── Health (aggregate of every module) ───────────────────────────────────────
 # Puertos de los otros servicios, usados para consultar su /api/health.
 # EN: Ports of the other services, used to query their /api/health.
-MODULES = {"wol": 8080, "nut": 8081, "net": 8083, "pve": 8084}
+MODULES = {"wol": 8080, "nut": 8081, "net": 8083, "pve": 8084, "overview": 8085}
 
 # Pregunta a un módulo cómo está. Devuelve su informe JSON o None si no responde. Un 503 también trae
 # informe (significa «hay un fallo grave»), por eso se lee igual.

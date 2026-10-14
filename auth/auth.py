@@ -629,6 +629,115 @@ def version() -> str:
         return "dev"
 
 
+# ─── Eventos (línea de tiempo del Resumen) ────────────────────────────────────────────────
+# Los módulos anotan aquí los cambios de estado importantes (UPS a batería, host nuevo, nodo caído…) y la
+# página Resumen los muestra como línea de tiempo. Se guardan pocos y se usa el mismo candado entre procesos
+# que en los demás archivos compartidos.
+# EN: ─── Events (Overview timeline) ─────────────────────────────────────────────────────────
+#     Modules record important state changes here (UPS on battery, new host, node down…) and the Overview
+#     page shows them as a timeline. Few are kept and the same cross-process lock as other shared files is used.
+EVENTS_FILE  = Path(os.environ.get("PICONSOLE_EVENTS", str(USERS_FILE.with_name("events.json"))))
+EVENTS_MAX   = 300                      # entries kept
+EVENTS_DAYS  = 30                       # entries older than this are dropped
+_events_lock = FileLock(EVENTS_FILE.with_name(EVENTS_FILE.name + ".lock"))
+_state_seen: dict = {}                  # last state seen per key, in THIS process only
+
+# Anota un evento. level: "info", "warn" o "crit". Nunca lanza excepción: un fallo al anotar no debe afectar al módulo.
+# EN: Record an event. level: "info", "warn" or "crit". Never raises: a failure to record must not affect the module.
+def record_event(module, level, text, k=None, **params):
+    """Append an event {t, m, lv, tx[, k, p]} to events.json (best effort). `text` is the English message; `k` + `params`
+    let the page translate it (it falls back to `text` for unknown keys)."""
+    try:
+        now = int(time.time())
+        with _events_lock:
+            ev = read_json(EVENTS_FILE, [], list)
+            ev = [e for e in ev if isinstance(e, dict) and now - int(e.get("t", 0)) < EVENTS_DAYS * 86400]
+            if ev and ev[-1].get("m") == module and ev[-1].get("tx") == text and now - int(ev[-1].get("t", 0)) < 60:
+                return                                  # same event just recorded
+            e = {"t": now, "m": module, "lv": level, "tx": str(text)[:200]}
+            if k: e["k"] = k; e["p"] = {a: (b if isinstance(b, (int, float)) else str(b)[:80]) for a, b in params.items()}
+            ev.append(e)
+            write_json(EVENTS_FILE, ev[-EVENTS_MAX:], indent=None)
+    except Exception as e:
+        log.debug(f"record_event: {e}")
+
+# Detecta un CAMBIO de estado: la primera vez que ve una clave solo la memoriza (así reiniciar el servicio no
+# genera eventos falsos); cuando el estado cambia devuelve (anterior, nuevo), si no devuelve None.
+# EN: Detect a state CHANGE: the first time it sees a key it only remembers it (so restarting the service does not
+#     create false events); when the state changes it returns (previous, new), otherwise None.
+def state_changed(key, state):
+    """Return (old, new) when `state` differs from the last one seen for `key` in this process, else None."""
+    old = _state_seen.get(key)
+    _state_seen[key] = state
+    if old is None or old == state:
+        return None
+    return old, state
+
+# Lee los eventos (más recientes primero), solo de los módulos pedidos.
+# EN: Read the events (newest first), only for the requested modules.
+def read_events(modules=None, limit=100):
+    ev = read_json(EVENTS_FILE, [], list)
+    out = [e for e in ev if isinstance(e, dict) and (modules is None or e.get("m") in modules)]
+    return list(reversed(out))[:limit]
+
+
+# ─── Datos del equipo (widget «Pi» del Resumen) ────────────────────────────────────────────
+# Temperatura, CPU, memoria, disco y tiempo encendido leídos de /proc y /sys; sin comandos externos salvo lo que ya usa check_power.
+# EN: ─── Host data ("Pi" widget of the Overview) ──────────────────────────────────────────────
+#     Temperature, CPU, memory, disk and uptime read from /proc and /sys; no external commands beyond what check_power already uses.
+_cpu_prev: list = [None]
+
+def _cpu_percent():
+    """CPU usage since the previous call (first call: since boot)."""
+    try:
+        with open("/proc/stat") as f:
+            parts = [int(x) for x in f.readline().split()[1:8]]
+        idle = parts[3] + parts[4]; total = sum(parts)
+        prev = _cpu_prev[0]; _cpu_prev[0] = (idle, total)
+        if not prev or total == prev[1]:
+            return None if not prev else 0.0
+        return round(100.0 * (1 - (idle - prev[0]) / (total - prev[1])), 1)
+    except Exception:
+        return None
+
+def system_stats():
+    """Snapshot of the machine: temp (°C), cpu %, load, memory, disk, uptime, model, power flags."""
+    out = {"model": None, "temp": None, "cpu": _cpu_percent(), "load": None, "cores": os.cpu_count() or 1,
+           "mem": None, "disk": None, "uptime": None, "power": None}
+    try: out["load"] = [round(x, 2) for x in os.getloadavg()]
+    except OSError: pass
+    for f in (os.environ.get("PICONSOLE_PI_MODEL"), "/proc/device-tree/model", "/sys/firmware/devicetree/base/model"):
+        if not f: continue
+        try: out["model"] = Path(f).read_bytes().decode("utf-8", "ignore").strip("\x00 \n"); break
+        except OSError: continue
+    for f in ("/sys/class/thermal/thermal_zone0/temp",):
+        try: out["temp"] = round(int(Path(f).read_text().strip()) / 1000.0, 1); break
+        except Exception: continue
+    try:
+        m = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                k, v = line.split(":", 1); m[k] = int(v.split()[0]) * 1024
+        total = m.get("MemTotal", 0); avail = m.get("MemAvailable", m.get("MemFree", 0))
+        if total: out["mem"] = {"total": total, "used": total - avail, "pct": round(100.0 * (total - avail) / total, 1)}
+    except Exception: pass
+    try:
+        st = os.statvfs("/")
+        total = st.f_blocks * st.f_frsize; free = st.f_bavail * st.f_frsize
+        if total: out["disk"] = {"total": total, "used": total - free, "pct": round(100.0 * (total - free) / total, 1)}
+    except OSError: pass
+    try: out["uptime"] = int(float(Path("/proc/uptime").read_text().split()[0]))
+    except Exception: pass
+    try:
+        if _is_raspberry_pi():
+            bits = _read_throttled()
+            if bits is not None:
+                out["power"] = {"under_voltage": bool(bits & 0x1), "throttled": bool(bits & 0x4),
+                                "temp_limit": bool(bits & 0x8), "since_boot": bool(bits & 0xF0000)}
+    except Exception: pass
+    return out
+
+
 # ─── Health ───────────────────────────────────────────────────────────────────
 # ─── Salud ───────────────────────────────────────────────────────────────────────────
 # Cada servicio expone /api/health con una lista de chequeos (ok / warn / fail). Aquí están los
