@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.0n — 2026-10-14
+
+- **Kiosko de 7":** los gráficos de la Pi (temperatura y bajo voltaje) y de Proxmox (CPU y memoria) ya no se ocultan en pantallas bajas; se muestran compactos (28 px) y no cambian el alto de la página. El de temperatura de la UPS sigue oculto en kioskos de menos de 900 px de alto.
+
 ## 1.2.0m — 2026-10-14
 
 ### Nuevo: históricos en el Resumen

@@ -117,6 +117,8 @@ body.kiosk .list div>span:last-child{flex:1 1 100%;white-space:nowrap;overflow:h
 /* EN: And if it is short (7" landscape): no 24 h charts, 4 events and a short legend. */
 @media (max-width:1399px) and (max-height:700px){
 body.kiosk svg.spark,body.kiosk .hc{display:none}
+body.kiosk .kp svg.spark{display:block;height:28px}
+body.kiosk .kp .hc{display:block;font-size:.62rem}
 body.kiosk .tl .ev:nth-child(n+5){display:none}
 body.kiosk .legend>div:nth-child(n+5){display:none}
 body.kiosk .list>div:nth-child(n+3){display:none}
@@ -256,7 +258,7 @@ function tchart(h){
   if(cur.length)segs.push(cur);
   const svg=`<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${mark}${segs.map(p=>p.length>1?`<polyline points="${p.join(' ')}" fill="none" stroke="var(--blue)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>`:'').join('')}</svg>`;
   const cap=`<div class="hc">${T('h_temp')} · ${T('h_min')} ${Math.min.apply(null,tv).toFixed(0)}° · ${T('h_max')} ${Math.max.apply(null,tv).toFixed(0)}° · <i style="background:var(--red);margin-left:0"></i>${uv?`<b style="color:var(--red)">${T('h_uv')}: ${uv}</b>`:T('h_nouv')}</div>`;
-  return svg+cap;
+  return `<div class="kp">${svg}${cap}</div>`;
 }
 // Une los historiales de los nodos de un cluster en tramos de 5 min / merge a cluster's node histories into 5-min buckets
 function aggHist(c){
@@ -301,8 +303,8 @@ function renderUPS(d){
 // ───────── Proxmox ─────────
 function pveChart(id){
   const a=pveH[id]||[];if(a.length<3)return '';
-  return lchart([{vals:a.map(p=>p.cpu),color:'var(--blue)'},{vals:a.map(p=>p.mem),color:'#8b5cf6'}])+
-    `<div class="hc"><i style="background:var(--blue)"></i>${T('cpu')}<i style="background:#8b5cf6"></i>${T('mem')} · ${dur(a.length*300)}</div>`;
+  return '<div class="kp">'+lchart([{vals:a.map(p=>p.cpu),color:'var(--blue)'},{vals:a.map(p=>p.mem),color:'#8b5cf6'}])+
+    `<div class="hc"><i style="background:var(--blue)"></i>${T('cpu')}<i style="background:#8b5cf6"></i>${T('mem')} · ${dur(a.length*300)}</div></div>`;
 }
 function renderPVE(d){
   const el=$('c-pve');let sev='ok',body='';const cl=d.clusters||[];
