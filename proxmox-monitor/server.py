@@ -230,9 +230,9 @@ _glock = threading.Lock()
 
 # ─── Ring buffer de historial CPU/RAM por nodo ────────────────────────────────
 # Historial de CPU y RAM por nodo: un «buffer circular» de ~12 horas (1 muestra cada 30 s) para los gráficos de
-# cada nodo y del Resumen. Vive en memoria y se guarda en disco (ver «Persistencia» más abajo).
+# cada nodo y del Resumen. Vive en memoria y se guarda en la base de datos (ver «Persistencia» más abajo).
 # EN: CPU and RAM history per node: a ~12-hour "circular buffer" (1 sample every 30 s) for the per-node charts and
-#     the Overview. It lives in memory and is saved to disk (see "Persistence" below).
+#     the Overview. It lives in memory and is saved to the database (see "Persistence" below).
 from collections import deque as _deque
 
 _NODE_HISTORY: dict = {}   # { "cid:node": deque of {ts, cpu, mem_pct} }
@@ -249,7 +249,9 @@ def push_node_history(cid: str, node_name: str, cpu: float, mem: int, maxmem: in
             _NODE_HISTORY[key] = _deque(maxlen=_HIST_MAX)
         if _NODE_HISTORY[key] and time.time() - _NODE_HISTORY[key][-1]["ts"] < HIST_EVERY - 1:
             return                         # fixed 30 s sampling even when polling faster
-        _NODE_HISTORY[key].append({"ts": int(time.time()), "cpu": round(cpu*100, 1), "mem": mem_pct})
+        pt = {"ts": int(time.time()), "cpu": round(cpu*100, 1), "mem": mem_pct}
+        _NODE_HISTORY[key].append(pt)
+    _store_sample(cid, node_name, pt["ts"], pt["cpu"], pt["mem"])
 
 # Muestras guardadas de un nodo.
 # EN: Stored samples of a node.
@@ -258,44 +260,77 @@ def get_node_history(cid: str, node_name: str) -> list:
     with _hist_lock:
         return list(_NODE_HISTORY.get(key, []))
 
-# Persistencia del historial: se guarda en history.json (junto a clusters.json) cada HIST_SAVE_EVERY segundos y al
-# cerrar el servicio, y se recarga al arrancar, así los gráficos sobreviven a reinicios y actualizaciones. Solo se
-# conservan las últimas ~12 h y los clusters que siguen configurados. Formato: {"cid:nodo": [[ts, cpu%, mem%], ...]}.
-# EN: History persistence: saved to history.json (next to clusters.json) every HIST_SAVE_EVERY seconds and when the
-#     service stops, and reloaded at startup, so the charts survive restarts and upgrades. Only the last ~12 h and the
-#     clusters that are still configured are kept. Format: {"cid:node": [[ts, cpu%, mem%], ...]}.
-HIST_FILE       = Path(os.environ.get("PVE_HISTORY", str(DATA_FILE.with_name("history.json"))))
-HIST_SAVE_EVERY = 300
+# Persistencia: cada muestra se guarda en metrics.db (tabla pve_samples, compartida con el Resumen) en el momento, y
+# al arrancar se recargan las últimas ~12 h para los gráficos, así que sobreviven a reinicios, actualizaciones y cortes
+# de luz. Se conservan PVE_KEEP_DAYS días (7 por defecto). Si queda un history.json de la versión 1.2.0o, se importa
+# una vez y se renombra a .migrated.
+# EN: Persistence: every sample is stored at once in metrics.db (table pve_samples, shared with the Overview) and at
+#     startup the last ~12 h are reloaded for the charts, so they survive restarts, upgrades and power cuts.
+#     PVE_KEEP_DAYS days are kept (7 by default). A leftover history.json from version 1.2.0o is imported once and
+#     renamed to .migrated.
+HIST_FILE  = Path(os.environ.get("PVE_HISTORY", str(DATA_FILE.with_name("history.json"))))   # legacy JSON (1.2.0o)
+HIST_KEEP  = auth.keep_days("PVE_KEEP_DAYS", 7) * 86400
 
 def _num(x):
     return isinstance(x, (int, float)) and not isinstance(x, bool) and x == x
 
+def _store_sample(cid, node, ts, cpu, mem):
+    try:
+        c = auth.metrics_conn()
+        try:
+            c.execute("INSERT OR REPLACE INTO pve_samples (cid,node,ts,cpu,mem) VALUES (?,?,?,?,?)", (cid, node, ts, cpu, mem))
+            c.commit()
+        finally: c.close()
+    except Exception as e:
+        log.warning(f"could not store the history sample: {e}")
+
+def _migrate_history(c):
+    if not HIST_FILE.is_file(): return
+    try:
+        if c.execute("SELECT 1 FROM pve_samples LIMIT 1").fetchone() is None:
+            data, now, rows = auth.read_json(HIST_FILE, {}, dict), time.time(), []
+            for key, pts in data.items():
+                if not isinstance(key, str) or ":" not in key or not isinstance(pts, list): continue
+                cid, node = key.rsplit(":", 1)
+                rows += [(cid, node, int(r[0]), r[1], r[2]) for r in pts
+                         if isinstance(r, list) and len(r) == 3 and all(_num(v) for v in r) and now - HIST_KEEP < r[0] <= now + 60]
+            c.executemany("INSERT OR IGNORE INTO pve_samples (cid,node,ts,cpu,mem) VALUES (?,?,?,?,?)", rows); c.commit()
+            log.info(f"History: imported {len(rows)} samples from {HIST_FILE.name}")
+        HIST_FILE.rename(HIST_FILE.with_name(HIST_FILE.name + ".migrated"))
+    except Exception as e:
+        log.warning(f"could not import the old history: {e}")
+
+# Recarga las últimas ~12 h de los clusters que siguen configurados.
+# EN: Reload the last ~12 h of the clusters that are still configured.
 def load_history():
-    data = auth.read_json(HIST_FILE, {}, dict)
-    cut, now, n = time.time() - _HIST_MAX * HIST_EVERY, time.time(), 0
-    with _hist_lock:
-        for key, rows in data.items():
-            if not isinstance(key, str) or not isinstance(rows, list): continue
-            dq = _deque(maxlen=_HIST_MAX)
-            for r in rows:
-                if isinstance(r, list) and len(r) == 3 and all(_num(v) for v in r) and cut < r[0] <= now + 60:
-                    dq.append({"ts": int(r[0]), "cpu": r[1], "mem": r[2]})
-            if dq: _NODE_HISTORY[key] = dq; n += len(dq)
+    n = 0
+    try:
+        c = auth.metrics_conn()
+        try:
+            _migrate_history(c)
+            c.execute("DELETE FROM pve_samples WHERE ts < ?", (int(time.time()) - HIST_KEEP,)); c.commit()
+            try: keep = {x.get("id") for x in load_clusters()}
+            except Exception: keep = None
+            cut = int(time.time()) - _HIST_MAX * HIST_EVERY
+            rows = c.execute("SELECT cid,node,ts,cpu,mem FROM pve_samples WHERE ts >= ? ORDER BY ts", (cut,)).fetchall()
+        finally: c.close()
+        with _hist_lock:
+            for cid, node, ts, cpu, mem in rows:
+                if keep is not None and cid not in keep: continue
+                dq = _NODE_HISTORY.setdefault(f"{cid}:{node}", _deque(maxlen=_HIST_MAX))
+                dq.append({"ts": ts, "cpu": cpu, "mem": mem}); n += 1
+    except Exception as e:
+        log.warning(f"could not load the history: {e}")
     return n
 
-def save_history():
-    try: keep = {c.get("id") for c in load_clusters()}
-    except Exception: keep = None
-    with _hist_lock:
-        snap = {k: [[p["ts"], p["cpu"], p["mem"]] for p in dq]
-                for k, dq in _NODE_HISTORY.items() if keep is None or k.rsplit(":", 1)[0] in keep}
-    try: auth.write_json(HIST_FILE, snap, indent=None)
-    except Exception as e: log.warning(f"could not save the history: {e}")
-
-def _history_saver():
+def _history_pruner():
     while True:
-        time.sleep(HIST_SAVE_EVERY)
-        save_history()
+        time.sleep(3600)
+        try:
+            c = auth.metrics_conn()
+            try: c.execute("DELETE FROM pve_samples WHERE ts < ?", (int(time.time()) - HIST_KEEP,)); c.commit()
+            finally: c.close()
+        except Exception as e: log.warning(f"could not prune the history: {e}")
 
 
 # Última lectura de un cluster (datos, error y hora). El evento «wake» obliga al poller a refrescar de inmediato.
@@ -860,13 +895,9 @@ if __name__ == "__main__":
     n = load_history()
     if n: log.info(f"History restored: {n} samples")
     start_all()
-    threading.Thread(target=_history_saver, daemon=True, name="history-saver").start()
-    import signal
-    def _bye(*_):
-        save_history(); os._exit(0)
-    signal.signal(signal.SIGTERM, _bye)
+    threading.Thread(target=_history_pruner, daemon=True, name="history-pruner").start()
     try:
         srv = ThreadingHTTPServer((HOST, PORT), H)
         srv.daemon_threads = True
         srv.serve_forever()
-    except KeyboardInterrupt: _bye()
+    except KeyboardInterrupt: sys.exit(0)

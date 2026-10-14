@@ -25,8 +25,7 @@ for f in \
     /opt/pi-console/nut-monitor/history.db \
     /opt/pi-console/net-monitor/hosts.json \
     /opt/pi-console/net-monitor/config.json \
-    /opt/pi-console/proxmox-monitor/clusters.json \
-    /opt/pi-console/proxmox-monitor/history.json
+    /opt/pi-console/proxmox-monitor/clusters.json
 do
     [ -f "$f" ] && cp "$f" "$BACKUP_DIR/$(basename $f).${STAMP}.bak"
 done
