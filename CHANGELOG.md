@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0l — 2026-10-14
+
+### Nuevo: respaldo automático por SFTP
+- **`pi-console-sftp-backup`** (`/usr/local/bin`) + cron diario a las 03:17 (`/etc/cron.d/pi-console-sftp-backup`): crea el respaldo con Teleporter, lo **verifica antes de subirlo** (`teleporter check`), lo envía por SFTP (por defecto a `192.168.0.30`) con nombre temporal `.part` que renombra al terminar, y compara el tamaño remoto con el local.
+- **Retención:** 30 copias en el storage (`KEEP_REMOTE`) y 7 en la Pi (`KEEP_LOCAL`). Solo se borran archivos llamados `pi-console-auto-<equipo>-<fecha>_<hora>.tar.gz`; los demás archivos de la carpeta no se tocan.
+- **Seguro:** solo llave SSH (sin contraseñas), la huella del servidor se fija en la primera conexión y un cambio hace fallar el respaldo, el archivo de configuración (`/etc/pi-console/backup.conf`) se *lee* y nunca se ejecuta (solo claves conocidas, valores validados), un solo respaldo a la vez.
+- **Comandos:** `setup` (crea la llave y muestra la pública), `test` (conexión, carpeta, escritura), `run`, `status`. Resultado en `/var/lib/pi-console/backup.status` y en `journalctl -t pi-console-sftp-backup`.
+- No confundir con el atajo antiguo `pi-console-backup`, que sigue igual y equivale a `teleporter backup`; el nuevo se llama `pi-console-sftp-backup`.
+- Viene **desactivado** hasta completar `SFTP_USER`. El paquete recomienda `openssh-client` y `cron`; la llave y la huella se borran con `apt purge`.
+
 ## 1.2.0k — 2026-10-14
 
 ### Resumen
