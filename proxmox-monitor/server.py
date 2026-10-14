@@ -345,6 +345,27 @@ def _build_from_resources(res: list) -> list:
             nd["vms"], nd["cts"], nd["storage"] = [], [], []
     return [nodes[n] for n in sorted(order, key=_natural)]
 
+# Anota en la línea de tiempo del Resumen: nodo caído o recuperado, cluster otra vez alcanzable y cambios de salud de Ceph.
+# EN: Record on the Overview timeline: node down or recovered, cluster reachable again and Ceph health changes.
+def _cluster_events(cluster, nodes_data, ceph):
+    cid, cname = cluster["id"], cluster["name"]
+    if auth.state_changed(f"pve-cl:{cid}", "up"):
+        auth.record_event("pve", "info", f"{cname}: cluster reachable again", "pve_cl_up", c=cname)
+    for nd in nodes_data or []:
+        ch = auth.state_changed(f"pve-node:{cid}:{nd.get('name')}", nd.get("status") or "unknown")
+        if not ch: continue
+        if ch[1] == "online": auth.record_event("pve", "info", f"{cname}/{nd.get('name')}: node online", "pve_node_on", c=cname, n=nd.get("name"))
+        else:                 auth.record_event("pve", "crit", f"{cname}/{nd.get('name')}: node {ch[1]}", "pve_node_off", c=cname, n=nd.get("name"), st=ch[1])
+    try:
+        h = (ceph or {}).get("health", {}).get("status")
+        if h:
+            ch = auth.state_changed(f"pve-ceph:{cid}", h)
+            if ch:
+                auth.record_event("pve", "info" if h == "HEALTH_OK" else "crit" if h == "HEALTH_ERR" else "warn",
+                                  f"{cname}: Ceph {ch[0]} → {h}", "pve_ceph", c=cname, a=ch[0], b=h)
+    except Exception:
+        pass
+
 # Bucle del hilo de consulta de un cluster. En cada vuelta: vuelve a leer la configuración (si el cluster se borró, el
 # hilo termina; si se fijó una huella, la adopta), consulta la API, guarda la lectura y duerme según haya o no alguien mirando.
 # Un error se anota y se reintenta: el hilo nunca muere por un fallo de red.
@@ -407,12 +428,15 @@ def _poll_cluster(cluster):
 
             cache.update({"nodes": nodes_data, "version": version,
                           "name": cluster["name"], "ceph": ceph})
+            _cluster_events(cluster, nodes_data, ceph)
             log.debug(f"[{cluster['name']}] {len(nodes_data)} nodes in {time.time()-t0:.2f}s")
 
         except Exception as e:
             cache.set_error(str(e))
             client.close()
             log.error(f"[{cluster['name']}] poll error: {e}")
+            if auth.state_changed(f"pve-cl:{cid}", "down"):
+                auth.record_event("pve", "crit", f"{cluster['name']}: cluster unreachable", "pve_cl_down", c=cluster["name"])
 
         # fast while a browser is watching, slow otherwise; a new viewer wakes the poller at once
         active = (time.time() - _last_view) < VIEW_GRACE

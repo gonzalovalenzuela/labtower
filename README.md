@@ -4,7 +4,7 @@
 
 [English version → README.en.md](README.en.md)
 
-<img src="docs/screenshots/1920x1080/light/ups.png" alt="UPS Monitor" width="900">
+<img src="docs/screenshots/1920x1080/light/overview.png" alt="Resumen" width="900">
 
 **Contenido:** [Módulos](#módulos) · [Capturas](#capturas) · [Requisitos](#requisitos) · [Instalación](#instalación) · [Actualizar](#actualizar) · [Primer ingreso](#primer-ingreso) · [Uso por módulo](#uso-por-módulo) · [Salud del sistema](#salud-del-sistema) · [Backup y migración](#backup-y-migración--teleporter) · [Configuración](#configuración-variables-de-entorno) · [Operación](#operación) · [Seguridad](#seguridad) · [Arquitectura](#arquitectura) · [Estructura del repositorio](#estructura-del-repositorio) · [Licencia](#licencia)
 
@@ -16,6 +16,7 @@ Orden del menú por defecto (cada usuario puede reordenarlo):
 
 | Módulo | Puerto | Ruta | Descripción |
 |--------|--------|------|-------------|
+| **Resumen** | 8085 | `/overview/` | Una pantalla con lo principal de UPS, Proxmox y red, el estado de la Pi y una línea de tiempo de eventos; modo kiosko |
 | **UPS Monitor** | 8081 | `/nut/` | Monitor de UPS vía NUT — batería, carga, autonomía, consumo, voltajes, clientes, historial con gráficos y exportación CSV |
 | **Net Monitor** | 8083 | `/net/` | Escáner de red — hosts, tipo de dispositivo, OS, puertos, MAC/vendor (ARP, Pi-hole, SNMP) |
 | **Proxmox Monitor** | 8084 | `/pve/` | Dashboard de clusters Proxmox VE — nodos, VMs, CTs y Ceph; orden manual y pin de nodos |
@@ -32,6 +33,7 @@ Todas las pantallas, en tema claro y oscuro y en 4 resoluciones (1920×1080, 136
 
 | Módulo | Claro | Oscuro |
 |---|---|---|
+| **Resumen** | <img src="docs/screenshots/1920x1080/light/overview.png" width="420"> | <img src="docs/screenshots/1920x1080/dark/overview.png" width="420"> |
 | **UPS Monitor** | <img src="docs/screenshots/1920x1080/light/ups.png" width="420"> | <img src="docs/screenshots/1920x1080/dark/ups.png" width="420"> |
 | **Net Monitor** | <img src="docs/screenshots/1920x1080/light/net.png" width="420"> | <img src="docs/screenshots/1920x1080/dark/net.png" width="420"> |
 | **Proxmox Monitor** | <img src="docs/screenshots/1920x1080/light/proxmox.png" width="420"> | <img src="docs/screenshots/1920x1080/dark/proxmox.png" width="420"> |
@@ -67,11 +69,11 @@ El código fuente está comentado en español e inglés (los comentarios en ingl
 
 ```bash
 # Descargar el .deb desde Releases
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0b/pi-console_1.2.0b_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0c/pi-console_1.2.0c_all.deb
 
 # Instalar (apt resuelve e instala las dependencias: python3, nginx, nut, nut-client, snmp, sudo…)
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.0b_all.deb
+sudo apt-get install -y ./pi-console_1.2.0c_all.deb
 ```
 
 Usa `apt-get install ./archivo.deb` (no `dpkg -i`): así `apt` instala las dependencias que falten.
@@ -92,7 +94,7 @@ cd pi-console
 
 # Copiar archivos
 sudo mkdir -p /opt/pi-console
-sudo cp -r wol-console nut-monitor net-monitor proxmox-monitor auth /opt/pi-console/
+sudo cp -r wol-console nut-monitor net-monitor proxmox-monitor overview auth /opt/pi-console/
 sudo cp -r home /opt/pi-console/home
 sudo cp VERSION /opt/pi-console/VERSION
 
@@ -113,15 +115,15 @@ Está preparado el repositorio firmado para instalar y actualizar con `apt` (gu�
 ## Actualizar
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0b/pi-console_1.2.0b_all.deb
-sudo apt-get install -y ./pi-console_1.2.0b_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0c/pi-console_1.2.0c_all.deb
+sudo apt-get install -y ./pi-console_1.2.0c_all.deb
 pi-console-health
 ```
 
 - Funciona desde cualquier 1.1.x o 1.2.x anterior. Los datos (`/var/lib/pi-console`) se conservan y el instalador guarda además una copia en `/var/backups/pi-console`.
-- Si el número de versión que instalas es **menor** que el que ya tienes (por ejemplo, volver a 1.2.0 teniendo 1.2.0b), `apt` lo trata como bajar de versión y pide `--allow-downgrades`:
+- Si el número de versión que instalas es **menor** que el que ya tienes (por ejemplo, volver a 1.2.0 teniendo 1.2.0c), `apt` lo trata como bajar de versión y pide `--allow-downgrades`:
   `sudo apt-get install -y --allow-downgrades ./pi-console_1.2.0_all.deb`.
-  Lo mismo si vienes de las pruebas 1.2.0c, 1.2.0d o 1.2.0e (son mayores que 1.2.0b).
+  Lo mismo si vienes de las pruebas 1.2.0d o 1.2.0e (son mayores que 1.2.0c).
 - Los cambios de cada versión están en [CHANGELOG.md](CHANGELOG.md).
 
 ---
@@ -135,6 +137,19 @@ El mismo mecanismo sirve para cualquier usuario: en el Admin Panel se puede marc
 ---
 
 ## Uso por módulo
+
+### Resumen
+Es la pantalla para mirar de un vistazo cómo está todo (`/overview/`; también es el primer acceso del menú y una tarjeta en el inicio). Muestra:
+- **Estado global** (Todo en orden / Atención / Falla) y, si algo falla, una lista de qué requiere atención con enlace al módulo.
+- **UPS:** estado de cada UPS (en red, con batería, batería baja), carga de batería, carga, autonomía, consumo en vatios y gráfico de las últimas 24 h.
+- **Proxmox:** por cluster, nodos en línea, VMs y CTs corriendo, CPU y memoria del conjunto y salud de Ceph.
+- **Net Monitor:** equipos en línea, conocidos y apagados, último escaneo, reparto por tipo de equipo y equipos nuevos de las últimas 48 h.
+- **Raspberry Pi:** temperatura, CPU, memoria, disco, tiempo encendida y problemas de la fuente de poder.
+- **Línea de tiempo:** los cambios importantes con su hora (UPS pasa a batería o vuelve la red, nodo Proxmox caído o recuperado, cambios de salud de Ceph, equipos nuevos o que dejaron de responder). Los guardan los propios módulos, así que quedan registrados aunque nadie tenga la página abierta; se conservan los últimos 300 eventos o 30 días en `/var/lib/pi-console/events.json`.
+
+Cada persona ve solo las tarjetas y los eventos de los módulos a los que tiene acceso. La página se actualiza sola cada 10 s.
+
+**Modo kiosko:** el botón *Kiosko* (o abrir `/overview/?kiosk=1`) deja la página a pantalla completa, con letra grande, sin botones y sin cursor, y evita que la pantalla se apague. Pensado para un monitor o tablet fijo; el mouse muestra un botón para salir. La sesión se renueva sola mientras la página está abierta; para dejarlo permanente conviene un usuario con permisos de solo lectura. Mientras el Resumen está abierto, Proxmox Monitor consulta a sus clusters cada 5 s (igual que con su propia página abierta).
 
 ### UPS Monitor
 Empieza **sin servidores** (no hace falta tener una UPS). Un administrador agrega uno con *Agregar servidor* (nombre, host y puerto de `upsd`, por defecto 3493) y puede probar la conexión antes de guardar. Consulta `upsd` cada 10 s y guarda el historial en una base SQLite. La primera lectura aparece en pocos segundos; las dos primeras se guardan de inmediato para que los gráficos tengan puntos enseguida.
@@ -191,11 +206,11 @@ Seguridad: el panel ejecuta el respaldo/restauración como root mediante una reg
 
 ## Configuración (variables de entorno)
 
-Los valores por defecto sirven para la mayoría de los casos. Para cambiarlos, crea `/etc/default/pi-console` (lo leen los 5 servicios), escribe una línea `NOMBRE=valor` por variable y reinicia:
+Los valores por defecto sirven para la mayoría de los casos. Para cambiarlos, crea `/etc/default/pi-console` (lo leen los 6 servicios), escribe una línea `NOMBRE=valor` por variable y reinicia:
 
 ```bash
 echo 'NUT_POLL=5' | sudo tee -a /etc/default/pi-console
-sudo systemctl restart wol-console pi-console-ups admin-panel net-monitor proxmox-monitor
+sudo systemctl restart wol-console pi-console-ups admin-panel net-monitor proxmox-monitor pi-console-overview
 ```
 
 | Variable | Módulo | Por defecto | Para qué |
@@ -218,7 +233,7 @@ sudo systemctl restart wol-console pi-console-ups admin-panel net-monitor proxmo
 ## Operación
 
 ```bash
-systemctl status wol-console pi-console-ups admin-panel net-monitor proxmox-monitor   # estado
+systemctl status wol-console pi-console-ups admin-panel net-monitor proxmox-monitor pi-console-overview   # estado
 journalctl -u net-monitor -f          # logs de un servicio (cambia el nombre según el módulo)
 sudo systemctl restart net-monitor    # reiniciar uno
 pi-console-health                     # diagnóstico general
@@ -231,6 +246,7 @@ pi-console-health                     # diagnóstico general
 | `admin-panel` | Admin Panel |
 | `net-monitor` | Net Monitor |
 | `proxmox-monitor` | Proxmox Monitor |
+| `pi-console-overview` | Resumen |
 
 **Desinstalar:**
 - `sudo apt remove pi-console` detiene los servicios y guarda una copia final de los datos en `/var/backups/pi-console`; los datos de `/var/lib/pi-console` se conservan.
@@ -243,7 +259,7 @@ pi-console-health                     # diagnóstico general
 Pi Console está pensado para una **red local de confianza** y se sirve por **HTTP en el puerto 80** (nginx). Es una decisión de diseño, no un descuido:
 
 - **Sin TLS en el paquete.** Las credenciales y la cookie de sesión viajan sin cifrar por la LAN. No expongas el puerto 80 a internet ni a redes no confiables. Si algún día lo publicas, pon delante un proxy con HTTPS (nginx, Caddy, Cloudflare Tunnel…) y deja que solo ese proxy llegue al puerto 80.
-- **Los servicios Python escuchan solo en `127.0.0.1`** (8080–8084); únicamente nginx es accesible desde la red.
+- **Los servicios Python escuchan solo en `127.0.0.1`** (8080–8085); únicamente nginx es accesible desde la red.
 - **Cookie `Secure` (opcional).** La cookie de sesión lleva `HttpOnly` y `SameSite=Strict` y dura 24 h. Detrás de HTTPS define `PICONSOLE_SECURE_COOKIE=1` (ver [Configuración](#configuración-variables-de-entorno)) para que además lleve `Secure`. Está apagado por defecto porque con HTTP el navegador no enviaría una cookie `Secure` y no podrías iniciar sesión.
 - **Contraseñas e intentos.** Las contraseñas se guardan con scrypt. Tras 5 intentos de login fallidos desde una IP en 10 minutos, esa IP queda bloqueada 5 minutos.
 - **Permisos por módulo.** Cada módulo (WOL, UPS, Net, Proxmox) tiene su propio nivel (ninguno, solo lectura, ejecutar, admin). Un administrador **solo puede dar o quitar permisos en los módulos donde él mismo tiene ese nivel**, y no puede borrar ni cambiar la contraseña de un usuario con más permisos que él. Los respaldos (Teleporter) solo los maneja quien es admin de todos los módulos.
@@ -264,6 +280,7 @@ Raspberry Pi
 ├── /opt/pi-console/          ←── código (lo reemplaza cada actualización)
 │   ├── VERSION
 │   ├── home/                 ←── página de inicio estática
+│   ├── overview/             ←── Resumen: servidor Python + frontend
 │   ├── auth/                 ←── autenticación compartida + Admin Panel
 │   ├── wol-console/          ←── servidor Python + frontend
 │   ├── nut-monitor/          ←── servidor Python + frontend
@@ -279,7 +296,8 @@ Raspberry Pi
     ├── pi-console-ups.service   # (antes nut-monitor: chocaba con el upsmon de NUT)
     ├── admin-panel.service
     ├── net-monitor.service
-    └── proxmox-monitor.service
+    ├── proxmox-monitor.service
+    └── pi-console-overview.service
 ```
 
 Cada módulo es un servidor HTTP Python 3 independiente que escucha solo en `127.0.0.1`. La autenticación se comparte: todos usan `auth/auth.py` y los mismos archivos de usuarios y sesiones (accesibles también por la ruta de compatibilidad `/opt/pi-console-auth/`).
@@ -301,6 +319,7 @@ pi-console/
 ├── nut-monitor/             # server.py + static/index.html
 ├── net-monitor/             # server.py + static/index.html
 ├── proxmox-monitor/         # server.py + static/index.html
+├── overview/                # Resumen: server.py + static/index.html
 ├── home/
 │   └── index.html           # Página de inicio del dashboard
 ├── etc/

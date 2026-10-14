@@ -25,6 +25,7 @@ if [ "$1" = "purge" ]; then
     rm -f /etc/systemd/system/admin-panel.service
     rm -f /etc/systemd/system/net-monitor.service
     rm -f /etc/systemd/system/proxmox-monitor.service
+    rm -f /etc/systemd/system/pi-console-overview.service
     systemctl daemon-reload 2>/dev/null || true
     # Eliminar usuario del sistema
     userdel pi-console 2>/dev/null || true

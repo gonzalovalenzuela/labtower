@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0c — 2026-10-14
+
+### Nuevo: Resumen (`/overview/`)
+- **Página de resumen** con lo principal de UPS Monitor, Proxmox Monitor y Net Monitor en una sola pantalla: estado global con lista de lo que requiere atención, tarjetas por UPS (estado, batería, carga, autonomía, vatios, gráfico de 24 h), por cluster Proxmox (nodos, VMs/CTs, CPU/memoria, Ceph) y de la red (en línea/conocidos/apagados, último escaneo, tipos de equipo, equipos nuevos de 48 h). Cada persona ve solo los módulos a los que tiene acceso. Claro/oscuro, español/inglés y móvil.
+- **Widget de la Raspberry Pi:** temperatura, CPU, memoria, disco, tiempo encendida y problemas de la fuente de poder.
+- **Línea de tiempo de eventos:** UPS pasa a batería / batería baja / vuelve la red, servidor UPS sin conexión, nodo Proxmox caído o recuperado, cluster sin conexión, cambios de salud de Ceph, equipos nuevos / que volvieron / que dejaron de responder (el primer escaneo se resume en una línea; más de 5 cambios iguales se agrupan). Los registra cada módulo en `/var/lib/pi-console/events.json` (máx. 300 eventos o 30 días), así que se guardan aunque nadie tenga la página abierta. Reiniciar un servicio no genera eventos falsos.
+- **Modo kiosko** (`?kiosk=1` o botón): pantalla completa, letra grande, sin botones ni cursor y con la pantalla siempre encendida.
+- Servicio nuevo `pi-console-overview` (puerto 8085, solo loopback), ruta `/overview/` en nginx, acceso «Overview» en el menú de todos los módulos y tarjeta «Resumen» en la página de inicio. Se incluye en la salud del sistema, en `pi-console-resources`, en Teleporter (reinicio tras restaurar) y en la desinstalación.
+
 ## 1.2.0b — 2026-10-13
 
 Compilación de documentación y pulido sobre la 1.2.0 (no cambia el comportamiento de los módulos).

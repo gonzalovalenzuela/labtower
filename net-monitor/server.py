@@ -916,6 +916,31 @@ if _saved.get("pihole_hosts"):
 # conserva alias, tipo y SO editados a mano, MAC/fabricante previos y el historial de conexión/desconexión. Guarda cada 20 equipos y al final. Pase lo que pase deja el estado en «no corriendo» y rearma el temporizador.
 # EN: Full scan (or of a single IP). It reserves the scan atomically so two triggers cannot run at once, walks the IPs with a thread pool and merges each result with what is already known:
 #     it keeps hand-edited alias, type and OS, previous MAC/vendor and the connect/disconnect history. It saves every 20 devices and at the end. Whatever happens it leaves the state as "not running" and re-arms the timer.
+# Anota en la línea de tiempo del Resumen lo que cambió en un escaneo: hosts nuevos, que volvieron o que dejaron de responder.
+# El primer escaneo se resume en una sola línea; si hay más de 5 cambios del mismo tipo se agrupan en un evento.
+# EN: Record on the Overview timeline what a scan changed: new hosts, hosts back or no longer answering.
+#     The first scan is summarised in one line; more than 5 changes of the same kind are grouped into one event.
+def _record_scan_events(changes, first_inventory, online, single_ip=None):
+    try:
+        if first_inventory:
+            if online: auth.record_event("net", "info", f"First scan: {online} hosts found", "net_first", n=online)
+            return
+        label = {"new": ("warn", "New device"), "up": ("info", "Back online"), "down": ("info", "Went offline")}
+        for kind in ("new", "up", "down"):
+            items = [(ip, h) for k, ip, h in changes if k == kind]
+            if not items: continue
+            lv, txt = label[kind]
+            if len(items) > 5:
+                auth.record_event("net", lv, f"{txt}: {len(items)} hosts", f"net_{kind}_n", n=len(items))
+                continue
+            for ip, h in items:
+                name = h.get("alias") or h.get("hostname") or ""
+                extra = h.get("vendor") or "" if kind == "new" else ""
+                auth.record_event("net", lv, f"{txt}: {ip}" + (f" ({name})" if name else "") + (f" {extra}" if extra else ""),
+                                  f"net_{kind}", ip=ip, n=name, v=extra)
+    except Exception as e:
+        log.debug(f"scan events: {e}")
+
 def run_scan(network: str = None, single_ip: str = None):
     global _scan_timer, _live_hosts
     with _scan_lock:                      # reserve the scan atomically: two triggers can't both start
@@ -942,6 +967,8 @@ def run_scan(network: str = None, single_ip: str = None):
 
     _scan_status.update({"total": len(ips)})
     log.info(f"Starting scan: {len(ips)} hosts in {network or NETWORK}")
+    _scan_events = []                    # changes found by this scan: ("new"|"up"|"down", ip, host)
+    first_inventory = not hosts          # first scan ever: every host is "new", so it is summarised instead
 
     # Trabajo de cada hilo del pool: escanear una IP.
     # EN: Job of each pool thread: scan one IP.
@@ -992,10 +1019,15 @@ def run_scan(network: str = None, single_ip: str = None):
                             history = history[-200:]  # max 200 eventos
                             result["uptime_history"] = history
                             hosts[ip_str] = result
+                            if is_new:
+                                _scan_events.append(("new", ip_str, result))
+                            elif not was_online and result["online"]:
+                                _scan_events.append(("up", ip_str, result))
                             log.debug(f"[{completed}/{len(ips)}] {ip_str} → {result['os']} | TTL={result['ttl']} | {len(result['ports'])} puertos")
                         else:
                             if ip_str in hosts:
                                 if hosts[ip_str].get("online"):  # was online, now offline
+                                    _scan_events.append(("down", ip_str, hosts[ip_str]))
                                     history = hosts[ip_str].get("uptime_history", [])
                                     history.append({"ts": int(time.time()), "event": "down"})
                                     hosts[ip_str]["uptime_history"] = history[-200:]
@@ -1013,6 +1045,7 @@ def run_scan(network: str = None, single_ip: str = None):
             save_hosts(hosts)
             _live_hosts = None
         online = sum(1 for h in hosts.values() if h.get("online"))
+        _record_scan_events(_scan_events, first_inventory, online, single_ip)
         _scan_status.update({"running": False, "finished": int(time.time())})
         log.info(f"Scan finished: {online} hosts online out of {len(ips)} scanned")
 

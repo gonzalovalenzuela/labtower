@@ -383,6 +383,22 @@ class NUTClient:
             return next((l.strip() for l in lines if l.strip()), "")
         except: return ""
 
+# Anota en la línea de tiempo del Resumen los cambios de estado del UPS: pasa a batería, batería baja o vuelve la red.
+# El estado se agrupa en tres modos (red, batería, batería baja) para no anotar cada variación de carga («OL CHRG»).
+# EN: Record UPS state changes on the Overview timeline: goes on battery, low battery or mains is back.
+#     The status is grouped into three modes (mains, battery, low battery) so each charge variation ("OL CHRG") is not recorded.
+def _status_event(sid, name, status, entry):
+    words = status.split()
+    mode = "lb" if "LB" in words else "ob" if "OB" in words else "ol" if "OL" in words else "other"
+    ch = auth.state_changed(f"nut:{sid}:{name}", mode)
+    if not ch: return
+    old, new = ch
+    pct = f"{entry.get('charge', 0):.0f} %"
+    if new == "lb":      auth.record_event("nut", "crit", f"{name}: low battery ({pct})", "ups_lowb", n=name, pct=pct)
+    elif new == "ob":    auth.record_event("nut", "warn", f"{name}: on battery ({pct})", "ups_batt", n=name, pct=pct)
+    elif new == "ol":    auth.record_event("nut", "info", f"{name}: mains power restored ({pct})", "ups_mains", n=name, pct=pct)
+    else:                auth.record_event("nut", "warn", f"{name}: status {status}", "ups_other", n=name, st=status)
+
 # ─── Cache en memoria (solo estado actual) ────────────────────────────────────
 # Estado actual en memoria de un servidor NUT: variables de cada UPS, clientes, último error y última lectura buena.
 # Solo guarda el «ahora»; el historial vive en SQLite.
@@ -411,6 +427,8 @@ class SCache:
             self._clients[name] = clients or []
             self._error = None; self._last_ok = time.time()
             if ver: self._ver = ver
+        if auth.state_changed(f"nut-srv:{self.id}", "up"):
+            auth.record_event("nut", "info", "UPS server reachable again", "ups_srv_up", n=self.id)
         # Insertar en DB fuera del lock
         try:
             watts = _calc_watts(vars_)
@@ -427,6 +445,7 @@ class SCache:
             }
             status = (vars_.get("ups.status") or "OL").strip()
             db_insert(self.id, name, entry, urgent=not status.startswith("OL"))
+            _status_event(self.id, name, status, entry)
         except Exception as e:
             log.debug(f"db_insert error: {e}")
 
@@ -434,6 +453,8 @@ class SCache:
     # EN: Store the last connection error to show it on the page.
     def set_error(self, msg):
         with self._lock: self._error = msg
+        ch = auth.state_changed(f"nut-srv:{self.id}", "down")
+        if ch: auth.record_event("nut", "crit", f"UPS server unreachable: {str(msg)[:80]}", "ups_srv_down", n=self.id, e=str(msg)[:80])
 
     # Instantánea para la API: estado actual más historial según el rango pedido (1h, 1d, 1w, 1mo, all).
     # Con range=none solo se devuelve el estado actual y no se toca la base (así refresca la página sin costo).
