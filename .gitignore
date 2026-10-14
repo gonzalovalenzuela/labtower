@@ -36,3 +36,7 @@ data/
 *.log
 logs/
 .csrf-secret
+
+# Datos de ejecución de Net Monitor / Net Monitor runtime data
+net-monitor/config.json
+net-monitor/hosts.json
