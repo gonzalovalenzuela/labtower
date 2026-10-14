@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0g — 2026-10-14
+
+### Resumen
+- **Compatible con iPad antiguos (p. ej. iPad Air 1, iOS 12):** el Safari de esa versión no soporta `gap` en flexbox (separaba mal cabecera, píldoras, filas y eventos) ni `:has()` (el modo kiosko no agrandaba la letra). La página detecta el soporte y usa márgenes de respaldo solo cuando hace falta, y el modo kiosko marca `<html>` con una clase en vez de `:has()`. En navegadores modernos el aspecto es el mismo (comparado píxel a píxel).
+
 ## 1.2.0f — 2026-10-14
 
 ### Resumen

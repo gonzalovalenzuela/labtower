@@ -72,7 +72,7 @@ svg.spark{width:100%;height:42px;display:block}
 /* Modo kiosko: letra grande, sin controles; pensado para dejarlo en un monitor o tablet fijo. */
 /* EN: Kiosk mode: large text, no controls; meant for a fixed monitor or tablet. */
 body.kiosk{cursor:none}
-html:has(body.kiosk){font-size:19px}
+html.kiosk{font-size:19px}
 body.kiosk .wrap{max-width:none;padding:18px 24px}
 body.kiosk .nokiosk{display:none!important}
 body.kiosk .grid{grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}
@@ -82,8 +82,33 @@ body.kiosk .tl{max-height:none}
 body.kiosk .top{padding-right:9.5rem}
 #kx{display:none;position:fixed;top:10px;right:10px;opacity:.0;transition:opacity .3s}
 body.kiosk #kx{display:block}body.kiosk.moved #kx{opacity:1;cursor:pointer}
+/* Respaldo para navegadores sin "gap" en flexbox (Safari < 14.1, p. ej. iPad Air 1 / iOS 12): la clase nfg la pone el script del <head>. */
+/* EN: Fallback for browsers without flexbox "gap" (Safari < 14.1, e.g. iPad Air 1 / iOS 12): the nfg class is set by the <head> script. */
+.nfg .top{margin:0 -12px 4px 0}
+.nfg .top>*{margin:0 12px 12px 0}
+.nfg .top h1>*+*{margin-left:10px}
+.nfg .pill i{margin-right:7px}
+.nfg .attn li b{margin-right:8px}
+.nfg .card>*+*{margin-top:12px}
+.nfg .ch>*+*{margin-left:8px}
+.nfg .row>*+*{margin-left:10px}
+.nfg .unit>*+*{margin-top:8px}
+.nfg .uh .sub{margin:0 8px}
+.nfg .uh .pill{margin-left:auto}
+.nfg .donutbox>*+*{margin-left:14px}
+.nfg .legend>*+*{margin-top:3px}
+.nfg .list>*+*{margin-top:5px}
+.nfg .list div>*+*{margin-left:8px}
+.nfg .ev>*+*{margin-left:10px}
+.nfg .ev .t{margin-left:auto;padding-left:10px}
+.nfg .login>*+*{margin-top:12px}
 @media (max-width:640px){.wrap{padding:12px}.row .l{width:52px}.grid{grid-template-columns:1fr}}
 </style>
+<script>
+// Detecta si flexbox soporta "gap"; si no, activa los márgenes de respaldo (clase nfg).
+// EN: Detects flexbox "gap" support; if missing, turns on the fallback margins (nfg class).
+(function(){try{var d=document.createElement('div');d.style.cssText='display:flex;flex-direction:column;row-gap:1px;position:absolute;visibility:hidden';d.appendChild(document.createElement('div'));d.appendChild(document.createElement('div'));document.documentElement.appendChild(d);var ok=d.offsetHeight===1;document.documentElement.removeChild(d);if(!ok)document.documentElement.className+=' nfg'}catch(e){}})();
+</script>
 </head>
 <body>
 <!-- Resumen de Pi Console: estado global, tarjetas de UPS, Proxmox, red y Pi, y línea de tiempo de eventos. Consulta las APIs de los otros módulos con la misma sesión. -->
@@ -327,7 +352,7 @@ $('bl').onclick=()=>{lang=lang==='es'?'en':'es';try{localStorage.setItem('pi-lan
 // ───────── Modo kiosko / kiosk mode ─────────
 let wl=null;
 async function setKiosk(on){
-  document.body.classList.toggle('kiosk',on);
+  document.body.classList.toggle('kiosk',on);document.documentElement.classList.toggle('kiosk',on);
   try{const u=new URL(location.href);on?u.searchParams.set('kiosk','1'):u.searchParams.delete('kiosk');history.replaceState(null,'',u)}catch(e){}
   try{
     if(on){if(document.documentElement.requestFullscreen&&!document.fullscreenElement)await document.documentElement.requestFullscreen();if(navigator.wakeLock)wl=await navigator.wakeLock.request('screen')}
@@ -335,12 +360,12 @@ async function setKiosk(on){
   }catch(e){}
 }
 $('bk').onclick=()=>setKiosk(true);$('kx').onclick=()=>setKiosk(false);
-document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement&&document.body.classList.contains('kiosk'))document.body.classList.remove('kiosk')});
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement&&document.body.classList.contains('kiosk')){document.body.classList.remove('kiosk');document.documentElement.classList.remove('kiosk')}});
 let mv=null;document.addEventListener('mousemove',()=>{document.body.classList.add('moved');clearTimeout(mv);mv=setTimeout(()=>document.body.classList.remove('moved'),2500)});
 document.addEventListener('visibilitychange',async()=>{if(document.visibilityState==='visible'&&document.body.classList.contains('kiosk')&&navigator.wakeLock){try{wl=await navigator.wakeLock.request('screen')}catch(e){}}});
 
 applyLang();
-if(new URLSearchParams(location.search).get('kiosk')==='1')document.body.classList.add('kiosk');
+if(new URLSearchParams(location.search).get('kiosk')==='1'){document.body.classList.add('kiosk');document.documentElement.classList.add('kiosk')}
 start();
 </script>
 </body>
