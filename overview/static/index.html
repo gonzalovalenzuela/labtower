@@ -83,8 +83,34 @@ body.kiosk .top{padding-right:9.5rem}
 /* Pantallas más chicas (tablet de 7", portátil): letra y columnas más compactas. Se puede ajustar con ?zoom=0.8 (0.5–2). */
 /* EN: Smaller screens (7" tablet, laptop): more compact text and columns. Adjustable with ?zoom=0.8 (0.5–2). */
 @media (max-width:1599px){html.kiosk{font-size:16px;font-size:calc(16px*var(--kz,1))}}
-@media (max-width:1199px){html.kiosk{font-size:14px;font-size:calc(14px*var(--kz,1))}body.kiosk .wrap{padding:12px 14px}body.kiosk .grid{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}}
+@media (max-width:1199px){html.kiosk{font-size:14px;font-size:calc(14px*var(--kz,1))}}
 @media (max-width:899px){html.kiosk{font-size:12.5px;font-size:calc(12.5px*var(--kz,1))}}
+/* Tablet chica o portátil (≤ 1399 px de ancho): tarjetas más compactas para que quepan más datos por pantalla. */
+/* EN: Small tablet or laptop (≤ 1399 px wide): more compact cards so more data fits on the screen. */
+@media (max-width:1399px){
+body.kiosk .wrap{padding:8px 10px}
+body.kiosk .top{margin-bottom:8px}
+body.kiosk .grid{gap:8px;grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+body.kiosk .card{padding:9px 11px;gap:7px}
+html.nfg.kiosk .card>*+*{margin-top:7px}
+body.kiosk .unit{gap:5px;padding-top:7px}
+html.nfg.kiosk .unit>*+*{margin-top:5px}
+body.kiosk .kpis{gap:6px;grid-template-columns:repeat(auto-fit,minmax(64px,1fr))}
+body.kiosk .kpi{padding:5px 8px}
+body.kiosk .kpi b{font-size:1.15rem}
+body.kiosk .attn{padding:6px 10px;margin-bottom:8px}
+body.kiosk .ev{padding:4px 0}
+body.kiosk .uh{flex-wrap:wrap}
+body.kiosk .pill{white-space:nowrap}
+}
+/* Además, si es baja (landscape de 7"): sin gráficos de 24 h, 4 eventos y leyenda corta. */
+/* EN: And if it is short (7" landscape): no 24 h charts, 4 events and a short legend. */
+@media (max-width:1399px) and (max-height:700px){
+body.kiosk svg.spark{display:none}
+body.kiosk .tl .ev:nth-child(n+5){display:none}
+body.kiosk .legend>div:nth-child(n+5){display:none}
+body.kiosk .list>div:nth-child(n+3){display:none}
+}
 #kx{display:none;position:fixed;top:10px;right:10px;opacity:.0;transition:opacity .3s}
 body.kiosk #kx{display:block}body.kiosk.moved #kx{opacity:1;cursor:pointer}
 /* Respaldo para navegadores sin "gap" en flexbox (Safari < 14.1, p. ej. iPad Air 1 / iOS 12): la clase nfg la pone el script del <head>. */

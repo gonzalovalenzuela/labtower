@@ -1,4 +1,4 @@
-# Pi Console 1.2.0h
+# Pi Console 1.2.0i
 
 ## Español
 
@@ -13,6 +13,7 @@ Primer release de la serie 1.2. Reúne todo lo hecho desde 1.1.8 y deja el códi
 - Mensajes de error y de log del backend en inglés.
 - **Instalación nueva más limpia:** el primer ingreso con `admin`/`admin` obliga a cambiar la contraseña antes de usar cualquier módulo; UPS Monitor empieza sin servidores (no exige tener una UPS); Net Monitor no escanea nada hasta que lo pides («Hacer escaneo inicial», con la lista llenándose en vivo) y autodetecta tu red; `snmp` es dependencia; los ejemplos usan IP neutras; menú por defecto: UPS, Net, Proxmox, WOL, Admin.
 - **Permisos entre módulos:** un admin solo da o quita permisos en los módulos donde él mismo tiene ese nivel, y los respaldos (Teleporter) los maneja solo quien administra todos los módulos. Proxmox avisa de forma permanente de los clusters sin certificado fijado. Cookie `Secure` opcional (`PICONSOLE_SECURE_COOKIE=1`) y sección [*Seguridad*](README.md#seguridad) en el README.
+- **1.2.0i:** el kiosko cabe sin scroll en una tablet de 7" (1024×600): 4 tarjetas en una fila, márgenes y tamaños compactos, sin gráficos de 24 h y con la línea de tiempo resumida.
 - **1.2.0h:** el modo kiosko se adapta a pantallas chicas (tablet de 7"): letra y columnas según el tamaño, `?zoom=` para ajustar, desplazamiento automático si el contenido no cabe (`?autoscroll=0` lo desactiva) y el botón de salir aparece también al tocar la pantalla.
 - **1.2.0g:** el Resumen se ve bien en iPad antiguos (iOS 12 / Safari < 14.1): espaciado de respaldo donde el navegador no soporta `gap` en flexbox y tamaño de letra del modo kiosko sin `:has()`. En navegadores modernos no cambia nada.
 - **1.2.0f:** en modo kiosko el botón «Salir de kiosko» ya no tapa la hora de actualización.
@@ -22,8 +23,8 @@ Primer release de la serie 1.2. Reúne todo lo hecho desde 1.1.8 y deja el códi
 
 **Actualizar desde cualquier 1.1.x**
 ```bash
-wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0h_all.deb?n=$RANDOM" -O pi-console_1.2.0h_all.deb
-sudo apt-get install -y ./pi-console_1.2.0h_all.deb
+wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0i_all.deb?n=$RANDOM" -O pi-console_1.2.0i_all.deb
+sudo apt-get install -y ./pi-console_1.2.0i_all.deb
 pi-console-health
 ```
 Los datos (`/var/lib/pi-console`) se conservan; el instalador además guarda una copia en `/var/backups/pi-console`.
@@ -43,6 +44,7 @@ First release of the 1.2 series. It gathers everything done since 1.1.8 and leav
 - Backend error and log messages in English.
 - **Cleaner fresh install:** the first login with `admin`/`admin` forces a password change before any module can be used; UPS Monitor starts with no servers (no UPS required); Net Monitor scans nothing until you ask ("Run initial scan", with the list filling in live) and autodetects your network; `snmp` is a dependency; examples use neutral IPs; default menu: UPS, Net, Proxmox, WOL, Admin.
 - **Cross-module permissions:** an admin can only grant or remove permissions on the modules where they hold that level themselves, and backups (Teleporter) are handled only by someone who administers every module. Proxmox permanently warns about clusters without a pinned certificate. Optional `Secure` cookie (`PICONSOLE_SECURE_COOKIE=1`) and a [*Security*](README.md#seguridad) section in the README.
+- **1.2.0i:** kiosk fits without scrolling on a 7" tablet (1024×600): 4 cards in one row, compact spacing and sizes, no 24 h charts and a shortened timeline.
 - **1.2.0h:** kiosk mode adapts to small screens (7" tablet): text size and columns by screen size, `?zoom=` to adjust, automatic scrolling when the content doesn't fit (`?autoscroll=0` disables it), and the exit button also appears on touch.
 - **1.2.0g:** Overview renders correctly on old iPads (iOS 12 / Safari < 14.1): fallback spacing where flexbox `gap` is unsupported and kiosk font size without `:has()`. No change on modern browsers.
 - **1.2.0f:** in kiosk mode the "Exit kiosk" button no longer covers the update time.
@@ -52,8 +54,8 @@ First release of the 1.2 series. It gathers everything done since 1.1.8 and leav
 
 **Upgrade from any 1.1.x**
 ```bash
-wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0h_all.deb?n=$RANDOM" -O pi-console_1.2.0h_all.deb
-sudo apt-get install -y ./pi-console_1.2.0h_all.deb
+wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0i_all.deb?n=$RANDOM" -O pi-console_1.2.0i_all.deb
+sudo apt-get install -y ./pi-console_1.2.0i_all.deb
 pi-console-health
 ```
 Data in `/var/lib/pi-console` is kept; the installer also saves a copy in `/var/backups/pi-console`.

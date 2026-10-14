@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0i — 2026-10-14
+
+### Resumen
+- **Kiosko compacto para tablets de 7" y portátiles (≤ 1399 px de ancho):** tarjetas con menos margen y relleno, KPIs más chicos, hasta 4 tarjetas en una fila y las filas de las unidades que se envuelven en vez de salirse de la tarjeta. En pantallas bajas (≤ 700 px de alto, como 1024×600) se ocultan los gráficos de 24 h y se resumen la línea de tiempo (4 eventos), la leyenda de tipos y los equipos nuevos, de modo que todo cabe sin scroll. Más grande que 1399 px no cambia nada.
+
 ## 1.2.0h — 2026-10-14
 
 ### Resumen
