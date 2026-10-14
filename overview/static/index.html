@@ -72,7 +72,7 @@ svg.spark{width:100%;height:42px;display:block}
 /* Modo kiosko: letra grande, sin controles; pensado para dejarlo en un monitor o tablet fijo. */
 /* EN: Kiosk mode: large text, no controls; meant for a fixed monitor or tablet. */
 body.kiosk{cursor:none}
-html.kiosk{font-size:19px}
+html.kiosk{font-size:19px;font-size:calc(19px*var(--kz,1))}
 body.kiosk .wrap{max-width:none;padding:18px 24px}
 body.kiosk .nokiosk{display:none!important}
 body.kiosk .grid{grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}
@@ -80,6 +80,11 @@ body.kiosk .tl{max-height:none}
 /* deja sitio al botón fijo "Salir de kiosko" para que no tape la hora de actualización */
 /* EN: leave room for the fixed "Exit kiosk" button so it doesn't cover the update time */
 body.kiosk .top{padding-right:9.5rem}
+/* Pantallas más chicas (tablet de 7", portátil): letra y columnas más compactas. Se puede ajustar con ?zoom=0.8 (0.5–2). */
+/* EN: Smaller screens (7" tablet, laptop): more compact text and columns. Adjustable with ?zoom=0.8 (0.5–2). */
+@media (max-width:1599px){html.kiosk{font-size:16px;font-size:calc(16px*var(--kz,1))}}
+@media (max-width:1199px){html.kiosk{font-size:14px;font-size:calc(14px*var(--kz,1))}body.kiosk .wrap{padding:12px 14px}body.kiosk .grid{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}}
+@media (max-width:899px){html.kiosk{font-size:12.5px;font-size:calc(12.5px*var(--kz,1))}}
 #kx{display:none;position:fixed;top:10px;right:10px;opacity:.0;transition:opacity .3s}
 body.kiosk #kx{display:block}body.kiosk.moved #kx{opacity:1;cursor:pointer}
 /* Respaldo para navegadores sin "gap" en flexbox (Safari < 14.1, p. ej. iPad Air 1 / iOS 12): la clase nfg la pone el script del <head>. */
@@ -361,10 +366,30 @@ async function setKiosk(on){
 }
 $('bk').onclick=()=>setKiosk(true);$('kx').onclick=()=>setKiosk(false);
 document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement&&document.body.classList.contains('kiosk')){document.body.classList.remove('kiosk');document.documentElement.classList.remove('kiosk')}});
-let mv=null;document.addEventListener('mousemove',()=>{document.body.classList.add('moved');clearTimeout(mv);mv=setTimeout(()=>document.body.classList.remove('moved'),2500)});
+let mv=null;const showKx=()=>{document.body.classList.add('moved');clearTimeout(mv);mv=setTimeout(()=>document.body.classList.remove('moved'),2500)};
+document.addEventListener('mousemove',showKx);document.addEventListener('touchstart',showKx,{passive:true});
 document.addEventListener('visibilitychange',async()=>{if(document.visibilityState==='visible'&&document.body.classList.contains('kiosk')&&navigator.wakeLock){try{wl=await navigator.wakeLock.request('screen')}catch(e){}}});
 
+// Desplazamiento automático en modo kiosko cuando el contenido no cabe en la pantalla (tablets chicas).
+// Sube y baja despacio, hace pausa arriba y abajo, y se detiene 30 s si se toca la pantalla. Se desactiva con ?autoscroll=0.
+// EN: Automatic scrolling in kiosk mode when the content doesn't fit the screen (small tablets).
+// It moves slowly up and down, pauses at the top and bottom, and stops for 30 s on touch. Disable with ?autoscroll=0.
+let asDir=1,asHold=Date.now()+8000;
+const asNoAuto=new URLSearchParams(location.search).get('autoscroll')==='0';
+const asTouch=()=>{asHold=Date.now()+30000};
+['touchstart','wheel','keydown'].forEach(ev=>document.addEventListener(ev,asTouch,{passive:true}));
+setInterval(()=>{
+  if(asNoAuto||!document.body.classList.contains('kiosk')||Date.now()<asHold)return;
+  const el=document.scrollingElement||document.documentElement,max=el.scrollHeight-el.clientHeight;
+  if(max<=8)return;
+  const y=el.scrollTop;
+  if(asDir>0&&y>=max-1){asDir=-1;asHold=Date.now()+8000;return}
+  if(asDir<0&&y<=0){asDir=1;asHold=Date.now()+8000;return}
+  window.scrollBy(0,asDir);
+},50);
+
 applyLang();
+try{const z=parseFloat(new URLSearchParams(location.search).get('zoom'));if(z>=0.5&&z<=2)document.documentElement.style.setProperty('--kz',z)}catch(e){}
 if(new URLSearchParams(location.search).get('kiosk')==='1'){document.body.classList.add('kiosk');document.documentElement.classList.add('kiosk')}
 start();
 </script>

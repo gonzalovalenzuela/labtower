@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0h — 2026-10-14
+
+### Resumen
+- **Modo kiosko para pantallas chicas (tablet de 7"):** el tamaño de letra y de columnas se adapta al ancho de la pantalla (antes era fijo, pensado para 1920 px). `?zoom=0.5–2` ajusta el tamaño a gusto.
+- **Desplazamiento automático** en kiosko cuando el contenido no cabe: sube y baja despacio con pausa arriba y abajo, se detiene 30 s al tocar la pantalla y se desactiva con `?autoscroll=0`.
+- El botón «Salir de kiosko» aparece también al tocar la pantalla (tablets sin mouse).
+
 ## 1.2.0g — 2026-10-14
 
 ### Resumen
