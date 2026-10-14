@@ -58,6 +58,8 @@ DATA_FILES=(
   "data/net-monitor/hosts.json|$PI_HOME/net-monitor/hosts.json"
   "data/net-monitor/config.json|$PI_HOME/net-monitor/config.json"
   "data/proxmox-monitor/clusters.json|$PI_HOME/proxmox-monitor/clusters.json"
+  "data/proxmox-monitor/history.json|$PI_HOME/proxmox-monitor/history.json"
+  "data/pi-history.json|$DATA_DIR/pi-history.json"
 )
 # ES: Igual para la configuración del sistema (nginx y NUT). Estos archivos solo se restauran por consola con --nut / --nginx.
 CONF_FILES=(
@@ -560,8 +562,9 @@ Pi Console Teleporter v$TELEPORTER_VERSION
                                           and nginx configuration are kept unless you
                                           pass --nut / --nginx.
 
-Backup contents: users/sessions, WOL devices, UPS servers + history.db,
-Net Monitor hosts + config (SNMP), Proxmox clusters, NUT config, nginx site.
+Backup contents: users/sessions, WOL devices, UPS servers + history.db (includes UPS temperature),
+Net Monitor hosts + config (SNMP), Proxmox clusters + CPU/memory history, Pi temperature and
+under-voltage history, NUT config, nginx site.
 The archive holds passwords and tokens (mode 600) — keep it private.
 EOF
 }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0o — 2026-10-14
+
+### Históricos persistentes y en el respaldo
+- **Proxmox: CPU y memoria (12 h).** Antes vivían solo en memoria y se perdían al reiniciar Proxmox Monitor o actualizar el paquete. Ahora se guardan en `proxmox-monitor/history.json` cada 5 min y al detener el servicio, y se recargan al arrancar (se descartan las muestras de más de 12 h y los clusters que ya no existen). También se conservan al desinstalar y reinstalar (`preinst`/`prerm`/`postinst`).
+- **Pi: temperatura y bajo voltaje (24 h)** en `/var/lib/pi-console/pi-history.json` (ya persistente desde 1.2.0m).
+- **UPS: temperatura (24 h)** ya estaba en `history.db`.
+- **Teleporter** respalda y restaura `proxmox-monitor/history.json` y `pi-history.json` (el `history.db` de la UPS ya estaba). Los respaldos antiguos siguen siendo válidos (sin esos archivos se conservan los actuales).
+- Un corte de luz brusco puede perder los últimos minutos del historial (se escribe cada 5 a 10 min para cuidar la SD).
+
 ## 1.2.0n — 2026-10-14
 
 - **Kiosko de 7":** los gráficos de la Pi (temperatura y bajo voltaje) y de Proxmox (CPU y memoria) ya no se ocultan en pantallas bajas; se muestran compactos (28 px) y no cambian el alto de la página. El de temperatura de la UPS sigue oculto en kioskos de menos de 900 px de alto.

@@ -34,9 +34,9 @@ Raspberry Pi OS, DietPi or Debian 12+ (also works on an x86 VM), Python 3.9+, ng
 ## Install
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0n/pi-console_1.2.0n_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0o/pi-console_1.2.0o_all.deb
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.0n_all.deb
+sudo apt-get install -y ./pi-console_1.2.0o_all.deb
 ```
 
 Then open `http://<pi-ip>/`. The initial user is `admin` / `admin`; you **must set a new password** on first login. UPS Monitor starts with no servers, and Net Monitor scans nothing until you press "Run initial scan".
@@ -57,6 +57,8 @@ sudo teleporter backup ~/backup.tar.gz   # backup / check / restore
 Settings are environment variables in `/etc/default/pi-console` (`NUT_POLL`, `SCAN_NETWORK`, `SCAN_INTERVAL`, `PICONSOLE_SECURE_COOKIE`…; see the Spanish README for the full table). `apt remove` keeps your data; `apt purge` removes code, services and the system user but leaves `/var/lib/pi-console` and `/var/backups/pi-console`.
 
 ## Automatic SFTP backup
+
+Teleporter backups also include the **Overview chart histories**: UPS temperature (inside `history.db`), Proxmox CPU and memory (`history.json`) and Pi temperature and under-voltage (`pi-history.json`). The last two are written to disk every few minutes and when the service stops, so a backup may miss the latest minutes. Backups made by older versions stay valid; they just lack those files and the current ones are kept.
 
 A daily cron job (03:17) makes a Teleporter backup, **verifies it before uploading**, and sends it over SFTP to a storage server (`192.168.0.30` by default). It ships **disabled** until a user is set. It uses an SSH key only (never a password), so it can run unattended.
 

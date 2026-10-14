@@ -1,4 +1,4 @@
-# Pi Console 1.2.0n
+# Pi Console 1.2.0o
 
 ## Español
 
@@ -13,6 +13,7 @@ Primer release de la serie 1.2. Reúne todo lo hecho desde 1.1.8 y deja el códi
 - Mensajes de error y de log del backend en inglés.
 - **Instalación nueva más limpia:** el primer ingreso con `admin`/`admin` obliga a cambiar la contraseña antes de usar cualquier módulo; UPS Monitor empieza sin servidores (no exige tener una UPS); Net Monitor no escanea nada hasta que lo pides («Hacer escaneo inicial», con la lista llenándose en vivo) y autodetecta tu red; `snmp` es dependencia; los ejemplos usan IP neutras; menú por defecto: UPS, Net, Proxmox, WOL, Admin.
 - **Permisos entre módulos:** un admin solo da o quita permisos en los módulos donde él mismo tiene ese nivel, y los respaldos (Teleporter) los maneja solo quien administra todos los módulos. Proxmox avisa de forma permanente de los clusters sin certificado fijado. Cookie `Secure` opcional (`PICONSOLE_SECURE_COOKIE=1`) y sección [*Seguridad*](README.md#seguridad) en el README.
+- **1.2.0o:** los históricos de los gráficos del Resumen (Proxmox, Pi) ahora se guardan en disco y sobreviven a reinicios y actualizaciones; Teleporter los incluye en el respaldo, junto con la temperatura de la UPS que ya estaba en `history.db`.
 - **1.2.0n:** modo kiosko de 7": los gráficos de la Pi (temperatura y bajo voltaje) y de Proxmox (CPU y memoria) ahora también se ven, en versión compacta.
 - **1.2.0m:** Resumen: histórico de 24 h de temperatura y bajo voltaje de la Pi (solo en Raspberry Pi), gráfico de CPU y memoria de Proxmox (12 h) y gráfico de temperatura de la UPS (si el equipo la informa).
 - **1.2.0l:** respaldo automático por SFTP (`pi-console-sftp-backup`, cron diario 03:17 hacia el storage 192.168.0.30): verifica el archivo antes de subirlo, lo sube con nombre temporal, compara el tamaño y conserva 30 copias remotas y 7 locales. Viene desactivado hasta completar `SFTP_USER` en `/etc/pi-console/backup.conf`.
@@ -28,8 +29,8 @@ Primer release de la serie 1.2. Reúne todo lo hecho desde 1.1.8 y deja el códi
 
 **Actualizar desde cualquier 1.1.x**
 ```bash
-wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0n_all.deb?n=$RANDOM" -O pi-console_1.2.0n_all.deb
-sudo apt-get install -y ./pi-console_1.2.0n_all.deb
+wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0o_all.deb?n=$RANDOM" -O pi-console_1.2.0o_all.deb
+sudo apt-get install -y ./pi-console_1.2.0o_all.deb
 pi-console-health
 ```
 Los datos (`/var/lib/pi-console`) se conservan; el instalador además guarda una copia en `/var/backups/pi-console`.
@@ -49,6 +50,7 @@ First release of the 1.2 series. It gathers everything done since 1.1.8 and leav
 - Backend error and log messages in English.
 - **Cleaner fresh install:** the first login with `admin`/`admin` forces a password change before any module can be used; UPS Monitor starts with no servers (no UPS required); Net Monitor scans nothing until you ask ("Run initial scan", with the list filling in live) and autodetects your network; `snmp` is a dependency; examples use neutral IPs; default menu: UPS, Net, Proxmox, WOL, Admin.
 - **Cross-module permissions:** an admin can only grant or remove permissions on the modules where they hold that level themselves, and backups (Teleporter) are handled only by someone who administers every module. Proxmox permanently warns about clusters without a pinned certificate. Optional `Secure` cookie (`PICONSOLE_SECURE_COOKIE=1`) and a [*Security*](README.md#seguridad) section in the README.
+- **1.2.0o:** the Overview chart histories (Proxmox, Pi) are now saved to disk and survive restarts and upgrades; Teleporter includes them in the backup, along with the UPS temperature that was already in `history.db`.
 - **1.2.0n:** 7" kiosk mode: the Pi (temperature and under-voltage) and Proxmox (CPU and memory) charts are now shown too, in compact form.
 - **1.2.0m:** Overview: 24 h history of Pi temperature and under-voltage (Raspberry Pi only), Proxmox CPU and memory chart (12 h) and UPS temperature chart (if the unit reports it).
 - **1.2.0l:** automatic SFTP backup (`pi-console-sftp-backup`, daily cron at 03:17 to the 192.168.0.30 storage): verifies the archive before uploading, uploads under a temporary name, compares the size and keeps 30 remote and 7 local copies. Disabled until `SFTP_USER` is set in `/etc/pi-console/backup.conf`.
@@ -64,8 +66,8 @@ First release of the 1.2 series. It gathers everything done since 1.1.8 and leav
 
 **Upgrade from any 1.1.x**
 ```bash
-wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0n_all.deb?n=$RANDOM" -O pi-console_1.2.0n_all.deb
-sudo apt-get install -y ./pi-console_1.2.0n_all.deb
+wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0o_all.deb?n=$RANDOM" -O pi-console_1.2.0o_all.deb
+sudo apt-get install -y ./pi-console_1.2.0o_all.deb
 pi-console-health
 ```
 Data in `/var/lib/pi-console` is kept; the installer also saves a copy in `/var/backups/pi-console`.
