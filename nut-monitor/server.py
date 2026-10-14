@@ -406,7 +406,7 @@ def _status_event(sid, name, status, entry):
 #     It only keeps the "now"; the history lives in SQLite.
 class SCache:
     def __init__(self, sid):
-        self.id = sid; self._lock = threading.RLock()
+        self.id = sid; self.name = sid; self._lock = threading.RLock()
         self._ups = {}; self._clients = {}
         self._error = None; self._last_ok = None; self._ver = ""
 
@@ -428,7 +428,7 @@ class SCache:
             self._error = None; self._last_ok = time.time()
             if ver: self._ver = ver
         if auth.state_changed(f"nut-srv:{self.id}", "up"):
-            auth.record_event("nut", "info", "UPS server reachable again", "ups_srv_up", n=self.id)
+            auth.record_event("nut", "info", f"UPS server {self.name} reachable again", "ups_srv_up", n=self.name)
         # Insertar en DB fuera del lock
         try:
             watts = _calc_watts(vars_)
@@ -454,7 +454,7 @@ class SCache:
     def set_error(self, msg):
         with self._lock: self._error = msg
         ch = auth.state_changed(f"nut-srv:{self.id}", "down")
-        if ch: auth.record_event("nut", "crit", f"UPS server unreachable: {str(msg)[:80]}", "ups_srv_down", n=self.id, e=str(msg)[:80])
+        if ch: auth.record_event("nut", "crit", f"UPS server {self.name} unreachable: {str(msg)[:80]}", "ups_srv_down", n=self.name, e=str(msg)[:80])
 
     # Instantánea para la API: estado actual más historial según el rango pedido (1h, 1d, 1w, 1mo, all).
     # Con range=none solo se devuelve el estado actual y no se toca la base (así refresca la página sin costo).
@@ -500,6 +500,7 @@ def ensure_poller(server):
     sid = server["id"]
     with _gl:
         if sid not in _caches: _caches[sid] = SCache(sid)
+        _caches[sid].name = server.get("name") or sid       # readable name for the Overview timeline
         ev = _wake.setdefault(sid, threading.Event())
         if sid in _pollers: ev.set()   # edited server: poll again right away
         if sid not in _pollers or not _pollers[sid].is_alive():

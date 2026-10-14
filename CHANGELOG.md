@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0d — 2026-10-14
+
+### Resumen
+- **Mensajes de servidor UPS sin conexión legibles:** el aviso y la línea de tiempo mostraban el identificador interno del servidor (un UUID); ahora dicen el nombre y la dirección, p. ej. «Servidor UPS Sala técnica (192.168.0.5:3493) sin conexión: Timeout connecting to upsd». La tarjeta de UPS también usa el nombre del servidor.
+
 ## 1.2.0c — 2026-10-14
 
 ### Nuevo: Resumen (`/overview/`)
