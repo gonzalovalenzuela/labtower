@@ -1,4 +1,4 @@
-# Pi Console 1.2.0d
+# Pi Console 1.2.0f
 
 ## Español
 
@@ -13,14 +13,15 @@ Primer release de la serie 1.2. Reúne todo lo hecho desde 1.1.8 y deja el códi
 - Mensajes de error y de log del backend en inglés.
 - **Instalación nueva más limpia:** el primer ingreso con `admin`/`admin` obliga a cambiar la contraseña antes de usar cualquier módulo; UPS Monitor empieza sin servidores (no exige tener una UPS); Net Monitor no escanea nada hasta que lo pides («Hacer escaneo inicial», con la lista llenándose en vivo) y autodetecta tu red; `snmp` es dependencia; los ejemplos usan IP neutras; menú por defecto: UPS, Net, Proxmox, WOL, Admin.
 - **Permisos entre módulos:** un admin solo da o quita permisos en los módulos donde él mismo tiene ese nivel, y los respaldos (Teleporter) los maneja solo quien administra todos los módulos. Proxmox avisa de forma permanente de los clusters sin certificado fijado. Cookie `Secure` opcional (`PICONSOLE_SECURE_COOKIE=1`) y sección [*Seguridad*](README.md#seguridad) en el README.
+- **1.2.0f:** en modo kiosko el botón «Salir de kiosko» ya no tapa la hora de actualización.
 - **1.2.0d:** el Resumen muestra el nombre y la dirección del servidor UPS sin conexión en vez de su identificador interno.
 - **1.2.0c (Resumen):** nueva página `/overview/` con lo principal de UPS, Proxmox y red en una pantalla, widget de la Pi (temperatura, CPU, memoria, disco), línea de tiempo de eventos y modo kiosko para un monitor fijo. Servicio nuevo `pi-console-overview` (puerto 8085).
 - **1.2.0b (documentación):** README reordenado y completo (actualizar, variables de entorno, operación, capturas de los 5 módulos), versión en inglés (`README.en.md`) y `LICENSE` MIT. La clave CSRF de WOL ahora es aleatoria y persistente (sin valor por defecto conocido). La página de inicio sigue el orden del menú e incluye el Admin Panel.
 
 **Actualizar desde cualquier 1.1.x**
 ```bash
-wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0d_all.deb?n=$RANDOM" -O pi-console_1.2.0d_all.deb
-sudo apt-get install -y ./pi-console_1.2.0d_all.deb
+wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0f_all.deb?n=$RANDOM" -O pi-console_1.2.0f_all.deb
+sudo apt-get install -y ./pi-console_1.2.0f_all.deb
 pi-console-health
 ```
 Los datos (`/var/lib/pi-console`) se conservan; el instalador además guarda una copia en `/var/backups/pi-console`.
@@ -40,14 +41,15 @@ First release of the 1.2 series. It gathers everything done since 1.1.8 and leav
 - Backend error and log messages in English.
 - **Cleaner fresh install:** the first login with `admin`/`admin` forces a password change before any module can be used; UPS Monitor starts with no servers (no UPS required); Net Monitor scans nothing until you ask ("Run initial scan", with the list filling in live) and autodetects your network; `snmp` is a dependency; examples use neutral IPs; default menu: UPS, Net, Proxmox, WOL, Admin.
 - **Cross-module permissions:** an admin can only grant or remove permissions on the modules where they hold that level themselves, and backups (Teleporter) are handled only by someone who administers every module. Proxmox permanently warns about clusters without a pinned certificate. Optional `Secure` cookie (`PICONSOLE_SECURE_COOKIE=1`) and a [*Security*](README.md#seguridad) section in the README.
+- **1.2.0f:** in kiosk mode the "Exit kiosk" button no longer covers the update time.
 - **1.2.0d:** Overview shows the name and address of an unreachable UPS server instead of its internal identifier.
 - **1.2.0c (Overview):** new `/overview/` page with the key points of UPS, Proxmox and network on one screen, a Pi widget (temperature, CPU, memory, disk), an event timeline and a kiosk mode for a fixed monitor. New service `pi-console-overview` (port 8085).
 - **1.2.0b (documentation):** reorganised, complete README (updating, environment variables, operations, screenshots of all 5 modules), an English version (`README.en.md`) and an MIT `LICENSE`. The WOL CSRF key is now random and persistent (no known default). The home page follows the menu order and includes the Admin Panel.
 
 **Upgrade from any 1.1.x**
 ```bash
-wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0d_all.deb?n=$RANDOM" -O pi-console_1.2.0d_all.deb
-sudo apt-get install -y ./pi-console_1.2.0d_all.deb
+wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0f_all.deb?n=$RANDOM" -O pi-console_1.2.0f_all.deb
+sudo apt-get install -y ./pi-console_1.2.0f_all.deb
 pi-console-health
 ```
 Data in `/var/lib/pi-console` is kept; the installer also saves a copy in `/var/backups/pi-console`.

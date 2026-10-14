@@ -77,6 +77,9 @@ body.kiosk .wrap{max-width:none;padding:18px 24px}
 body.kiosk .nokiosk{display:none!important}
 body.kiosk .grid{grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}
 body.kiosk .tl{max-height:none}
+/* deja sitio al botón fijo "Salir de kiosko" para que no tape la hora de actualización */
+/* EN: leave room for the fixed "Exit kiosk" button so it doesn't cover the update time */
+body.kiosk .top{padding-right:9.5rem}
 #kx{display:none;position:fixed;top:10px;right:10px;opacity:.0;transition:opacity .3s}
 body.kiosk #kx{display:block}body.kiosk.moved #kx{opacity:1;cursor:pointer}
 @media (max-width:640px){.wrap{padding:12px}.row .l{width:52px}.grid{grid-template-columns:1fr}}
