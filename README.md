@@ -69,11 +69,11 @@ El código fuente está comentado en español e inglés (los comentarios en ingl
 
 ```bash
 # Descargar el .deb desde Releases
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0l/pi-console_1.2.0l_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0m/pi-console_1.2.0m_all.deb
 
 # Instalar (apt resuelve e instala las dependencias: python3, nginx, nut, nut-client, snmp, sudo…)
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.0l_all.deb
+sudo apt-get install -y ./pi-console_1.2.0m_all.deb
 ```
 
 Usa `apt-get install ./archivo.deb` (no `dpkg -i`): así `apt` instala las dependencias que falten.
@@ -115,13 +115,13 @@ Está preparado el repositorio firmado para instalar y actualizar con `apt` (gu�
 ## Actualizar
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0l/pi-console_1.2.0l_all.deb
-sudo apt-get install -y ./pi-console_1.2.0l_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0m/pi-console_1.2.0m_all.deb
+sudo apt-get install -y ./pi-console_1.2.0m_all.deb
 pi-console-health
 ```
 
 - Funciona desde cualquier 1.1.x o 1.2.x anterior. Los datos (`/var/lib/pi-console`) se conservan y el instalador guarda además una copia en `/var/backups/pi-console`.
-- Si el número de versión que instalas es **menor** que el que ya tienes (por ejemplo, volver a 1.2.0 teniendo 1.2.0l), `apt` lo trata como bajar de versión y pide `--allow-downgrades`:
+- Si el número de versión que instalas es **menor** que el que ya tienes (por ejemplo, volver a 1.2.0 teniendo 1.2.0m), `apt` lo trata como bajar de versión y pide `--allow-downgrades`:
   `sudo apt-get install -y --allow-downgrades ./pi-console_1.2.0_all.deb`.
 - Los cambios de cada versión están en [CHANGELOG.md](CHANGELOG.md).
 
@@ -140,10 +140,10 @@ El mismo mecanismo sirve para cualquier usuario: en el Admin Panel se puede marc
 ### Resumen
 Es la pantalla para mirar de un vistazo cómo está todo (`/overview/`; también es el primer acceso del menú y una tarjeta en el inicio). Muestra:
 - **Estado global** (Todo en orden / Atención / Falla) y, si algo falla, una lista de qué requiere atención con enlace al módulo.
-- **UPS:** estado de cada UPS (en red, con batería, batería baja), carga de batería, carga, autonomía, consumo en vatios y gráfico de las últimas 24 h.
-- **Proxmox:** por cluster, nodos en línea, VMs y CTs corriendo, CPU y memoria del conjunto y salud de Ceph.
+- **UPS:** estado de cada UPS (en red, con batería, batería baja), carga de batería, carga, autonomía, consumo en vatios, gráfico de carga de las últimas 24 h y, si la UPS informa temperatura, su gráfico de temperatura.
+- **Proxmox:** por cluster, nodos en línea, VMs y CTs corriendo, CPU y memoria del conjunto, salud de Ceph y un gráfico de CPU y memoria de las últimas 12 h (se pierde si se reinicia Proxmox Monitor).
 - **Net Monitor:** equipos en línea, conocidos y apagados, último escaneo, reparto por tipo de equipo y equipos nuevos de las últimas 48 h.
-- **Raspberry Pi:** temperatura, CPU, memoria, disco, tiempo encendida y problemas de la fuente de poder.
+- **Raspberry Pi:** temperatura, CPU, memoria, disco, tiempo encendida y problemas de la fuente de poder. **Solo si la instalación está en una Raspberry Pi** muestra además el histórico de 24 h de la temperatura, con marcas rojas cuando hubo bajo voltaje (subtensión) y ámbar cuando hubo limitación; se guarda en `/var/lib/pi-console/pi-history.json` y sobrevive a reinicios. En otros equipos no se crea ni se muestra.
 - **Línea de tiempo:** los cambios importantes con su hora (UPS pasa a batería o vuelve la red, nodo Proxmox caído o recuperado, cambios de salud de Ceph, equipos nuevos o que dejaron de responder). Los guardan los propios módulos, así que quedan registrados aunque nadie tenga la página abierta; se conservan los últimos 300 eventos o 30 días en `/var/lib/pi-console/events.json`.
 
 Cada persona ve solo las tarjetas y los eventos de los módulos a los que tiene acceso. La página se actualiza sola cada 10 s.

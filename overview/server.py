@@ -14,7 +14,7 @@ Overview — resumen de UPS, Proxmox, red y la Pi / Overview of UPS, Proxmox, ne
 #       /api/system  → temperature, CPU, memory, disk and uptime of the Pi
 #       /api/events  → timeline (modules record their state changes with auth.record_event)
 #     Structure: health · HTTP (GET/POST) · startup.
-import json, os, sys, logging
+import json, os, sys, logging, threading, time
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 ThreadingHTTPServer.request_queue_size = 128
 from urllib.parse import urlparse, parse_qs
@@ -37,6 +37,79 @@ STATIC_DIR = Path(__file__).parent / "static"
 # Qué permiso hace falta para ver los eventos de cada módulo.
 # EN: Which permission is needed to see each module's events.
 EVENT_MODULES = ("nut", "net", "pve")
+
+
+# ─── Historial de la Pi (temperatura y bajo voltaje) ─────────────────────────────────────
+# Solo en una Raspberry Pi: cada PI_EVERY segundos se anota la temperatura y los bits de «get_throttled».
+# Cada muestra es [hora, temperatura, banderas]; banderas: 1 = subtensión ahora, 2 = limitada ahora,
+# 4 = límite de temperatura ahora, 8 = hubo subtensión desde la muestra anterior (aunque ya no esté).
+# Se guardan 24 h y se escriben a disco cada PI_SAVE_EVERY muestras (y al cerrar) para no gastar la SD;
+# al reiniciar el servicio se retoma lo guardado. En otros equipos no se crea hilo ni archivo.
+# EN: ─── Pi history (temperature and under-voltage) ─────────────────────────────────────
+#     Raspberry Pi only: every PI_EVERY seconds the temperature and the "get_throttled" bits are recorded.
+#     Each sample is [time, temperature, flags]; flags: 1 = under-voltage now, 2 = throttled now,
+#     4 = temperature limit now, 8 = there was under-voltage since the previous sample (even if gone now).
+#     24 h are kept and written to disk every PI_SAVE_EVERY samples (and on exit) to spare the SD card;
+#     when the service restarts it resumes from what was saved. On other machines no thread or file is created.
+PI_EVERY      = int(os.environ.get("PICONSOLE_PI_EVERY", "60"))
+PI_KEEP       = 24 * 3600
+PI_SAVE_EVERY = 10
+PI_FILE       = Path(os.environ.get("PICONSOLE_PI_HISTORY", str(auth.EVENTS_FILE.with_name("pi-history.json"))))
+_pi_samples   = []
+_pi_lock      = threading.Lock()
+
+def pi_enabled():
+    return auth._is_raspberry_pi()
+
+def pi_load():
+    data = auth.read_json(PI_FILE, [], list)
+    now = time.time()
+    ok = []
+    for s in data:
+        if isinstance(s, list) and len(s) == 3 and all(isinstance(x, (int, float)) or x is None for x in s) \
+                and s[0] and now - PI_KEEP < s[0] <= now + 60:
+            ok.append(s)
+    with _pi_lock: _pi_samples[:] = ok
+
+def pi_save():
+    with _pi_lock: snap = list(_pi_samples)
+    try: auth.write_json(PI_FILE, snap, indent=None)
+    except Exception as e: log.warning(f"could not save the Pi history: {e}")
+
+# Una muestra: temperatura y banderas de alimentación.
+# EN: One sample: temperature and power flags.
+def pi_sample(prev_since):
+    st = auth.system_stats()
+    bits = auth._read_throttled()
+    flags, since = 0, prev_since
+    if bits is not None:
+        if bits & 0x1: flags |= 1
+        if bits & 0x4: flags |= 2
+        if bits & 0x8: flags |= 4
+        since = bool(bits & 0x10000)
+        if since and prev_since is False and not (bits & 0x1): flags |= 8      # new under-voltage between two samples
+    return [int(time.time()), st.get("temp"), flags], since
+
+def pi_loop():
+    pi_load()
+    since, n = None, 0
+    while True:
+        try:
+            s, since = pi_sample(since)
+            cut = time.time() - PI_KEEP
+            with _pi_lock:
+                _pi_samples.append(s)
+                while _pi_samples and _pi_samples[0][0] < cut: _pi_samples.pop(0)
+            n += 1
+            if n % PI_SAVE_EVERY == 0: pi_save()
+        except Exception as e:
+            log.warning(f"Pi sample failed: {e}")
+        time.sleep(PI_EVERY)
+
+def pi_history(hours=24):
+    cut = time.time() - max(1, min(24, hours)) * 3600
+    with _pi_lock: s = [x for x in _pi_samples if x[0] >= cut]
+    return {"pi": True, "every": PI_EVERY, "samples": s}
 
 
 # ─── Salud ───────────────────────────────────────────────────────────────────
@@ -107,6 +180,14 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/system":
             return self._json(200, auth.system_stats())
 
+        # Historial de temperatura y subtensión: solo existe en una Raspberry Pi.
+        # EN: Temperature and under-voltage history: it exists only on a Raspberry Pi.
+        if path == "/api/pihistory":
+            if not pi_enabled(): return self._json(200, {"pi": False, "samples": []})
+            try: hours = int(parse_qs(u.query).get("hours", ["24"])[0])
+            except ValueError: hours = 24
+            return self._json(200, pi_history(hours))
+
         # Eventos: solo los de módulos sobre los que el usuario tiene al menos «solo lectura».
         # EN: Events: only those of modules where the user has at least "readonly".
         if path == "/api/events":
@@ -141,9 +222,16 @@ class H(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     auth.system_stats()           # primes the CPU counter so the first reading is meaningful
+    if pi_enabled():
+        threading.Thread(target=pi_loop, daemon=True, name="pi-history").start()
     log.info(f"Overview en http://{HOST}:{PORT}")
+    import signal
+    def _bye(*_):
+        if pi_enabled(): pi_save()
+        os._exit(0)
+    signal.signal(signal.SIGTERM, _bye)
     try:
         srv = ThreadingHTTPServer((HOST, PORT), H)
         srv.daemon_threads = True
         srv.serve_forever()
-    except KeyboardInterrupt: sys.exit(0)
+    except KeyboardInterrupt: _bye()

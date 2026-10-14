@@ -23,7 +23,7 @@ More screenshots (light/dark, 4 resolutions) are in [`docs/screenshots/`](docs/s
 
 ## Overview page
 
-`/overview/` shows, on one screen: a global status (all good / attention / failure) with a list of what needs attention; each UPS (state, battery, load, runtime, watts, 24 h chart); each Proxmox cluster (nodes online, running VMs/CTs, CPU/memory, Ceph health); Net Monitor (hosts online/known/offline, last scan, device types, new devices in the last 48 h); the Raspberry Pi itself (temperature, CPU, memory, disk, uptime, power supply); and an **event timeline** (UPS on battery or mains back, Proxmox node down/up, Ceph health changes, new or vanished hosts). Events are recorded by the modules themselves, so they are kept even when nobody has the page open (last 300 events / 30 days in `/var/lib/pi-console/events.json`). Everyone sees only the cards and events of the modules they can access; the page refreshes every 10 s.
+`/overview/` shows, on one screen: a global status (all good / attention / failure) with a list of what needs attention; each UPS (state, battery, load, runtime, watts, 24 h load chart and, if the UPS reports it, a temperature chart); each Proxmox cluster (nodes online, running VMs/CTs, CPU/memory, Ceph health, 12 h CPU and memory chart); Net Monitor (hosts online/known/offline, last scan, device types, new devices in the last 48 h); the Raspberry Pi itself (temperature, CPU, memory, disk, uptime, power supply; on a real Raspberry Pi only, also a 24 h temperature history with red marks for under-voltage and amber for throttling, kept in `/var/lib/pi-console/pi-history.json`); and an **event timeline** (UPS on battery or mains back, Proxmox node down/up, Ceph health changes, new or vanished hosts). Events are recorded by the modules themselves, so they are kept even when nobody has the page open (last 300 events / 30 days in `/var/lib/pi-console/events.json`). Everyone sees only the cards and events of the modules they can access; the page refreshes every 10 s.
 
 **Kiosk mode:** the *Kiosk* button (or `/overview/?kiosk=1`) goes full screen with large text, no buttons or cursor, and keeps the screen awake. Meant for a fixed monitor or tablet; moving the mouse or touching the screen shows an exit button. Text size adapts to the screen (7" tablet, laptop, monitor); adjust it with `?zoom=0.8` (0.5 to 2). If the content doesn't fit, the *Auto-scroll* button (it shows up next to *Exit kiosk* when the screen is touched) makes it scroll slowly up and down by itself; it starts off and pauses for 30 s when the screen is touched. With `?autoscroll=1` it starts on. Example: `/overview/?kiosk=1&zoom=0.9`. The session renews itself while the page is open, so a read-only user is advisable. While Overview is open, Proxmox Monitor polls its clusters every 5 s (as it does with its own page open).
 
@@ -34,9 +34,9 @@ Raspberry Pi OS, DietPi or Debian 12+ (also works on an x86 VM), Python 3.9+, ng
 ## Install
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0l/pi-console_1.2.0l_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0m/pi-console_1.2.0m_all.deb
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.0l_all.deb
+sudo apt-get install -y ./pi-console_1.2.0m_all.deb
 ```
 
 Then open `http://<pi-ip>/`. The initial user is `admin` / `admin`; you **must set a new password** on first login. UPS Monitor starts with no servers, and Net Monitor scans nothing until you press "Run initial scan".

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0m — 2026-10-14
+
+### Nuevo: históricos en el Resumen
+- **Raspberry Pi: temperatura y bajo voltaje (24 h).** El servicio Resumen anota cada minuto la temperatura y los bits de `get_throttled` y guarda las últimas 24 h en `/var/lib/pi-console/pi-history.json` (se escribe cada 10 muestras y al cerrar el servicio, y se retoma al reiniciar). El gráfico marca en **rojo** la subtensión (también la que ocurrió entre dos muestras y ya pasó) y en **ámbar** la limitación por energía o temperatura; muestra mín., máx. y cuántos episodios de subtensión hubo. **Solo existe en una Raspberry Pi**: en otros equipos no se crea hilo, archivo ni gráfico (`/api/pihistory` responde `pi:false`).
+- **Proxmox: CPU y memoria (12 h)** por cluster, con el historial que ya guardaba Proxmox Monitor (promedio de los nodos en tramos de 5 min). El historial se pide una vez por minuto; el resto de las actualizaciones siguen siendo livianas.
+- **UPS: temperatura (24 h)** bajo el gráfico de carga, solo si la UPS informa temperatura (NUT `ups.temperature` o `battery.temperature`).
+- En modo kiosko de pantalla baja (7") los gráficos nuevos se ocultan como los demás; el de temperatura de la UPS también en kioskos de menos de 900 px de alto, para que todo siga cabiendo.
+
 ## 1.2.0l — 2026-10-14
 
 ### Nuevo: respaldo automático por SFTP
