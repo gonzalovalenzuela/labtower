@@ -1,1 +1,3 @@
 /etc/nginx/sites-available/pi-console.conf
+/etc/pi-console/backup.conf
+/etc/cron.d/pi-console-sftp-backup

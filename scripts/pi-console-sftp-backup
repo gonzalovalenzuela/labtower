@@ -1,0 +1,260 @@
+#!/bin/bash
+# pi-console-sftp-backup — automatic Pi Console backup, uploaded over SFTP to a storage server.
+#
+#   pi-console-sftp-backup [run]    make a backup now and upload it (this is what cron runs)
+#   pi-console-sftp-backup setup    create the SSH key and show the public key to authorize on the storage
+#   pi-console-sftp-backup test     check the SFTP connection, the remote folder and write access
+#   pi-console-sftp-backup status   show the result of the last run
+#
+# Installed as /usr/local/bin/pi-console-sftp-backup. Settings: /etc/pi-console/backup.conf.
+# Scheduled by /etc/cron.d/pi-console-sftp-backup (every day at 03:17). It does nothing until SFTP_USER is set.
+#
+# How it works:
+#  1. `teleporter backup` creates the archive (module data, NUT and nginx configuration) in LOCAL_DIR.
+#  2. `teleporter check` verifies it BEFORE uploading (a bad archive is never sent).
+#  3. It is uploaded as <name>.part and renamed when complete, and the remote size is compared with the local one.
+#  4. Old copies are pruned (KEEP_LOCAL here, KEEP_REMOTE on the storage). Only files named
+#     pi-console-auto-<this host>-<date>_<time>.tar.gz are ever deleted, nothing else.
+#  5. The result is written to /var/lib/pi-console/backup.status and to the system log
+#     (journalctl -t pi-console-sftp-backup).
+# ES: Respaldo automático de Pi Console por SFTP. `teleporter backup` crea el archivo, `teleporter check` lo verifica antes de
+#     subirlo, se sube con nombre temporal (.part) y se renombra al terminar, se compara el tamaño remoto con el local y se borran
+#     las copias viejas (solo las que se llaman pi-console-auto-<este equipo>-<fecha>_<hora>.tar.gz). Solo usa llave SSH, nunca
+#     contraseña, para poder correr desde cron. El resultado queda en /var/lib/pi-console/backup.status y en el log del sistema.
+set -uo pipefail
+
+CONF="${PICONSOLE_BACKUP_CONF:-/etc/pi-console/backup.conf}"
+
+# Defaults (override them in the configuration file).
+# ES: Valores por defecto; se cambian en el archivo de configuración.
+SFTP_HOST="192.168.0.30"
+SFTP_PORT="22"
+SFTP_USER=""                                   # empty = backups disabled / vacío = respaldo desactivado
+SFTP_DIR="pi-console-sftp-backups"                  # relative to the SFTP user's home, or absolute
+SFTP_KEY="/etc/pi-console/backup_key"
+KNOWN_HOSTS="/etc/pi-console/backup_known_hosts"
+KEEP_LOCAL=7
+KEEP_REMOTE=30
+LOCAL_DIR="/var/backups/pi-console"
+STATUS_FILE="/var/lib/pi-console/backup.status"
+TELEPORTER="/usr/local/bin/teleporter.sh"
+LOCK_FILE="/run/lock/pi-console-sftp-backup.lock"
+
+# The configuration file is READ, never executed: only KEY=value lines with known keys are accepted.
+# ES: El archivo de configuración se LEE, nunca se ejecuta: solo se aceptan líneas CLAVE=valor con claves conocidas.
+load_conf() {
+  local line k v
+  [ -r "$CONF" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line#"${line%%[![:space:]]*}"}"                       # trim leading spaces
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    [[ "$line" =~ ^([A-Z_]+)[[:space:]]*=[[:space:]]*(.*)$ ]] || continue
+    k="${BASH_REMATCH[1]}"; v="${BASH_REMATCH[2]}"
+    if   [[ "$v" =~ ^\"([^\"]*)\"([[:space:]]*#.*)?[[:space:]]*$ ]]; then v="${BASH_REMATCH[1]}"
+    elif [[ "$v" =~ ^\'([^\']*)\'([[:space:]]*#.*)?[[:space:]]*$ ]]; then v="${BASH_REMATCH[1]}"
+    else v="${v%%[[:space:]]#*}"; v="${v%"${v##*[![:space:]]}"}"; fi   # drop trailing comment and spaces
+    case "$k" in
+      SFTP_HOST|SFTP_PORT|SFTP_USER|SFTP_DIR|SFTP_KEY|KNOWN_HOSTS|KEEP_LOCAL|KEEP_REMOTE|LOCAL_DIR|STATUS_FILE|TELEPORTER|LOCK_FILE)
+        printf -v "$k" '%s' "$v";;
+    esac
+  done < "$CONF"
+}
+load_conf
+
+HOST_SHORT="$(hostname -s | tr -c 'A-Za-z0-9.\n-' '_')"
+PREFIX="pi-console-auto-${HOST_SHORT}-"
+NAME_RE="^${PREFIX//./\\.}[0-9]{8}_[0-9]{6}\\.tar\\.gz$"
+
+log()  { echo "$*"; logger -t pi-console-sftp-backup -- "$*" 2>/dev/null || true; }
+die()  { log "ERROR: $*"; write_status 0 "" 0 "$*"; exit 1; }
+# ES: Valida la configuración antes de usarla (el archivo se «source»a como root, y los valores terminan en comandos sftp).
+valid_conf() {
+  [[ "$SFTP_HOST" =~ ^[A-Za-z0-9._:-]+$ ]] || { echo "SFTP_HOST is not valid"; return 1; }
+  [[ "$SFTP_PORT" =~ ^[0-9]{1,5}$ ]] || { echo "SFTP_PORT is not valid"; return 1; }
+  [[ "$SFTP_USER" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "SFTP_USER is not valid"; return 1; }
+  [[ "$SFTP_DIR" =~ ^[A-Za-z0-9._/~-]+$ && "$SFTP_DIR" != *..* ]] || { echo "SFTP_DIR is not valid (letters, digits, . _ - / only; no spaces, no ..)"; return 1; }
+  [[ "$KEEP_LOCAL" =~ ^[0-9]+$ && "$KEEP_LOCAL" -ge 1 ]] || { echo "KEEP_LOCAL must be a number >= 1"; return 1; }
+  [[ "$KEEP_REMOTE" =~ ^[0-9]+$ && "$KEEP_REMOTE" -ge 1 ]] || { echo "KEEP_REMOTE must be a number >= 1"; return 1; }
+  return 0
+}
+
+SSH_OPTS=()
+build_opts() {
+  SSH_OPTS=(-oBatchMode=yes -oIdentitiesOnly=yes -i "$SFTP_KEY" -oPort="$SFTP_PORT"
+            -oStrictHostKeyChecking=accept-new -oUserKnownHostsFile="$KNOWN_HOSTS"
+            -oConnectTimeout=20 -oServerAliveInterval=15 -oServerAliveCountMax=4)
+}
+# Reads sftp batch commands from stdin; a leading "-" makes a command's failure non-fatal.
+# ES: Lee comandos de sftp por la entrada estándar; un «-» al inicio hace que su falla no corte el lote.
+sftp_batch() { sftp "${SSH_OPTS[@]}" -b - "$SFTP_USER@$SFTP_HOST" 2>&1; }
+
+# One-line, safe-to-store version of an error message.
+clean() { printf '%s' "$*" | tr '\n' ' ' | tr -cd 'A-Za-z0-9 .,:/_@=()-' | cut -c1-220; }
+
+# write_status <ok 0|1> <file> <size> <message>
+write_status() {
+  local ok="$1" file="$2" size="$3" msg; msg="$(clean "${4:-}")"
+  mkdir -p "$(dirname "$STATUS_FILE")" 2>/dev/null || return 0
+  local tmp="$STATUS_FILE.tmp.$$"
+  printf '{"time": %s, "ok": %s, "file": "%s", "size": %s, "remote": "%s@%s:%s", "message": "%s"}\n' \
+    "$(date +%s)" "$([ "$ok" = 1 ] && echo true || echo false)" "$(clean "$file")" "${size:-0}" \
+    "$(clean "$SFTP_USER")" "$(clean "$SFTP_HOST")" "$(clean "$SFTP_DIR")" "$msg" > "$tmp" 2>/dev/null \
+    && chmod 644 "$tmp" && mv -f "$tmp" "$STATUS_FILE" 2>/dev/null || rm -f "$tmp" 2>/dev/null
+  return 0
+}
+
+need_conf() {
+  [ -n "$SFTP_USER" ] || return 2
+  local why; why="$(valid_conf)" || die "configuration: $why (edit $CONF)"
+  command -v sftp >/dev/null 2>&1 || die "sftp is not installed (apt install openssh-client)"
+  [ -r "$SFTP_KEY" ] || die "SSH key not found: $SFTP_KEY — run: sudo pi-console-sftp-backup setup"
+  mkdir -p "$(dirname "$KNOWN_HOSTS")" 2>/dev/null || true
+  build_opts
+  return 0
+}
+
+# ── run ────────────────────────────────────────────────────────────────────────
+cmd_run() {
+  [ "$(id -u)" -eq 0 ] || { echo "this command needs root: sudo pi-console-sftp-backup" >&2; exit 1; }
+  need_conf; local rc=$?
+  if [ $rc -eq 2 ]; then log "backup is not configured (SFTP_USER is empty in $CONF): nothing to do"; exit 0; fi
+  # Only one run at a time.
+  mkdir -p "$(dirname "$LOCK_FILE")" 2>/dev/null || true
+  if { exec 8>"$LOCK_FILE"; } 2>/dev/null; then flock -n 8 || { log "another backup is already running"; exit 0; }; fi
+
+  umask 077
+  mkdir -p "$LOCAL_DIR" || die "cannot create $LOCAL_DIR"
+  chmod 700 "$LOCAL_DIR" 2>/dev/null || true
+  local name="${PREFIX}$(date +%Y%m%d_%H%M%S).tar.gz" file out
+  file="$LOCAL_DIR/$name"
+
+  log "creating backup $name"
+  out="$("$TELEPORTER" backup "$file" 2>&1)" || { echo "$out" | tail -5; rm -f -- "$file"; die "teleporter backup failed: $(echo "$out" | tail -1)"; }
+  out="$("$TELEPORTER" check "$file" 2>&1)" || { echo "$out" | tail -5; rm -f -- "$file"; die "the archive did not pass the check, it was NOT uploaded: $(echo "$out" | tail -1)"; }
+  local size; size="$(stat -c %s "$file")"
+
+  log "uploading $name ($size bytes) to $SFTP_USER@$SFTP_HOST:$SFTP_DIR"
+  out="$(printf '%s\n' "-mkdir $SFTP_DIR" "put $file $SFTP_DIR/$name.part" "rename $SFTP_DIR/$name.part $SFTP_DIR/$name" \
+         "ls -l $SFTP_DIR/$name" | sftp_batch)" || {
+    echo "$out" | tail -5
+    printf '%s\n' "-rm $SFTP_DIR/$name.part" | sftp_batch >/dev/null 2>&1
+    prune_local   # the archive stays here for the next attempt, but never more than KEEP_LOCAL
+    die "upload failed: $(echo "$out" | grep -v '^sftp>' | tail -2 | tr '\n' ' ')"
+  }
+  # Compare the remote size with the local one (when the server's listing can be read).
+  local rsize; rsize="$(echo "$out" | awk -v n="$name" '$NF ~ n"$" && $5 ~ /^[0-9]+$/ {print $5; exit}')"
+  if [ -n "$rsize" ] && [ "$rsize" != "$size" ]; then
+    printf '%s\n' "-rm $SFTP_DIR/$name" | sftp_batch >/dev/null 2>&1
+    die "the uploaded file has a different size (local $size, remote $rsize); it was removed from the storage"
+  fi
+  [ -n "$rsize" ] || log "warning: could not read the remote size, upload not double-checked"
+
+  prune_remote
+  prune_local
+  write_status 1 "$name" "$size" "ok"
+  log "backup finished: $name ($size bytes)"
+}
+
+# Keep the newest KEEP_REMOTE of our own files on the storage.
+# ES: En el storage se conservan las KEEP_REMOTE más nuevas; solo se tocan archivos con nuestro patrón de nombre.
+prune_remote() {
+  local list n i=0 old=()
+  list="$(printf '%s\n' "ls -1 $SFTP_DIR" | sftp_batch)" || { log "warning: could not list the remote folder, old copies were not pruned"; return 0; }
+  while IFS= read -r n; do
+    n="${n##*/}"; [[ "$n" =~ $NAME_RE ]] && old+=("$n")
+  done < <(echo "$list" | grep -v '^sftp>' | sort -r)
+  for n in "${old[@]}"; do
+    i=$((i+1)); [ $i -le "$KEEP_REMOTE" ] && continue
+    printf '%s\n' "-rm $SFTP_DIR/$n" | sftp_batch >/dev/null 2>&1 && log "removed old remote copy $n"
+  done
+}
+prune_local() {
+  local f i=0
+  while IFS= read -r f; do
+    [[ "${f##*/}" =~ $NAME_RE ]] || continue
+    i=$((i+1)); [ $i -le "$KEEP_LOCAL" ] && continue
+    rm -f -- "$f" && log "removed old local copy ${f##*/}"
+  done < <(ls -1 "$LOCAL_DIR"/${PREFIX}*.tar.gz 2>/dev/null | sort -r)
+}
+
+# ── setup ──────────────────────────────────────────────────────────────────────
+cmd_setup() {
+  [ "$(id -u)" -eq 0 ] || { echo "this command needs root: sudo pi-console-sftp-backup setup" >&2; exit 1; }
+  command -v ssh-keygen >/dev/null 2>&1 || { echo "ssh-keygen is not installed (apt install openssh-client)"; exit 1; }
+  mkdir -p "$(dirname "$SFTP_KEY")"
+  if [ ! -f "$SFTP_KEY" ]; then
+    ssh-keygen -q -t ed25519 -N "" -C "pi-console-sftp-backup@$(hostname -s)" -f "$SFTP_KEY" || exit 1
+    chmod 600 "$SFTP_KEY"; echo "SSH key created: $SFTP_KEY"
+  else
+    echo "SSH key already exists: $SFTP_KEY"
+  fi
+  [ -f "$SFTP_KEY.pub" ] || ssh-keygen -y -f "$SFTP_KEY" > "$SFTP_KEY.pub"
+  cat <<EOF
+
+1) Authorize this public key for the SFTP user on the storage ($SFTP_HOST):
+
+$(cat "$SFTP_KEY.pub")
+
+   - If the user has a shell:   ssh-copy-id -i $SFTP_KEY.pub ${SFTP_USER:-USER}@$SFTP_HOST
+   - If it is a NAS or an SFTP-only user: paste the line above in the user's authorized keys
+     (in the NAS panel, or in ~/.ssh/authorized_keys on the storage).
+
+2) Edit $CONF and set SFTP_USER (and SFTP_DIR if you want another folder).
+
+3) Check it:   sudo pi-console-sftp-backup test
+   Then run one now:   sudo pi-console-sftp-backup run
+EOF
+}
+
+# ── test ───────────────────────────────────────────────────────────────────────
+cmd_test() {
+  [ "$(id -u)" -eq 0 ] || { echo "this command needs root: sudo pi-console-sftp-backup test" >&2; exit 1; }
+  [ -n "$SFTP_USER" ] || { echo "SFTP_USER is empty: set it in $CONF"; exit 1; }
+  local why; why="$(valid_conf)" || { echo "configuration: $why"; exit 1; }
+  command -v sftp >/dev/null 2>&1 || { echo "sftp is not installed (apt install openssh-client)"; exit 1; }
+  [ -r "$SFTP_KEY" ] || { echo "SSH key not found: $SFTP_KEY — run: sudo pi-console-sftp-backup setup"; exit 1; }
+  mkdir -p "$(dirname "$KNOWN_HOSTS")" 2>/dev/null || true
+  build_opts
+  local tmp out probe=".pi-console-sftp-backup-test-$$"
+  tmp="$(mktemp)"; echo "pi-console backup test $(date -Iseconds)" > "$tmp"
+  echo "Connecting to $SFTP_USER@$SFTP_HOST:$SFTP_PORT ..."
+  out="$(printf '%s\n' "-mkdir $SFTP_DIR" "ls -l $SFTP_DIR" "put $tmp $SFTP_DIR/$probe" "rm $SFTP_DIR/$probe" | sftp_batch)"; local rc=$?
+  rm -f "$tmp"
+  if [ $rc -eq 0 ]; then
+    echo "OK: connection, folder '$SFTP_DIR' and write access work."
+  else
+    echo "FAILED:"; echo "$out" | grep -v '^sftp>' | tail -6
+    case "$out" in
+      *"Permission denied"*) echo "→ The storage rejected the key. Authorize the public key (sudo pi-console-sftp-backup setup shows it) for user $SFTP_USER.";;
+      *"REMOTE HOST IDENTIFICATION HAS CHANGED"*|*"Host key verification failed"*) echo "→ The storage's host key changed. If that is expected, remove its line from $KNOWN_HOSTS and try again.";;
+      *"timed out"*|*"No route"*|*"refused"*) echo "→ Cannot reach $SFTP_HOST:$SFTP_PORT (is SFTP/SSH enabled on the storage?).";;
+    esac
+    exit 1
+  fi
+}
+
+# ── status ─────────────────────────────────────────────────────────────────────
+cmd_status() {
+  [ -f "$STATUS_FILE" ] || { echo "No backup has run yet."; return 0; }
+  python3 -I - "$STATUS_FILE" <<'PY'
+import json, sys, time
+d = json.load(open(sys.argv[1]))
+when = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(d.get("time", 0)))
+print("Last run:  %s" % when)
+print("Result:    %s" % ("OK" if d.get("ok") else "FAILED"))
+if d.get("file"): print("File:      %s (%s bytes)" % (d["file"], d.get("size", 0)))
+print("Storage:   %s" % d.get("remote", "?"))
+if d.get("message") and not d.get("ok"): print("Detail:    %s" % d["message"])
+PY
+}
+
+usage() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; }
+
+case "${1:-run}" in
+  run)    cmd_run;;
+  setup)  cmd_setup;;
+  test)   cmd_test;;
+  status) cmd_status;;
+  -h|--help|help) usage;;
+  *) echo "Unknown command: $1" >&2; usage; exit 1;;
+esac

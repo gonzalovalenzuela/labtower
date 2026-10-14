@@ -34,9 +34,9 @@ Raspberry Pi OS, DietPi or Debian 12+ (also works on an x86 VM), Python 3.9+, ng
 ## Install
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0k/pi-console_1.2.0k_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0l/pi-console_1.2.0l_all.deb
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.0k_all.deb
+sudo apt-get install -y ./pi-console_1.2.0l_all.deb
 ```
 
 Then open `http://<pi-ip>/`. The initial user is `admin` / `admin`; you **must set a new password** on first login. UPS Monitor starts with no servers, and Net Monitor scans nothing until you press "Run initial scan".
@@ -55,6 +55,21 @@ sudo teleporter backup ~/backup.tar.gz   # backup / check / restore
 ```
 
 Settings are environment variables in `/etc/default/pi-console` (`NUT_POLL`, `SCAN_NETWORK`, `SCAN_INTERVAL`, `PICONSOLE_SECURE_COOKIE`…; see the Spanish README for the full table). `apt remove` keeps your data; `apt purge` removes code, services and the system user but leaves `/var/lib/pi-console` and `/var/backups/pi-console`.
+
+## Automatic SFTP backup
+
+A daily cron job (03:17) makes a Teleporter backup, **verifies it before uploading**, and sends it over SFTP to a storage server (`192.168.0.30` by default). It ships **disabled** until a user is set. It uses an SSH key only (never a password), so it can run unattended.
+
+```bash
+sudo pi-console-sftp-backup setup     # creates the SSH key and shows the public key to authorize on the storage
+sudo nano /etc/pi-console/backup.conf   # set SFTP_USER (and SFTP_DIR, SFTP_HOST if needed)
+sudo pi-console-sftp-backup test      # checks connection, folder and write access
+sudo pi-console-sftp-backup run       # make a backup now (cron does it by itself afterwards)
+sudo pi-console-sftp-backup status    # result of the last run
+journalctl -t pi-console-sftp-backup  # history / errors
+```
+
+It uploads as `.part` and renames when complete, then compares the remote size with the local one. It keeps 30 copies on the storage and 7 on the Pi, and only deletes files named `pi-console-auto-<host>-<date>_<time>.tar.gz`. The storage's host key is pinned on first use and a change makes the backup fail. The archive holds password hashes and tokens: use a dedicated SFTP user on a trusted storage. Restore with `teleporter restore` or the admin panel.
 
 ## Security
 

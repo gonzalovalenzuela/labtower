@@ -69,11 +69,11 @@ El código fuente está comentado en español e inglés (los comentarios en ingl
 
 ```bash
 # Descargar el .deb desde Releases
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0k/pi-console_1.2.0k_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0l/pi-console_1.2.0l_all.deb
 
 # Instalar (apt resuelve e instala las dependencias: python3, nginx, nut, nut-client, snmp, sudo…)
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.0k_all.deb
+sudo apt-get install -y ./pi-console_1.2.0l_all.deb
 ```
 
 Usa `apt-get install ./archivo.deb` (no `dpkg -i`): así `apt` instala las dependencias que falten.
@@ -115,13 +115,13 @@ Está preparado el repositorio firmado para instalar y actualizar con `apt` (gu�
 ## Actualizar
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0k/pi-console_1.2.0k_all.deb
-sudo apt-get install -y ./pi-console_1.2.0k_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0l/pi-console_1.2.0l_all.deb
+sudo apt-get install -y ./pi-console_1.2.0l_all.deb
 pi-console-health
 ```
 
 - Funciona desde cualquier 1.1.x o 1.2.x anterior. Los datos (`/var/lib/pi-console`) se conservan y el instalador guarda además una copia en `/var/backups/pi-console`.
-- Si el número de versión que instalas es **menor** que el que ya tienes (por ejemplo, volver a 1.2.0 teniendo 1.2.0k), `apt` lo trata como bajar de versión y pide `--allow-downgrades`:
+- Si el número de versión que instalas es **menor** que el que ya tienes (por ejemplo, volver a 1.2.0 teniendo 1.2.0l), `apt` lo trata como bajar de versión y pide `--allow-downgrades`:
   `sudo apt-get install -y --allow-downgrades ./pi-console_1.2.0_all.deb`.
 - Los cambios de cada versión están en [CHANGELOG.md](CHANGELOG.md).
 
@@ -200,6 +200,27 @@ Para migrar a otra Pi: instala el `.deb`, entra con `admin` (te pedirá la contr
 Incluye usuarios, WOL, UPS (servidores e historial), Net Monitor (hosts y SNMP), Proxmox, configuración de NUT y nginx. El archivo contiene contraseñas y tokens (permisos 600): guárdalo en un lugar privado. Antes de restaurar se guarda un snapshot del estado actual en `/var/backups/pi-console/`.
 
 Seguridad: el panel ejecuta el respaldo/restauración como root mediante una regla `sudo` limitada a `teleporter.sh gui-backup` y `gui-restore`. Restaurar la configuración de NUT (opcional) puede introducir comandos que el demonio del UPS ejecuta como root: restaura solo respaldos de confianza.
+
+---
+
+## Respaldo automático por SFTP
+
+Un cron diario (03:17) crea un respaldo con Teleporter, lo **verifica antes de subirlo** y lo envía por SFTP a un servidor de almacenamiento (por defecto `192.168.0.30`). Viene instalado pero **desactivado** hasta que se completa el usuario. Solo usa llave SSH (nunca contraseña), así que puede correr sin que nadie lo atienda.
+
+```bash
+sudo pi-console-sftp-backup setup     # crea la llave SSH y muestra la llave pública para autorizarla en el storage
+sudo nano /etc/pi-console/backup.conf   # completar SFTP_USER (y SFTP_DIR, SFTP_HOST si hace falta)
+sudo pi-console-sftp-backup test      # revisa conexión, carpeta y permiso de escritura
+sudo pi-console-sftp-backup run       # hace un respaldo ahora (después lo hace cron solo)
+sudo pi-console-sftp-backup status    # resultado de la última corrida
+journalctl -t pi-console-sftp-backup  # historial / errores
+```
+
+- **Seguro:** el archivo se sube con nombre temporal (`.part`) y se renombra al terminar; después se compara el tamaño remoto con el local. Un respaldo que no pasa la verificación no se envía.
+- **Retención:** se conservan 30 copias en el storage (`KEEP_REMOTE`) y 7 en la Pi (`/var/backups/pi-console`, `KEEP_LOCAL`). Solo se borran archivos llamados `pi-console-auto-<equipo>-<fecha>_<hora>.tar.gz`; cualquier otro archivo de esa carpeta no se toca.
+- **Huella del servidor:** la primera conexión guarda la huella del storage (`/etc/pi-console/backup_known_hosts`); si cambia, el respaldo falla y avisa en vez de enviar los datos a un equipo distinto.
+- **Contenido sensible:** el respaldo incluye contraseñas (hash) y tokens. Usa un usuario SFTP propio, con acceso solo a esa carpeta, en un storage de confianza.
+- El horario se cambia en `/etc/cron.d/pi-console-sftp-backup`. Para restaurar, descarga el archivo del storage y usa `teleporter restore` o el panel de administración.
 
 ---
 
@@ -288,7 +309,7 @@ Raspberry Pi
 │
 ├── /var/lib/pi-console/      ←── datos (usuarios, sesiones, historial…); sobreviven a las actualizaciones
 ├── /var/backups/pi-console/  ←── copias automáticas antes de actualizar o desinstalar
-├── /usr/local/bin/           ←── teleporter, pi-console-health, pi-console-resources
+├── /usr/local/bin/           ←── teleporter, pi-console-sftp-backup, pi-console-health, pi-console-resources
 │
 └── systemd services
     ├── wol-console.service
@@ -322,9 +343,12 @@ pi-console/
 ├── home/
 │   └── index.html           # Página de inicio del dashboard
 ├── etc/
-│   └── nginx/sites-available/pi-console.conf
+│   ├── nginx/sites-available/pi-console.conf
+│   ├── pi-console/backup.conf      # Configuración del respaldo por SFTP
+│   └── cron.d/pi-console-sftp-backup    # Cron diario del respaldo
 ├── scripts/
 │   ├── teleporter.sh        # Backup / check / restore
+│   ├── pi-console-sftp-backup    # Respaldo automático por SFTP (cron diario)
 │   ├── pi-console-health    # Diagnóstico desde la terminal
 │   ├── pi-console-resources # Memoria y CPU de los servicios
 │   └── apt-repo.py          # Generador del repositorio APT (aún sin publicar)

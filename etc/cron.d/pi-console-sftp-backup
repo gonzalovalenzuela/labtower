@@ -1,0 +1,7 @@
+# Pi Console — automatic backup over SFTP, every day at 03:17.
+# It does nothing until SFTP_USER is set in /etc/pi-console/backup.conf (see: sudo pi-console-sftp-backup setup).
+# Result: sudo pi-console-sftp-backup status   |   log: journalctl -t pi-console-sftp-backup
+# ES: Respaldo automático de Pi Console por SFTP, todos los días a las 03:17. No hace nada hasta que se complete SFTP_USER.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+17 3 * * * root [ -x /usr/local/bin/pi-console-sftp-backup ] && /usr/local/bin/pi-console-sftp-backup run

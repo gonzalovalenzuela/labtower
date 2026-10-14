@@ -27,6 +27,10 @@ if [ "$1" = "purge" ]; then
     rm -f /etc/systemd/system/proxmox-monitor.service
     rm -f /etc/systemd/system/pi-console-overview.service
     systemctl daemon-reload 2>/dev/null || true
+    # Llave SSH y huella del respaldo automático por SFTP (el .conf y el cron los borra dpkg por ser conffiles)
+    # EN: SSH key and host key of the automatic SFTP backup (dpkg removes the .conf and the cron file, as they are conffiles)
+    rm -f /etc/pi-console/backup_key /etc/pi-console/backup_key.pub /etc/pi-console/backup_known_hosts
+    rmdir /etc/pi-console 2>/dev/null || true
     # Eliminar usuario del sistema
     userdel pi-console 2>/dev/null || true
     echo "pi-console: purged (backups in /var/backups/pi-console)"
