@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0k — 2026-10-14
+
+### Resumen
+- **«Equipos nuevos» cortado en el kiosko de tablets chicas:** en tarjetas angostas la fila (etiqueta NEW + IP + nombre) se salía del borde de la tarjeta. Ahora el nombre puede achicarse y en el kiosko compacto va en una segunda línea, con puntos suspensivos si es muy largo, y la etiqueta es más pequeña. En otras pantallas el nombre largo se parte en vez de cortarse.
+
 ## 1.2.0j — 2026-10-14
 
 ### Resumen
