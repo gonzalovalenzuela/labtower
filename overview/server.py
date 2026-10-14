@@ -40,44 +40,44 @@ EVENT_MODULES = ("nut", "net", "pve")
 
 
 # ─── Historial de la Pi (temperatura y bajo voltaje) ─────────────────────────────────────
-# Solo en una Raspberry Pi: cada PI_EVERY segundos se anota la temperatura y los bits de «get_throttled».
-# Cada muestra es [hora, temperatura, banderas]; banderas: 1 = subtensión ahora, 2 = limitada ahora,
-# 4 = límite de temperatura ahora, 8 = hubo subtensión desde la muestra anterior (aunque ya no esté).
-# Se guardan 24 h y se escriben a disco cada PI_SAVE_EVERY muestras (y al cerrar) para no gastar la SD;
-# al reiniciar el servicio se retoma lo guardado. En otros equipos no se crea hilo ni archivo.
+# Solo en una Raspberry Pi: cada PI_EVERY segundos se guarda en metrics.db (tabla pi_samples) la temperatura y los
+# bits de «get_throttled». Banderas: 1 = subtensión ahora, 2 = limitada ahora, 4 = límite de temperatura ahora,
+# 8 = hubo subtensión desde la muestra anterior (aunque ya no esté). Se conservan PICONSOLE_PI_KEEP_DAYS días (7 por
+# defecto). En otros equipos no se crea hilo ni se escribe nada. Si queda un pi-history.json de la versión 1.2.0m/o,
+# se importa una vez y se renombra a .migrated.
 # EN: ─── Pi history (temperature and under-voltage) ─────────────────────────────────────
-#     Raspberry Pi only: every PI_EVERY seconds the temperature and the "get_throttled" bits are recorded.
-#     Each sample is [time, temperature, flags]; flags: 1 = under-voltage now, 2 = throttled now,
-#     4 = temperature limit now, 8 = there was under-voltage since the previous sample (even if gone now).
-#     24 h are kept and written to disk every PI_SAVE_EVERY samples (and on exit) to spare the SD card;
-#     when the service restarts it resumes from what was saved. On other machines no thread or file is created.
-PI_EVERY      = int(os.environ.get("PICONSOLE_PI_EVERY", "60"))
-PI_KEEP       = 24 * 3600
-PI_SAVE_EVERY = 10
-PI_FILE       = Path(os.environ.get("PICONSOLE_PI_HISTORY", str(auth.EVENTS_FILE.with_name("pi-history.json"))))
-_pi_samples   = []
-_pi_lock      = threading.Lock()
+#     Raspberry Pi only: every PI_EVERY seconds the temperature and the "get_throttled" bits are stored in
+#     metrics.db (table pi_samples). Flags: 1 = under-voltage now, 2 = throttled now, 4 = temperature limit now,
+#     8 = there was under-voltage since the previous sample (even if gone now). PICONSOLE_PI_KEEP_DAYS days are kept
+#     (7 by default). On other machines no thread is created and nothing is written. A leftover pi-history.json from
+#     version 1.2.0m/o is imported once and renamed to .migrated.
+PI_EVERY    = int(os.environ.get("PICONSOLE_PI_EVERY", "60"))
+PI_KEEP     = auth.keep_days("PICONSOLE_PI_KEEP_DAYS", 7) * 86400
+PI_LEGACY   = Path(os.environ.get("PICONSOLE_PI_HISTORY", str(auth.EVENTS_FILE.with_name("pi-history.json"))))
 
 def pi_enabled():
     return auth._is_raspberry_pi()
 
-def pi_load():
-    data = auth.read_json(PI_FILE, [], list)
-    now = time.time()
-    ok = []
-    for s in data:
-        if isinstance(s, list) and len(s) == 3 and all(isinstance(x, (int, float)) or x is None for x in s) \
-                and s[0] and now - PI_KEEP < s[0] <= now + 60:
-            ok.append(s)
-    with _pi_lock: _pi_samples[:] = ok
+def _ok_row(s, now):
+    return isinstance(s, list) and len(s) == 3 and isinstance(s[0], (int, float)) and now - PI_KEEP < s[0] <= now + 60 \
+        and (s[1] is None or isinstance(s[1], (int, float))) and isinstance(s[2], (int, float))
 
-def pi_save():
-    with _pi_lock: snap = list(_pi_samples)
-    try: auth.write_json(PI_FILE, snap, indent=None)
-    except Exception as e: log.warning(f"could not save the Pi history: {e}")
+# Importa el JSON antiguo si la tabla está vacía.
+# EN: Import the old JSON if the table is empty.
+def pi_migrate(c):
+    if not PI_LEGACY.is_file(): return
+    try:
+        if c.execute("SELECT 1 FROM pi_samples LIMIT 1").fetchone() is None:
+            now = time.time()
+            rows = [(int(s[0]), s[1], int(s[2])) for s in auth.read_json(PI_LEGACY, [], list) if _ok_row(s, now)]
+            c.executemany("INSERT OR IGNORE INTO pi_samples (ts,temp,flags) VALUES (?,?,?)", rows); c.commit()
+            log.info(f"Pi history: imported {len(rows)} samples from {PI_LEGACY.name}")
+        PI_LEGACY.rename(PI_LEGACY.with_name(PI_LEGACY.name + ".migrated"))
+    except Exception as e:
+        log.warning(f"could not import the old Pi history: {e}")
 
-# Una muestra: temperatura y banderas de alimentación.
-# EN: One sample: temperature and power flags.
+# Una muestra: [hora, temperatura, banderas].
+# EN: One sample: [time, temperature, flags].
 def pi_sample(prev_since):
     st = auth.system_stats()
     bits = auth._read_throttled()
@@ -90,26 +90,44 @@ def pi_sample(prev_since):
         if since and prev_since is False and not (bits & 0x1): flags |= 8      # new under-voltage between two samples
     return [int(time.time()), st.get("temp"), flags], since
 
+def pi_store(s):
+    c = auth.metrics_conn()
+    try:
+        c.execute("INSERT OR REPLACE INTO pi_samples (ts,temp,flags) VALUES (?,?,?)", tuple(s))
+        c.commit()
+    finally: c.close()
+
+def pi_prune():
+    c = auth.metrics_conn()
+    try:
+        c.execute("DELETE FROM pi_samples WHERE ts < ?", (int(time.time()) - PI_KEEP,)); c.commit()
+    finally: c.close()
+
 def pi_loop():
-    pi_load()
     since, n = None, 0
+    try:
+        c = auth.metrics_conn()
+        try: pi_migrate(c)
+        finally: c.close()
+        pi_prune()
+    except Exception as e:
+        log.warning(f"Pi history unavailable: {e}")
     while True:
         try:
             s, since = pi_sample(since)
-            cut = time.time() - PI_KEEP
-            with _pi_lock:
-                _pi_samples.append(s)
-                while _pi_samples and _pi_samples[0][0] < cut: _pi_samples.pop(0)
+            pi_store(s)
             n += 1
-            if n % PI_SAVE_EVERY == 0: pi_save()
+            if n % 360 == 0: pi_prune()
         except Exception as e:
             log.warning(f"Pi sample failed: {e}")
         time.sleep(PI_EVERY)
 
 def pi_history(hours=24):
-    cut = time.time() - max(1, min(24, hours)) * 3600
-    with _pi_lock: s = [x for x in _pi_samples if x[0] >= cut]
-    return {"pi": True, "every": PI_EVERY, "samples": s}
+    cut = int(time.time()) - max(1, min(PI_KEEP // 3600, hours)) * 3600
+    c = auth.metrics_conn()
+    try: rows = [list(r) for r in c.execute("SELECT ts,temp,flags FROM pi_samples WHERE ts >= ? ORDER BY ts", (cut,))]
+    finally: c.close()
+    return {"pi": True, "every": PI_EVERY, "samples": rows}
 
 
 # ─── Salud ───────────────────────────────────────────────────────────────────
@@ -186,7 +204,9 @@ class H(BaseHTTPRequestHandler):
             if not pi_enabled(): return self._json(200, {"pi": False, "samples": []})
             try: hours = int(parse_qs(u.query).get("hours", ["24"])[0])
             except ValueError: hours = 24
-            return self._json(200, pi_history(hours))
+            try: return self._json(200, pi_history(hours))
+            except Exception as e:
+                log.warning(f"Pi history unavailable: {e}"); return self._json(200, {"pi": True, "every": PI_EVERY, "samples": []})
 
         # Eventos: solo los de módulos sobre los que el usuario tiene al menos «solo lectura».
         # EN: Events: only those of modules where the user has at least "readonly".
@@ -225,13 +245,8 @@ if __name__ == "__main__":
     if pi_enabled():
         threading.Thread(target=pi_loop, daemon=True, name="pi-history").start()
     log.info(f"Overview en http://{HOST}:{PORT}")
-    import signal
-    def _bye(*_):
-        if pi_enabled(): pi_save()
-        os._exit(0)
-    signal.signal(signal.SIGTERM, _bye)
     try:
         srv = ThreadingHTTPServer((HOST, PORT), H)
         srv.daemon_threads = True
         srv.serve_forever()
-    except KeyboardInterrupt: _bye()
+    except KeyboardInterrupt: sys.exit(0)

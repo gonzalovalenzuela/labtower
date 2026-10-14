@@ -207,7 +207,6 @@ nut-monitor/history.db:history.db
 net-monitor/hosts.json:hosts.json
 net-monitor/config.json:config.json
 proxmox-monitor/clusters.json:clusters.json
-proxmox-monitor/history.json:history.json
 "
     printf '%s\n' "$MODULE_FILES" | grep -v '^$' | while IFS=: read -r rel_path base; do
         dest="$PI_HOME/$rel_path"

@@ -58,6 +58,11 @@ DATA_FILES=(
   "data/net-monitor/hosts.json|$PI_HOME/net-monitor/hosts.json"
   "data/net-monitor/config.json|$PI_HOME/net-monitor/config.json"
   "data/proxmox-monitor/clusters.json|$PI_HOME/proxmox-monitor/clusters.json"
+  "data/metrics.db|$DATA_DIR/metrics.db"
+)
+# ES: Archivos de la versión 1.2.0o (historiales en JSON). Ya no se respaldan, pero un respaldo antiguo puede traerlos: al restaurar se dejan en su sitio y los servicios los importan a metrics.db una sola vez.
+# EN: Files of version 1.2.0o (JSON histories). They are no longer backed up, but an old backup may carry them: on restore they are put back and the services import them into metrics.db once.
+LEGACY_FILES=(
   "data/proxmox-monitor/history.json|$PI_HOME/proxmox-monitor/history.json"
   "data/pi-history.json|$DATA_DIR/pi-history.json"
 )
@@ -119,7 +124,9 @@ c = sqlite3.connect("file:%s?mode=ro" % sys.argv[1], uri=True)
 r = c.execute("PRAGMA integrity_check").fetchone()
 if not r or r[0] != "ok": sys.exit(1)
 try: n = c.execute("SELECT COUNT(*) FROM history").fetchone()[0]
-except Exception: n = "?"
+except Exception:
+    try: n = sum(c.execute("SELECT COUNT(*) FROM " + t).fetchone()[0] for t in ("pi_samples", "pve_samples"))
+    except Exception: n = "?"
 print(n)
 PY
 }
@@ -419,6 +426,11 @@ cmd_restore() {
     [[ "$rel" == *.db ]] && rm -f "$dst-wal" "$dst-shm" "$dst-journal"
     if install_file "$src" "$dst" 600 "$owner"; then ok "$rel"; else err "$rel — could not be restored"; fi
   done
+  for entry in "${LEGACY_FILES[@]}"; do
+    rel="${entry%%|*}"; dst="${entry#*|}"; src="$TMP/$rel"
+    [ -f "$src" ] || continue
+    if install_file "$src" "$dst" 600 "$owner"; then ok "$rel (old format, will be imported)"; else warn "$rel — could not be restored"; fi
+  done
 
   hdr "Auth links"
   mkdir -p "$AUTH_DIR"
@@ -563,8 +575,8 @@ Pi Console Teleporter v$TELEPORTER_VERSION
                                           pass --nut / --nginx.
 
 Backup contents: users/sessions, WOL devices, UPS servers + history.db (includes UPS temperature),
-Net Monitor hosts + config (SNMP), Proxmox clusters + CPU/memory history, Pi temperature and
-under-voltage history, NUT config, nginx site.
+Net Monitor hosts + config (SNMP), Proxmox clusters, metrics.db (Proxmox CPU/memory and Pi
+temperature/under-voltage histories), NUT config, nginx site.
 The archive holds passwords and tokens (mode 600) — keep it private.
 EOF
 }

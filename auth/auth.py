@@ -45,7 +45,7 @@ file, fsync and rename) so no data is lost or corrupted by power cuts.
 #
 #     Convention: comments are written in Spanish first and then in English (marked "EN:"). The
 #     English docstrings describe what each function does; the comments explain why.
-import copy, json, os, hashlib, hmac, secrets, time, logging, threading, glob, shutil, subprocess
+import copy, json, os, hashlib, hmac, secrets, time, logging, threading, glob, shutil, subprocess, sqlite3
 from pathlib import Path
 
 try:
@@ -736,6 +736,41 @@ def system_stats():
                                 "temp_limit": bool(bits & 0x8), "since_boot": bool(bits & 0xF0000)}
     except Exception: pass
     return out
+
+
+# ─── Métricas: historiales de los gráficos del Resumen ──────────────────────────────────────────
+# Una base SQLite compartida (metrics.db, junto a users.json) con el historial de temperatura y subtensión de la Pi
+# (lo escribe el servicio Resumen) y el de CPU y memoria de los nodos Proxmox (lo escribe Proxmox Monitor). Cada
+# muestra se confirma al instante (WAL), así que un corte de luz no pierde datos; Teleporter la incluye en el respaldo.
+# EN: ─── Metrics: histories behind the Overview charts ─────────────────────────────────────────
+#     One shared SQLite database (metrics.db, next to users.json) holding the Pi temperature and under-voltage
+#     history (written by the Overview service) and the CPU and memory history of the Proxmox nodes (written by
+#     Proxmox Monitor). Each sample is committed at once (WAL), so a power cut loses nothing; Teleporter backs it up.
+METRICS_DB = Path(os.environ.get("PICONSOLE_METRICS", str(USERS_FILE.with_name("metrics.db"))))
+_METRICS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS pi_samples  (ts INTEGER PRIMARY KEY, temp REAL, flags INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS pve_samples (cid TEXT NOT NULL, node TEXT NOT NULL, ts INTEGER NOT NULL, cpu REAL, mem REAL,
+                                        PRIMARY KEY (cid, node, ts)) WITHOUT ROWID;
+"""
+
+def metrics_conn():
+    """Open metrics.db (created on first use, mode 600). Callers close it; open per operation, they are rare."""
+    new = not METRICS_DB.exists()
+    c = sqlite3.connect(str(METRICS_DB), timeout=10)
+    try:
+        c.execute("PRAGMA journal_mode=WAL"); c.execute("PRAGMA synchronous=NORMAL")
+        c.executescript(_METRICS_SCHEMA)
+        if new:
+            try: os.chmod(METRICS_DB, 0o600)
+            except OSError: pass
+    except Exception:
+        c.close(); raise
+    return c
+
+def keep_days(env, default):
+    """Retention in days from an environment variable (1–365)."""
+    try: return max(1, min(365, int(os.environ.get(env, default))))
+    except ValueError: return default
 
 
 # ─── Health ───────────────────────────────────────────────────────────────────

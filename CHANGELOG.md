@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0p — 2026-10-14
+
+### Históricos en base de datos (SQLite)
+- Los históricos de los gráficos del Resumen pasan de archivos JSON a una base **`/var/lib/pi-console/metrics.db`** (tablas `pi_samples` y `pve_samples`), compartida por el Resumen (temperatura y bajo voltaje de la Pi) y Proxmox Monitor (CPU y memoria de los nodos). Es el mismo motor que el historial de la UPS (`history.db`).
+- **Cada muestra se guarda al instante** (modo WAL): un corte de luz ya no pierde los últimos minutos, y no se reescribe un archivo completo cada vez.
+- **Retención configurable:** 7 días por defecto; `PICONSOLE_PI_KEEP_DAYS` (Pi) y `PVE_KEEP_DAYS` (Proxmox) la cambian, de 1 a 365. Los gráficos siguen mostrando 24 h (Pi) y 12 h (Proxmox).
+- **Migración automática:** si existen `pi-history.json` o `proxmox-monitor/history.json` (versión 1.2.0o), se importan una vez a la base y se renombran a `.migrated`.
+- **Teleporter** respalda `metrics.db` con la API de respaldo de SQLite (consistente aunque los servicios estén escribiendo) y la verifica. Restaura también respaldos de la 1.2.0o, que traían los JSON; los servicios los importan.
+- En un equipo que no es Raspberry Pi no se crea hilo ni tabla de la Pi.
+
 ## 1.2.0o — 2026-10-14
 
 ### Históricos persistentes y en el respaldo
