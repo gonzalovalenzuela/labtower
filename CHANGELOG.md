@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0j — 2026-10-14
+
+### Resumen
+- **Desplazamiento automático apagado por defecto:** ahora se activa con el botón «Auto-desplazar», que aparece junto a «Salir de kiosko» al mover el mouse o tocar la pantalla (solo si el contenido no cabe). Se apaga con el mismo botón, siempre vuelve apagado al entrar al kiosko y con `?autoscroll=1` arranca encendido. Reemplaza al parámetro `?autoscroll=0` de la 1.2.0h.
+- **Toque accidental:** el primer toque solo muestra la barra de botones; ya no pulsa un botón que todavía estaba invisible (podía sacar del kiosko sin querer). La barra queda visible 4 s.
+
 ## 1.2.0i — 2026-10-14
 
 ### Resumen

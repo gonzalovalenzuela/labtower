@@ -79,7 +79,7 @@ body.kiosk .grid{grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}
 body.kiosk .tl{max-height:none}
 /* deja sitio al botón fijo "Salir de kiosko" para que no tape la hora de actualización */
 /* EN: leave room for the fixed "Exit kiosk" button so it doesn't cover the update time */
-body.kiosk .top{padding-right:9.5rem}
+body.kiosk .top{padding-right:17rem}
 /* Pantallas más chicas (tablet de 7", portátil): letra y columnas más compactas. Se puede ajustar con ?zoom=0.8 (0.5–2). */
 /* EN: Smaller screens (7" tablet, laptop): more compact text and columns. Adjustable with ?zoom=0.8 (0.5–2). */
 @media (max-width:1599px){html.kiosk{font-size:16px;font-size:calc(16px*var(--kz,1))}}
@@ -111,8 +111,11 @@ body.kiosk .tl .ev:nth-child(n+5){display:none}
 body.kiosk .legend>div:nth-child(n+5){display:none}
 body.kiosk .list>div:nth-child(n+3){display:none}
 }
-#kx{display:none;position:fixed;top:10px;right:10px;opacity:.0;transition:opacity .3s}
-body.kiosk #kx{display:block}body.kiosk.moved #kx{opacity:1;cursor:pointer}
+#kbar{display:none;position:fixed;top:10px;right:10px;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+#kbar .btn{margin-left:8px}
+body.kiosk #kbar{display:block}body.kiosk.moved #kbar{opacity:1;pointer-events:auto}
+body.kiosk.moved #kbar .btn{cursor:pointer}
+#ka.on{background:var(--blue-dim);color:var(--blue);border-color:var(--blue)}
 /* Respaldo para navegadores sin "gap" en flexbox (Safari < 14.1, p. ej. iPad Air 1 / iOS 12): la clase nfg la pone el script del <head>. */
 /* EN: Fallback for browsers without flexbox "gap" (Safari < 14.1, e.g. iPad Air 1 / iOS 12): the nfg class is set by the <head> script. */
 .nfg .top{margin:0 -12px 4px 0}
@@ -170,19 +173,19 @@ body.kiosk #kx{display:block}body.kiosk.moved #kx{opacity:1;cursor:pointer}
     <section class="card wide" id="c-ev"></section>
   </div>
 </div>
-<button class="btn" id="kx" data-i="exitk">Exit kiosk</button>
+<div id="kbar"><button class="btn hide" id="ka" data-i="ascroll" aria-pressed="false">Auto-scroll</button><button class="btn" id="kx" data-i="exitk">Exit kiosk</button></div>
 
 <script>
 // ───────── Textos / texts ─────────
 const TXT={
- en:{title:'Overview',home:'Home',kiosk:'Kiosk',logout:'Sign out',login:'Sign in',exitk:'Exit kiosk',updated:'Updated',allok:'All good',attn:'Attention',fail:'Failure',
+ en:{title:'Overview',home:'Home',kiosk:'Kiosk',logout:'Sign out',login:'Sign in',exitk:'Exit kiosk',ascroll:'Auto-scroll',updated:'Updated',allok:'All good',attn:'Attention',fail:'Failure',
   ups:'UPS Monitor',pve:'Proxmox',net:'Net Monitor',pi:'Raspberry Pi',ev:'Timeline',open:'Open →',noups:'No UPS servers configured',nopve:'No clusters configured',nonet:'No scan yet',noev:'No events yet',
   mains:'On mains',batt:'On battery',lowb:'Low battery',unreach:'Unreachable',battery:'Battery',load:'Load',runtime:'Runtime',power:'Power',nodes:'Nodes',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memory',disk:'Disk',temp:'Temp',uptime:'Uptime',
   online:'Online',known:'Known',offline:'Offline',newdev:'New devices',lastscan:'Last scan',scanning:'Scanning…',ceph:'Ceph',types:'By device type',nonew:'No new devices',
   ago:'ago',now:'now',min:'min',h:'h',d:'d',s:'s',power_uv:'Under-voltage',power_th:'Throttled',power_ok:'Power supply OK',invalid:'Invalid credentials',
   issue_batt:'is running on battery',issue_lowb:'has low battery',issue_srv:'unreachable',issue_node:'node offline',issue_cl:'cluster unreachable',issue_cpu:'high CPU',issue_ram:'high memory',issue_ceph:'Ceph',
   issue_temp:'Pi temperature high',issue_disk:'Pi disk almost full',issue_mem:'Pi memory high',issue_pwr:'Pi power supply problem',issue_scan:'scan error'},
- es:{title:'Resumen',home:'Inicio',kiosk:'Kiosko',logout:'Cerrar sesión',login:'Entrar',exitk:'Salir de kiosko',updated:'Actualizado',allok:'Todo en orden',attn:'Atención',fail:'Falla',
+ es:{title:'Resumen',home:'Inicio',kiosk:'Kiosko',logout:'Cerrar sesión',login:'Entrar',exitk:'Salir de kiosko',ascroll:'Auto-desplazar',updated:'Actualizado',allok:'Todo en orden',attn:'Atención',fail:'Falla',
   ups:'UPS Monitor',pve:'Proxmox',net:'Net Monitor',pi:'Raspberry Pi',ev:'Línea de tiempo',open:'Abrir →',noups:'Sin servidores UPS configurados',nopve:'Sin clusters configurados',nonet:'Aún sin escaneo',noev:'Sin eventos todavía',
   mains:'En red eléctrica',batt:'Con batería',lowb:'Batería baja',unreach:'Sin conexión',battery:'Batería',load:'Carga',runtime:'Autonomía',power:'Consumo',nodes:'Nodos',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memoria',disk:'Disco',temp:'Temp',uptime:'Encendida',
   online:'En línea',known:'Conocidos',offline:'Apagados',newdev:'Equipos nuevos',lastscan:'Último escaneo',scanning:'Escaneando…',ceph:'Ceph',types:'Por tipo de equipo',nonew:'Sin equipos nuevos',
@@ -383,29 +386,41 @@ $('bl').onclick=()=>{lang=lang==='es'?'en':'es';try{localStorage.setItem('pi-lan
 // ───────── Modo kiosko / kiosk mode ─────────
 let wl=null;
 async function setKiosk(on){
-  document.body.classList.toggle('kiosk',on);document.documentElement.classList.toggle('kiosk',on);
+  document.body.classList.toggle('kiosk',on);document.documentElement.classList.toggle('kiosk',on);if(on&&typeof asOn!=='undefined'){asOn=false;asPaint()}
   try{const u=new URL(location.href);on?u.searchParams.set('kiosk','1'):u.searchParams.delete('kiosk');history.replaceState(null,'',u)}catch(e){}
   try{
     if(on){if(document.documentElement.requestFullscreen&&!document.fullscreenElement)await document.documentElement.requestFullscreen();if(navigator.wakeLock)wl=await navigator.wakeLock.request('screen')}
     else{if(document.fullscreenElement)await document.exitFullscreen();if(wl){wl.release();wl=null}}
   }catch(e){}
 }
-$('bk').onclick=()=>setKiosk(true);$('kx').onclick=()=>setKiosk(false);
+$('bk').onclick=()=>setKiosk(true);$('kx').onclick=()=>{if(kbarReady())setKiosk(false)};
 document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement&&document.body.classList.contains('kiosk')){document.body.classList.remove('kiosk');document.documentElement.classList.remove('kiosk')}});
-let mv=null;const showKx=()=>{document.body.classList.add('moved');clearTimeout(mv);mv=setTimeout(()=>document.body.classList.remove('moved'),2500)};
+// La barra de botones del kiosko aparece al mover el mouse o tocar la pantalla; el primer toque solo la muestra (no pulsa un botón aún invisible).
+// EN: The kiosk button bar shows up on mouse move or touch; the first touch only reveals it (it doesn't press a still-invisible button).
+let mv=null,kShown=0;
+const kbarReady=()=>Date.now()-kShown>350;
+const showKx=()=>{
+  if(!document.body.classList.contains('moved'))kShown=Date.now();
+  const el=document.scrollingElement||document.documentElement;$('ka').classList.toggle('hide',el.scrollHeight-el.clientHeight<=8);
+  document.body.classList.add('moved');clearTimeout(mv);mv=setTimeout(()=>document.body.classList.remove('moved'),4000)};
 document.addEventListener('mousemove',showKx);document.addEventListener('touchstart',showKx,{passive:true});
 document.addEventListener('visibilitychange',async()=>{if(document.visibilityState==='visible'&&document.body.classList.contains('kiosk')&&navigator.wakeLock){try{wl=await navigator.wakeLock.request('screen')}catch(e){}}});
 
-// Desplazamiento automático en modo kiosko cuando el contenido no cabe en la pantalla (tablets chicas).
-// Sube y baja despacio, hace pausa arriba y abajo, y se detiene 30 s si se toca la pantalla. Se desactiva con ?autoscroll=0.
-// EN: Automatic scrolling in kiosk mode when the content doesn't fit the screen (small tablets).
-// It moves slowly up and down, pauses at the top and bottom, and stops for 30 s on touch. Disable with ?autoscroll=0.
+// Desplazamiento automático en modo kiosko, para cuando el contenido no cabe en la pantalla (tablets chicas).
+// Viene APAGADO: se activa con el botón «Auto-desplazar» que aparece al tocar la pantalla (o abriendo con ?autoscroll=1).
+// Sube y baja despacio, hace pausa arriba y abajo, y se detiene 30 s si se toca la pantalla.
+// EN: Automatic scrolling in kiosk mode, for when the content doesn't fit the screen (small tablets).
+// It starts OFF: turn it on with the "Auto-scroll" button that shows up when the screen is touched (or open with ?autoscroll=1).
+// It moves slowly up and down, pauses at the top and bottom, and stops for 30 s on touch.
 let asDir=1,asHold=Date.now()+8000;
-const asNoAuto=new URLSearchParams(location.search).get('autoscroll')==='0';
+let asOn=new URLSearchParams(location.search).get('autoscroll')==='1';
+const asPaint=()=>{$('ka').classList.toggle('on',asOn);$('ka').setAttribute('aria-pressed',asOn?'true':'false')};
+$('ka').onclick=()=>{if(!kbarReady())return;asOn=!asOn;asDir=1;asHold=Date.now()+1500;asPaint()};
+asPaint();
 const asTouch=()=>{asHold=Date.now()+30000};
 ['touchstart','wheel','keydown'].forEach(ev=>document.addEventListener(ev,asTouch,{passive:true}));
 setInterval(()=>{
-  if(asNoAuto||!document.body.classList.contains('kiosk')||Date.now()<asHold)return;
+  if(!asOn||!document.body.classList.contains('kiosk')||Date.now()<asHold)return;
   const el=document.scrollingElement||document.documentElement,max=el.scrollHeight-el.clientHeight;
   if(max<=8)return;
   const y=el.scrollTop;
