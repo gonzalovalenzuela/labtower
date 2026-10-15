@@ -36,6 +36,12 @@ if [ "$1" = "purge" ]; then
     rm -f /etc/pi-console/backup_passphrase
     rmdir /etc/pi-console 2>/dev/null || true
     # Eliminar usuario del sistema
+    # ES: Los datos se conservan, pero pasan a root (700) antes de borrar el usuario: así no quedan a nombre de un uid huérfano que otro usuario podría heredar.
+    # EN: The data is kept, but it becomes root-owned (700) before the user is deleted, so it is not left under an orphan uid that another user could inherit.
+    if [ -d /var/lib/pi-console ] && [ ! -L /var/lib/pi-console ]; then
+        chown -R -h root:root /var/lib/pi-console 2>/dev/null || true
+        chmod 700 /var/lib/pi-console 2>/dev/null || true
+    fi
     userdel pi-console 2>/dev/null || true
     echo "pi-console: purged (backups in /var/backups/pi-console)"
 fi

@@ -27,7 +27,7 @@ Las actualizaciones llegan con `sudo apt update && sudo apt upgrade`. Si ya tien
    ```
 2. **Crear la rama `gh-pages`** en un clon aparte (queda sin historial del código):
    ```bash
-   cd /Volumes/NVME/Proyectos
+   cd <carpeta-de-trabajo>
    git clone git@github.com:gonzalovalenzuela/pi-console.git pi-console-pages
    cd pi-console-pages && git checkout --orphan gh-pages && git rm -rf . && git commit --allow-empty -m "gh-pages" && cd ..
    ```
@@ -36,7 +36,7 @@ Las actualizaciones llegan con `sudo apt update && sudo apt upgrade`. Si ya tien
 ## Publicar una versión / Publishing a release
 
 ```bash
-cd /Volumes/NVME/Proyectos/pi-console-repo
+cd <carpeta-del-repo>
 python3 scripts/apt-repo.py --repo ../pi-console-pages --key <HUELLA> add /ruta/a/pi-console_1.2.0_all.deb
 cd ../pi-console-pages && git add -A && git commit -m "pi-console 1.2.0" && git push -u origin gh-pages
 ```

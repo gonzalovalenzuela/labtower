@@ -20,6 +20,12 @@ fi
 # EN: Step 2: persistent data folder (/var/lib/pi-console). dpkg never touches it, so users and settings survive upgrades.
 # ES: La carpeta raíz la crea root; todo lo de adentro lo crea el usuario del servicio (así root nunca hace chown/chmod sobre un enlace plantado dentro).
 # EN: The top folder is created by root; everything inside is created by the service user (so root never chowns/chmods through a planted link).
+# ES: Tras un purge los datos quedan en root (700): se devuelven al usuario del servicio. Solo en ese estado (carpeta de root, sin enlaces), cuando ningún servicio corre ni puede haber plantado nada.
+# EN: After a purge the data is root-owned (700): hand it back to the service user. Only in that state (root-owned folder, not a link), when no service is running or could have planted anything.
+if [ -d "$DATA_DIR" ] && [ ! -L "$DATA_DIR" ] && [ "$(stat -c %u "$DATA_DIR")" = "0" ]; then
+    find "$DATA_DIR" -xdev -exec chown -h pi-console:pi-console {} +
+    echo "  data of a previous installation handed back to pi-console"
+fi
 install -d -m 750 -o pi-console -g pi-console "$DATA_DIR"
 as_svc() { runuser -u pi-console -- "$@"; }
 for d in wol-console nut-monitor net-monitor proxmox-monitor; do

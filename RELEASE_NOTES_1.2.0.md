@@ -1,4 +1,6 @@
-# Pi Console 1.2.0x
+# Pi Console 1.2.0 (historial de las compilaciones 1.2.0a–x)
+
+> Versión vigente: ver [RELEASE_NOTES_1.2.1.md](RELEASE_NOTES_1.2.1.md).
 
 ## Español
 
@@ -35,14 +37,6 @@ Primer release de la serie 1.2. Reúne todo lo hecho desde 1.1.8 y deja el códi
 - **1.2.0d:** el Resumen muestra el nombre y la dirección del servidor UPS sin conexión en vez de su identificador interno.
 - **1.2.0c (Resumen):** nueva página `/overview/` con lo principal de UPS, Proxmox y red en una pantalla, widget de la Pi (temperatura, CPU, memoria, disco), línea de tiempo de eventos y modo kiosko para un monitor fijo. Servicio nuevo `pi-console-overview` (puerto 8085).
 - **1.2.0b (documentación):** README reordenado y completo (actualizar, variables de entorno, operación, capturas de los 5 módulos), versión en inglés (`README.en.md`) y `LICENSE` MIT. La clave CSRF de WOL ahora es aleatoria y persistente (sin valor por defecto conocido). La página de inicio sigue el orden del menú e incluye el Admin Panel.
-
-**Actualizar desde cualquier 1.1.x**
-```bash
-wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0x_all.deb?n=$RANDOM" -O pi-console_1.2.0x_all.deb
-sudo apt-get install -y ./pi-console_1.2.0x_all.deb
-pi-console-health
-```
-Los datos (`/var/lib/pi-console`) se conservan; el instalador además guarda una copia en `/var/backups/pi-console`.
 
 Detalle completo en [CHANGELOG.md](CHANGELOG.md).
 
@@ -84,13 +78,5 @@ First release of the 1.2 series. It gathers everything done since 1.1.8 and leav
 - **1.2.0d:** Overview shows the name and address of an unreachable UPS server instead of its internal identifier.
 - **1.2.0c (Overview):** new `/overview/` page with the key points of UPS, Proxmox and network on one screen, a Pi widget (temperature, CPU, memory, disk), an event timeline and a kiosk mode for a fixed monitor. New service `pi-console-overview` (port 8085).
 - **1.2.0b (documentation):** reorganised, complete README (updating, environment variables, operations, screenshots of all 5 modules), an English version (`README.en.md`) and an MIT `LICENSE`. The WOL CSRF key is now random and persistent (no known default). The home page follows the menu order and includes the Admin Panel.
-
-**Upgrade from any 1.1.x**
-```bash
-wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0x_all.deb?n=$RANDOM" -O pi-console_1.2.0x_all.deb
-sudo apt-get install -y ./pi-console_1.2.0x_all.deb
-pi-console-health
-```
-Data in `/var/lib/pi-console` is kept; the installer also saves a copy in `/var/backups/pi-console`.
 
 Full details in [CHANGELOG.md](CHANGELOG.md).
