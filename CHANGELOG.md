@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.0w — 2026-10-15
+
+- **Resumen:** las tarjetas se reparten de forma equilibrada. Si no caben todas en una fila (4 tarjetas con sitio para 3 columnas, típico en pantallas de ~1000–1300 px), pasan a 2×2 en vez de dejar la última sola en una segunda fila con un hueco a su derecha. En kiosko el ancho mínimo por tarjeta baja de 380 a 320 px: 4 tarjetas caben en una fila desde ~1400 px.
+
 ## 1.2.0v — 2026-10-15
 
 - **Resumen, kiosko y pantallas anchas:** la línea de tiempo estaba dentro de la grilla de tarjetas y, al ocupar todas las columnas, reservaba una columna vacía a la derecha: con 4 tarjetas y un ancho de ~1100–1200 px quedaba cerca de un 20 % de la pantalla sin usar. Ahora la línea de tiempo va debajo de la grilla y las tarjetas reparten todo el ancho.

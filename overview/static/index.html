@@ -86,7 +86,7 @@ body.kiosk{cursor:none}
 html.kiosk{font-size:19px;font-size:calc(19px*var(--kz,1))}
 body.kiosk .wrap{max-width:none;padding:18px 24px}
 body.kiosk .nokiosk{display:none!important}
-body.kiosk .grid{grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}
+body.kiosk .grid{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
 body.kiosk .tl{max-height:none}
 /* deja sitio al botón fijo "Salir de kiosko" para que no tape la hora de actualización */
 /* EN: leave room for the fixed "Exit kiosk" button so it doesn't cover the update time */
@@ -419,7 +419,7 @@ async function refresh(){
     try{const h=await jget('api/pihistory');piH=h&&h.pi?h:null}catch(e){}
   }
   const card=(id,show)=>$(id).classList.toggle('hide',!show);
-  card('c-nut',!!R.nut);card('c-pve',!!R.pve);card('c-net',!!R.net);
+  card('c-nut',!!R.nut);card('c-pve',!!R.pve);card('c-net',!!R.net);fitGrid();
   const fail=(id,name)=>{$(id).innerHTML=`<div class="ch"><h2>${name}</h2>${pill('crit',T('unreach'))}</div>`;issues.push({lv:'crit',m:name,t:`${name}: ${T('unreach')}`});return 'crit'};
   if(R.nut)sevs.push(R.nut.status==='fulfilled'?renderUPS(R.nut.value):fail('c-nut',T('ups')));
   if(R.pve)sevs.push(R.pve.status==='fulfilled'?renderPVE(R.pve.value):fail('c-pve',T('pve')));
@@ -462,10 +462,21 @@ function applyLang(){
 }
 $('bl').onclick=()=>{lang=lang==='es'?'en':'es';try{localStorage.setItem('pi-lang',lang)}catch(e){}applyLang();if(me&&me.username){histTs=0;refresh()}};
 
+// ES: Reparto equilibrado de las tarjetas: si no caben todas en una fila, se reparten en filas parejas (4 tarjetas con sitio para 3 → 2×2) en vez de dejar una sola tarjeta huérfana con un hueco a su derecha.
+// EN: Balanced card layout: if they do not all fit in one row they are spread over even rows (4 cards with room for 3 → 2×2) instead of leaving one orphan card with a gap to its right.
+function fitGrid(){
+  const g=$('grid');if(!g)return;
+  g.style.gridTemplateColumns='';
+  const n=[...g.children].filter(c=>!c.classList.contains('hide')).length;
+  const t=getComputedStyle(g).gridTemplateColumns.split(' ').length;
+  if(n>t&&t>0){const rows=Math.ceil(n/t);g.style.gridTemplateColumns='repeat('+Math.ceil(n/rows)+',minmax(0,1fr))'}
+}
+window.addEventListener('resize',fitGrid);
+
 // ───────── Modo kiosko / kiosk mode ─────────
 let wl=null;
 async function setKiosk(on){
-  document.body.classList.toggle('kiosk',on);document.documentElement.classList.toggle('kiosk',on);if(on&&typeof asOn!=='undefined'){asOn=false;asPaint()}
+  document.body.classList.toggle('kiosk',on);document.documentElement.classList.toggle('kiosk',on);fitGrid();if(on&&typeof asOn!=='undefined'){asOn=false;asPaint()}
   try{const u=new URL(location.href);on?u.searchParams.set('kiosk','1'):u.searchParams.delete('kiosk');history.replaceState(null,'',u)}catch(e){}
   try{
     if(on){if(document.documentElement.requestFullscreen&&!document.fullscreenElement)await document.documentElement.requestFullscreen();if(navigator.wakeLock)wl=await navigator.wakeLock.request('screen')}
