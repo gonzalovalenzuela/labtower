@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.1 — 2026-10-15
+
+Versión estable de la serie 1.2 (reúne 1.2.0a–x). El funcionamiento es el de 1.2.0x, salvo lo indicado.
+
+### Revisión previa al release
+- Sin claves, tokens ni credenciales en el código, el historial de git ni el `.deb`.
+- Sin datos personales ni de red: solo quedan el nombre del autor y direcciones de documentación (`192.0.2.0/24`).
+- 38 pruebas de integración; instalación, actualización, desinstalación y purga del `.deb` probadas.
+
+### Cambios
+- **Paquete:** al purgar, los datos conservados pasan a `root:root` (700) y se devuelven al usuario del servicio al reinstalar. Antes quedaban a nombre de un uid huérfano.
+- **Páginas:** la metaetiqueta `author` ya no incluye el correo.
+- **Documentación:** capturas rehechas con datos ficticios y la versión actual; ruta local quitada de `docs/APT.md`.
+
 ## 1.2.0x — 2026-10-15
 
 - **UPS Monitor:** los gráficos de voltaje, consumo y temperatura de cada UPS ocupan ahora todo el ancho del detalle (más amplios y sin el hueco que dejaba el de temperatura al quedar solo en una fila). En pantallas angostas ya iban a todo el ancho.
