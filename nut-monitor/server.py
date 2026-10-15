@@ -52,8 +52,12 @@ POLL_SEC    = int(os.environ.get("NUT_POLL", 10))
 STATIC_DIR  = Path(__file__).parent / "static"
 # servers.json: lista de servidores NUT configurados. history.db: historial en SQLite.
 # EN: servers.json: list of configured NUT servers. history.db: history in SQLite.
-DATA_FILE   = Path(__file__).parent / "servers.json"
-DB_FILE     = Path(__file__).parent / "history.db"
+# Los datos viven en /var/lib/pi-console/nut-monitor (el código de /opt es de solo lectura para el servicio).
+# EN: The data lives in /var/lib/pi-console/nut-monitor (the code in /opt is read-only for the service).
+DATA_DIR    = auth.module_data("nut-monitor")
+auth.adopt_legacy(Path(__file__).parent, DATA_DIR, ("servers.json", "history.db"))
+DATA_FILE   = DATA_DIR / "servers.json"
+DB_FILE     = DATA_DIR / "history.db"
 
 # Cuántos puntos devolver en la API según rango
 # Máximo de puntos que se devuelven por rango del gráfico. Se reducen promediando intervalos
@@ -654,7 +658,7 @@ class H(BaseHTTPRequestHandler):
     def _body(self):
         try:
             n = int(self.headers.get("Content-Length", 0))
-            if n > 8192: return None
+            if n < 0 or n > 8192: return None
             return json.loads(self.rfile.read(n))
         except: return None
 
@@ -689,10 +693,10 @@ class H(BaseHTTPRequestHandler):
 
         if path in ("/", "/index.html"):
             return self._file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
-        if path == "/api/version":     # public: shown in the page footer
-            return self._json(200, {"version": auth.version()})
+        if path == "/api/version":     # shown in the page footer; only with a session (or from this machine)
+            return self._json(200, {"version": auth.version()} if (auth.get_session(tok) or auth.is_local_request(self)) else {})
         if path == "/api/health":      # public: levels only; details need a valid session
-            code, body = health_report(auth.get_session(tok) is not None)
+            code, body = health_report(auth.health_mode(self, tok))
             return self._json(code, body)
         # En GET siempre responde ok: la página lo usa para saber que el servicio está vivo.
         # EN: On GET it always answers ok: the page uses it to know the service is alive.
@@ -755,7 +759,7 @@ class H(BaseHTTPRequestHandler):
                     r["vin"], r["vout"], r["watts"], r["temp"]
                 ])
             body = buf.getvalue().encode()
-            fname = f"ups-history-{sid}-{ups}-{time.strftime('%Y%m%d')}.csv"
+            fname = auth.safe_filename(f"ups-history-{sid}-{ups}-{time.strftime('%Y%m%d')}.csv")
             self.send_response(200)
             self.send_header("Content-Type", "text/csv; charset=utf-8")
             self.send_header("Content-Disposition", f'attachment; filename="{fname}"')
@@ -790,7 +794,7 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.send_header("Set-Cookie",
                 auth.session_cookie(token))
-            body_resp = json.dumps({"ok": True, "token": token, "username": body["username"],
+            body_resp = json.dumps({"ok": True, "username": body["username"],
                                     "permissions": u["permissions"],
                                     "must_change_password": must}).encode()
             self.send_header("Content-Length", str(len(body_resp)))
@@ -808,12 +812,14 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/servers":
             if not auth.check_permission(tok, "nut", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
-            host = (body.get("host") or "").strip()
-            name = (body.get("name") or "").strip()
+            host = str(body.get("host") or "").strip()
+            name = str(body.get("name") or "").strip()
             try: port = int(body.get("port") or 3493)
             except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
             if not host or not name: return self._json(400, {"error": "host and name are required"})
             if not 1 <= port <= 65535: return self._json(400, {"error": "Invalid port"})
+            if not auth.valid_host(host): return self._json(400, {"error": "Invalid host"})
+            if len(name) > 60 or re.search(r"[\x00-\x1f\x7f]", name): return self._json(400, {"error": "Invalid name"})
             import uuid
             with _srv_lock:
                 srvs = load_servers()
@@ -828,10 +834,10 @@ class H(BaseHTTPRequestHandler):
         elif path == "/api/test":
             if not auth.check_permission(tok, "nut", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
-            host = (body.get("host") or "").strip()
+            host = str(body.get("host") or "").strip()
             try: port = int(body.get("port") or 3493)
             except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
-            if not host or not 1 <= port <= 65535: return self._json(400, {"error": "Invalid host or port"})
+            if not auth.valid_host(host) or not 1 <= port <= 65535: return self._json(400, {"error": "Invalid host or port"})
             try:
                 nut  = NUTClient(host, port, timeout=4)
                 ups  = nut.list_ups(); ver = nut.get_version()
@@ -853,12 +859,14 @@ class H(BaseHTTPRequestHandler):
         body = self._body()
         if body is None: return self._json(400, {"error": "Invalid request body"})
         sid  = m.group(1)
-        host = (body.get("host") or "").strip()
-        name = (body.get("name") or "").strip()
+        host = str(body.get("host") or "").strip()
+        name = str(body.get("name") or "").strip()
         try: port = int(body.get("port") or 3493)
         except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
         if not host or not name: return self._json(400, {"error": "host and name are required"})
         if not 1 <= port <= 65535: return self._json(400, {"error": "Invalid port"})
+        if not auth.valid_host(host): return self._json(400, {"error": "Invalid host"})
+        if len(name) > 60 or re.search(r"[\x00-\x1f\x7f]", name): return self._json(400, {"error": "Invalid name"})
         with _srv_lock:
             srvs = load_servers()
             srv  = next((x for x in srvs if x["id"] == sid), None)

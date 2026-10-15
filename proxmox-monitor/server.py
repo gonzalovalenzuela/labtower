@@ -50,7 +50,11 @@ PORT       = 8084
 STATIC_DIR = Path(__file__).parent / "static"
 # clusters.json: clusters configurados, con su token de API (por eso el archivo es privado, modo 0600).
 # EN: clusters.json: configured clusters, with their API token (so the file is private, mode 0600).
-DATA_FILE  = Path(__file__).parent / "clusters.json"
+# Los datos viven en /var/lib/pi-console/proxmox-monitor (el código de /opt es de solo lectura para el servicio).
+# EN: The data lives in /var/lib/pi-console/proxmox-monitor (the code in /opt is read-only for the service).
+DATA_DIR   = auth.module_data("proxmox-monitor")
+auth.adopt_legacy(Path(__file__).parent, DATA_DIR, ("clusters.json", "history.json"))
+DATA_FILE  = DATA_DIR / "clusters.json"
 # Ritmos de consulta: rápido cuando hay alguien mirando, lento cuando no (variables PVE_POLL_*).
 # EN: Polling rates: fast when someone is looking, slow when not (PVE_POLL_* variables).
 POLL_ACTIVE = float(os.environ.get("PVE_POLL_ACTIVE", 5))    # seconds, while someone is watching
@@ -584,7 +588,7 @@ class H(BaseHTTPRequestHandler):
     def _body(self):
         try:
             n = int(self.headers.get("Content-Length", 0))
-            if n > 8192: return None
+            if n < 0 or n > 8192: return None
             return json.loads(self.rfile.read(n))
         except: return None
 
@@ -613,10 +617,10 @@ class H(BaseHTTPRequestHandler):
         if path in ("/", "/index.html"):
             return self._file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
 
-        if path == "/api/version":     # public: shown in the page footer
-            return self._json(200, {"version": auth.version()})
+        if path == "/api/version":     # shown in the page footer; only with a session (or from this machine)
+            return self._json(200, {"version": auth.version()} if (auth.get_session(tok) or auth.is_local_request(self)) else {})
         if path == "/api/health":      # public: levels only; details need a valid session
-            code, body = health_report(auth.get_session(tok) is not None)
+            code, body = health_report(auth.health_mode(self, tok))
             return self._json(code, body)
 
         if not auth.check_permission(tok, "pve", "readonly"):
@@ -721,7 +725,7 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.send_header("Set-Cookie",
                 auth.session_cookie(token))
-            br = json.dumps({"ok": True, "token": token, "username": body["username"],
+            br = json.dumps({"ok": True, "username": body["username"],
                              "permissions": u["permissions"],
                              "must_change_password": must}).encode()
             self.send_header("Content-Length", str(len(br)))
@@ -761,15 +765,19 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/clusters":
             if not auth.check_permission(tok, "pve", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
-            host  = (body.get("host","")).strip()
+            host  = str(body.get("host","")).strip()
             name  = (body.get("name","")).strip()
-            user  = (body.get("user","")).strip()
-            tname = (body.get("token_name","")).strip()
-            tval  = (body.get("token_value","")).strip()
+            user  = str(body.get("user","")).strip()
+            tname = str(body.get("token_name","")).strip()
+            tval  = str(body.get("token_value","")).strip()
             try: port = int(body.get("port", 8006))
             except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
             if not all([host,name,user,tname,tval]):
                 return self._json(400, {"error": "All fields are required"})
+            if not auth.valid_host(host): return self._json(400, {"error": "Invalid host"})
+            if len(name) > 60 or re.search(r"[\x00-\x1f\x7f]", name): return self._json(400, {"error": "Invalid name"})
+            if not re.fullmatch(r"[A-Za-z0-9_.@!-]{1,64}", user) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", tname):
+                return self._json(400, {"error": "Invalid user or token name"})
             if not 1 <= port <= 65535: return self._json(400, {"error": "Invalid port"})
             fp = _fp_norm(body.get("fingerprint"))
             if not fp:
@@ -793,10 +801,10 @@ class H(BaseHTTPRequestHandler):
         elif path == "/api/fingerprint":
             if not auth.check_permission(tok, "pve", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
-            host = (body.get("host","")).strip()
+            host = str(body.get("host","")).strip()
             try: port = int(body.get("port", 8006))
             except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
-            if not host or not 1 <= port <= 65535: return self._json(400, {"error": "Invalid host or port"})
+            if not auth.valid_host(host) or not 1 <= port <= 65535: return self._json(400, {"error": "Invalid host or port"})
             try:
                 self._json(200, {"ok": True, "fingerprint": _fp_fmt(fetch_fingerprint(host, port))})
             except Exception as e:
@@ -835,13 +843,13 @@ class H(BaseHTTPRequestHandler):
         elif path == "/api/test":
             if not auth.check_permission(tok, "pve", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
-            host  = (body.get("host","")).strip()
+            host  = str(body.get("host","")).strip()
             try: port = int(body.get("port", 8006))
             except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
-            if not host or not 1 <= port <= 65535: return self._json(400, {"error": "Invalid host or port"})
-            user  = (body.get("user","")).strip()
-            tname = (body.get("token_name","")).strip()
-            tval  = (body.get("token_value","")).strip()
+            if not auth.valid_host(host) or not 1 <= port <= 65535: return self._json(400, {"error": "Invalid host or port"})
+            user  = str(body.get("user","")).strip()
+            tname = str(body.get("token_name","")).strip()
+            tval  = str(body.get("token_value","")).strip()
             try:
                 fp = _fp_norm(body.get("fingerprint"))
                 if not fp: return self._json(400, {"error": "Certificate fingerprint required"})

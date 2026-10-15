@@ -52,8 +52,12 @@ import auth
 HOST          = "127.0.0.1"
 PORT          = 8083
 STATIC_DIR    = Path(__file__).parent / "static"
-DATA_FILE     = Path(__file__).parent / "hosts.json"
-CONF_FILE     = Path(__file__).parent / "config.json"
+# Los datos viven en /var/lib/pi-console/net-monitor (el código de /opt es de solo lectura para el servicio).
+# EN: The data lives in /var/lib/pi-console/net-monitor (the code in /opt is read-only for the service).
+DATA_DIR      = auth.module_data("net-monitor")
+auth.adopt_legacy(Path(__file__).parent, DATA_DIR, ("hosts.json", "config.json"))
+DATA_FILE     = DATA_DIR / "hosts.json"
+CONF_FILE     = DATA_DIR / "config.json"
 
 # Candado de config.json. Regla: cargar → modificar → guardar dentro de este candado.
 # EN: Lock of config.json. Rule: load → modify → save inside this lock.
@@ -184,20 +188,45 @@ def http_banner(ip: str, port: int = 80) -> str:
         return ""
 
 # ─── Pi-hole v6 API ───────────────────────────────────────────────────────────
-# Llamada a la API de Pi-hole. No valida el certificado porque Pi-hole usa uno propio en la LAN.
-# EN: Call to the Pi-hole API. It does not validate the certificate because Pi-hole uses its own on the LAN.
+# Llamada a la API de Pi-hole. Pi-hole usa un certificado propio en la LAN, así que no se valida contra una CA: se FIJA su huella la primera vez que
+# se conecta (TOFU) y si después cambia, la conexión se rechaza y la contraseña no se envía. Guardar de nuevo la configuración de Pi-hole borra
+# las huellas fijadas (se vuelven a aprender en la siguiente conexión).
+# EN: Call to the Pi-hole API. Pi-hole uses its own certificate on the LAN, so it is not validated against a CA: its fingerprint is PINNED the
+#     first time it connects (TOFU) and if it later changes the connection is refused and the password is not sent. Saving the Pi-hole
+#     configuration again clears the pinned fingerprints (they are learned again on the next connection).
+PIHOLE_HOST_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?$")
 def _pihole_request(host: str, path: str, method: str = "GET",
                     data: bytes = None, sid: str = None) -> dict:
-    url = f"https://{host}{path}"
+    import http.client, hashlib
+    if not PIHOLE_HOST_RE.match(host or ""):
+        raise ValueError("invalid Pi-hole host")
+    name, _, port = host.partition(":")
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode    = ssl.CERT_NONE
     headers = {"Content-Type": "application/json"}
     if sid:
         headers["X-FTL-SID"] = sid
-    req = Request(url, data=data, headers=headers, method=method)
-    with urlopen(req, context=ctx, timeout=5) as r:
-        return json.loads(r.read().decode())
+    conn = http.client.HTTPSConnection(name, int(port or 443), timeout=5, context=ctx)
+    try:
+        conn.connect()
+        fp = hashlib.sha256(conn.sock.getpeercert(True)).hexdigest()
+        with _cfg_lock:
+            cfg = load_config()
+            pins = cfg.setdefault("pihole_pins", {})
+            if pins.get(host) is None:
+                pins[host] = fp; save_config(cfg)
+                log.info(f"Pi-hole {host}: certificate fingerprint pinned ({fp[:16]}…)")
+            elif pins[host] != fp:
+                raise RuntimeError(f"Pi-hole {host}: the certificate changed (pinned fingerprint mismatch); nothing was sent")
+        conn.request(method, path, body=data, headers=headers)
+        r = conn.getresponse()
+        raw = r.read()
+        if r.status >= 400:
+            raise RuntimeError(f"HTTP {r.status}")
+        return json.loads(raw.decode())
+    finally:
+        conn.close()
 
 # Abre sesión en Pi-hole y devuelve el identificador de sesión (o None).
 # EN: Log in to Pi-hole and return the session id (or None).
@@ -852,7 +881,7 @@ def scan_host(ip: str) -> dict | None:
 # ─── Persistencia ─────────────────────────────────────────────────────────────
 # Equipos de WOL Console (solo lectura): se usa para marcar en la página qué equipos tienen Wake-on-LAN configurado.
 # EN: WOL Console devices (read-only): used to mark on the page which devices have Wake-on-LAN configured.
-WOL_DEVICES_FILE = Path(os.environ.get("WOL_DEVICES_FILE", str(Path(__file__).parent.parent / "wol-console" / "devices.json")))
+WOL_DEVICES_FILE = Path(os.environ.get("WOL_DEVICES_FILE", str(auth.DATA_ROOT / "wol-console" / "devices.json")))
 
 # MAC reducida a 12 dígitos hexadecimales en minúscula (clave para cruzar con WOL).
 # EN: MAC reduced to 12 lowercase hex digits (key to match against WOL).
@@ -1141,7 +1170,7 @@ class H(BaseHTTPRequestHandler):
     def _body(self):
         try:
             n = int(self.headers.get("Content-Length", 0))
-            if n > 8192: return None
+            if n < 0 or n > 8192: return None
             return json.loads(self.rfile.read(n))
         except: return None
 
@@ -1170,10 +1199,10 @@ class H(BaseHTTPRequestHandler):
         if path in ("/", "/index.html"):
             return self._file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
 
-        if path == "/api/version":     # public: shown in the page footer
-            return self._json(200, {"version": auth.version()})
+        if path == "/api/version":     # shown in the page footer; only with a session (or from this machine)
+            return self._json(200, {"version": auth.version()} if (auth.get_session(tok) or auth.is_local_request(self)) else {})
         if path == "/api/health":      # public: levels only; details need a valid session
-            code, body = health_report(auth.get_session(tok) is not None)
+            code, body = health_report(auth.health_mode(self, tok))
             return self._json(code, body)
 
         if not auth.check_permission(tok, "net", "readonly"):
@@ -1259,7 +1288,7 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.send_header("Set-Cookie",
                 auth.session_cookie(token))
-            br = json.dumps({"ok": True, "token": token, "username": body["username"],
+            br = json.dumps({"ok": True, "username": body["username"],
                              "permissions": u["permissions"],
                              "must_change_password": must}).encode()
             self.send_header("Content-Length", str(len(br)))
@@ -1274,6 +1303,8 @@ class H(BaseHTTPRequestHandler):
         # Inicia un escaneo completo o de una sola IP (409 si ya hay uno corriendo).
         # EN: Start a full scan or one of a single IP (409 if one is already running).
         if path == "/api/scan/start":
+            if not auth.check_permission(tok, "net", "execute"):
+                return self._json(403, {"error": "Execute permission required"})
             if _scan_status["running"]:
                 return self._json(409, {"error": "Scan already running"})
             single = (body.get("ip") or "").strip() or None
@@ -1335,14 +1366,23 @@ class H(BaseHTTPRequestHandler):
             if not auth.check_permission(tok, "net", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
             global PIHOLE_PASS, PIHOLE_HOSTS
-            cfg = load_config()
-            if "password" in body:
-                PIHOLE_PASS = body["password"]
-                cfg["pihole_pass"] = body["password"]
+            if "password" in body and (not isinstance(body["password"], str) or len(body["password"]) > 256):
+                return self._json(400, {"error": "Invalid password"})
             if "hosts" in body:
-                PIHOLE_HOSTS = body["hosts"]
-                cfg["pihole_hosts"] = body["hosts"]
-            save_config(cfg)
+                hl = [h.strip() for h in str(body["hosts"]).split(",") if h.strip()] if isinstance(body["hosts"], str) else None
+                if hl is None or len(hl) > 5 or not all(PIHOLE_HOST_RE.match(h) for h in hl):
+                    return self._json(400, {"error": "Invalid Pi-hole host (name or IP, optional :port; up to 5, comma separated)"})
+                body["hosts"] = ",".join(hl)
+            with _cfg_lock:
+                cfg = load_config()
+                if "password" in body:
+                    PIHOLE_PASS = body["password"]
+                    cfg["pihole_pass"] = body["password"]
+                if "hosts" in body:
+                    PIHOLE_HOSTS = body["hosts"]
+                    cfg["pihole_hosts"] = body["hosts"]
+                cfg.pop("pihole_pins", None)          # saving again = the administrator accepts the current certificates
+                save_config(cfg)
             # Refrescar cache inmediatamente
             if PIHOLE_PASS:
                 threading.Thread(target=refresh_pihole_cache, daemon=True).start()

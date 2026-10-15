@@ -18,14 +18,20 @@ fi
 
 # ── 2. Directorio de datos persistentes (nunca tocado por dpkg) ───────────────
 # EN: Step 2: persistent data folder (/var/lib/pi-console). dpkg never touches it, so users and settings survive upgrades.
-mkdir -p "$DATA_DIR"
-chown pi-console:pi-console "$DATA_DIR"
-chmod 750 "$DATA_DIR"
+# ES: La carpeta raíz la crea root; todo lo de adentro lo crea el usuario del servicio (así root nunca hace chown/chmod sobre un enlace plantado dentro).
+# EN: The top folder is created by root; everything inside is created by the service user (so root never chowns/chmods through a planted link).
+install -d -m 750 -o pi-console -g pi-console "$DATA_DIR"
+as_svc() { runuser -u pi-console -- "$@"; }
+for d in wol-console nut-monitor net-monitor proxmox-monitor; do
+    as_svc mkdir -p "$DATA_DIR/$d"
+    as_svc chmod 750 "$DATA_DIR/$d"
+done
 
 # ── 2b. Teleporter: directorio de trabajo + regla sudo para el panel de admin ─
 # El panel (usuario pi-console) solo puede ejecutar estas dos acciones como root.
 # EN: Step 2b: Teleporter work folder + sudo rule. The panel (user pi-console) may run only these two actions as root.
-install -d -m 700 -o pi-console -g pi-console "$DATA_DIR/teleporter"
+as_svc mkdir -p "$DATA_DIR/teleporter"
+as_svc chmod 700 "$DATA_DIR/teleporter"
 if [ -d /etc/sudoers.d ] && command -v visudo >/dev/null 2>&1; then
     # La regla se escribe primero en un archivo temporal y se valida con visudo: una regla inválida bloquearía sudo en todo el sistema.
     # EN: The rule is written to a temp file first and validated with visudo: an invalid rule would break sudo on the whole system.
@@ -47,21 +53,58 @@ fi
 
 # ── 3. Symlink auth compartido → datos persistentes ───────────────────────────
 # EN: Step 3: shared auth links, so the old path /opt/pi-console-auth keeps pointing at the module and the persistent data.
+# ES: /opt/pi-console-auth es de root: los servicios no pueden redirigir estos enlaces. sessions.json ya no se enlaza.
+# EN: /opt/pi-console-auth is root-owned: the services cannot redirect these links. sessions.json is no longer linked.
 mkdir -p "$AUTH_LINK"
-ln -sf "$PI_HOME/auth/auth.py"        "$AUTH_LINK/auth.py"        2>/dev/null || true
-ln -sf "$DATA_DIR/users.json"         "$AUTH_LINK/users.json"     2>/dev/null || true
-ln -sf "$DATA_DIR/sessions.json"      "$AUTH_LINK/sessions.json"  2>/dev/null || true
-chown -h pi-console:pi-console "$AUTH_LINK"/* 2>/dev/null || true
-chown pi-console:pi-console "$AUTH_LINK"
+chown root:root "$AUTH_LINK"; chmod 755 "$AUTH_LINK"
+ln -sfn "$PI_HOME/auth/auth.py"        "$AUTH_LINK/auth.py"
+ln -sfn "$DATA_DIR/users.json"         "$AUTH_LINK/users.json"
+rm -f "$AUTH_LINK/sessions.json"
+
+# ── 3b. Mover los datos de los módulos desde /opt/pi-console (versiones < 1.2.0u) a /var/lib/pi-console/<módulo>/ ──
+# EN: Step 3b: move the module data from /opt/pi-console (versions < 1.2.0u) to /var/lib/pi-console/<module>/.
+# ES: Se hace con el usuario del servicio y ANTES de pasar el código a root. Las bases SQLite se copian con su API de respaldo.
+# EN: Done as the service user and BEFORE the code becomes root-owned. SQLite databases are copied with their backup API.
+systemctl stop wol-console pi-console-ups admin-panel net-monitor proxmox-monitor pi-console-overview 2>/dev/null || true
+MIGRATED=""
+for pair in wol-console/devices.json wol-console/wake_log.json nut-monitor/servers.json nut-monitor/history.db \
+            net-monitor/hosts.json net-monitor/config.json proxmox-monitor/clusters.json proxmox-monitor/history.json; do
+    old="$PI_HOME/$pair"; new="$DATA_DIR/$pair"
+    if as_svc sh -c '[ -f "$1" ] && [ ! -L "$1" ] && [ ! -e "$2" ]' sh "$old" "$new"; then
+        if as_svc python3 -I -c 'import os, shutil, sqlite3, sys
+src, dst = sys.argv[1:3]
+os.umask(0o077)
+if dst.endswith(".db"):
+    s = sqlite3.connect("file:%s?mode=ro" % src, uri=True); d = sqlite3.connect(dst); s.backup(d); d.close(); s.close()
+else:
+    shutil.copyfile(src, dst)
+os.chmod(dst, 0o600)' "$old" "$new" 2>/dev/null; then
+            echo "  data moved: $pair -> $DATA_DIR/$pair"
+            MIGRATED="$MIGRATED $old"
+        else
+            as_svc rm -f "$new"
+            echo "  WARNING: could not move $old (kept in place, copy in /var/backups/pi-console)"
+        fi
+    fi
+done
+# ES: Las sesiones antiguas guardaban el token en claro: se descartan (todos deben iniciar sesión otra vez) y se borran de los respaldos.
+# EN: Old sessions stored the token in clear: they are discarded (everyone logs in again) and removed from the backups.
+as_svc rm -f "$DATA_DIR/sessions.json"
+rm -f /var/backups/pi-console/sessions.json.*.bak
 
 # ── 4. Permisos de directorios de código ─────────────────────────────────────
-# EN: Step 4: ownership and permissions of the code folders.
-chown -R pi-console:pi-console "$PI_HOME"
-chmod 755 "$PI_HOME"
-for module in wol-console nut-monitor net-monitor proxmox-monitor overview auth; do
-    chown pi-console:pi-console "$PI_HOME/$module"
-    chmod 755 "$PI_HOME/$module"
+# EN: Step 4: the code is root-owned and not writable by the services (a compromised service cannot rewrite its own code).
+chown -R -h root:root "$PI_HOME"
+chmod -R go-w,a+rX "$PI_HOME"
+# ES: Se quitan los archivos viejos (incluso si eran enlaces simbólicos) de /opt/pi-console cuando ya existe el nuevo en /var/lib/pi-console; el código es de root, así que nadie los puede volver a plantar.
+# EN: The old files (even if they were symlinks) are removed from /opt/pi-console once the new one exists in /var/lib/pi-console; the code is root-owned, so nobody can plant them again.
+for pair in wol-console/devices.json wol-console/wake_log.json nut-monitor/servers.json nut-monitor/history.db \
+            net-monitor/hosts.json net-monitor/config.json proxmox-monitor/clusters.json proxmox-monitor/history.json; do
+    case " $MIGRATED " in *" $PI_HOME/$pair "*) rm -f "$PI_HOME/$pair"; continue;; esac
 done
+# ES: Código precompilado (los servicios ya no pueden escribir __pycache__).
+# EN: Precompiled code (the services can no longer write __pycache__).
+python3 -m compileall -q "$PI_HOME" >/dev/null 2>&1 || true
 
 # ttyUSB0 para NUT (UPS por serial)
 # EN: ttyUSB0 for NUT (serial UPS): the service user needs the dialout group to open the port.
@@ -102,8 +145,26 @@ migrate_legacy_nut_unit
 
 # ── 5. Instalar archivos de servicio systemd ──────────────────────────────────
 # EN: Step 5: install the systemd unit files. One template for the 6 services; they restart on failure after 5 s and log to the journal.
+# ES: Endurecimiento de systemd. Todos: sin /home, /tmp propio, kernel y cgroups de solo lectura, sin tiempo real, UMask 077, solo sockets IP/UNIX/netlink.
+#     Los que no ejecutan sudo ni ping (UPS, Proxmox, Overview) además: sin nuevos privilegios, sistema de archivos de solo lectura salvo /var/lib/pi-console.
+#     wol-console y net-monitor usan «ping» (capacidad de archivo) y admin-panel usa «sudo» (setuid): no llevan NoNewPrivileges ni capacidades vacías.
+#     admin-panel tampoco lleva ProtectSystem: el teleporter (vía sudo) debe escribir en /var/backups, /etc y /var/lib.
+# EN: systemd hardening. All: no /home, private /tmp, read-only kernel and cgroups, no realtime, UMask 077, only IP/UNIX/netlink sockets.
+#     Those that run neither sudo nor ping (UPS, Proxmox, Overview) also get: no new privileges, read-only filesystem except /var/lib/pi-console.
+#     wol-console and net-monitor use "ping" (file capability) and admin-panel uses "sudo" (setuid): no NoNewPrivileges / empty capabilities.
+#     admin-panel has no ProtectSystem either: the teleporter (through sudo) must write to /var/backups, /etc and /var/lib.
 install_service() {
-    name="$1" desc="$2" module="$3" script="$4"
+    name="$1" desc="$2" module="$3" script="$4" level="$5"
+    case "$level" in
+        strict) extra="NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=${DATA_DIR}
+CapabilityBoundingSet=
+AmbientCapabilities=";;
+        fs)     extra="ProtectSystem=strict
+ReadWritePaths=${DATA_DIR}";;
+        *)      extra="";;
+    esac
     cat > "/etc/systemd/system/${name}.service" <<EOF
 [Unit]
 Description=Pi Console — ${desc}
@@ -113,6 +174,7 @@ Wants=network.target
 [Service]
 Type=simple
 User=pi-console
+Group=pi-console
 WorkingDirectory=${PI_HOME}/${module}
 # Variables opcionales para todos los servicios (p. ej. PICONSOLE_SECURE_COOKIE=1); el archivo puede no existir.
 # EN: Optional variables for all the services (e.g. PICONSOLE_SECURE_COOKIE=1); the file may not exist.
@@ -123,6 +185,22 @@ RestartSec=5
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=${name}
+UMask=0077
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+${extra}
 
 [Install]
 WantedBy=multi-user.target
@@ -130,12 +208,12 @@ EOF
     echo "  service ${name} installed"
 }
 
-install_service "wol-console"     "WOL Console"     "wol-console"     "server.py"
-install_service "pi-console-ups" "UPS Monitor"      "nut-monitor"     "server.py"
-install_service "admin-panel"     "Admin Panel"      "auth"            "admin_panel.py"
-install_service "net-monitor"     "Net Monitor"      "net-monitor"     "server.py"
-install_service "proxmox-monitor" "Proxmox Monitor"  "proxmox-monitor" "server.py"
-install_service "pi-console-overview" "Overview" "overview" "server.py"
+install_service "wol-console"     "WOL Console"     "wol-console"     "server.py" fs
+install_service "pi-console-ups" "UPS Monitor"      "nut-monitor"     "server.py" strict
+install_service "admin-panel"     "Admin Panel"      "auth"            "admin_panel.py" none
+install_service "net-monitor"     "Net Monitor"      "net-monitor"     "server.py" fs
+install_service "proxmox-monitor" "Proxmox Monitor"  "proxmox-monitor" "server.py" strict
+install_service "pi-console-overview" "Overview" "overview" "server.py" strict
 
 # ── 6. Nginx ──────────────────────────────────────────────────────────────────
 # EN: Step 6: nginx. The default site is removed (it would take port 80) and the Pi Console one is enabled.
@@ -144,61 +222,35 @@ if [ -f /etc/nginx/sites-enabled/default ]; then
 fi
 ln -sf /etc/nginx/sites-available/pi-console.conf \
        /etc/nginx/sites-enabled/pi-console.conf 2>/dev/null || true
+# ES: Carpetas para el HTTPS opcional (pi-console-https) y la del registro de restauraciones (root: el panel solo la lee).
+# EN: Folders for the optional HTTPS (pi-console-https) and the restore log (root-owned: the panel only reads it).
+mkdir -p /etc/pi-console/https.d /etc/pi-console/http-extra.d
+mkdir -p /var/log/pi-console; chmod 755 /var/log/pi-console
 
-# ── 7. Migrar datos desde rutas antiguas (solo una vez) ──────────────────────
-# Si los datos estaban en la ruta antigua /opt/pi-console/auth/ o en backup,
-# los movemos a /var/lib/pi-console/ — solo si aún no existen ahí.
-# EN: Step 7: migrate data from old paths (only once). If the data was in the old /opt/pi-console/auth/ path or in a backup, it is moved to /var/lib/pi-console/ — only if it does not exist there yet.
+# ── 7. Usuarios: restaurar desde respaldo o dejar que el servicio cree el administrador inicial ──
+# EN: Step 7: users: restore from a backup, or let the service create the initial administrator.
+# ES: Instalación nueva: NO hay admin/admin. El servicio crea «admin» con una contraseña aleatoria (cambio obligatorio al primer ingreso) y este script la muestra al final.
+# EN: Fresh install: there is NO admin/admin. The service creates "admin" with a random password (change forced at first login) and this script prints it at the end.
 BACKUP_DIR="/var/backups/pi-console"
+# Escribe stdin en un archivo NUEVO de la carpeta de datos, con el usuario del servicio (nunca sobrescribe ni sigue enlaces).
+# EN: Write stdin to a NEW file in the data folder as the service user (never overwrites, never follows links).
+svc_put() { as_svc sh -c 'umask 077; [ ! -e "$1" ] && [ ! -L "$1" ] && cat > "$1"' sh "$1"; }
 
-if [ ! -f "$DATA_DIR/users.json" ]; then
-    # Intentar migrar desde backup (upgrade desde versión anterior)
+if ! as_svc test -e "$DATA_DIR/users.json"; then
     latest_users=$(ls -t "$BACKUP_DIR/users.json".*.bak 2>/dev/null | head -1)
     if [ -n "$latest_users" ]; then
-        cp "$latest_users" "$DATA_DIR/users.json"
-        chown pi-console:pi-console "$DATA_DIR/users.json"
-        chmod 600 "$DATA_DIR/users.json"
+        svc_put "$DATA_DIR/users.json" < "$latest_users"
         echo "  users migrated from backup: $latest_users"
-    else
-        # Fresh install: crear admin/admin
-        # Instalación nueva: usuario admin/admin con cambio de contraseña obligatorio en el primer ingreso. El hash antiguo se migra a scrypt en el primer login.
-        # EN: Fresh install: admin/admin user with a mandatory password change at first login. The old hash is migrated to scrypt on the first login.
-        python3 -c "
-import hashlib, json, time
-salt = 'pi-console-salt-change-me'
-pw   = hashlib.sha256(f'{salt}:admin'.encode()).hexdigest()
-users = {'admin': {'password_hash': pw, 'permissions': {
-    'wol':'admin','nut':'admin','net':'admin','pve':'admin'
-}, 'created': int(time.time()), 'must_change_password': True}}
-print(json.dumps(users, indent=2))
-" > "$DATA_DIR/users.json"
-        chown pi-console:pi-console "$DATA_DIR/users.json"
-        chmod 600 "$DATA_DIR/users.json"
-        echo "  users.json created (admin / admin)"
     fi
 else
     echo "  existing users kept in $DATA_DIR"
 fi
 
-# Migrar sessions.json si existe en backup y no hay uno nuevo
-if [ ! -f "$DATA_DIR/sessions.json" ]; then
-    latest_sess=$(ls -t "$BACKUP_DIR/sessions.json".*.bak 2>/dev/null | head -1)
-    if [ -n "$latest_sess" ]; then
-        cp "$latest_sess" "$DATA_DIR/sessions.json"
-        chown pi-console:pi-console "$DATA_DIR/sessions.json"
-    else
-        echo "{}" > "$DATA_DIR/sessions.json"
-        chown pi-console:pi-console "$DATA_DIR/sessions.json"
-    fi
-fi
-
 # ── 7b. Restaurar datos de los módulos desde backup (solo si faltan) ──────────
-# Dispositivos WOL, servidores UPS, historial, hosts, config y clusters viven
-# dentro de /opt/pi-console. Si no existen (reinstalación tras remove/purge),
-# se recuperan del backup. Nunca se sobrescribe un archivo existente.
-# history.db: se usa el respaldo MÁS GRANDE (el más reciente puede ser una base
-# casi vacía creada por un reinicio previo); el resto, el más reciente.
-# EN: Step 7b: restore module data from backup (only if missing). WOL devices, UPS servers, history, hosts, config and clusters live inside /opt/pi-console; after a remove/purge + reinstall they are recovered from the backup. An existing file is never overwritten. For history.db the LARGEST backup is used (the newest may be an almost empty database created by a previous restart); for the rest, the newest.
+# Dispositivos WOL, servidores UPS, historial, hosts, config y clusters. Si no existen (reinstalación tras remove/purge), se recuperan del backup.
+# Nunca se sobrescribe un archivo existente. history.db: el respaldo MÁS GRANDE (el más reciente puede ser una base casi vacía); el resto, el más reciente.
+# EN: Step 7b: restore module data from backup (only if missing), after a remove/purge + reinstall. An existing file is never overwritten.
+#     For history.db the LARGEST backup is used (the newest may be an almost empty database); for the rest, the newest.
 if [ -d "$BACKUP_DIR" ]; then
     MODULE_FILES="
 wol-console/devices.json:devices.json
@@ -209,21 +261,25 @@ net-monitor/config.json:config.json
 proxmox-monitor/clusters.json:clusters.json
 "
     printf '%s\n' "$MODULE_FILES" | grep -v '^$' | while IFS=: read -r rel_path base; do
-        dest="$PI_HOME/$rel_path"
-        [ -f "$dest" ] && continue
+        dest="$DATA_DIR/$rel_path"
+        as_svc test -e "$dest" && continue
         if [ "$base" = "history.db" ]; then
             src=$(ls -S "$BACKUP_DIR/${base}".*.bak 2>/dev/null | head -1)
         else
             src=$(ls -t "$BACKUP_DIR/${base}".*.bak 2>/dev/null | head -1)
         fi
-        if [ -n "$src" ]; then
-            mkdir -p "$(dirname "$dest")"
-            cp "$src" "$dest"
-            chown pi-console:pi-console "$dest"
+        if [ -n "$src" ] && svc_put "$dest" < "$src"; then
             echo "  restored: $rel_path (from $src)"
         fi
     done
 fi
+
+# Sobrantes en /opt/pi-console (enlaces simbólicos o archivos que no se migraron): ya no se usan.
+# EN: Leftovers in /opt/pi-console (symlinks or files that were not migrated): no longer used.
+for pair in wol-console/devices.json wol-console/wake_log.json nut-monitor/servers.json nut-monitor/history.db \
+            net-monitor/hosts.json net-monitor/config.json proxmox-monitor/clusters.json proxmox-monitor/history.json; do
+    if [ -L "$PI_HOME/$pair" ]; then rm -f "$PI_HOME/$pair"; fi
+done
 
 # ── 8. Recargar y habilitar servicios ─────────────────────────────────────────
 # EN: Step 8: reload systemd, then enable and (re)start the services and reload nginx if its configuration is valid.
@@ -243,12 +299,24 @@ else
     echo "  WARNING: nginx -t failed, check the configuration manually"
 fi
 
+# ES: Contraseña inicial: la crea el servicio en el primer arranque; se espera unos segundos y se muestra una sola vez.
+# EN: Initial password: created by the service on first start; wait a few seconds and show it once.
+INIT_PW=""
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    INIT_PW=$(as_svc sh -c '[ -f "$1" ] && [ ! -L "$1" ] && cat -- "$1"' sh "$DATA_DIR/initial-admin-password" 2>/dev/null | head -1) || INIT_PW=""
+    [ -n "$INIT_PW" ] && break
+    # Instalación con usuarios ya existentes: no hay contraseña inicial que esperar.
+    # EN: Install with existing users: there is no initial password to wait for.
+    if as_svc test -e "$DATA_DIR/users.json" && [ "$i" -ge 3 ]; then break; fi
+    sleep 1
+done
+
 echo ""
-echo "╔════════════════════════════════════════════════╗"
-# Mensaje final con la URL de acceso.
-# EN: Final message with the access URL.
-echo "║  Pi Console installed successfully             ║"
-echo "║  URL: http://$(hostname -I | awk '{print $1}')                  ║"
-echo "║  Initial user: admin / admin                   ║"
-echo "║  (change the password at first login)          ║"
-echo "╚════════════════════════════════════════════════╝"
+echo "Pi Console installed successfully"
+echo "  URL: http://$(hostname -I | awk '{print $1}')"
+if [ -n "$INIT_PW" ]; then
+    echo "  Initial user:     admin"
+    echo "  Initial password: $INIT_PW"
+    echo "  (random; you must change it at the first login; also in $DATA_DIR/initial-admin-password until then)"
+fi
+echo "  HTTPS (optional): sudo pi-console-https enable [--redirect]"

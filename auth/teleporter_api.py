@@ -15,6 +15,9 @@ from pathlib import Path
 BIN        = os.environ.get("TELEPORTER_BIN", "/usr/local/bin/teleporter.sh")
 SUDO       = os.environ.get("TELEPORTER_SUDO", "sudo -n").split()
 SPOOL      = Path(os.environ.get("TELEPORTER_SPOOL", "/var/lib/pi-console/teleporter"))
+# El registro de restauración lo escribe root (el panel solo lo lee): así el panel no puede redirigir un archivo que root abre.
+# EN: The restore log is written by root (the panel only reads it): the panel cannot redirect a file that root opens.
+RESTORE_LOG = Path(os.environ.get("TELEPORTER_LOG", "/var/log/pi-console/restore.log"))
 MAX_UPLOAD = int(os.environ.get("TELEPORTER_MAX_UPLOAD", 200 * 1024 * 1024))
 # Nombres de respaldo permitidos: «pi-console-<texto seguro>.tar.gz» (creados por el sistema) o
 # «upload-AAAAMMDD_HHMMSS.tar.gz» (subidos). Cualquier otro nombre se rechaza: evita rutas con «../».
@@ -189,7 +192,7 @@ def delete(name):
 # EN: State of the last restore read from restore.log: idle (never), running (recent and no result),
 #     ok / errors / failed (from the final RESULT) or failed if 15 min passed without finishing.
 def restore_status():
-    log = SPOOL / "restore.log"
+    log = RESTORE_LOG
     try:
         st = log.stat()
         text = log.read_text(errors="replace")

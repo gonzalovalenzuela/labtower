@@ -388,7 +388,7 @@ input.err{border-color:var(--red)}
       </div>
       <div class="field" id="field-password">
         <label data-i18n="fieldPassword">Password</label>
-        <input type="password" id="d-password" placeholder="Minimum 6 characters" autocomplete="new-password">
+        <input type="password" id="d-password" placeholder="Minimum 8 characters" autocomplete="new-password">
       </div>
       <div class="field" id="field-must-change">
         <label style="flex-direction:row;align-items:center;gap:8px;cursor:pointer">
@@ -441,6 +441,10 @@ input.err{border-color:var(--red)}
       <div class="field" id="field-change-pw" style="display:none;border-top:1px solid var(--border);padding-top:14px">
         <label data-i18n="fieldNewPw">New password (leave blank to keep current)</label>
         <input type="password" id="d-new-pw" autocomplete="new-password">
+        <div id="field-cur-pw" style="display:none;margin-top:10px">
+          <label data-i18n="fieldCurPw">Current password (required to change your own)</label>
+          <input type="password" id="d-cur-pw" autocomplete="current-password">
+        </div>
       </div>
     </div>
     <div class="drawer-footer">
@@ -509,7 +513,7 @@ const LANG = {
     colUser:'User', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colStatus:'Status', colCreated:'Created', colActions:'Actions',
     drawerNew:'New user', drawerEdit:'Edit — ',
     fieldUsername:'Username', fieldUsernameHint:'2-32 alphanumeric chars, dash or underscore',
-    fieldPassword:'Password', fieldPasswordHint:'Minimum 6 characters',
+    fieldPassword:'Password', fieldPasswordHint:'Minimum 8 characters',
     fieldMustChange:'Require password change on next login',
     permsLabel:'Permissions',
     permNone:'No access', permReadonly:'Read only', permExecute:'Execute', permAdmin:'Administrator',
@@ -519,6 +523,7 @@ const LANG = {
     permHelpAdmin:'full access + device management',
     fieldNewPw:'New password (leave blank to keep current)',
     fieldNewPwPlaceholder:'New password',
+    fieldCurPw:'Current password (required to change your own)', curPwNeeded:'Enter your current password to change it',
     btnCancel:'Cancel', btnCreate:'Create user', btnSave:'Save changes',
     modalDeleteTitle:'Delete user', modalDeleteBtn:'Delete',
     mustChangeBadge:'Change pwd',
@@ -562,7 +567,7 @@ const LANG = {
     colUser:'Usuario', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colStatus:'Estado', colCreated:'Creado', colActions:'Acciones',
     drawerNew:'Nuevo usuario', drawerEdit:'Editar — ',
     fieldUsername:'Nombre de usuario', fieldUsernameHint:'2-32 caracteres alfanuméricos, guion o guion bajo',
-    fieldPassword:'Contraseña', fieldPasswordHint:'Mínimo 6 caracteres',
+    fieldPassword:'Contraseña', fieldPasswordHint:'Mínimo 8 caracteres',
     fieldMustChange:'Solicitar cambio de contraseña en el próximo login',
     permsLabel:'Permisos',
     permNone:'Sin acceso', permReadonly:'Solo lectura', permExecute:'Ejecución', permAdmin:'Administrador',
@@ -572,6 +577,7 @@ const LANG = {
     permHelpAdmin:'acceso total + gestión de dispositivos',
     fieldNewPw:'Nueva contraseña (dejar vacío para no cambiar)',
     fieldNewPwPlaceholder:'Nueva contraseña',
+    fieldCurPw:'Contraseña actual (obligatoria para cambiar la tuya)', curPwNeeded:'Escribe tu contraseña actual para cambiarla',
     btnCancel:'Cancelar', btnCreate:'Crear usuario', btnSave:'Guardar cambios',
     modalDeleteTitle:'Eliminar usuario', modalDeleteBtn:'Eliminar',
     mustChangeBadge:'Cambiar pwd',
@@ -917,6 +923,10 @@ function openDrawer(user) {
 
   document.getElementById('d-new-pw').value = '';
   document.getElementById('d-new-pw').placeholder = t('fieldNewPwPlaceholder');
+  document.getElementById('d-cur-pw').value = '';
+  // Para cambiar la PROPIA contraseña se pide la actual.
+  // EN: To change one's OWN password the current one is asked for.
+  document.getElementById('field-cur-pw').style.display = (isEdit && me && user.username === me.username) ? '' : 'none';
 
   document.getElementById('drawer-title').textContent  = isEdit ? t('editTitle', user.username) : t('drawerNew');
   document.getElementById('btn-save').textContent       = isEdit ? t('btnSave') : t('btnCreate');
@@ -975,9 +985,11 @@ async function saveUser() {
       if (!r.ok) { toast(d.error||'Error', true); return; }
       // Cambiar contraseña si se ingresó
       if (newPw) {
+        const curPw = document.getElementById('d-cur-pw').value;
+        if (me && uorig === me.username && !curPw) { toast(t('curPwNeeded'), true); return; }
         const r2 = await fetch('api/change_password', {
           method: 'POST', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({username:uorig, new_password:newPw})
+          body: JSON.stringify({username:uorig, new_password:newPw, current_password:curPw})
         });
         const d2 = await r2.json();
         if (!r2.ok) { toast(d2.error||t('toastErrPw'), true); return; }

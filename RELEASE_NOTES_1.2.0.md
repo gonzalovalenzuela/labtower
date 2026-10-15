@@ -1,4 +1,4 @@
-# Pi Console 1.2.0t
+# Pi Console 1.2.0u
 
 ## Español
 
@@ -13,6 +13,7 @@ Primer release de la serie 1.2. Reúne todo lo hecho desde 1.1.8 y deja el códi
 - Mensajes de error y de log del backend en inglés.
 - **Instalación nueva más limpia:** el primer ingreso con `admin`/`admin` obliga a cambiar la contraseña antes de usar cualquier módulo; UPS Monitor empieza sin servidores (no exige tener una UPS); Net Monitor no escanea nada hasta que lo pides («Hacer escaneo inicial», con la lista llenándose en vivo) y autodetecta tu red; `snmp` es dependencia; los ejemplos usan IP neutras; menú por defecto: UPS, Net, Proxmox, WOL, Admin.
 - **Permisos entre módulos:** un admin solo da o quita permisos en los módulos donde él mismo tiene ese nivel, y los respaldos (Teleporter) los maneja solo quien administra todos los módulos. Proxmox avisa de forma permanente de los clusters sin certificado fijado. Cookie `Secure` opcional (`PICONSOLE_SECURE_COOKIE=1`) y sección [*Seguridad*](README.md#seguridad) en el README.
+- **1.2.0u (seguridad):** corrige los 13 hallazgos de la auditoría. Instalación nueva **sin `admin`/`admin`** (contraseña aleatoria que muestra el instalador); contraseñas de mínimo 8 caracteres y cambio de contraseña con la actual; límites de intentos compartidos por todos los módulos; sesiones guardadas solo como hash y sin token en el JSON del login; nginx con límites de peticiones/conexiones, sin versión visible y con HTTPS opcional (`sudo pi-console-https enable`); servicios con código de root de solo lectura, datos en `/var/lib/pi-console/<módulo>/` y unidades systemd endurecidas; instalador y Teleporter ya no siguen enlaces simbólicos; el respaldo SFTP sale cifrado (gpg) y sin sesiones; hosts validados y certificado de Pi-hole fijado; solo lectura no puede escanear; un admin parcial no puede degradar al administrador; sin oráculo de credenciales en el login del panel. **Tras actualizar hay que iniciar sesión otra vez.**
 - **1.2.0t:** Resumen: el gráfico de temperatura de la UPS se muestra en el kiosko de cualquier tamaño de pantalla (antes se ocultaba entre 701 y 900 px de alto), en versión compacta.
 - **1.2.0s:** Resumen: en el kiosko de 7" (altura ≤ 700 px) vuelve a verse el gráfico de temperatura de la UPS; la leyenda de la torta de Net Monitor y el título del gráfico de temperatura de la Pi quedan más compactos en kiosko; sin referencias a redes privadas (el servidor SFTP por defecto ahora es `storage.example.lan`: hay que poner el real en `SFTP_HOST`).
 - **1.2.0r:** Resumen: la torta de Net Monitor muestra todos los tipos de equipo en su leyenda (TV, teléfono, tablet, cámara…), y el gráfico de temperatura de la Pi se ajusta a los datos acumulados, como los de la UPS.
@@ -34,8 +35,8 @@ Primer release de la serie 1.2. Reúne todo lo hecho desde 1.1.8 y deja el códi
 
 **Actualizar desde cualquier 1.1.x**
 ```bash
-wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0t_all.deb?n=$RANDOM" -O pi-console_1.2.0t_all.deb
-sudo apt-get install -y ./pi-console_1.2.0t_all.deb
+wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0u_all.deb?n=$RANDOM" -O pi-console_1.2.0u_all.deb
+sudo apt-get install -y ./pi-console_1.2.0u_all.deb
 pi-console-health
 ```
 Los datos (`/var/lib/pi-console`) se conservan; el instalador además guarda una copia en `/var/backups/pi-console`.
@@ -55,6 +56,7 @@ First release of the 1.2 series. It gathers everything done since 1.1.8 and leav
 - Backend error and log messages in English.
 - **Cleaner fresh install:** the first login with `admin`/`admin` forces a password change before any module can be used; UPS Monitor starts with no servers (no UPS required); Net Monitor scans nothing until you ask ("Run initial scan", with the list filling in live) and autodetects your network; `snmp` is a dependency; examples use neutral IPs; default menu: UPS, Net, Proxmox, WOL, Admin.
 - **Cross-module permissions:** an admin can only grant or remove permissions on the modules where they hold that level themselves, and backups (Teleporter) are handled only by someone who administers every module. Proxmox permanently warns about clusters without a pinned certificate. Optional `Secure` cookie (`PICONSOLE_SECURE_COOKIE=1`) and a [*Security*](README.md#seguridad) section in the README.
+- **1.2.0u (security):** fixes all 13 audit findings. Fresh installs have **no `admin`/`admin`** (random password shown by the installer); passwords of at least 8 characters and password changes need the current one; login throttling shared by every module; sessions stored only as hashes and no token in the login JSON; nginx with request/connection limits, no visible version and optional HTTPS (`sudo pi-console-https enable`); root-owned read-only code, data in `/var/lib/pi-console/<module>/` and hardened systemd units; the installer and Teleporter no longer follow symlinks; the SFTP backup is encrypted (gpg) and carries no sessions; hosts validated and the Pi-hole certificate pinned; read-only users cannot scan; a partial admin cannot demote the main administrator; no credential oracle in the panel login. **Log in again after upgrading.**
 - **1.2.0t:** Resumen: el gráfico de temperatura de la UPS se muestra en el kiosko de cualquier tamaño de pantalla (antes se ocultaba entre 701 y 900 px de alto), en versión compacta.
 - **1.2.0s:** Resumen: en el kiosko de 7" (altura ≤ 700 px) vuelve a verse el gráfico de temperatura de la UPS; la leyenda de la torta de Net Monitor y el título del gráfico de temperatura de la Pi quedan más compactos en kiosko; sin referencias a redes privadas (el servidor SFTP por defecto ahora es `storage.example.lan`: hay que poner el real en `SFTP_HOST`).
 - **1.2.0r:** Resumen: la torta de Net Monitor muestra todos los tipos de equipo en su leyenda (TV, teléfono, tablet, cámara…), y el gráfico de temperatura de la Pi se ajusta a los datos acumulados, como los de la UPS.
@@ -79,8 +81,8 @@ First release of the 1.2 series. It gathers everything done since 1.1.8 and leav
 
 **Upgrade from any 1.1.x**
 ```bash
-wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0t_all.deb?n=$RANDOM" -O pi-console_1.2.0t_all.deb
-sudo apt-get install -y ./pi-console_1.2.0t_all.deb
+wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0u_all.deb?n=$RANDOM" -O pi-console_1.2.0u_all.deb
+sudo apt-get install -y ./pi-console_1.2.0u_all.deb
 pi-console-health
 ```
 Data in `/var/lib/pi-console` is kept; the installer also saves a copy in `/var/backups/pi-console`.

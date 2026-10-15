@@ -5,6 +5,7 @@
 #   pi-console-sftp-backup setup    create the SSH key and show the public key to authorize on the storage
 #   pi-console-sftp-backup test     check the SFTP connection, the remote folder and write access
 #   pi-console-sftp-backup status   show the result of the last run
+#   pi-console-sftp-backup decrypt <file.tar.gz.gpg> [out.tar.gz]   decrypt a copy downloaded from the storage
 #
 # Installed as /usr/local/bin/pi-console-sftp-backup. Settings: /etc/pi-console/backup.conf.
 # Scheduled by /etc/cron.d/pi-console-sftp-backup (every day at 03:17). It does nothing until SFTP_USER is set.
@@ -12,7 +13,8 @@
 # How it works:
 #  1. `teleporter backup` creates the archive (module data, NUT and nginx configuration) in LOCAL_DIR.
 #  2. `teleporter check` verifies it BEFORE uploading (a bad archive is never sent).
-#  3. It is uploaded as <name>.part and renamed when complete, and the remote size is compared with the local one.
+#  3. The archive is ENCRYPTED (gpg, AES-256, passphrase in /etc/pi-console/backup_passphrase) before leaving the Pi, because it holds
+#     password hashes and API tokens. It is uploaded as <name>.gpg.part and renamed when complete, and the remote size is compared.
 #  4. Old copies are pruned (KEEP_LOCAL here, KEEP_REMOTE on the storage). Only files named
 #     pi-console-auto-<this host>-<date>_<time>.tar.gz are ever deleted, nothing else.
 #  5. The result is written to /var/lib/pi-console/backup.status and to the system log
@@ -39,6 +41,8 @@ LOCAL_DIR="/var/backups/pi-console"
 STATUS_FILE="/var/lib/pi-console/backup.status"
 TELEPORTER="/usr/local/bin/teleporter.sh"
 LOCK_FILE="/run/lock/pi-console-sftp-backup.lock"
+ENCRYPT="yes"                                  # yes | no — encrypt the copy that is uploaded / cifrar la copia que se sube
+PASSPHRASE_FILE="/etc/pi-console/backup_passphrase"
 
 # The configuration file is READ, never executed: only KEY=value lines with known keys are accepted.
 # ES: El archivo de configuración se LEE, nunca se ejecuta: solo se aceptan líneas CLAVE=valor con claves conocidas.
@@ -54,7 +58,7 @@ load_conf() {
     elif [[ "$v" =~ ^\'([^\']*)\'([[:space:]]*#.*)?[[:space:]]*$ ]]; then v="${BASH_REMATCH[1]}"
     else v="${v%%[[:space:]]#*}"; v="${v%"${v##*[![:space:]]}"}"; fi   # drop trailing comment and spaces
     case "$k" in
-      SFTP_HOST|SFTP_PORT|SFTP_USER|SFTP_DIR|SFTP_KEY|KNOWN_HOSTS|KEEP_LOCAL|KEEP_REMOTE|LOCAL_DIR|STATUS_FILE|TELEPORTER|LOCK_FILE)
+      SFTP_HOST|SFTP_PORT|SFTP_USER|SFTP_DIR|SFTP_KEY|KNOWN_HOSTS|KEEP_LOCAL|KEEP_REMOTE|LOCAL_DIR|STATUS_FILE|TELEPORTER|LOCK_FILE|ENCRYPT|PASSPHRASE_FILE)
         printf -v "$k" '%s' "$v";;
     esac
   done < "$CONF"
@@ -63,7 +67,7 @@ load_conf
 
 HOST_SHORT="$(hostname -s | tr -c 'A-Za-z0-9.\n-' '_')"
 PREFIX="pi-console-auto-${HOST_SHORT}-"
-NAME_RE="^${PREFIX//./\\.}[0-9]{8}_[0-9]{6}\\.tar\\.gz$"
+NAME_RE="^${PREFIX//./\\.}[0-9]{8}_[0-9]{6}\\.tar\\.gz(\\.gpg)?$"
 
 log()  { echo "$*"; logger -t pi-console-sftp-backup -- "$*" 2>/dev/null || true; }
 die()  { log "ERROR: $*"; write_status 0 "" 0 "$*"; exit 1; }
@@ -75,6 +79,7 @@ valid_conf() {
   [[ "$SFTP_DIR" =~ ^[A-Za-z0-9._/~-]+$ && "$SFTP_DIR" != *..* ]] || { echo "SFTP_DIR is not valid (letters, digits, . _ - / only; no spaces, no ..)"; return 1; }
   [[ "$KEEP_LOCAL" =~ ^[0-9]+$ && "$KEEP_LOCAL" -ge 1 ]] || { echo "KEEP_LOCAL must be a number >= 1"; return 1; }
   [[ "$KEEP_REMOTE" =~ ^[0-9]+$ && "$KEEP_REMOTE" -ge 1 ]] || { echo "KEEP_REMOTE must be a number >= 1"; return 1; }
+  [[ "$ENCRYPT" =~ ^(yes|no)$ ]] || { echo "ENCRYPT must be yes or no"; return 1; }
   return 0
 }
 
@@ -103,11 +108,28 @@ write_status() {
   return 0
 }
 
+# ES: Contraseña de cifrado: se crea sola la primera vez (aleatoria, 0600, solo root). SIN ELLA los respaldos cifrados no se pueden abrir: hay que guardar una copia fuera de la Pi.
+# EN: Encryption passphrase: created automatically the first time (random, 0600, root only). WITHOUT IT the encrypted backups cannot be opened: keep a copy off the Pi.
+ensure_passphrase() {
+  [ -s "$PASSPHRASE_FILE" ] && return 0
+  mkdir -p "$(dirname "$PASSPHRASE_FILE")"
+  ( umask 077; head -c 48 /dev/urandom | base64 -w0 > "$PASSPHRASE_FILE"; echo >> "$PASSPHRASE_FILE" ) || return 1
+  chmod 600 "$PASSPHRASE_FILE"
+  log "IMPORTANT: a new encryption passphrase was created in $PASSPHRASE_FILE — copy it somewhere safe off this Pi (sudo cat $PASSPHRASE_FILE); without it the encrypted backups cannot be restored"
+}
+# gpg_encrypt <in> <out> / gpg_decrypt <in> <out>
+gpg_encrypt() { gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-file "$PASSPHRASE_FILE" --symmetric --cipher-algo AES256 -o "$2" "$1"; }
+gpg_decrypt() { gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-file "$PASSPHRASE_FILE" --decrypt -o "$2" "$1"; }
+
 need_conf() {
   [ -n "$SFTP_USER" ] || return 2
   local why; why="$(valid_conf)" || die "configuration: $why (edit $CONF)"
   command -v sftp >/dev/null 2>&1 || die "sftp is not installed (apt install openssh-client)"
   [ -r "$SFTP_KEY" ] || die "SSH key not found: $SFTP_KEY — run: sudo pi-console-sftp-backup setup"
+  if [ "$ENCRYPT" = yes ]; then
+    command -v gpg >/dev/null 2>&1 || die "gpg is not installed (apt install gnupg), or set ENCRYPT=no in $CONF (not recommended)"
+    ensure_passphrase || die "cannot create $PASSPHRASE_FILE"
+  fi
   mkdir -p "$(dirname "$KNOWN_HOSTS")" 2>/dev/null || true
   build_opts
   return 0
@@ -131,28 +153,37 @@ cmd_run() {
   log "creating backup $name"
   out="$("$TELEPORTER" backup "$file" 2>&1)" || { echo "$out" | tail -5; rm -f -- "$file"; die "teleporter backup failed: $(echo "$out" | tail -1)"; }
   out="$("$TELEPORTER" check "$file" 2>&1)" || { echo "$out" | tail -5; rm -f -- "$file"; die "the archive did not pass the check, it was NOT uploaded: $(echo "$out" | tail -1)"; }
-  local size; size="$(stat -c %s "$file")"
+  # ES: Lo que sale de la Pi va cifrado; la copia local (carpeta de root, modo 600) queda sin cifrar para restaurar rápido.
+  # EN: What leaves the Pi is encrypted; the local copy (root folder, mode 600) stays plain for a quick restore.
+  local up="$file" upname="$name"
+  if [ "$ENCRYPT" = yes ]; then
+    up="$file.gpg"; upname="$name.gpg"
+    gpg_encrypt "$file" "$up" || { rm -f -- "$up"; die "could not encrypt the backup, it was NOT uploaded"; }
+  fi
+  local size; size="$(stat -c %s "$up")"
 
-  log "uploading $name ($size bytes) to $SFTP_USER@$SFTP_HOST:$SFTP_DIR"
-  out="$(printf '%s\n' "-mkdir $SFTP_DIR" "put $file $SFTP_DIR/$name.part" "rename $SFTP_DIR/$name.part $SFTP_DIR/$name" \
-         "ls -l $SFTP_DIR/$name" | sftp_batch)" || {
+  log "uploading $upname ($size bytes) to $SFTP_USER@$SFTP_HOST:$SFTP_DIR"
+  out="$(printf '%s\n' "-mkdir $SFTP_DIR" "put $up $SFTP_DIR/$upname.part" "rename $SFTP_DIR/$upname.part $SFTP_DIR/$upname" \
+         "ls -l $SFTP_DIR/$upname" | sftp_batch)" || {
+    [ "$up" != "$file" ] && rm -f -- "$up"
     echo "$out" | tail -5
-    printf '%s\n' "-rm $SFTP_DIR/$name.part" | sftp_batch >/dev/null 2>&1
+    printf '%s\n' "-rm $SFTP_DIR/$upname.part" | sftp_batch >/dev/null 2>&1
     prune_local   # the archive stays here for the next attempt, but never more than KEEP_LOCAL
     die "upload failed: $(echo "$out" | grep -v '^sftp>' | tail -2 | tr '\n' ' ')"
   }
   # Compare the remote size with the local one (when the server's listing can be read).
-  local rsize; rsize="$(echo "$out" | awk -v n="$name" '$NF ~ n"$" && $5 ~ /^[0-9]+$/ {print $5; exit}')"
+  [ "$up" != "$file" ] && rm -f -- "$up"
+  local rsize; rsize="$(echo "$out" | awk -v n="$upname" '$NF ~ n"$" && $5 ~ /^[0-9]+$/ {print $5; exit}')"
   if [ -n "$rsize" ] && [ "$rsize" != "$size" ]; then
-    printf '%s\n' "-rm $SFTP_DIR/$name" | sftp_batch >/dev/null 2>&1
+    printf '%s\n' "-rm $SFTP_DIR/$upname" | sftp_batch >/dev/null 2>&1
     die "the uploaded file has a different size (local $size, remote $rsize); it was removed from the storage"
   fi
   [ -n "$rsize" ] || log "warning: could not read the remote size, upload not double-checked"
 
   prune_remote
   prune_local
-  write_status 1 "$name" "$size" "ok"
-  log "backup finished: $name ($size bytes)"
+  write_status 1 "$upname" "$size" "ok"
+  log "backup finished: $upname ($size bytes)"
 }
 
 # Keep the newest KEEP_REMOTE of our own files on the storage.
@@ -233,6 +264,20 @@ cmd_test() {
   fi
 }
 
+# ── decrypt ────────────────────────────────────────────────────────────────────
+# ES: Descifra una copia bajada del storage; luego se restaura con «sudo teleporter restore <out.tar.gz>». La integridad la comprueba gpg.
+# EN: Decrypt a copy downloaded from the storage; then restore it with "sudo teleporter restore <out.tar.gz>". gpg checks its integrity.
+cmd_decrypt() {
+  local in="${1:-}" out="${2:-}"
+  [ -n "$in" ] && [ -f "$in" ] || { echo "usage: pi-console-sftp-backup decrypt <file.tar.gz.gpg> [out.tar.gz]"; exit 1; }
+  command -v gpg >/dev/null 2>&1 || { echo "gpg is not installed (apt install gnupg)"; exit 1; }
+  [ -n "$out" ] || out="${in%.gpg}"
+  [ "$out" != "$in" ] && [ ! -e "$out" ] || { echo "destination exists or equals the source: $out"; exit 1; }
+  [ -r "$PASSPHRASE_FILE" ] || { echo "passphrase file not readable: $PASSPHRASE_FILE (copy the saved passphrase there, mode 600)"; exit 1; }
+  ( umask 077; gpg_decrypt "$in" "$out" ) || { rm -f -- "$out"; echo "decryption failed (wrong passphrase or corrupted file)"; exit 1; }
+  echo "Decrypted: $out — restore with: sudo teleporter restore $out"
+}
+
 # ── status ─────────────────────────────────────────────────────────────────────
 cmd_status() {
   [ -f "$STATUS_FILE" ] || { echo "No backup has run yet."; return 0; }
@@ -248,13 +293,14 @@ if d.get("message") and not d.get("ok"): print("Detail:    %s" % d["message"])
 PY
 }
 
-usage() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; }
 
 case "${1:-run}" in
   run)    cmd_run;;
   setup)  cmd_setup;;
   test)   cmd_test;;
   status) cmd_status;;
+  decrypt) shift; cmd_decrypt "$@";;
   -h|--help|help) usage;;
   *) echo "Unknown command: $1" >&2; usage; exit 1;;
 esac
