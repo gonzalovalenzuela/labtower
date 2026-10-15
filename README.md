@@ -105,11 +105,6 @@ sudo nginx -t && sudo systemctl reload nginx
 
 # Instalar servicios manualmente (ver debian/postinst como referencia)
 ```
-
-### Repositorio APT (próximamente)
-
-Está preparado el repositorio firmado para instalar y actualizar con `apt` (guía en [docs/APT.md](docs/APT.md)), pero **todavía no está publicado**. Por ahora instala el `.deb` como en la opción A.
-
 ---
 
 ## Actualizar
@@ -207,7 +202,7 @@ Seguridad: el panel ejecuta el respaldo/restauración como root mediante una reg
 
 ## Respaldo automático por SFTP
 
-Un cron diario (03:17) crea un respaldo con Teleporter, lo **verifica antes de subirlo** y lo envía por SFTP a un servidor de almacenamiento (por defecto `192.168.0.30`). Viene instalado pero **desactivado** hasta que se completa el usuario. Solo usa llave SSH (nunca contraseña), así que puede correr sin que nadie lo atienda.
+Un cron diario (03:17) crea un respaldo con Teleporter, lo **verifica antes de subirlo** y lo envía por SFTP a un servidor de almacenamiento. Viene instalado pero **desactivado** hasta que se completa el usuario. Solo usa llave SSH (nunca contraseña), así que puede correr sin que nadie lo atienda.
 
 ```bash
 sudo pi-console-sftp-backup setup     # crea la llave SSH y muestra la llave pública para autorizarla en el storage
@@ -278,7 +273,7 @@ pi-console-health                     # diagnóstico general
 
 ## Seguridad
 
-Pi Console está pensado para una **red local de confianza** y se sirve por **HTTP en el puerto 80** (nginx). Es una decisión de diseño, no un descuido:
+Pi Console está pensado para una **red local de confianza** y se sirve por **HTTP en el puerto 80** (nginx):
 
 - **Sin TLS en el paquete.** Las credenciales y la cookie de sesión viajan sin cifrar por la LAN. No expongas el puerto 80 a internet ni a redes no confiables. Si algún día lo publicas, pon delante un proxy con HTTPS (nginx, Caddy, Cloudflare Tunnel…) y deja que solo ese proxy llegue al puerto 80.
 - **Los servicios Python escuchan solo en `127.0.0.1`** (8080–8085); únicamente nginx es accesible desde la red.
