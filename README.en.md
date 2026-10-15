@@ -60,7 +60,7 @@ Settings are environment variables in `/etc/default/pi-console` (`NUT_POLL`, `SC
 
 Teleporter backups also include the **Overview chart histories**: UPS temperature (in its `history.db`) and Proxmox CPU/memory plus Pi temperature/under-voltage (in `metrics.db`). Backups from version 1.2.0o (which kept that data as JSON) restore too and the data is imported automatically. Older backups without those files stay valid: the current ones are kept.
 
-A daily cron job (03:17) makes a Teleporter backup, **verifies it before uploading**, and sends it over SFTP to a storage server (`192.168.0.30` by default). It ships **disabled** until a user is set. It uses an SSH key only (never a password), so it can run unattended.
+A daily cron job (03:17) makes a Teleporter backup, **verifies it before uploading**, and sends it over SFTP to a storage server (`storage.example.lan` by default). It ships **disabled** until a user is set. It uses an SSH key only (never a password), so it can run unattended.
 
 ```bash
 sudo pi-console-sftp-backup setup     # creates the SSH key and shows the public key to authorize on the storage

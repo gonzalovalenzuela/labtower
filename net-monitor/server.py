@@ -80,7 +80,7 @@ def _default_network():
             s.connect(("192.0.2.1", 9))
             return str(ipaddress.ip_network(s.getsockname()[0] + "/24", strict=False))
     except Exception:
-        return "192.168.0.0/24"
+        return "192.0.2.0/24"
 NETWORK       = os.environ.get("SCAN_NETWORK",   _default_network())
 SCAN_PORTS    = os.environ.get("SCAN_PORTS",     "21,22,23,25,53,80,111,135,139,443,445,548,554,873,1883,2049,3260,3306,3389,5000,5001,5357,5432,5555,5900,6379,7547,8001,8002,8008,8009,8080,8291,8443,9100,27017,62078")
 SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL", 3600))
