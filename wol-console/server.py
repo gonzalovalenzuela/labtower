@@ -6,7 +6,7 @@
 # del equipo repetida 16 veces. La tarjeta de red del equipo apagado lo reconoce y enciende la placa.
 #
 # Estructura del archivo:
-#   · utilidades (límite de tasa, token CSRF, validación de MAC, broadcast, ping)
+#   · utilidades (límite de tasa, validación de MAC, broadcast, ping)
 #   · envío del paquete y registro de encendidos (wake_log.json)
 #   · lista de equipos (devices.json) y datos compartidos con Net Monitor
 #   · salud (/api/health) y manejador HTTP (GET, POST, DELETE)
@@ -16,7 +16,7 @@
 #     MAC repeated 16 times. The network card of the powered-off device recognises it and switches the board on.
 #
 #     File structure:
-#       · utilities (rate limit, CSRF token, MAC validation, broadcast, ping)
+#       · utilities (rate limit, MAC validation, broadcast, ping)
 #       · packet sending and wake log (wake_log.json)
 #       · device list (devices.json) and data shared with Net Monitor
 #       · health (/api/health) and HTTP handler (GET, POST, DELETE)
@@ -35,33 +35,17 @@ import auth
 # EN: Configuration and data paths. HOST is loopback only: network access goes through nginx.
 PORT       = 8080
 HOST       = "127.0.0.1"
-DATA_FILE  = Path(__file__).parent / "devices.json"
-LOG_FILE   = Path(__file__).parent / "wake_log.json"
+# Los datos viven en /var/lib/pi-console/wol-console (el código de /opt es de solo lectura para el servicio).
+# EN: The data lives in /var/lib/pi-console/wol-console (the code in /opt is read-only for the service).
+DATA_DIR   = auth.module_data("wol-console")
+auth.adopt_legacy(Path(__file__).parent, DATA_DIR, ("devices.json", "wake_log.json"))
+DATA_FILE  = DATA_DIR / "devices.json"
+LOG_FILE   = DATA_DIR / "wake_log.json"
 # Net Monitor host table (shared info: MAC, IP, name, type). Read-only here.
 # Tabla de hosts de Net Monitor (solo lectura aquí): permite autocompletar equipos y mostrar si están en línea.
 # EN: Net Monitor host table (read-only here): lets devices be autocompleted and shows whether they are online.
-NET_HOSTS_FILE = Path(os.environ.get("NET_HOSTS_FILE", str(Path(__file__).parent.parent / "net-monitor" / "hosts.json")))
+NET_HOSTS_FILE = Path(os.environ.get("NET_HOSTS_FILE", str(auth.DATA_ROOT / "net-monitor" / "hosts.json")))
 STATIC_DIR = Path(__file__).parent / "static"
-# Clave para firmar los tokens CSRF. Se puede fijar con la variable de entorno WOL_SECRET; si no está, se genera una clave aleatoria la primera vez y se guarda (permisos 600) junto al servicio, para que no cambie al reiniciar. Ya no existe una clave por defecto conocida.
-# EN: Key used to sign CSRF tokens. It can be set with the WOL_SECRET environment variable; if absent, a random key is generated the first time and saved (permissions 600) next to the service, so it does not change on restart. There is no longer a well-known default key.
-def _load_secret() -> str:
-    env = os.environ.get("WOL_SECRET", "").strip()
-    if env: return env
-    f = Path(__file__).parent / ".csrf-secret"
-    try:
-        v = f.read_text().strip()
-        if len(v) >= 32: return v
-    except OSError:
-        pass
-    import secrets
-    v = secrets.token_hex(32)
-    try:
-        fd = os.open(f, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w") as fh: fh.write(v)
-    except OSError as e:
-        logging.getLogger("wol").warning(f"could not save the CSRF key ({e}); using one valid until restart")
-    return v
-WOL_SECRET = _load_secret()
 # Máximo de encendidos por minuto y por IP (evita que un cliente descontrolado inunde la red con paquetes).
 # EN: Maximum wake-ups per minute and per IP (stops a runaway client from flooding the network with packets).
 RATE_LIMIT  = 10
@@ -87,22 +71,6 @@ def check_rate(ip):
             for k in [k for k, v in _rate.items() if not v or now - v[-1] >= 60]:
                 _rate.pop(k, None)
         return True
-
-# ─── CSRF token ───────────────────────────────────────────────────────────────
-# Token CSRF: HMAC del bloque de 5 minutos actual. No se guarda nada; basta recalcularlo.
-# EN: CSRF token: HMAC of the current 5-minute block. Nothing is stored; it is simply recomputed.
-def gen_token():
-    ts = str(int(time.time()//300))
-    return hmac.new(WOL_SECRET.encode(), ts.encode(), hashlib.sha256).hexdigest()[:32]
-
-# Acepta el token del bloque actual y el anterior, para que no falle justo en el cambio de bloque.
-# EN: Accepts the token of the current and the previous block, so it does not fail right at the block change.
-def valid_token(t):
-    for d in (0,-1):
-        ts = str(int(time.time()//300)+d)
-        exp = hmac.new(WOL_SECRET.encode(), ts.encode(), hashlib.sha256).hexdigest()[:32]
-        if hmac.compare_digest(exp, t or ""): return True
-    return False
 
 # ─── MAC validation ───────────────────────────────────────────────────────────
 # MAC válida: 6 pares hexadecimales separados por «:» o «-».
@@ -259,6 +227,9 @@ def validate_device(d):
         return False, "Invalid port"
     if d.get("tag","PC") not in ("PC","SERVER","NAS","VM","OTHER"):
         return False, "Invalid category"
+    ip = d.get("ip")
+    if ip not in (None, "") and not (isinstance(ip, str) and valid_host(ip.strip())):
+        return False, "Invalid IP or host"
     return True, ""
 
 # ─── Health ───────────────────────────────────────────────────────────────────
@@ -301,7 +272,7 @@ class H(BaseHTTPRequestHandler):
     def _body(self):
         try:
             n = int(self.headers.get("Content-Length", 0))
-            if n > 8192: return None
+            if n < 0 or n > 8192: return None
             return json.loads(self.rfile.read(n))
         except: return None
 
@@ -320,9 +291,9 @@ class H(BaseHTTPRequestHandler):
             self.end_headers(); self.wfile.write(c)
         except FileNotFoundError: self._json(404, {"error": "Not found"})
 
-    # GET: página, versión, token CSRF y salud son públicos; el resto exige sesión con WOL «readonly».
+    # GET: la página es pública (versión y salud solo con sesión o desde esta máquina); el resto exige sesión con WOL «readonly».
     # Rutas: /api/devices, /api/netmonitor/hosts, /api/wake_log, /api/config, /api/me.
-    # EN: GET: page, version, CSRF token and health are public; the rest requires a session with WOL "readonly".
+    # EN: GET: the page is public (version and health only with a session or from this machine); the rest requires a session with WOL "readonly".
     #     Routes: /api/devices, /api/netmonitor/hosts, /api/wake_log, /api/config, /api/me.
     def do_GET(self):
         path = urlparse(self.path).path.rstrip("/") or "/"
@@ -331,13 +302,10 @@ class H(BaseHTTPRequestHandler):
         if path in ("/", "/index.html"):
             return self._file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
 
-        if path == "/api/version":     # public: shown in the page footer
-            return self._json(200, {"version": auth.version()})
-        if path == "/api/token":
-            return self._json(200, {"token": gen_token()})
-
+        if path == "/api/version":     # shown in the page footer; only with a session (or from this machine)
+            return self._json(200, {"version": auth.version()} if (auth.get_session(tok) or auth.is_local_request(self)) else {})
         if path == "/api/health":      # public: levels only; details need a valid session
-            code, body = health_report(auth.get_session(tok) is not None)
+            code, body = health_report(auth.health_mode(self, tok))
             return self._json(code, body)
 
         if not auth.check_permission(tok, "wol", "readonly"):
@@ -420,7 +388,7 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.send_header("Set-Cookie",
                 auth.session_cookie(token))
-            br = json.dumps({"ok": True, "token": token, "username": body["username"],
+            br = json.dumps({"ok": True, "username": body["username"],
                              "permissions": u["permissions"],
                              "must_change_password": must}).encode()
             self.send_header("Content-Length", str(len(br)))

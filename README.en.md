@@ -34,12 +34,12 @@ Raspberry Pi OS, DietPi or Debian 12+ (also works on an x86 VM), Python 3.9+, ng
 ## Install
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0t/pi-console_1.2.0t_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0u/pi-console_1.2.0u_all.deb
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.0t_all.deb
+sudo apt-get install -y ./pi-console_1.2.0u_all.deb
 ```
 
-Then open `http://<pi-ip>/`. The initial user is `admin` / `admin`; you **must set a new password** on first login. UPS Monitor starts with no servers, and Net Monitor scans nothing until you press "Run initial scan".
+Then open `http://<pi-ip>/`. The installer prints the initial user `admin` with a **random password** (it is also in `/var/lib/pi-console/initial-admin-password` until changed); you **must set a new password** on first login. UPS Monitor starts with no servers, and Net Monitor scans nothing until you press "Run initial scan".
 
 ## Update
 
@@ -75,7 +75,7 @@ It uploads as `.part` and renames when complete, then compares the remote size w
 
 ## Security
 
-Designed for a **trusted LAN**, served over **plain HTTP on port 80**: do not expose it to the internet; put an HTTPS proxy in front if you need to (and set `PICONSOLE_SECURE_COOKIE=1`). Python services listen on `127.0.0.1` only. Passwords use scrypt; 5 failed logins from one IP within 10 minutes lock that IP for 5 minutes; sessions last 24 h. Per-module permissions (none / read-only / execute / admin): an admin can only grant permissions on modules where they hold that level, and only admins of every module can use Teleporter from the panel. Proxmox clusters pin the certificate SHA-256 fingerprint.
+Designed for a **trusted LAN**, served over **plain HTTP on port 80**: do not expose it to the internet. HTTPS is one command away: `sudo pi-console-https enable` (self-signed certificate) or `--cert/--key` with your own, plus `--redirect` to redirect port 80, send HSTS and mark the cookie `Secure`. Python services listen on `127.0.0.1` only. Passwords (min. 8 characters) use scrypt; 5 failed logins from one IP within 10 minutes lock that IP for 5 minutes, with a per-account limit as well; the counters are shared by every module, and changing a password needs the current one. Session tokens are stored only as SHA-256 hashes and are never returned in the login JSON or included in backups; sessions last 24 h. nginx rate-limits requests and connections per IP and hides its version. The code in `/opt/pi-console` is root-owned and read-only for the services, their data lives in `/var/lib/pi-console/<module>/`, the systemd units are hardened, and the scripts that run as root never follow symlinks inside the services' folders. Hosts and names are validated and the Pi-hole certificate is pinned on first use. Known limit: the nginx CSP still allows `'unsafe-inline'` because the pages carry inline scripts and styles. The SFTP backup is encrypted with gpg (AES-256); keep a copy of `/etc/pi-console/backup_passphrase` off the Pi. Per-module permissions (none / read-only / execute / admin): an admin can only grant permissions on modules where they hold that level, and only admins of every module can use Teleporter from the panel. Proxmox clusters pin the certificate SHA-256 fingerprint.
 
 ## License
 

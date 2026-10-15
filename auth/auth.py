@@ -45,7 +45,7 @@ file, fsync and rename) so no data is lost or corrupted by power cuts.
 #
 #     Convention: comments are written in Spanish first and then in English (marked "EN:"). The
 #     English docstrings describe what each function does; the comments explain why.
-import copy, json, os, hashlib, hmac, secrets, time, logging, threading, glob, shutil, subprocess, sqlite3
+import copy, json, os, re, hashlib, hmac, secrets, time, logging, threading, glob, shutil, subprocess, sqlite3
 from pathlib import Path
 
 try:
@@ -62,6 +62,39 @@ log = logging.getLogger("auth")
 # EN: Paths of the shared files. The PICONSOLE_* variables let tests move them
 #     without touching /var/lib/pi-console.
 USERS_FILE    = Path(os.environ.get("PICONSOLE_USERS",    "/var/lib/pi-console/users.json"))
+# Carpeta de datos de la instalación y subcarpeta de cada módulo (/var/lib/pi-console/<módulo>). El código en /opt/pi-console es de solo
+# lectura para los servicios: todo lo que escriben vive aquí.
+# EN: Data folder of the installation and the sub-folder of each module (/var/lib/pi-console/<module>). The code in /opt/pi-console is
+#     read-only for the services: everything they write lives here.
+DATA_ROOT = USERS_FILE.parent
+def module_data(name: str) -> Path:
+    """Writable data folder of a module (created on demand)."""
+    d = DATA_ROOT / name
+    try: d.mkdir(parents=True, exist_ok=True)
+    except OSError as e: log.warning(f"cannot create {d}: {e}")
+    return d
+
+# Datos que antes vivían junto al código (versiones < 1.2.0u): si el archivo nuevo no existe, se copia el viejo (las bases SQLite con su API de
+# respaldo). En una instalación con paquete, postinst ya los movió; esto cubre ejecuciones de desarrollo.
+# EN: Data that used to live next to the code (versions < 1.2.0u): if the new file does not exist the old one is copied (SQLite databases
+#     with their backup API). On a packaged install postinst has already moved them; this covers development runs.
+def adopt_legacy(old_dir, new_dir, names):
+    old_dir, new_dir = Path(old_dir), Path(new_dir)
+    for n in names:
+        old, new = old_dir / n, new_dir / n
+        try:
+            if old.is_symlink() or not old.is_file() or new.exists(): continue
+            if n.endswith(".db"):
+                s_, d_ = sqlite3.connect(f"file:{old}?mode=ro", uri=True), sqlite3.connect(str(new))
+                try: s_.backup(d_)
+                finally: d_.close(); s_.close()
+            else:
+                shutil.copyfile(old, new)
+            os.chmod(new, 0o600)
+            log.info(f"adopted {old} -> {new}")
+        except Exception as e:
+            log.warning(f"could not adopt {old}: {e}")
+
 # Duración de una sesión sin actividad.
 # EN: How long a session lasts without activity.
 SESSION_TTL = 24 * 3600   # 24 horas
@@ -256,6 +289,28 @@ def _verify(stored, password: str) -> bool:
     except Exception:
         return False
 
+# Política de contraseñas: mínimo 8 caracteres (sin contar espacios de los extremos), distinta del nombre de usuario y fuera de una lista corta de
+# contraseñas evidentes. Devuelve el texto del error (en inglés) o None si es aceptable.
+# EN: Password policy: at least 8 characters (ignoring surrounding spaces), different from the username and not in a short list of obvious
+#     passwords. Returns the error text (in English) or None when acceptable.
+PASSWORD_MIN = 8
+_COMMON_PW = {"password", "password1", "12345678", "123456789", "1234567890", "qwerty123", "admin123", "administrator", "letmein1",
+              "pi-console", "piconsole", "raspberry", "raspberrypi", "11111111", "00000000", "abcd1234", "iloveyou"}
+def password_error(pw, username=None):
+    if not isinstance(pw, str): return "Invalid password"
+    pw = pw.strip()
+    if len(pw) < PASSWORD_MIN: return f"Password must be at least {PASSWORD_MIN} characters"
+    if len(pw) > 256: return "Password is too long"
+    if username and pw.lower() == str(username).lower(): return "Password must be different from the username"
+    if pw.lower() in _COMMON_PW: return "That password is too common"
+    return None
+
+# Contraseña aleatoria legible (sin 0/O/1/l/I) para la cuenta inicial.
+# EN: Readable random password (no 0/O/1/l/I) for the initial account.
+def _random_password(n=14):
+    alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    return "".join(secrets.choice(alphabet) for _ in range(n))
+
 # Para un usuario inexistente se gasta el mismo tiempo que para uno real: así no se puede averiguar qué
 # usuarios existen midiendo cuánto tarda la respuesta.
 # EN: For a non-existent user the same time is spent as for a real one, so you cannot find out which
@@ -269,32 +324,44 @@ def _burn_time(password: str):
 
 
 # ─── Usuarios ─────────────────────────────────────────────────────────────────
-# El hash de la contraseña inicial «admin» se calcula una sola vez, porque se consulta en cada petición de una instalación nueva.
-# EN: The hash of the initial password "admin" is computed only once, because it is queried on every request of a fresh install.
-_default_pw_hash = None
+# Cuenta inicial de una instalación nueva: «admin» con una contraseña ALEATORIA (ya no existe admin/admin) y cambio obligatorio en el primer
+# inicio de sesión. La contraseña se guarda en initial-admin-password (modo 600) hasta que se cambia, y se muestra al instalar y en el journal.
+# EN: Initial account of a fresh install: "admin" with a RANDOM password (admin/admin no longer exists) and a mandatory change at first login.
+#     The password is kept in initial-admin-password (mode 600) until it is changed, and shown at install time and in the journal.
+INITIAL_PW_FILE = USERS_FILE.with_name("initial-admin-password")
 
-# Usuario inicial de una instalación nueva: admin/admin con obligación de cambiar la contraseña en el primer inicio de sesión.
-# EN: Initial user of a fresh install: admin/admin, forced to change the password at the first login.
-def _default_users() -> dict:
-    global _default_pw_hash
-    if _default_pw_hash is None: _default_pw_hash = _hash("admin")      # computed once: this runs per request on a fresh install
-    return {
-        "admin": {
-            "password_hash": _default_pw_hash,
+def clear_initial_password():
+    """Delete the initial-password file (called once the administrator has set their own password)."""
+    try: INITIAL_PW_FILE.unlink()
+    except OSError: pass
+
+def ensure_initial_user() -> bool:
+    """Create the initial administrator on a fresh install (idempotent, safe across processes). Returns True if created."""
+    with users_lock():
+        if USERS_FILE.exists() or _initialized():
+            return False
+        pw = _random_password()
+        users = {"admin": {
+            "password_hash": _hash(pw),
             "permissions": {"wol": "admin", "nut": "admin", "net": "admin", "pve": "admin"},
             "created": int(time.time()),
             "must_change_password": True,
-        }
-    }
+        }}
+        save_users(users)
+        try: atomic_write(INITIAL_PW_FILE, pw + "\n")
+        except OSError as e: log.warning(f"cannot write {INITIAL_PW_FILE}: {e}")
+        log.warning(f"Initial administrator created. User: admin  Password: {pw}  (you must change it at the first login; "
+                    f"it is also in {INITIAL_PW_FILE})")
+        return True
 
 # Caché de users.json: se vuelve a leer del disco solo cuando cambia el archivo (firma = fecha de modificación + tamaño).
 # EN: Cache of users.json: re-read from disk only when the file changes (signature = modification time + size).
 _ucache = {"sig": None, "data": None}
 
 # Marcador que indica «esta instalación ya tuvo usuarios». Sin él, un users.json borrado reabriría el panel
-# con admin/admin; con él, falla cerrado (nadie entra) hasta restaurar el archivo.
+# con una cuenta inicial nueva; con él, falla cerrado (nadie entra) hasta restaurar el archivo.
 # EN: Marker meaning "this install has already had users". Without it, a deleted users.json would reopen the panel
-#     with admin/admin; with it, the system fails closed (nobody gets in) until the file is restored.
+#     with a new initial account; with it, the system fails closed (nobody gets in) until the file is restored.
 INIT_MARKER = USERS_FILE.with_name(".users-initialized")
 
 # Una instalación se considera ya usada si existe el marcador o la copia de seguridad.
@@ -322,22 +389,22 @@ def _file_sig(p: Path):
         return None
 
 # Fuente única de la tabla de usuarios para todo el módulo. Orden de decisión:
-#   1. users.json no existe y la instalación es nueva → usuario inicial admin/admin.
+#   1. users.json no existe y la instalación es nueva → se crea el usuario inicial (admin con contraseña aleatoria).
 #   2. users.json no existe pero la instalación ya se usó → se usa la copia .bak, o nadie entra.
 #   3. users.json existe → se usa (de la caché si no cambió); si está corrupto, la copia .bak.
-# Nunca se vuelve a admin/admin por un archivo dañado o borrado.
+# Nunca se vuelve a una cuenta por defecto por un archivo dañado o borrado.
 # EN: Single source of the users table for the whole module. Decision order:
-#       1. users.json is missing and the install is new → initial admin/admin user.
+#       1. users.json is missing and the install is new → the initial user is created (admin with a random password).
 #       2. users.json is missing but the install was already used → use the .bak copy, or nobody gets in.
 #       3. users.json exists → use it (from the cache if unchanged); if corrupt, the .bak copy.
-#     It never falls back to admin/admin because of a damaged or deleted file.
+#     It never falls back to a default account because of a damaged or deleted file.
 def _users_cached() -> dict:
     """Parsed users.json (shared object: do not mutate). Re-read only when the file changes.
 
-    * Missing file, never initialised → the initial admin account (fresh install only).
+    * Missing file, never initialised → the initial admin account is created (fresh install only).
     * Missing file after use         → the last good copy (users.json.bak) or NO users.
     * Unreadable/corrupt file       → the last good copy (users.json.bak) or, failing that,
-      NO users. It must never fall back to the default admin/admin account, which would
+      NO users. It must never fall back to a default account, which would
       silently reopen the panel with well-known credentials after a bad write.
     """
     sig = _file_sig(USERS_FILE)
@@ -345,7 +412,12 @@ def _users_cached() -> dict:
         # users.json missing. Only a genuinely fresh install (no marker, no backup) gets the
         # initial admin; otherwise the file was removed and nobody may log in with defaults.
         if not _initialized():
-            return _default_users()
+            try:
+                if ensure_initial_user():
+                    return _users_cached()
+            except Exception as e:
+                log.error(f"cannot create the initial administrator: {e}")
+            return {}
         sig = ("missing",)
     if sig == _ucache["sig"] and _ucache["data"] is not None:
         return _ucache["data"]
@@ -439,6 +511,11 @@ def _save_sessions(sessions: dict):
     atomic_write(SESSIONS_FILE, json.dumps(sessions))
     _scache["sig"], _scache["data"] = _file_sig(SESSIONS_FILE), sessions
 
+# Los tokens NO se guardan en claro: sessions.json y los respaldos solo contienen su SHA-256, así que leer el archivo no permite usar una sesión.
+# EN: Tokens are NOT stored in clear: sessions.json and backups only hold their SHA-256, so reading the file does not let anyone use a session.
+def _tkey(token: str) -> str:
+    return hashlib.sha256(str(token).encode()).hexdigest()
+
 # Abre una sesión: token aleatorio de 256 bits. Se guardan usuario, permisos al momento del login y
 # vencimiento. Aprovecha para purgar las sesiones vencidas.
 # EN: Open a session: random 256-bit token. Stores the user, the permissions at login time and the expiry.
@@ -447,7 +524,7 @@ def create_session(username: str, permissions: dict) -> str:
     token = secrets.token_hex(32)
     with _sessions_lock:
         sessions = _load_sessions()
-        sessions[token] = {
+        sessions[_tkey(token)] = {
             "username":    username,
             "permissions": permissions,
             "expires":     time.time() + SESSION_TTL,
@@ -466,27 +543,28 @@ def create_session(username: str, permissions: dict) -> str:
 #       · if the user no longer exists, it is deleted (removing a user cuts their session at once);
 #       · the permissions returned are always the CURRENT ones from users.json, not the ones at login;
 #       · the 24 h window is renewed, but written to disk only if more than RENEW_EVERY seconds passed.
-# Devuelve la sesión del token (o None). Si la cuenta tiene must_change_password (primer ingreso con admin/admin, o marcada por un admin), la sesión NO es válida para nada, salvo para cambiar la contraseña (allow_pending=True): así ningún módulo da acceso hasta que se cambie.
-# EN: Return the session of the token (or None). If the account has must_change_password (first login with admin/admin, or flagged by an admin), the session is NOT valid for anything except changing the password (allow_pending=True): no module grants access until it is changed.
+# Devuelve la sesión del token (o None). Si la cuenta tiene must_change_password (primer ingreso con la contraseña inicial, o marcada por un admin), la sesión NO es válida para nada, salvo para cambiar la contraseña (allow_pending=True): así ningún módulo da acceso hasta que se cambie.
+# EN: Return the session of the token (or None). If the account has must_change_password (first login with the initial password, or flagged by an admin), the session is NOT valid for anything except changing the password (allow_pending=True): no module grants access until it is changed.
 def get_session(token: str, allow_pending: bool = False) -> dict | None:
     if not token: return None
+    key = _tkey(token)
     with _sessions_lock:
         sessions = _load_sessions()
-        s = sessions.get(token)
+        s = sessions.get(key)
         if not s: return None
         now = time.time()
         if now > s.get("expires", 0):
-            sessions.pop(token, None); _save_sessions(sessions); return None
+            sessions.pop(key, None); _save_sessions(sessions); return None
         # The account must still exist, and the permissions are always the current ones:
         # deleting or demoting a user takes effect immediately instead of when the session expires.
         user = _users_cached().get(s.get("username"))
         if user is None:
-            sessions.pop(token, None); _save_sessions(sessions); return None
+            sessions.pop(key, None); _save_sessions(sessions); return None
         # Ventana deslizante de 24h, pero persistida solo si pasaron > RENEW_EVERY s
         # desde la última renovación (evita una escritura a disco por request).
         if s["expires"] - now < SESSION_TTL - RENEW_EVERY:
             s["expires"] = now + SESSION_TTL
-            sessions[token] = s
+            sessions[key] = s
             _save_sessions(sessions)
         if user.get("must_change_password") and not allow_pending:
             return None
@@ -498,16 +576,17 @@ def get_session(token: str, allow_pending: bool = False) -> dict | None:
 def delete_session(token: str):
     with _sessions_lock:
         sessions = _load_sessions()
-        if sessions.pop(token, None) is not None:
+        if sessions.pop(_tkey(token), None) is not None:
             _save_sessions(sessions)
 
 # Cierra todas las sesiones de un usuario (cambio de contraseña o eliminación), dejando opcionalmente una.
 # EN: Close all the sessions of a user (password change or removal), optionally keeping one.
 def delete_user_sessions(username: str, keep: str | None = None):
     """Log a user out everywhere (password change, account removal), optionally keeping one session."""
+    keep_key = _tkey(keep) if keep else None
     with _sessions_lock:
         sessions = _load_sessions()
-        gone = [t for t, s in sessions.items() if s.get("username") == username and t != keep]
+        gone = [t for t, s in sessions.items() if s.get("username") == username and t != keep_key]
         for t in gone: del sessions[t]
         if gone: _save_sessions(sessions)
 
@@ -547,16 +626,77 @@ def authenticate(username: str, password: str) -> dict | None:
     return copy.deepcopy(user)
 
 
-# ─── Login throttling ─────────────────────────────────────────────────────────
-# Per client IP and per process (each service keeps its own counters): MAX_FAILS failed
-# logins within WINDOW seconds lock that IP out for LOCKOUT seconds.
-# Límite de intentos: tras MAX_FAILS fallos desde la misma IP dentro de WINDOW segundos, esa IP queda
-# bloqueada LOCKOUT segundos. Cada proceso lleva su propia cuenta (no se comparte entre servicios).
-# EN: Attempt limit: after MAX_FAILS failures from the same IP within WINDOW seconds, that IP is
-#     locked for LOCKOUT seconds. Each process keeps its own count (not shared between services).
+# ─── Límite de intentos (compartido) ──────────────────────────────────────────────
+# Los contadores viven en login-throttle.json (con candado entre procesos), así que los 6 servicios comparten la misma cuenta: probar contraseñas
+# en otro módulo ya no da más intentos. Se lleva una cuenta por IP (MAX_FAILS fallos en WINDOW s bloquean esa IP LOCKOUT s) y otra por cuenta de
+# usuario (ACCOUNT_FAILS fallos, desde cualquier IP, la bloquean LOCKOUT s). El mismo mecanismo protege el cambio de contraseña. Si el archivo no se
+# puede usar se cae a contadores en memoria.
+# EN: ─── Attempt limiting (shared) ─────────────────────────────────────────────────────
+#     The counters live in login-throttle.json (with a cross-process lock), so the 6 services share the same count: guessing passwords on another
+#     module no longer gives more attempts. One count per IP (MAX_FAILS failures within WINDOW s lock that IP for LOCKOUT s) and one per user account
+#     (ACCOUNT_FAILS failures, from any IP, lock it for LOCKOUT s). The same mechanism protects password changes. If the file cannot be used it
+#     falls back to in-memory counters.
 MAX_FAILS, WINDOW, LOCKOUT = 5, 600, 300
-_fails: dict = {}
-_fails_lock = threading.Lock()
+try: ACCOUNT_FAILS = max(5, int(os.environ.get("PICONSOLE_LOGIN_MAX_ACCOUNT", "20")))
+except ValueError: ACCOUNT_FAILS = 20
+THROTTLE_FILE = Path(os.environ.get("PICONSOLE_THROTTLE", str(USERS_FILE.with_name("login-throttle.json"))))
+_throttle_lock = FileLock(THROTTLE_FILE.with_name(THROTTLE_FILE.name + ".lock"))
+_mem_fails: dict = {}
+_mem_lock = threading.Lock()
+
+def _th_read():
+    try:
+        d = json.loads(THROTTLE_FILE.read_text())
+        return d if isinstance(d, dict) else {}
+    except FileNotFoundError:
+        return {}
+    except Exception as e:
+        log.warning(f"{THROTTLE_FILE}: {e}")
+        return {}
+
+def throttle_wait(key: str) -> int:
+    """Seconds the caller must still wait for `key` (an IP, account or other string); 0 when it may proceed."""
+    now = time.time()
+    f = _th_read().get(key)
+    w = int(f["lock"] - now) + 1 if isinstance(f, dict) and f.get("lock", 0) > now else 0
+    with _mem_lock:
+        m = _mem_fails.get(key)
+        if m and m.get("lock", 0) > now: w = max(w, int(m["lock"] - now) + 1)
+    return w
+
+def _th_bump(d: dict, key: str, now: float, max_fails: int, window: int, lockout: int) -> bool:
+    if len(d) > 2048:
+        for k in [k for k, v in d.items() if not isinstance(v, dict) or (v.get("lock", 0) < now and now - v.get("first", 0) > window)]: del d[k]
+    f = d.get(key)
+    if not isinstance(f, dict) or now - f.get("first", 0) > window: f = d[key] = {"n": 0, "first": now, "lock": 0}
+    f["n"] = f.get("n", 0) + 1
+    if f["n"] >= max_fails:
+        f["lock"], f["n"], f["first"] = now + lockout, 0, now
+        return True
+    return False
+
+def throttle_fail(key: str, max_fails: int = MAX_FAILS, window: int = WINDOW, lockout: int = LOCKOUT) -> bool:
+    """Count one failure for `key`; returns True when it has just been locked."""
+    now = time.time()
+    try:
+        with _throttle_lock:
+            d = _th_read()
+            locked = _th_bump(d, key, now, max_fails, window, lockout)
+            atomic_write(THROTTLE_FILE, json.dumps(d))
+        return locked
+    except Exception as e:
+        log.warning(f"login-throttle file unusable, using memory: {e}")
+        with _mem_lock:
+            return _th_bump(_mem_fails, key, now, max_fails, window, lockout)
+
+def throttle_clear(key: str):
+    try:
+        with _throttle_lock:
+            d = _th_read()
+            if d.pop(key, None) is not None: atomic_write(THROTTLE_FILE, json.dumps(d))
+    except Exception:
+        pass
+    with _mem_lock: _mem_fails.pop(key, None)
 
 # IP real del cliente. Detrás de nginx todas las peticiones llegan desde 127.0.0.1, así que solo en ese caso
 # se confía en la cabecera X-Real-IP (que pone nginx); un cliente remoto no puede falsearla.
@@ -570,33 +710,66 @@ def client_ip(handler) -> str:
         if real and len(real) <= 45: return real
     return ip
 
+# ¿La petición viene directamente de esta máquina (sin pasar por nginx)? Es el caso de pi-console-health y de los demás servicios.
+# EN: Does the request come straight from this machine (not through nginx)? That is the case of pi-console-health and of the other services.
+def is_local_request(handler) -> bool:
+    return handler.client_address[0] in ("127.0.0.1", "::1") and not (handler.headers.get("X-Real-IP") or "").strip()
+
+# Nombre de archivo seguro para cabeceras (Content-Disposition): solo letras, números, punto, guion y guion bajo.
+# EN: Safe file name for headers (Content-Disposition): only letters, digits, dot, dash and underscore.
+def safe_filename(name, maxlen: int = 120) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]", "_", str(name))[:maxlen] or "file"
+
+# ¿Es un nombre de host o una IP razonable? Nunca empieza con «-» ni lleva espacios, «/», «@» ni otros caracteres especiales (se usa en conexiones y comandos).
+# EN: Is it a reasonable host name or IP? It never starts with "-" and has no spaces, "/", "@" or other special characters (used in connections and commands).
+_HOSTNAME_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,251}[A-Za-z0-9])?$")
+def valid_host(h) -> bool:
+    if not isinstance(h, str) or not h or len(h) > 253: return False
+    if _HOSTNAME_RE.match(h): return True
+    try:
+        import ipaddress
+        ipaddress.ip_address(h); return True
+    except ValueError:
+        return False
+
+# Registra un inicio de sesión fallido (por IP y por cuenta).
+# EN: Record a failed login (per IP and per account).
+def login_failed(handler, username):
+    ip = client_ip(handler)
+    uname = username.strip().lower()[:64] if isinstance(username, str) else ""
+    if throttle_fail("ip:" + ip):
+        log.warning(f"login locked for {ip} after {MAX_FAILS} failed attempts")
+    if uname and throttle_fail("u:" + uname, ACCOUNT_FAILS):
+        log.warning(f"account {uname!r} locked after {ACCOUNT_FAILS} failed attempts")
+
 # Inicio de sesión con límite de intentos. Devuelve (usuario, None) si entra, o (None, (código, mensaje)):
-# 429 si la IP está bloqueada, 401 si las credenciales son inválidas (con una pausa de 0,3 s).
+# 429 si la IP o la cuenta están bloqueadas, 401 si las credenciales son inválidas (con una pausa de 0,3 s).
 # EN: Login with attempt limiting. Returns (user, None) on success, or (None, (code, message)):
-#     429 if the IP is locked, 401 for invalid credentials (with a 0.3 s pause).
+#     429 if the IP or the account is locked, 401 for invalid credentials (with a 0.3 s pause).
 def login(handler, username, password):
     """Throttled login: returns (user, None) or (None, (http_status, message))."""
-    ip, now = client_ip(handler), time.time()
-    with _fails_lock:
-        if len(_fails) > 2048:
-            for k in [k for k, v in _fails.items() if v["lock"] < now and now - v["first"] > WINDOW]: del _fails[k]
-        f = _fails.get(ip)
-        if f and f["lock"] > now:
-            wait = int(f["lock"] - now) + 1
-            return None, (429, f"Too many failed attempts. Try again in {wait} s")
+    ip = client_ip(handler)
+    uname = username.strip().lower()[:64] if isinstance(username, str) else ""
+    wait = max(throttle_wait("ip:" + ip), throttle_wait("u:" + uname) if uname else 0)
+    if wait:
+        return None, (429, f"Too many failed attempts. Try again in {wait} s")
     u = authenticate(username, password)
-    with _fails_lock:
-        if u:
-            _fails.pop(ip, None)
-            return u, None
-        f = _fails.get(ip)
-        if not f or now - f["first"] > WINDOW: f = _fails[ip] = {"n": 0, "first": now, "lock": 0}
-        f["n"] += 1
-        if f["n"] >= MAX_FAILS:
-            f["lock"], f["n"], f["first"] = now + LOCKOUT, 0, now
-            log.warning(f"login locked for {ip} after {MAX_FAILS} failed attempts")
+    if u:
+        throttle_clear("ip:" + ip)
+        if uname: throttle_clear("u:" + uname)
+        return u, None
+    login_failed(handler, username)
     time.sleep(0.3)
     return None, (401, "Invalid credentials")
+
+# Freno para operaciones que verifican una contraseña con la sesión ya abierta (cambio de contraseña): 5 fallos en 10 min bloquean 5 min.
+# EN: Brake for operations that verify a password with a session already open (password change): 5 failures in 10 min lock for 5 min.
+def password_guard_wait(username) -> int:
+    return throttle_wait("pw:" + str(username))
+def password_guard_fail(username):
+    throttle_fail("pw:" + str(username))
+def password_guard_ok(username):
+    throttle_clear("pw:" + str(username))
 
 # ¿La sesión del token tiene al menos el nivel «required» sobre el recurso (wol, nut, net, pve)?
 # EN: Does the token's session have at least the "required" level on the resource (wol, nut, net, pve)?
@@ -889,12 +1062,22 @@ def check_power():
 # entregan los niveles, sin el texto de detalle. Un fallo grave responde 503.
 # EN: Build the /api/health response: the overall status is the worst of the checks. Without an admin session only
 #     the levels are returned, without the detail text. A serious failure answers 503.
+# Quién consulta /api/health: True = con sesión (detalle completo), False = desde esta máquina sin sesión (solo niveles: lo usa pi-console-health),
+# None = anónimo por la red (solo el estado global, sin versión ni nombres de chequeos).
+# EN: Who is querying /api/health: True = with a session (full detail), False = from this machine without a session (levels only: used by
+#     pi-console-health), None = anonymous over the network (only the overall status, no version and no check names).
+def health_mode(handler, tok):
+    if get_session(tok) is not None: return True
+    return False if is_local_request(handler) else None
+
 def health_reply(module, checks, detailed=False, extra=None):
-    """Build (http_code, body). Unauthenticated callers get levels only, no detail text."""
+    """Build (http_code, body). detailed: True = everything, False = levels only, None = overall status only."""
     levels = [c["level"] for c in checks.values()]
     status = FAIL if FAIL in levels else "degraded" if WARN in levels else OK
+    code = 503 if status == FAIL else 200
+    if detailed is None:
+        return code, {"status": status}
     body = {"module": module, "version": version(), "status": status, "uptime": int(time.time() - STARTED),
             "checks": {k: ({**v} if detailed else {"level": v["level"]}) for k, v in checks.items()}}
     if extra and detailed: body.update(extra)
-    return (503 if status == FAIL else 200), body
-
+    return code, body

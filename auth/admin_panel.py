@@ -104,6 +104,7 @@ def health_report(tok, detailed=False):
             c[name] = auth.chk(lvl, ", ".join(bad) if bad else "")
             modules[name] = h
     code, body = auth.health_reply("admin", c, detailed, extra={"modules": modules})
+    if detailed is None: return code, body
     if not detailed: body["modules"] = {k: {"status": v.get("status")} for k, v in modules.items()}
     return code, body
 
@@ -132,7 +133,7 @@ class H(BaseHTTPRequestHandler):
     def _body(self):
         try:
             n = int(self.headers.get("Content-Length", 0))
-            if n > 8192: return None
+            if n < 0 or n > 8192: return None
             return json.loads(self.rfile.read(n))
         except: return None
 
@@ -229,10 +230,10 @@ class H(BaseHTTPRequestHandler):
             return self._json(200, {"username": sess["username"],
                                     "must_change_password": sess["must_change_password"]} if sess else {})
 
-        if path == "/api/version":     # public: shown in the page footer
-            return self._json(200, {"version": auth.version()})
+        if path == "/api/version":     # shown in the page footer; only with a session (or from this machine)
+            return self._json(200, {"version": auth.version()} if (auth.get_session(tok) or auth.is_local_request(self)) else {})
         if path == "/api/health":      # public: levels only; details need a valid session
-            code, body = health_report(tok, auth.get_session(tok) is not None)
+            code, body = health_report(tok, auth.health_mode(self, tok))
             return self._json(code, body)
 
         if not auth.check_permission(tok, "wol", "admin") and \
@@ -285,9 +286,14 @@ class H(BaseHTTPRequestHandler):
             u, err = auth.login(self, body.get("username",""), body.get("password",""))
             if not u: return self._json(err[0], {"error": err[1]})
             # Solo admins pueden acceder al panel
+            # Un usuario válido que no es admin recibe la MISMA respuesta que una contraseña incorrecta (y cuenta como intento fallido): así este
+            # formulario no sirve para comprobar si una contraseña es correcta.
+            # EN: A valid user who is not an admin gets the SAME answer as a wrong password (and counts as a failed attempt), so this form cannot be
+            #     used to check whether a password is right.
             if auth.LEVELS.get(u["permissions"].get("wol",""),0) < 3 and \
                auth.LEVELS.get(u["permissions"].get("nut",""),0) < 3:
-                return self._json(403, {"error": "Administrator access required"})
+                auth.login_failed(self, body.get("username", ""))
+                return self._json(401, {"error": "Invalid credentials"})
             token = auth.create_session(body["username"], u["permissions"])
             users = auth.load_users()
             must  = users.get(body["username"],{}).get("must_change_password", False)
@@ -295,7 +301,7 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.send_header("Set-Cookie",
                 auth.session_cookie(token))
-            br = json.dumps({"ok": True, "token": token, "username": body["username"],
+            br = json.dumps({"ok": True, "username": body["username"],
                              "permissions": u["permissions"],
                              "must_change_password": must}).encode()
             self.send_header("Content-Length", str(len(br)))
@@ -314,12 +320,18 @@ class H(BaseHTTPRequestHandler):
             new_ = body.get("new_password")
             if not isinstance(cur, str) or not isinstance(new_, str):
                 return self._json(400, {"error": "Invalid request body"})
-            if len(new_.strip()) < 6:
-                return self._json(400, {"error": "Password must be at least 6 characters"})
+            perr = auth.password_error(new_, me_)
+            if perr:
+                return self._json(400, {"error": perr})
             if new_ == cur:
                 return self._json(400, {"error": "The new password must be different from the current one"})
+            wait = auth.password_guard_wait(me_)
+            if wait:
+                return self._json(429, {"error": f"Too many failed attempts. Try again in {wait} s"})
             if auth.authenticate(me_, cur) is None:
+                auth.password_guard_fail(me_)
                 return self._json(403, {"error": "Current password is incorrect"})
+            auth.password_guard_ok(me_)
             with auth.users_lock():
                 users = auth.load_users()
                 if me_ not in users: return self._json(404, {"error": "User not found"})
@@ -327,6 +339,7 @@ class H(BaseHTTPRequestHandler):
                 users[me_]["must_change_password"] = False
                 auth.save_users(users)
             auth.delete_user_sessions(me_, keep=tok)
+            if me_ == "admin": auth.clear_initial_password()
             log.info(f"Password changed by the user themselves: {me_}")
             return self._json(200, {"ok": True})
 
@@ -383,6 +396,9 @@ class H(BaseHTTPRequestHandler):
                 return self._json(400, {"error": "Username and password are required"})
             if not re.match(r'^[a-zA-Z0-9_\-]{2,32}$', uname):
                 return self._json(400, {"error": "Invalid username (2-32 alphanumeric chars)"})
+            perr = auth.password_error(pwd, uname)
+            if perr:
+                return self._json(400, {"error": perr})
             if any(v not in VALID_PERMS for v in perms.values()):
                 return self._json(400, {"error": "Invalid permission"})
             denied = _grant_denied(sess["permissions"], {}, perms)
@@ -396,7 +412,7 @@ class H(BaseHTTPRequestHandler):
                     "password_hash": auth._hash(pwd),
                     "permissions": perms,
                     "created": int(time.time()),
-                    "must_change_password": body.get("must_change_password", False),
+                    "must_change_password": bool(body.get("must_change_password", False)),
                 }
                 auth.save_users(users)
             log.info(f"Usuario creado: {uname} por {me}")
@@ -407,14 +423,28 @@ class H(BaseHTTPRequestHandler):
         # EN: Password change: each user changes their own and only a WOL admin changes others'. Changing it
         #     closes every other session of that account.
         elif path == "/api/change_password":
-            # Cambiar propia contraseña o la de cualquiera (admin)
-            target = (body.get("username") or me).strip()
-            new_pw = (body.get("new_password") or "").strip()
-            if not new_pw or len(new_pw) < 6:
-                return self._json(400, {"error": "Password must be at least 6 characters"})
+            # Cambiar la propia contraseña (exige la actual) o la de otro usuario (restablecimiento por un admin)
+            target = str(body.get("username") or me).strip()
+            new_pw = str(body.get("new_password") or "").strip()
+            perr = auth.password_error(new_pw, target)
+            if perr:
+                return self._json(400, {"error": perr})
             # No-admin solo puede cambiar la suya
             if target != me and not auth.check_permission(tok, "wol", "admin"):
                 return self._json(403, {"error": "You can only change your own password"})
+            if target == me:
+                # Con una sesión robada no se puede fijar una contraseña nueva sin conocer la actual; los intentos se limitan igual que en el login.
+                # EN: With a stolen session a new password cannot be set without knowing the current one; attempts are limited like the login.
+                cur = body.get("current_password")
+                if not isinstance(cur, str) or not cur:
+                    return self._json(400, {"error": "Current password is required"})
+                wait = auth.password_guard_wait(me)
+                if wait:
+                    return self._json(429, {"error": f"Too many failed attempts. Try again in {wait} s"})
+                if auth.authenticate(me, cur) is None:
+                    auth.password_guard_fail(me)
+                    return self._json(403, {"error": "Current password is incorrect"})
+                auth.password_guard_ok(me)
             with auth.users_lock():
                 users = auth.load_users()
                 if target not in users:
@@ -426,6 +456,7 @@ class H(BaseHTTPRequestHandler):
                 auth.save_users(users)
             # every other session of that account is closed (the current one stays open)
             auth.delete_user_sessions(target, keep=tok if target == me else None)
+            if target == "admin": auth.clear_initial_password()
             log.info(f"Password changed: {target} by {me}")
             self._json(200, {"ok": True})
 
@@ -462,6 +493,10 @@ class H(BaseHTTPRequestHandler):
                 users = auth.load_users()
                 if uname not in users:
                     return self._json(404, {"error": "User not found"})
+                # Quien tiene menos nivel que el usuario afectado en algún módulo no puede tocar sus permisos (igual que para borrarlo).
+                # EN: Someone with a lower level than the target on any module cannot touch their permissions (same rule as for deleting).
+                if uname != me and _outranks(sess["permissions"], users[uname].get("permissions")):
+                    return self._json(403, {"error": "You cannot change a user with higher permissions than yours"})
                 denied = _grant_denied(sess["permissions"], users[uname].get("permissions"), new)
                 if denied:
                     return self._json(403, {"error": f"You cannot change the level on '{denied}': it is above your own"})

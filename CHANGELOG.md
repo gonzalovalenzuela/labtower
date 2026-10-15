@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.0u — 2026-10-15
+
+### Seguridad (auditoría: 13 hallazgos)
+- **Instalador y Teleporter como root:** ya no siguen enlaces simbólicos dentro de carpetas que controlan los servicios (antes un servicio comprometido podía hacer que un respaldo incluyera archivos de root o que una restauración los sobrescribiera). Las lecturas las hace el usuario del servicio y las escrituras usan `openat` con `O_NOFOLLOW`; la instantánea SQLite la toma el usuario del servicio; el registro de restauración está en `/var/log/pi-console/` (de root); `/opt/pi-console` y `/opt/pi-console-auth` son de root. Teleporter 2.2.0.
+- **Servicios:** el código es de solo lectura para ellos y los datos pasan de `/opt/pi-console/<módulo>/` a `/var/lib/pi-console/<módulo>/` (el instalador los mueve solo). Unidades systemd endurecidas (`ProtectSystem`, `ProtectHome`, `PrivateTmp`, `NoNewPrivileges` donde no hay `ping` ni `sudo`, familias de sockets, `UMask=0077`…).
+- **CSV de UPS Monitor:** el nombre del archivo exportado ya no puede inyectar cabeceras (CRLF).
+- **HTTPS:** nuevo comando `pi-console-https` (`enable [--redirect] [--cert --key]`, `disable`, `status`) con certificado autofirmado o propio, HSTS y cookie `Secure` al redirigir.
+- **Intentos de login:** contadores compartidos por todos los módulos (archivo con `flock`), límite por IP y por cuenta; cambiar la contraseña exige la actual y esos intentos también se limitan.
+- **Respaldos:** no incluyen `sessions.json`; el respaldo SFTP se **cifra con gpg** (AES-256) antes de salir (`pi-console-sftp-backup decrypt` para abrirlo; la contraseña está en `/etc/pi-console/backup_passphrase`, guarda una copia fuera de la Pi).
+- **Cuentas:** sin `admin`/`admin`: contraseña aleatoria en la instalación nueva (la muestra el instalador); mínimo 8 caracteres también al crear usuarios.
+- **Permisos:** un usuario de solo lectura ya no puede iniciar un escaneo de Net Monitor; un admin parcial (p. ej. solo WOL) no puede degradar, borrar ni cambiar la contraseña del administrador principal.
+- **Hosts y Pi-hole:** hosts y nombres de NUT, Proxmox y Pi-hole se validan; el certificado de Pi-hole se fija en la primera conexión (TOFU).
+- **nginx:** `server_tokens off`, límites de peticiones y conexiones por IP (más estricto en el login), `Content-Length` negativo rechazado, cabeceras adicionales; `/api/health` público solo informa el estado y `/api/version` pide sesión. Se quita el endpoint `/wol/api/token` (sin uso).
+- **Sesiones:** se guardan solo como hash SHA-256 y el login ya no devuelve el token en el JSON. **Hay que iniciar sesión otra vez tras actualizar.**
+- **Admin Panel:** un usuario válido que no es admin recibe la misma respuesta que una contraseña incorrecta (sin oráculo de credenciales).
+- **Límite conocido:** la CSP todavía permite `'unsafe-inline'` (las páginas llevan scripts y estilos en línea).
+
 ## 1.2.0t — 2026-10-15
 
 - **Resumen, kiosko:** el gráfico de temperatura de la UPS se muestra ahora en cualquier tamaño de pantalla, de forma compacta (en 1.2.0s seguía oculto entre 701 y 900 px de alto, que es el caso de varias tablets de 7").

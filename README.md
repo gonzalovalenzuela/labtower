@@ -69,11 +69,11 @@ El código fuente está comentado en español e inglés (los comentarios en ingl
 
 ```bash
 # Descargar el .deb desde Releases
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0t/pi-console_1.2.0t_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0u/pi-console_1.2.0u_all.deb
 
 # Instalar (apt resuelve e instala las dependencias: python3, nginx, nut, nut-client, snmp, sudo…)
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.0t_all.deb
+sudo apt-get install -y ./pi-console_1.2.0u_all.deb
 ```
 
 Usa `apt-get install ./archivo.deb` (no `dpkg -i`): así `apt` instala las dependencias que falten.
@@ -82,7 +82,7 @@ El instalador:
 - Crea el usuario del sistema `pi-console`
 - Instala los servicios systemd y los habilita
 - Configura nginx
-- Crea el usuario inicial `admin` / `admin`, que **obliga a cambiar la contraseña** en el primer ingreso (ver [Primer ingreso](#primer-ingreso))
+- Crea el usuario inicial `admin` con una **contraseña aleatoria** que el instalador muestra al terminar (también queda en `/var/lib/pi-console/initial-admin-password` hasta que la cambies) y que **obliga a cambiarla** en el primer ingreso (ver [Primer ingreso](#primer-ingreso)). Si la perdiste: `sudo cat /var/lib/pi-console/initial-admin-password`
 
 Luego abre `http://<ip-de-la-pi>/`.
 
@@ -100,6 +100,8 @@ sudo cp VERSION /opt/pi-console/VERSION
 
 # Nginx
 sudo cp etc/nginx/sites-available/pi-console.conf /etc/nginx/sites-available/
+sudo cp etc/nginx/snippets/pi-console-site.conf /etc/nginx/snippets/
+sudo mkdir -p /etc/pi-console/https.d /etc/pi-console/http-extra.d
 sudo ln -s /etc/nginx/sites-available/pi-console.conf /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 
@@ -110,13 +112,13 @@ sudo nginx -t && sudo systemctl reload nginx
 ## Actualizar
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0t/pi-console_1.2.0t_all.deb
-sudo apt-get install -y ./pi-console_1.2.0t_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0u/pi-console_1.2.0u_all.deb
+sudo apt-get install -y ./pi-console_1.2.0u_all.deb
 pi-console-health
 ```
 
 - Funciona desde cualquier 1.1.x o 1.2.x anterior. Los datos (`/var/lib/pi-console`) se conservan y el instalador guarda además una copia en `/var/backups/pi-console`.
-- Si el número de versión que instalas es **menor** que el que ya tienes (por ejemplo, volver a 1.2.0 teniendo 1.2.0t), `apt` lo trata como bajar de versión y pide `--allow-downgrades`:
+- Si el número de versión que instalas es **menor** que el que ya tienes (por ejemplo, volver a 1.2.0 teniendo 1.2.0u), `apt` lo trata como bajar de versión y pide `--allow-downgrades`:
   `sudo apt-get install -y --allow-downgrades ./pi-console_1.2.0_all.deb`.
 - Los cambios de cada versión están en [CHANGELOG.md](CHANGELOG.md).
 
@@ -216,8 +218,9 @@ journalctl -t pi-console-sftp-backup  # historial / errores
 - **Seguro:** el archivo se sube con nombre temporal (`.part`) y se renombra al terminar; después se compara el tamaño remoto con el local. Un respaldo que no pasa la verificación no se envía.
 - **Retención:** se conservan 30 copias en el storage (`KEEP_REMOTE`) y 7 en la Pi (`/var/backups/pi-console`, `KEEP_LOCAL`). Solo se borran archivos llamados `pi-console-auto-<equipo>-<fecha>_<hora>.tar.gz`; cualquier otro archivo de esa carpeta no se toca.
 - **Huella del servidor:** la primera conexión guarda la huella del storage (`/etc/pi-console/backup_known_hosts`); si cambia, el respaldo falla y avisa en vez de enviar los datos a un equipo distinto.
-- **Contenido sensible:** el respaldo incluye contraseñas (hash) y tokens. Usa un usuario SFTP propio, con acceso solo a esa carpeta, en un storage de confianza.
-- El horario se cambia en `/etc/cron.d/pi-console-sftp-backup`. Para restaurar, descarga el archivo del storage y usa `teleporter restore` o el panel de administración.
+- **Cifrado:** lo que sale de la Pi va **cifrado con gpg (AES-256)**; la contraseña se crea sola en `/etc/pi-console/backup_passphrase` la primera vez. **Guarda una copia fuera de la Pi** (`sudo cat /etc/pi-console/backup_passphrase`): sin ella no se puede abrir ningún respaldo. Para restaurar: baja el `.tar.gz.gpg`, `sudo pi-console-sftp-backup decrypt archivo.tar.gz.gpg` y luego `sudo teleporter restore archivo.tar.gz`. `ENCRYPT=no` en `backup.conf` lo desactiva (no recomendado).
+- **Contenido sensible:** el respaldo incluye contraseñas (hash) y tokens de API (las sesiones abiertas no). Usa un usuario SFTP propio, con acceso solo a esa carpeta, en un storage de confianza.
+- El horario se cambia en `/etc/cron.d/pi-console-sftp-backup`. Para restaurar, descarga el archivo del storage, descífralo (ver arriba) y usa `teleporter restore` o el panel de administración.
 
 ---
 
@@ -275,14 +278,17 @@ pi-console-health                     # diagnóstico general
 
 Pi Console está pensado para una **red local de confianza** y se sirve por **HTTP en el puerto 80** (nginx):
 
-- **Sin TLS en el paquete.** Las credenciales y la cookie de sesión viajan sin cifrar por la LAN. No expongas el puerto 80 a internet ni a redes no confiables. Si algún día lo publicas, pon delante un proxy con HTTPS (nginx, Caddy, Cloudflare Tunnel…) y deja que solo ese proxy llegue al puerto 80.
+- **HTTP por defecto, HTTPS con un comando.** Por defecto las credenciales y la cookie viajan sin cifrar por la LAN: no expongas el puerto 80 a internet. Para cifrar: `sudo pi-console-https enable` (certificado autofirmado, el navegador avisa una vez) o con tu certificado: `sudo pi-console-https enable --cert fullchain.pem --key privkey.pem`. Con `--redirect` el puerto 80 redirige a HTTPS, la cookie pasa a `Secure` y se envía HSTS. `sudo pi-console-https disable` lo deshace; `status` muestra el estado.
 - **Los servicios Python escuchan solo en `127.0.0.1`** (8080–8085); únicamente nginx es accesible desde la red.
-- **Cookie `Secure` (opcional).** La cookie de sesión lleva `HttpOnly` y `SameSite=Strict` y dura 24 h. Detrás de HTTPS define `PICONSOLE_SECURE_COOKIE=1` (ver [Configuración](#configuración-variables-de-entorno)) para que además lleve `Secure`. Está apagado por defecto porque con HTTP el navegador no enviaría una cookie `Secure` y no podrías iniciar sesión.
-- **Contraseñas e intentos.** Las contraseñas se guardan con scrypt. Tras 5 intentos de login fallidos desde una IP en 10 minutos, esa IP queda bloqueada 5 minutos.
+- **Cookie `Secure` (opcional).** La cookie de sesión lleva `HttpOnly` y `SameSite=Strict` y dura 24 h. Con `pi-console-https enable --redirect` (o `PICONSOLE_SECURE_COOKIE=1` detrás de tu propio proxy HTTPS, ver [Configuración](#configuración-variables-de-entorno)) lleva además `Secure`. Está apagado por defecto porque con HTTP el navegador no enviaría una cookie `Secure` y no podrías iniciar sesión.
+- **Contraseñas e intentos.** Las contraseñas (mínimo 8 caracteres) se guardan con scrypt. Tras 5 intentos de login fallidos desde una IP en 10 minutos, esa IP queda bloqueada 5 minutos; además cada cuenta tiene su propio límite. El contador es **compartido por todos los módulos** (un archivo con bloqueo), cambiar la contraseña exige la actual y esos intentos también se limitan. nginx añade límite de peticiones por IP (más estricto en el login) y de conexiones simultáneas, y no revela su versión.
+- **Sesiones.** El token vive solo en la cookie `HttpOnly`; en disco (`sessions.json`) se guarda únicamente su hash SHA-256, el login no lo devuelve en el JSON y los respaldos no incluyen las sesiones. Un `/api/health` público solo dice «ok/degraded/fail»; la versión y los detalles piden sesión.
+- **Servicios con privilegios mínimos.** El código de `/opt/pi-console` es de root y de solo lectura para los servicios; lo que escriben vive en `/var/lib/pi-console/<módulo>/`. Las unidades systemd llevan endurecimiento (sin `/home`, `/tmp` propio, kernel de solo lectura, sin nuevos privilegios y sistema de archivos de solo lectura salvo los datos, en UPS, Proxmox y Resumen). Los scripts que corren como root (instalador, Teleporter) **nunca siguen enlaces simbólicos** dentro de las carpetas de los servicios.
+- **Entradas validadas.** Hosts y nombres de NUT, Proxmox y Pi-hole se validan; el certificado de Pi-hole se fija en la primera conexión (TOFU) y si cambia no se envía la contraseña; el nombre del CSV exportado no puede inyectar cabeceras; un usuario de solo lectura no puede lanzar escaneos; un admin parcial (p. ej. solo WOL) no puede degradar, borrar ni cambiar la contraseña del administrador principal.
+- **Límite conocido.** La política CSP de nginx todavía admite `'unsafe-inline'` porque las páginas llevan sus scripts y estilos en línea; las demás cabeceras (nosniff, frame, referrer, permisos) sí están.
 - **Permisos por módulo.** Cada módulo (WOL, UPS, Net, Proxmox) tiene su propio nivel (ninguno, solo lectura, ejecutar, admin). Un administrador **solo puede dar o quitar permisos en los módulos donde él mismo tiene ese nivel**, y no puede borrar ni cambiar la contraseña de un usuario con más permisos que él. Los respaldos (Teleporter) solo los maneja quien es admin de todos los módulos.
 - **Proxmox: certificado fijado.** Los clusters nuevos exigen fijar la huella SHA-256 del certificado. Un cluster antiguo sin huella se conecta sin validar la identidad del servidor: la página muestra un aviso permanente y el servicio lo anota en el log al arrancar; usa «Fijar certificado» para corregirlo.
-- **Primer ingreso.** La cuenta inicial `admin`/`admin` obliga a cambiar la contraseña antes de usar cualquier módulo.
-- **Clave CSRF de WOL.** Se genera aleatoria en la primera ejecución y se guarda con permisos 600; no hay una clave por defecto conocida.
+- **Primer ingreso.** Ya no existe `admin`/`admin`: la cuenta inicial tiene una contraseña aleatoria (la muestra el instalador) y obliga a cambiarla antes de usar cualquier módulo.
 
 ---
 
@@ -304,9 +310,10 @@ Raspberry Pi
 │   ├── net-monitor/          ←── servidor Python + frontend
 │   └── proxmox-monitor/      ←── servidor Python + frontend
 │
-├── /var/lib/pi-console/      ←── datos (usuarios, sesiones, historial…); sobreviven a las actualizaciones
+├── /var/lib/pi-console/      ←── datos (users.json, <módulo>/…, metrics.db…); sobreviven a las actualizaciones
+├── /etc/pi-console/          ←── backup.conf, llave y contraseña del respaldo SFTP, tls/ (si activas HTTPS)
 ├── /var/backups/pi-console/  ←── copias automáticas antes de actualizar o desinstalar
-├── /usr/local/bin/           ←── teleporter, pi-console-sftp-backup, pi-console-health, pi-console-resources
+├── /usr/local/bin/           ←── teleporter, pi-console-sftp-backup, pi-console-https, pi-console-health, pi-console-resources
 │
 └── systemd services
     ├── wol-console.service
@@ -317,7 +324,7 @@ Raspberry Pi
     └── pi-console-overview.service
 ```
 
-Cada módulo es un servidor HTTP Python 3 independiente que escucha solo en `127.0.0.1`. La autenticación se comparte: todos usan `auth/auth.py` y los mismos archivos de usuarios y sesiones (accesibles también por la ruta de compatibilidad `/opt/pi-console-auth/`).
+Cada módulo es un servidor HTTP Python 3 independiente que escucha solo en `127.0.0.1`. La autenticación se comparte: todos usan `auth/auth.py` y los mismos archivos de usuarios y sesiones (accesibles también por la ruta de compatibilidad `/opt/pi-console-auth/`, que es de root).
 
 ---
 
@@ -341,12 +348,14 @@ pi-console/
 │   └── index.html           # Página de inicio del dashboard
 ├── etc/
 │   ├── nginx/sites-available/pi-console.conf
+│   ├── nginx/snippets/pi-console-site.conf   # cabeceras, límites y rutas (HTTP y HTTPS)
 │   ├── pi-console/backup.conf      # Configuración del respaldo por SFTP
 │   └── cron.d/pi-console-sftp-backup    # Cron diario del respaldo
 ├── scripts/
 │   ├── teleporter.sh        # Backup / check / restore
 │   ├── pi-console-sftp-backup    # Respaldo automático por SFTP (cron diario)
 │   ├── pi-console-health    # Diagnóstico desde la terminal
+│   ├── pi-console-https     # Activa/desactiva HTTPS (certificado autofirmado o propio)
 │   ├── pi-console-resources # Memoria y CPU de los servicios
 │   └── apt-repo.py          # Generador del repositorio APT (aún sin publicar)
 ├── debian/                  # Empaquetado .deb

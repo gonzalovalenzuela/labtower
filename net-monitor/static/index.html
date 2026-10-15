@@ -603,6 +603,9 @@ function applyTheme(t){const p=t==='system'?(window.matchMedia('(prefers-color-s
 // ¿Puede editar equipos y cambiar la configuración? (nivel «admin» de Net).
 // EN: Can it edit devices and change the configuration? (Net "admin" level).
 function canAdmin(){return ME&&ME.permissions?.net==='admin';}
+// Escanear la red requiere nivel «execute» o superior (un usuario de solo lectura no puede lanzar escaneos).
+// EN: Scanning the network requires the "execute" level or higher (a read-only user cannot start scans).
+function canScan(){const l=ME&&ME.permissions?.net;return l==='execute'||l==='admin';}
 // Barra lateral común: los mismos accesos en todas las páginas. El usuario puede reordenarlos arrastrando (el orden se guarda en el navegador, clave pi-nav-order). «Admin» solo se muestra a administradores.
 // EN: Common sidebar: the same links on every page. The user can reorder them by dragging (the order is stored in the browser, key pi-nav-order). "Admin" is shown to administrators only.
 const _NAV_ITEMS=[
@@ -693,6 +696,7 @@ function applyPermissions(){
   document.getElementById('avatar').textContent=_un[0].toUpperCase();
   const _permKey={readonly:'permReadonly',execute:'permExecute',admin:'permAdmin'}[ME.permissions?.net];
   document.getElementById('me-role').textContent=_permKey?t(_permKey):'—';
+  const _bs=document.getElementById('btn-scan');if(_bs)_bs.style.display=canScan()?'':'none';
   renderNav();
 }
 // Cierra la sesión en el servidor y recarga la página.
@@ -831,6 +835,7 @@ function quickHash(hosts, scan){
 // Pide al servidor un escaneo completo de la red.
 // EN: Ask the server for a full network scan.
 async function startScan(){
+  if(!canScan())return;
   const btn=document.getElementById('btn-scan');
   btn.disabled=true;btn.innerHTML=`<span class="spin">⟳</span> ${t('scanning')}`;
   try{
@@ -848,6 +853,7 @@ async function startScan(){
 // Reescanea una sola IP (botón en la fila del equipo).
 // EN: Rescan a single IP (button in the device row).
 async function rescanHost(ip){
+  if(!canScan())return;
   try{
     const r=await fetch('api/scan/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip})});
     const d=await r.json();
@@ -1040,7 +1046,7 @@ function renderTable(){
     tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state">
       <strong>${hosts.length?t('noResults'):(scanRunning?t('scanning'):t('noHosts2'))}</strong>
       ${hosts.length?t('filterHint'):(scanRunning?'':t('startScanHint'))}
-      ${(!hosts.length&&!scanRunning)?`<div class="empty-offer">${scanNetwork?`<div class="empty-net">${esc(t('initialScanNet',scanNetwork))}</div>`:''}<button class="btn-scan" onclick="startScan()">${esc(t('initialScanBtn'))}</button></div>`:''}
+      ${(!hosts.length&&!scanRunning&&canScan())?`<div class="empty-offer">${scanNetwork?`<div class="empty-net">${esc(t('initialScanNet',scanNetwork))}</div>`:''}<button class="btn-scan" onclick="startScan()">${esc(t('initialScanBtn'))}</button></div>`:''}
     </div></td></tr>`;
     return;
   }
@@ -1122,7 +1128,7 @@ function renderTable(){
           ${h.vendor?`<div class="detail-value">Vendor: ${esc(h.vendor)}</div>`:''}${h.mac?`<div class="detail-value">MAC: ${esc(h.mac)}</div>`:''}
           ${h.os_raw?`<div class="detail-value" style="color:var(--text-dim);font-size:10px">${esc(h.os_raw)}</div>`:''}
           <div class="detail-value" style="margin-top:6px">
-            <button class="btn-rescan" onclick="rescanHost('${esc(h.ip)}');event.stopPropagation()">
+            <button class="btn-rescan"${canScan()?'':' style="display:none"'} onclick="rescanHost('${esc(h.ip)}');event.stopPropagation()">
               <svg style="width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2" viewBox="0 0 24 24"><polyline points="23,4 23,10 17,10"/><path d="M20.49,15a9,9,0,1,1-2.12-9.36L23,10"/></svg>
               Re-escanear
             </button>

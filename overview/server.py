@@ -160,7 +160,7 @@ class H(BaseHTTPRequestHandler):
     def _body(self):
         try:
             n = int(self.headers.get("Content-Length", 0))
-            if n > 8192: return None
+            if n < 0 or n > 8192: return None
             return json.loads(self.rfile.read(n))
         except Exception: return None
 
@@ -185,9 +185,9 @@ class H(BaseHTTPRequestHandler):
         if path in ("/", "/index.html"):
             return self._file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
         if path == "/api/version":
-            return self._json(200, {"version": auth.version()})
+            return self._json(200, {"version": auth.version()} if (auth.get_session(tok) or auth.is_local_request(self)) else {})
         if path == "/api/health":
-            code, body = health_report(auth.get_session(tok) is not None)
+            code, body = health_report(auth.health_mode(self, tok))
             return self._json(code, body)
         sess = auth.get_session(tok)
         if path == "/api/me":
@@ -229,7 +229,7 @@ class H(BaseHTTPRequestHandler):
             if not u: return self._json(err[0], {"error": err[1]})
             token = auth.create_session(body["username"], u["permissions"])
             must  = auth.load_users().get(body["username"], {}).get("must_change_password", False)
-            return self._json(200, {"ok": True, "token": token, "username": body["username"],
+            return self._json(200, {"ok": True, "username": body["username"],
                                     "permissions": u["permissions"], "must_change_password": must},
                               [("Set-Cookie", auth.session_cookie(token))])
         if path == "/api/logout":

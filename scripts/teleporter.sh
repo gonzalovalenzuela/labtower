@@ -8,8 +8,13 @@
 # Installed as /usr/local/bin/teleporter.sh, with a `teleporter` symlink.
 #
 # Design notes (lessons learned):
-#  * users.json / sessions.json live in /var/lib/pi-console and /opt/pi-console-auth
-#    holds SYMLINKS to them — restore writes the real file and re-creates the links.
+#  * All data lives in /var/lib/pi-console (users.json, <module>/…, metrics.db); /opt/pi-console-auth
+#    (root-owned) holds SYMLINKS to the shared files — restore writes the real file and re-creates them.
+#  * Root NEVER follows a symlink inside the folders the services control: every read/write/delete there
+#    goes through the `sfs` helper (openat + O_NOFOLLOW from a trusted base) and SQLite snapshots are taken
+#    by the unprivileged service user. A link planted by a compromised service cannot expose or overwrite
+#    root files.
+#  * Live sessions (sessions.json) are NOT part of a backup: a backup must not carry usable logins.
 #  * history.db is copied with the SQLite backup API (consistent while running);
 #    stale -wal/-shm files are removed on restore.
 #  * `check` runs before every restore; nothing is touched if the archive is bad.
@@ -24,14 +29,15 @@
 #     los servicios siempre se reinician aunque falle a medias; y el archivo solo admite miembros de una lista blanca.
 set -uo pipefail
 
-TELEPORTER_VERSION="2.1.0"
+TELEPORTER_VERSION="2.2.0"
 
 # Paths (overridable through the environment, used by the tests).
 # Under sudo (the admin panel) every override is dropped: only the defaults apply.
 # ES: Cuando corre por sudo (desde el panel) se ignoran todas las variables de entorno de prueba: solo valen las rutas reales, así nadie puede redirigir el script como root.
 if [ -n "${SUDO_USER:-}" ]; then
   unset PICONSOLE_HOME PICONSOLE_DATA PICONSOLE_AUTH_LINK PICONSOLE_NUT_DIR PICONSOLE_NGINX_CONF \
-        PICONSOLE_NGINX_ENABLED PICONSOLE_SAFETY_DIR PICONSOLE_LOCK TELEPORTER_SKIP_SYSTEM
+        PICONSOLE_NGINX_ENABLED PICONSOLE_SAFETY_DIR PICONSOLE_LOCK TELEPORTER_SKIP_SYSTEM \
+        TELEPORTER_DROP PICONSOLE_RESTORE_LOG PICONSOLE_SERVICE_USER
 fi
 PI_HOME="${PICONSOLE_HOME:-/opt/pi-console}"
 DATA_DIR="${PICONSOLE_DATA:-/var/lib/pi-console}"
@@ -42,28 +48,32 @@ NGINX_ENABLED="${PICONSOLE_NGINX_ENABLED:-/etc/nginx/sites-enabled/pi-console.co
 SAFETY_DIR="${PICONSOLE_SAFETY_DIR:-/var/backups/pi-console}"
 SPOOL_DIR="$DATA_DIR/teleporter"      # backups/uploads handled by the admin panel
 LOCK_FILE="${PICONSOLE_LOCK:-/run/lock/pi-console-teleporter.lock}"
-SERVICE_USER="pi-console"
+RESTORE_LOG="${PICONSOLE_RESTORE_LOG:-/var/log/pi-console/restore.log}"   # root-owned: the panel only reads it
+SERVICE_USER="${PICONSOLE_SERVICE_USER:-pi-console}"
 SERVICES="wol-console pi-console-ups admin-panel net-monitor proxmox-monitor pi-console-overview"
 SKIP_SYSTEM="${TELEPORTER_SKIP_SYSTEM:-0}"   # 1 = no systemctl/nginx/chown (tests)
+DROP_FORCE="${TELEPORTER_DROP:-0}"           # 1 = drop to the service user even with SKIP_SYSTEM (tests)
+# Trusted base for the `sfs` helper: the (root-owned) parent of the data folder, resolved once.
+DATA_PARENT="$(dirname -- "$DATA_DIR")"
+SFS_BASE="$(realpath -m -- "$DATA_PARENT")"
 
 # member-in-archive | real path on disk
 # ES: Tabla «miembro dentro del archivo | ruta real en disco» de los datos de cada módulo. Si se agrega un módulo con datos, se agrega aquí.
 DATA_FILES=(
   "data/users.json|$DATA_DIR/users.json"
-  "data/sessions.json|$DATA_DIR/sessions.json"
-  "data/wol-console/devices.json|$PI_HOME/wol-console/devices.json"
-  "data/wol-console/wake_log.json|$PI_HOME/wol-console/wake_log.json"
-  "data/nut-monitor/servers.json|$PI_HOME/nut-monitor/servers.json"
-  "data/nut-monitor/history.db|$PI_HOME/nut-monitor/history.db"
-  "data/net-monitor/hosts.json|$PI_HOME/net-monitor/hosts.json"
-  "data/net-monitor/config.json|$PI_HOME/net-monitor/config.json"
-  "data/proxmox-monitor/clusters.json|$PI_HOME/proxmox-monitor/clusters.json"
+  "data/wol-console/devices.json|$DATA_DIR/wol-console/devices.json"
+  "data/wol-console/wake_log.json|$DATA_DIR/wol-console/wake_log.json"
+  "data/nut-monitor/servers.json|$DATA_DIR/nut-monitor/servers.json"
+  "data/nut-monitor/history.db|$DATA_DIR/nut-monitor/history.db"
+  "data/net-monitor/hosts.json|$DATA_DIR/net-monitor/hosts.json"
+  "data/net-monitor/config.json|$DATA_DIR/net-monitor/config.json"
+  "data/proxmox-monitor/clusters.json|$DATA_DIR/proxmox-monitor/clusters.json"
   "data/metrics.db|$DATA_DIR/metrics.db"
 )
 # ES: Archivos de la versión 1.2.0o (historiales en JSON). Ya no se respaldan, pero un respaldo antiguo puede traerlos: al restaurar se dejan en su sitio y los servicios los importan a metrics.db una sola vez.
 # EN: Files of version 1.2.0o (JSON histories). They are no longer backed up, but an old backup may carry them: on restore they are put back and the services import them into metrics.db once.
 LEGACY_FILES=(
-  "data/proxmox-monitor/history.json|$PI_HOME/proxmox-monitor/history.json"
+  "data/proxmox-monitor/history.json|$DATA_DIR/proxmox-monitor/history.json"
   "data/pi-history.json|$DATA_DIR/pi-history.json"
 )
 # ES: Igual para la configuración del sistema (nginx y NUT). Estos archivos solo se restauran por consola con --nut / --nginx.
@@ -87,8 +97,8 @@ hdr()  { echo; echo "${B}▶ $*${N}"; }
 die()  { echo "${R}Error:${N} $*" >&2; exit 1; }
 WARNINGS=0; ERRORS=0
 
-TMP=""
-cleanup() { [ -n "$TMP" ] && rm -rf "$TMP"; }
+TMP=""; STAGE=""
+cleanup() { [ -n "$TMP" ] && rm -rf "$TMP"; [ -n "$STAGE" ] && rm -rf "$STAGE"; return 0; }
 trap cleanup EXIT
 
 # ES: Exige ser root; si no, aborta indicando que se use sudo.
@@ -102,6 +112,116 @@ need_tools() {
   done
 }
 svc_user_exists() { id -u "$SERVICE_USER" >/dev/null 2>&1; }
+
+# ES: Ayudante «sfs»: toda operación de root sobre carpetas que controlan los servicios (datos, intercambio del panel) pasa por aquí.
+#     Recorre la ruta componente a componente con openat + O_NOFOLLOW desde una base de confianza, así un enlace simbólico plantado
+#     por un servicio comprometido nunca se sigue (ni para leer, ni para escribir, ni para borrar).
+# EN: "sfs" helper: every root operation inside folders the services control (data, panel exchange folder) goes through here.
+#     It walks the path component by component with openat + O_NOFOLLOW from a trusted base, so a symlink planted by a compromised
+#     service is never followed (not to read, write nor delete).
+SFS_PY=$(cat <<'PY'
+import os, re, pwd, grp, sys, stat, time
+NF = os.O_NOFOLLOW
+def die(m, rc=1):
+    sys.stderr.write("sfs: %s\n" % m); sys.exit(rc)
+def split(base, path):
+    base = os.path.realpath(base); path = os.path.normpath(path)
+    if path != base and not path.startswith(base + "/"):
+        die("path outside the trusted base: %s" % path)
+    return base, [p for p in path[len(base):].split("/") if p]
+def ids(user):
+    if not user or user == "-": return -1, -1
+    u = pwd.getpwnam(user); return u.pw_uid, u.pw_gid
+def opendir(base, parts, create=False, uid=-1, gid=-1, mode=0o750):
+    fd = os.open(base, os.O_RDONLY | os.O_DIRECTORY)
+    for p in parts:
+        try:
+            nfd = os.open(p, os.O_RDONLY | os.O_DIRECTORY | NF, dir_fd=fd)
+        except FileNotFoundError:
+            if not create: os.close(fd); raise
+            os.mkdir(p, mode, dir_fd=fd)
+            nfd = os.open(p, os.O_RDONLY | os.O_DIRECTORY | NF, dir_fd=fd)
+            if uid >= 0: os.fchown(nfd, uid, gid)
+        except OSError as e:
+            os.close(fd); die("refusing %s (%s)" % (p, e.strerror), 3)
+        os.close(fd); fd = nfd
+    return fd
+def main():
+    op, base, path = sys.argv[1:4]; a = sys.argv[4:]
+    os.umask(0o077)
+    base, parts = split(base, path)
+    if op == "get":                      # get BASE SRC DST
+        if not parts: die("bad path")
+        try: d = opendir(base, parts[:-1])
+        except FileNotFoundError: sys.exit(2)
+        try: s = os.open(parts[-1], os.O_RDONLY | NF, dir_fd=d)
+        except FileNotFoundError: sys.exit(2)
+        except OSError as e: die("refusing %s (%s)" % (path, e.strerror), 3)
+        if not stat.S_ISREG(os.fstat(s).st_mode): die("not a regular file: %s" % path, 3)
+        o = os.open(a[0], os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        while True:
+            b = os.read(s, 1 << 20)
+            if not b: break
+            os.write(o, b)
+        os.close(o); os.close(s); return
+    if op == "put":                      # put BASE DST SRC MODE USER
+        src, mode, user = a[0], int(a[1], 8), a[2]
+        uid, gid = ids(user)
+        if not parts: die("bad path")
+        d = opendir(base, parts[:-1], True, uid, gid)
+        name = parts[-1]; tmp = ".%s.sfs.%d" % (name, os.getpid())
+        try: os.unlink(tmp, dir_fd=d)
+        except FileNotFoundError: pass
+        o = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | NF, 0o600, dir_fd=d)
+        with open(src, "rb") as f:
+            while True:
+                b = f.read(1 << 20)
+                if not b: break
+                os.write(o, b)
+        os.fsync(o); os.fchmod(o, mode)
+        if uid >= 0: os.fchown(o, uid, gid)
+        os.close(o); os.rename(tmp, name, src_dir_fd=d, dst_dir_fd=d); os.close(d); return
+    if op == "rm":                       # rm BASE PATH
+        try: d = opendir(base, parts[:-1])
+        except (FileNotFoundError, SystemExit): return
+        try: os.unlink(parts[-1], dir_fd=d)
+        except FileNotFoundError: pass
+        except IsADirectoryError: pass
+        return
+    if op == "mkdir":                    # mkdir BASE PATH USER MODE
+        uid, gid = ids(a[0]); mode = int(a[1], 8)
+        d = opendir(base, parts, True, uid, gid, mode)
+        os.fchmod(d, mode)
+        if uid >= 0: os.fchown(d, uid, gid)
+        return
+    if op == "prune":                    # prune BASE DIR KEEP
+        keep = int(a[0])
+        try: d = opendir(base, parts)
+        except FileNotFoundError: return
+        bk = re.compile(r"^pi-console-[A-Za-z0-9._-]{1,80}\.tar\.gz$"); up = re.compile(r"^upload-\d{8}_\d{6}\.tar\.gz$")
+        files = []
+        for n in os.listdir(d):
+            try: st = os.stat(n, dir_fd=d, follow_symlinks=False)
+            except OSError: continue
+            if not stat.S_ISREG(st.st_mode): continue
+            if bk.match(n): files.append((st.st_mtime, n))
+            elif up.match(n) and time.time() - st.st_mtime > 86400: os.unlink(n, dir_fd=d)
+        files.sort(reverse=True)
+        for _, n in files[keep:]: os.unlink(n, dir_fd=d)
+        return
+    die("unknown op")
+main()
+PY
+)
+sfs() {  # sfs <op> <path> [args…]   (paths under $DATA_DIR are re-based on the resolved parent)
+  local op="$1" path="$2"; shift 2
+  python3 -I -c "$SFS_PY" "$op" "$SFS_BASE" "${path/#$DATA_PARENT\//$SFS_BASE/}" "$@"
+}
+# ES: Ejecuta un comando como el usuario de servicio sin privilegios (en producción siempre; en pruebas solo con TELEPORTER_DROP=1).
+as_service() {
+  if [ "$SKIP_SYSTEM" = "1" ] && [ "$DROP_FORCE" != "1" ]; then "$@"
+  else runuser -u "$SERVICE_USER" -- "$@"; fi
+}
 is_secret() {
   case "$1" in
     *users.json|*sessions.json|*config.json|*clusters.json|*servers.json|*upsd.users|*upsmon.conf) return 0;;
@@ -207,16 +327,19 @@ cmd_backup() {
     if [ ! -f "$src" ]; then warn "$rel — not present, skipped"; continue; fi
     mkdir -p "$TMP/$(dirname "$rel")"
     if [[ "$rel" == *.db ]]; then
-      if python3 -I - "$src" "$TMP/$rel" <<'PY'
-import sqlite3, sys
+      # ES: La instantánea SQLite la toma el usuario del servicio (no root): root solo recoge el resultado sin seguir enlaces.
+      local snap_n=".snap.$$.db"
+      spool_init
+      if as_service python3 -I -c 'import sqlite3, sys
 s = sqlite3.connect("file:%s?mode=ro" % sys.argv[1], uri=True)
 d = sqlite3.connect(sys.argv[2])
-s.backup(d); d.close(); s.close()
-PY
+s.backup(d); d.close(); s.close()' "$src" "$SPOOL_DIR/$snap_n" 2>/dev/null \
+         && sfs get "$SPOOL_DIR/$snap_n" "$TMP/$rel"
       then ok "$rel ($(du -h "$TMP/$rel" | cut -f1)) — consistent SQLite snapshot"
-      else err "$rel — SQLite backup failed"; continue; fi
+      else err "$rel — SQLite backup failed"; sfs rm "$SPOOL_DIR/$snap_n"; continue; fi
+      sfs rm "$SPOOL_DIR/$snap_n"
     else
-      cp -- "$src" "$TMP/$rel" || { err "$rel — copy failed"; continue; }
+      sfs get "$src" "$TMP/$rel" || { err "$rel — copy failed"; continue; }
       if [[ "$rel" == *.json ]] && ! validate_json "$TMP/$rel"; then
         warn "$rel — source is not valid JSON (copied as is)"
       else ok "$rel ($(du -h "$TMP/$rel" | cut -f1))"; fi
@@ -417,27 +540,27 @@ cmd_restore() {
 
   hdr "Restoring data"
   local entry rel dst src mode owner
-  owner="$SERVICE_USER:$SERVICE_USER"
-  mkdir -p "$DATA_DIR"
-  [ "$SKIP_SYSTEM" = "1" ] || { chown "$owner" "$DATA_DIR" 2>/dev/null; chmod 750 "$DATA_DIR"; }
+  owner="$SERVICE_USER"
+  [ "$SKIP_SYSTEM" = "1" ] && [ "$DROP_FORCE" != "1" ] && owner="-"
+  sfs mkdir "$DATA_DIR" "$owner" 750 || err "$DATA_DIR — unsafe or not usable"
   for entry in "${DATA_FILES[@]}"; do
     rel="${entry%%|*}"; dst="${entry#*|}"; src="$TMP/$rel"
     [ -f "$src" ] || { warn "$rel — not in backup, current file kept"; continue; }
-    [[ "$rel" == *.db ]] && rm -f "$dst-wal" "$dst-shm" "$dst-journal"
-    if install_file "$src" "$dst" 600 "$owner"; then ok "$rel"; else err "$rel — could not be restored"; fi
+    [[ "$rel" == *.db ]] && { sfs rm "$dst-wal"; sfs rm "$dst-shm"; sfs rm "$dst-journal"; }
+    if sfs put "$dst" "$src" 600 "$owner"; then ok "$rel"; else err "$rel — could not be restored"; fi
   done
   for entry in "${LEGACY_FILES[@]}"; do
     rel="${entry%%|*}"; dst="${entry#*|}"; src="$TMP/$rel"
     [ -f "$src" ] || continue
-    if install_file "$src" "$dst" 600 "$owner"; then ok "$rel (old format, will be imported)"; else warn "$rel — could not be restored"; fi
+    if sfs put "$dst" "$src" 600 "$owner"; then ok "$rel (old format, will be imported)"; else warn "$rel — could not be restored"; fi
   done
 
   hdr "Auth links"
   mkdir -p "$AUTH_DIR"
-  ln -sf "$PI_HOME/auth/auth.py" "$AUTH_DIR/auth.py"
-  ln -sf "$DATA_DIR/users.json" "$AUTH_DIR/users.json"
-  ln -sf "$DATA_DIR/sessions.json" "$AUTH_DIR/sessions.json"
-  if [ "$SKIP_SYSTEM" != "1" ]; then chown "$owner" "$AUTH_DIR"; chown -h "$owner" "$AUTH_DIR"/* 2>/dev/null; fi
+  # ES: /opt/pi-console-auth es de root: los servicios no pueden cambiar estos enlaces. sessions.json ya no se enlaza (el servicio lo crea en su carpeta de datos).
+  ln -sfn "$PI_HOME/auth/auth.py" "$AUTH_DIR/auth.py"
+  ln -sfn "$DATA_DIR/users.json" "$AUTH_DIR/users.json"
+  rm -f "$AUTH_DIR/sessions.json"
   ok "$AUTH_DIR → $DATA_DIR"
 
   hdr "System configuration"
@@ -470,9 +593,9 @@ cmd_restore() {
     fi
   fi
 
+  # ES: El código en /opt/pi-console es de root y de solo lectura para los servicios; solo los datos (/var/lib/pi-console) son suyos.
   hdr "Permissions"
-  if [ "$SKIP_SYSTEM" != "1" ]; then chown -R "$owner" "$PI_HOME"; fi
-  ok "ownership of $PI_HOME fixed"
+  ok "code in $PI_HOME stays root-owned; data in $DATA_DIR is owned by $SERVICE_USER"
 
   hdr "Starting services"
   SERVICES_STOPPED=0
@@ -505,14 +628,12 @@ release_lock() { exec 9>&-; LOCK_HELD=0; }
 NAME_RE='^(pi-console-[A-Za-z0-9._-]{1,80}|upload-[0-9]{8}_[0-9]{6})\.tar\.gz$'
 # ES: Prepara la carpeta de intercambio con el panel (modo 700, dueño pi-console).
 spool_init() {
-  mkdir -p "$SPOOL_DIR" && chmod 700 "$SPOOL_DIR"
-  [ "$SKIP_SYSTEM" = "1" ] || chown "$SERVICE_USER:$SERVICE_USER" "$SPOOL_DIR" 2>/dev/null || true
+  local o="$SERVICE_USER"; [ "$SKIP_SYSTEM" = "1" ] && [ "$DROP_FORCE" != "1" ] && o="-"
+  sfs mkdir "$SPOOL_DIR" "$o" 700 || die "the exchange folder $SPOOL_DIR is not safe"
 }
 # ES: Limpieza: se conservan los 5 respaldos más nuevos y se borran las subidas con más de un día.
-spool_prune() {  # keep the newest 5 backups, drop uploads older than a day
-  local f i=0
-  while IFS= read -r f; do i=$((i+1)); [ $i -gt 5 ] && rm -f -- "$f"; done < <(ls -1t "$SPOOL_DIR"/pi-console-*.tar.gz 2>/dev/null)
-  find "$SPOOL_DIR" -maxdepth 1 -name 'upload-*.tar.gz' -mmin +1440 -delete 2>/dev/null || true
+spool_prune() {  # keep the newest 5 backups, drop uploads older than a day (never follows links)
+  sfs prune "$SPOOL_DIR" 5 2>/dev/null || true
 }
 
 # ES: Crea un respaldo para el panel y imprime «BACKUP_FILE=<nombre>» (la línea que el panel lee).
@@ -521,8 +642,13 @@ cmd_gui_backup() {
   spool_init
   local name="pi-console-$(hostname -s | tr -c 'A-Za-z0-9.\n-' '_')-$(date +%Y%m%d_%H%M%S).tar.gz"
   [[ "$name" =~ $NAME_RE ]] || die "could not build a valid backup name"
-  cmd_backup "$SPOOL_DIR/$name" || exit 1
-  [ "$SKIP_SYSTEM" = "1" ] || chown "$SERVICE_USER:$SERVICE_USER" "$SPOOL_DIR/$name" 2>/dev/null || true
+  # ES: Se arma en una carpeta de root y luego se entrega al panel sin seguir enlaces (la carpeta del panel la controla un servicio).
+  local o="$SERVICE_USER"; [ "$SKIP_SYSTEM" = "1" ] && [ "$DROP_FORCE" != "1" ] && o="-"
+  mkdir -p "$SAFETY_DIR" && chmod 700 "$SAFETY_DIR"
+  STAGE=$(mktemp -d "$SAFETY_DIR/.gui.XXXXXX") || die "cannot create a staging directory"
+  cmd_backup "$STAGE/$name" || exit 1
+  sfs put "$SPOOL_DIR/$name" "$STAGE/$name" 600 "$o" || die "could not hand the backup to the panel"
+  rm -rf "$STAGE"; STAGE=""
   spool_prune
   echo "BACKUP_FILE=$name"
 }
@@ -537,16 +663,15 @@ cmd_gui_restore() {  # <name> <nut:0|1> <nginx:0|1>
   # let anyone who can upload a backup run commands as root. Those two are CLI-only.
   [ "$nut" = 0 ] && [ "$ngx" = 0 ] || die "restoring NUT/nginx is only available from the command line (teleporter restore --nut/--nginx)"
   src="$SPOOL_DIR/$name"
-  [ -f "$src" ] && [ ! -L "$src" ] || die "backup not found: $name"
   # Work on a root-owned private copy so the unprivileged user cannot swap the
-  # file between verification and extraction.
+  # file between verification and extraction (and a link in the exchange folder is never followed).
   copy=$(mktemp -d /var/tmp/teleporter.XXXXXX) || die "cannot create a temporary directory"
-  cp -- "$src" "$copy/restore.tar.gz" || { rm -rf "$copy"; die "could not copy the backup"; }
+  sfs get "$src" "$copy/restore.tar.gz" || { rm -rf "$copy"; die "backup not found: $name"; }
   chmod 600 "$copy/restore.tar.gz"
   local flags=(-y --rm-source); [ "$nut" = 1 ] && flags+=(--nut); [ "$ngx" = 1 ] && flags+=(--nginx)
-  local log="$SPOOL_DIR/restore.log"
+  local log="$RESTORE_LOG"
   release_lock   # the detached job takes it again
-  spool_init; rm -f -- "$log"
+  spool_init; mkdir -p "$(dirname "$log")" && chmod 755 "$(dirname "$log")"; rm -f -- "$log"
   # Detached from the admin-panel cgroup: the restore stops and restarts that very service.
   if [ "$SKIP_SYSTEM" != "1" ] && command -v systemd-run >/dev/null 2>&1; then
     systemctl reset-failed pi-console-restore.service 2>/dev/null || true
@@ -555,7 +680,7 @@ cmd_gui_restore() {  # <name> <nut:0|1> <nginx:0|1>
       "$0" restore "$copy/restore.tar.gz" "${flags[@]}" \
       || { rm -rf "$copy"; die "could not start the restore job"; }
   else
-    ( setsid "$0" restore "$copy/restore.tar.gz" "${flags[@]}" >"$log" 2>&1 & )
+    ( umask 022; setsid "$0" restore "$copy/restore.tar.gz" "${flags[@]}" >"$log" 2>&1 & )
   fi
   echo "RESTORE_STARTED=1"
 }
@@ -574,7 +699,7 @@ Pi Console Teleporter v$TELEPORTER_VERSION
                                           and nginx configuration are kept unless you
                                           pass --nut / --nginx.
 
-Backup contents: users/sessions, WOL devices, UPS servers + history.db (includes UPS temperature),
+Backup contents: users, WOL devices, UPS servers + history.db (includes UPS temperature),
 Net Monitor hosts + config (SNMP), Proxmox clusters, metrics.db (Proxmox CPU/memory and Pi
 temperature/under-voltage histories), NUT config, nginx site.
 The archive holds passwords and tokens (mode 600) — keep it private.

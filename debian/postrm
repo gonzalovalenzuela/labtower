@@ -30,6 +30,10 @@ if [ "$1" = "purge" ]; then
     # Llave SSH y huella del respaldo automático por SFTP (el .conf y el cron los borra dpkg por ser conffiles)
     # EN: SSH key and host key of the automatic SFTP backup (dpkg removes the .conf and the cron file, as they are conffiles)
     rm -f /etc/pi-console/backup_key /etc/pi-console/backup_key.pub /etc/pi-console/backup_known_hosts
+    # HTTPS opcional: certificado, configuración generada y registro de restauraciones.
+    # EN: Optional HTTPS: certificate, generated configuration and restore log.
+    rm -rf /etc/pi-console/tls /etc/pi-console/https.d /etc/pi-console/http-extra.d /var/log/pi-console
+    rm -f /etc/pi-console/backup_passphrase
     rmdir /etc/pi-console 2>/dev/null || true
     # Eliminar usuario del sistema
     userdel pi-console 2>/dev/null || true

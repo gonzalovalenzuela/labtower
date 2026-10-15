@@ -3,34 +3,47 @@ set -e
 
 # Antes de instalar o actualizar se copian los datos del usuario; si algo sale mal, siempre queda una copia con fecha en /var/backups/pi-console.
 # EN: Before installing or upgrading, the user's data is copied; if anything goes wrong, there is always a dated copy in /var/backups/pi-console.
+# ES: Las carpetas de datos las controlan los servicios (usuario pi-console): root NUNCA lee ahí por su cuenta (un enlace simbólico plantado
+#     le haría copiar archivos de root al respaldo). Cada archivo se lee con el usuario del servicio y root solo escribe en su propia carpeta.
+# EN: The data folders are controlled by the services (user pi-console): root NEVER reads there on its own (a planted symlink would make it copy
+#     root files into the backup). Every file is read as the service user and root only writes into its own folder.
 BACKUP_DIR="/var/backups/pi-console"
 STAMP=$(date +%Y%m%d_%H%M%S)
-
-# Backup de seguridad de datos (rutas antiguas y nuevas)
-# En versiones >= 1.1.4 los datos ya están en /var/lib/pi-console/ y sobreviven solos.
-# Este backup sirve como safety net y para migración desde versiones anteriores.
 BACKED_UP=false
-# Archivos de datos a respaldar: los de /var/lib (versiones nuevas) y los de /opt (versiones antiguas, para migrarlos).
-# EN: Data files to back up: those in /var/lib (new versions) and those in /opt (old versions, to migrate them).
-for f in \
-    /var/lib/pi-console/users.json \
-    /var/lib/pi-console/sessions.json \
-    /opt/pi-console/auth/users.json \
-    /opt/pi-console/auth/sessions.json \
-    /opt/pi-console/wol-console/devices.json \
-    /opt/pi-console/nut-monitor/servers.json \
-    /opt/pi-console/nut-monitor/history.db \
-    /opt/pi-console/net-monitor/hosts.json \
-    /opt/pi-console/net-monitor/config.json \
-    /opt/pi-console/proxmox-monitor/clusters.json
-do
-    if [ -f "$f" ]; then
-        mkdir -p "$BACKUP_DIR"
-        cp "$f" "$BACKUP_DIR/$(basename $f).${STAMP}.bak"
-        BACKED_UP=true
-        echo "  backup: $(basename $f)"
-    fi
-done
+
+# Archivos de datos: rutas nuevas (/var/lib/pi-console/<módulo>/, desde 1.2.0u) y antiguas (dentro de /opt/pi-console, para migrar).
+# sessions.json NO se respalda: contiene sesiones activas y un respaldo no debe guardar inicios de sesión utilizables.
+# EN: Data files: new paths (/var/lib/pi-console/<module>/, since 1.2.0u) and old ones (inside /opt/pi-console, to migrate).
+#     sessions.json is NOT backed up: it holds live sessions and a backup must not keep usable logins.
+if id -u pi-console >/dev/null 2>&1 && command -v runuser >/dev/null 2>&1; then
+    for f in \
+        /var/lib/pi-console/users.json \
+        /var/lib/pi-console/wol-console/devices.json \
+        /var/lib/pi-console/nut-monitor/servers.json \
+        /var/lib/pi-console/nut-monitor/history.db \
+        /var/lib/pi-console/net-monitor/hosts.json \
+        /var/lib/pi-console/net-monitor/config.json \
+        /var/lib/pi-console/proxmox-monitor/clusters.json \
+        /opt/pi-console/auth/users.json \
+        /opt/pi-console/wol-console/devices.json \
+        /opt/pi-console/nut-monitor/servers.json \
+        /opt/pi-console/nut-monitor/history.db \
+        /opt/pi-console/net-monitor/hosts.json \
+        /opt/pi-console/net-monitor/config.json \
+        /opt/pi-console/proxmox-monitor/clusters.json
+    do
+        if runuser -u pi-console -- test -f "$f" 2>/dev/null && ! runuser -u pi-console -- test -L "$f" 2>/dev/null; then
+            mkdir -p "$BACKUP_DIR"; chmod 700 "$BACKUP_DIR"
+            out="$BACKUP_DIR/$(basename "$f").${STAMP}.bak"
+            if (umask 077; runuser -u pi-console -- cat -- "$f" > "$out") 2>/dev/null; then
+                BACKED_UP=true
+                echo "  backup: $(basename "$f")"
+            else
+                rm -f "$out"
+            fi
+        fi
+    done
+fi
 
 if [ "$BACKED_UP" = true ]; then
     echo "pi-console: backup saved in $BACKUP_DIR"
