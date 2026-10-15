@@ -27,7 +27,7 @@ CONF="${PICONSOLE_BACKUP_CONF:-/etc/pi-console/backup.conf}"
 
 # Defaults (override them in the configuration file).
 # ES: Valores por defecto; se cambian en el archivo de configuración.
-SFTP_HOST="192.168.0.30"
+SFTP_HOST="storage.example.lan"
 SFTP_PORT="22"
 SFTP_USER=""                                   # empty = backups disabled / vacío = respaldo desactivado
 SFTP_DIR="pi-console-sftp-backups"                  # relative to the SFTP user's home, or absolute

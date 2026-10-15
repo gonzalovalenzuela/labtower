@@ -232,7 +232,7 @@ sudo systemctl restart wol-console pi-console-ups admin-panel net-monitor proxmo
 
 | Variable | Módulo | Por defecto | Para qué |
 |---|---|---|---|
-| `SCAN_NETWORK` | Net | /24 de la IP de la Pi | Red a escanear (ej. `192.168.1.0/24`) |
+| `SCAN_NETWORK` | Net | /24 de la IP de la Pi | Red a escanear (ej. `192.0.2.0/24`) |
 | `SCAN_INTERVAL` | Net | manual en instalación nueva | Segundos entre escaneos automáticos (0 = manual) |
 | `SCAN_PORTS` | Net | lista de puertos comunes | Puertos que se sondean por equipo |
 | `PORT_TIMEOUT` | Net | `0.5` | Segundos de espera por puerto |

@@ -44,7 +44,7 @@
 ## 1.2.0l — 2026-10-14
 
 ### Nuevo: respaldo automático por SFTP
-- **`pi-console-sftp-backup`** (`/usr/local/bin`) + cron diario a las 03:17 (`/etc/cron.d/pi-console-sftp-backup`): crea el respaldo con Teleporter, lo **verifica antes de subirlo** (`teleporter check`), lo envía por SFTP (por defecto a `192.168.0.30`) con nombre temporal `.part` que renombra al terminar, y compara el tamaño remoto con el local.
+- **`pi-console-sftp-backup`** (`/usr/local/bin`) + cron diario a las 03:17 (`/etc/cron.d/pi-console-sftp-backup`): crea el respaldo con Teleporter, lo **verifica antes de subirlo** (`teleporter check`), lo envía por SFTP (por defecto a `storage.example.lan`) con nombre temporal `.part` que renombra al terminar, y compara el tamaño remoto con el local.
 - **Retención:** 30 copias en el storage (`KEEP_REMOTE`) y 7 en la Pi (`KEEP_LOCAL`). Solo se borran archivos llamados `pi-console-auto-<equipo>-<fecha>_<hora>.tar.gz`; los demás archivos de la carpeta no se tocan.
 - **Seguro:** solo llave SSH (sin contraseñas), la huella del servidor se fija en la primera conexión y un cambio hace fallar el respaldo, el archivo de configuración (`/etc/pi-console/backup.conf`) se *lee* y nunca se ejecuta (solo claves conocidas, valores validados), un solo respaldo a la vez.
 - **Comandos:** `setup` (crea la llave y muestra la pública), `test` (conexión, carpeta, escritura), `run`, `status`. Resultado en `/var/lib/pi-console/backup.status` y en `journalctl -t pi-console-sftp-backup`.
@@ -87,7 +87,7 @@
 ## 1.2.0d — 2026-10-14
 
 ### Resumen
-- **Mensajes de servidor UPS sin conexión legibles:** el aviso y la línea de tiempo mostraban el identificador interno del servidor (un UUID); ahora dicen el nombre y la dirección, p. ej. «Servidor UPS Sala técnica (192.168.0.5:3493) sin conexión: Timeout connecting to upsd». La tarjeta de UPS también usa el nombre del servidor.
+- **Mensajes de servidor UPS sin conexión legibles:** el aviso y la línea de tiempo mostraban el identificador interno del servidor (un UUID); ahora dicen el nombre y la dirección, p. ej. «Servidor UPS Sala técnica (ups.example.lan:3493) sin conexión: Timeout connecting to upsd». La tarjeta de UPS también usa el nombre del servidor.
 
 ## 1.2.0c — 2026-10-14
 
@@ -149,7 +149,7 @@ Release final de la serie 1.2: reúne la base 1.2.0 (12-oct) y las compilaciones
 #### Instalación nueva
 - **UPS Monitor ya no crea un servidor «Local» por defecto**: una instalación nueva empieza sin servidores (no hace falta tener una UPS); se agrega uno desde la página. Las instalaciones existentes conservan los suyos.
 - **`snmp` pasa a ser dependencia** del paquete (antes solo sugerida), para que la fuente SNMP de Net Monitor funcione sin pasos extra.
-- **Net Monitor**: la red a escanear por defecto es la /24 de la IP de la máquina (antes fijaba `192.168.0.0/24`); se puede cambiar con `SCAN_NETWORK`. Los servidores Pi-hole ya no vienen precargados.
+- **Net Monitor**: la red a escanear por defecto es la /24 de la IP de la máquina (antes fijaba una red fija); se puede cambiar con `SCAN_NETWORK`. Los servidores Pi-hole ya no vienen precargados.
 - Los ejemplos (placeholders) de IP en WOL, UPS, Net Monitor y Proxmox usan direcciones de documentación (`192.0.2.x`) en lugar de IP de una red real.
 - Orden de navegación por defecto en todas las páginas: UPS Monitor, Net Monitor, Proxmox, WOL Console, Admin Panel (quien ya reordenó el menú conserva su orden).
 
