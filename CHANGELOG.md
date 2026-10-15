@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0s — 2026-10-15
+
+- **Resumen, kiosko de 7":** el gráfico de temperatura de la UPS no aparecía en pantallas de 700 px de alto o menos; ahora se muestra compacto, como los de la Pi y Proxmox. Entre 701 y 900 px sigue oculto para que quepa la pantalla.
+- **Resumen, kiosko:** leyenda de la torta de Net Monitor en dos columnas con etiquetas cortas y título más compacto en el gráfico de temperatura de la Pi.
+- **Sin referencias a redes privadas:** el servidor SFTP por defecto de `backup.conf` es ahora `storage.example.lan` (hay que indicar el real en `SFTP_HOST`); la red de respaldo de Net Monitor cuando no se detecta la IP es `192.0.2.0/24`.
+- Documentación y capturas (claro y oscuro) actualizadas.
+
 ## 1.2.0r — 2026-10-14
 
 - **Resumen, Net Monitor:** la leyenda de la torta mostraba solo los 6 tipos más numerosos, así que TV, teléfono, tablet, cámara, etc. podían quedar fuera aunque estuvieran en la torta. Ahora aparecen **todos** los tipos (hasta 12, con colores distintos); con más de 5 se ordenan en dos columnas. En el kiosko de pantalla chica la torta se achica y se usan nombres cortos (PC, Teléf., Cám., Impres.…) para que quepan todos sin cambiar el alto de las tarjetas.
