@@ -62,7 +62,6 @@ svg.spark{width:100%;height:42px;display:block}
 .legend .lb{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .legend .ln{flex:none;white-space:nowrap;margin-left:4px}
 .legend .ls{display:none}
-.legend.lg2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-gap:3px 12px;gap:3px 12px;flex:1;min-width:0}
 .list{display:flex;flex-direction:column;gap:5px;font-size:.8rem}
 .list div{display:flex;gap:8px;align-items:baseline}
 .list code{font-family:var(--mono);font-size:.76rem;color:var(--text-mid);flex-shrink:0}
@@ -116,7 +115,7 @@ body.kiosk .uh{flex-wrap:wrap}
 body.kiosk .pill{white-space:nowrap}
 body.kiosk .list div{flex-wrap:wrap}
 body.kiosk .list .pill{padding:1px 8px;font-size:.62rem}
-body.kiosk .legend.lg2{grid-gap:1px 6px;gap:1px 6px;font-size:.64rem}
+body.kiosk .legend.lg2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-gap:1px 6px;gap:1px 6px;font-size:.64rem;flex:1;min-width:0}
 body.kiosk .legend.lg2 .lf{display:none}
 body.kiosk .legend.lg2 .ls{display:inline}
 body.kiosk .legend i{margin-right:4px}
@@ -153,7 +152,7 @@ body.kiosk.moved #kbar .btn{cursor:pointer}
 .nfg .uh .pill{margin-left:auto}
 .nfg .donutbox>*+*{margin-left:14px}
 .nfg .legend>*+*{margin-top:3px}
-.nfg .legend.lg2>*+*{margin-top:0}
+html.nfg.kiosk .legend.lg2>*+*{margin-top:0}
 .nfg .list>*+*{margin-top:5px}
 .nfg .list div>*+*{margin-left:8px}
 .nfg .ev>*+*{margin-left:10px}
@@ -268,7 +267,7 @@ function tchart(h){
   });
   if(cur.length)segs.push(cur);
   const svg=`<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${mark}${segs.map(p=>p.length>1?`<polyline points="${p.join(' ')}" fill="none" stroke="var(--blue)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>`:'').join('')}</svg>`;
-  const cap=`<div class="hc">${T('h_temp')} ${dur(span)} · ${T('h_min')} ${Math.min.apply(null,tv).toFixed(0)}° · ${T('h_max')} ${Math.max.apply(null,tv).toFixed(0)}° · <i style="background:var(--red);margin-left:0"></i>${uv?`<b style="color:var(--red)">${T('h_uv')}: ${uv}</b>`:T('h_nouv')}</div>`;
+  const cap=`<div class="hc">${T('h_temp')} ${span>=82800?'24 h':dur(span)} · ${Math.min.apply(null,tv).toFixed(0)}–${Math.max.apply(null,tv).toFixed(0)}° · <i style="background:var(--red);margin-left:0"></i>${uv?`<b style="color:var(--red)">${T('h_uv')}: ${uv}</b>`:T('h_nouv')}</div>`;
   return `<div class="kp">${svg}${cap}</div>`;
 }
 // Une los historiales de los nodos de un cluster en tramos de 5 min / merge a cluster's node histories into 5-min buckets

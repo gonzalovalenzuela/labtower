@@ -142,7 +142,7 @@ Es la pantalla para mirar de un vistazo cómo está todo (`/overview/`; también
 - **Estado global** (Todo en orden / Atención / Falla) y, si algo falla, una lista de qué requiere atención con enlace al módulo.
 - **UPS:** estado de cada UPS (en red, con batería, batería baja), carga de batería, carga, autonomía, consumo en vatios, gráfico de carga de las últimas 24 h y, si la UPS informa temperatura, su gráfico de temperatura.
 - **Proxmox:** por cluster, nodos en línea, VMs y CTs corriendo, CPU y memoria del conjunto, salud de Ceph y un gráfico de CPU y memoria de las últimas 12 h (se guarda en `metrics.db`, 7 días; `PVE_KEEP_DAYS` lo cambia).
-- **Net Monitor:** equipos en línea, conocidos y apagados, último escaneo, reparto por tipo de equipo y equipos nuevos de las últimas 48 h.
+- **Net Monitor:** equipos en línea, conocidos y apagados, último escaneo, reparto por tipo de equipo (gráfico con leyenda completa de todos los tipos) y equipos nuevos de las últimas 48 h.
 - **Raspberry Pi:** temperatura, CPU, memoria, disco, tiempo encendida y problemas de la fuente de poder. **Solo si la instalación está en una Raspberry Pi** muestra además el histórico de 24 h de la temperatura, con marcas rojas cuando hubo bajo voltaje (subtensión) y ámbar cuando hubo limitación; se guarda en la base `/var/lib/pi-console/metrics.db` (7 días; `PICONSOLE_PI_KEEP_DAYS` lo cambia) y sobrevive a reinicios, actualizaciones y cortes de luz. En otros equipos no se crea ni se muestra.
 - **Línea de tiempo:** los cambios importantes con su hora (UPS pasa a batería o vuelve la red, nodo Proxmox caído o recuperado, cambios de salud de Ceph, equipos nuevos o que dejaron de responder). Los guardan los propios módulos, así que quedan registrados aunque nadie tenga la página abierta; se conservan los últimos 300 eventos o 30 días en `/var/lib/pi-console/events.json`.
 
@@ -193,7 +193,7 @@ teleporter check ~/pi-console-20261009.tar.gz                # verificar (no mod
 sudo teleporter restore ~/pi-console-20261009.tar.gz         # restaurar (agregar -y para no preguntar)
 ```
 
-El respaldo incluye también los **históricos de los gráficos del Resumen**: temperatura de la UPS (en su `history.db`) y CPU y memoria de Proxmox y temperatura y bajo voltaje de la Pi (en `metrics.db`). Los respaldos de la versión 1.2.0r (que guardaban esos datos en JSON) también se restauran y los datos se importan solos. Un respaldo antiguo sin esos archivos sigue siendo válido: se conservan los actuales.
+El respaldo incluye también los **históricos de los gráficos del Resumen**: temperatura de la UPS (en su `history.db`) y CPU y memoria de Proxmox y temperatura y bajo voltaje de la Pi (en `metrics.db`). Los respaldos de la versión 1.2.0o (que guardaban esos datos en JSON) también se restauran y los datos se importan solos. Un respaldo antiguo sin esos archivos sigue siendo válido: se conservan los actuales.
 
 **Desde el panel de administración** (`/admin/` → *Backup & restore*) se hace lo mismo con botones: crear y descargar un respaldo, subir uno, verificarlo y restaurarlo. Solo lo ve y usa quien es administrador de **todos** los módulos (WOL, UPS, Net y Proxmox), porque el respaldo contiene usuarios, tokens de Proxmox y toda la configuración.
 
