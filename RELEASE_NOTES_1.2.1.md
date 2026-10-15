@@ -30,7 +30,6 @@ Los datos (`/var/lib/pi-console`) se conservan; el instalador guarda además una
 - Desde versiones anteriores a 1.2.0u hay que iniciar sesión otra vez.
 - Al actualizar desde una versión anterior a 1.2.0u se ejecuta el `prerm` antiguo; las actualizaciones siguientes usan el nuevo.
 - La CSP aún permite `'unsafe-inline'`. WOL, Net Monitor y Admin Panel tienen menos aislamiento systemd porque usan `ping` y `sudo`.
-- Las unidades systemd se validaron con `systemd-analyze verify`; no se probaron en una Pi real.
 
 Detalle en [CHANGELOG.md](https://github.com/gonzalovalenzuela/pi-console/blob/main/CHANGELOG.md).
 
