@@ -34,9 +34,9 @@ Raspberry Pi OS, DietPi or Debian 12+ (also works on an x86 VM), Python 3.9+, ng
 ## Install
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0q/pi-console_1.2.0q_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0r/pi-console_1.2.0r_all.deb
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.0q_all.deb
+sudo apt-get install -y ./pi-console_1.2.0r_all.deb
 ```
 
 Then open `http://<pi-ip>/`. The initial user is `admin` / `admin`; you **must set a new password** on first login. UPS Monitor starts with no servers, and Net Monitor scans nothing until you press "Run initial scan".
@@ -58,7 +58,7 @@ Settings are environment variables in `/etc/default/pi-console` (`NUT_POLL`, `SC
 
 ## Automatic SFTP backup
 
-Teleporter backups also include the **Overview chart histories**: UPS temperature (in its `history.db`) and Proxmox CPU/memory plus Pi temperature/under-voltage (in `metrics.db`). Backups from version 1.2.0q (which kept that data as JSON) restore too and the data is imported automatically. Older backups without those files stay valid: the current ones are kept.
+Teleporter backups also include the **Overview chart histories**: UPS temperature (in its `history.db`) and Proxmox CPU/memory plus Pi temperature/under-voltage (in `metrics.db`). Backups from version 1.2.0r (which kept that data as JSON) restore too and the data is imported automatically. Older backups without those files stay valid: the current ones are kept.
 
 A daily cron job (03:17) makes a Teleporter backup, **verifies it before uploading**, and sends it over SFTP to a storage server (`192.168.0.30` by default). It ships **disabled** until a user is set. It uses an SSH key only (never a password), so it can run unattended.
 
