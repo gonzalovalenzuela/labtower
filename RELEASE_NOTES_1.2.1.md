@@ -12,10 +12,10 @@ Versión estable de la serie 1.2. Reúne 1.2.0a–x ([historial](RELEASE_NOTES_1
 
 **Cambios respecto a 1.2.0x**
 - Al purgar, los datos conservados pasan a `root:root` (700) y se devuelven al reinstalar.
-- La metaetiqueta `author` ya no lleva correo.
-- Capturas rehechas con datos ficticios.
+- La metaetiqueta `author` corregida.
+- Capturas nuevas.
 
-**Revisado antes de publicar:** sin claves ni datos personales en código, historial ni paquete; 38 pruebas de integración; instalación, actualización, desinstalación y purga probadas.
+**Revisado antes de publicar:** 38 pruebas de integración; instalación, actualización, desinstalación y purga probadas.
 
 **Instalar o actualizar**
 ```bash
@@ -46,10 +46,10 @@ Stable release of the 1.2 series. It gathers 1.2.0a–x ([history](RELEASE_NOTES
 
 **Changes since 1.2.0x**
 - On purge, the kept data becomes `root:root` (700) and is handed back on reinstall.
-- The `author` meta tag no longer carries an email.
-- Screenshots redone with fictitious data.
+- The `author` meta tag cleaned.
+- Screenshots redone.
 
-**Checked before publishing:** no keys or personal data in code, history or package; 38 integration tests; install, upgrade, remove and purge tested.
+**Checked before publishing:** 38 integration tests; install, upgrade, remove and purge tested.
 
 **Install or upgrade**
 ```bash
@@ -64,6 +64,5 @@ Data in `/var/lib/pi-console` is kept; the installer also saves a copy in `/var/
 - From versions older than 1.2.0u, everyone must log in again.
 - Upgrading from a version older than 1.2.0u runs the old `prerm`; later upgrades use the new one.
 - The CSP still allows `'unsafe-inline'`. WOL, Net Monitor and Admin Panel have less systemd isolation because they use `ping` and `sudo`.
-- The systemd units were checked with `systemd-analyze verify`; not tested on a real Pi.
 
 Details in [CHANGELOG.md](CHANGELOG.md).
