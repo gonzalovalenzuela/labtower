@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0r — 2026-10-14
+
+- **Resumen, Net Monitor:** la leyenda de la torta mostraba solo los 6 tipos más numerosos, así que TV, teléfono, tablet, cámara, etc. podían quedar fuera aunque estuvieran en la torta. Ahora aparecen **todos** los tipos (hasta 12, con colores distintos); con más de 5 se ordenan en dos columnas. En el kiosko de pantalla chica la torta se achica y se usan nombres cortos (PC, Teléf., Cám., Impres.…) para que quepan todos sin cambiar el alto de las tarjetas.
+- **Resumen, temperatura de la Pi:** el gráfico ya no reserva siempre 24 h de ancho: usa todo el ancho para los datos acumulados (2 min, 1 h, 24 h…) y el título indica el período que cubre («Temp 35 min»).
+
 ## 1.2.0q — 2026-10-14
 
 - **UPS Monitor: gráfico de temperatura de la UPS.** En el detalle de cada UPS aparece, junto a los de voltaje y consumo, el gráfico de temperatura con los mismos rangos (1 h, 1 día, 1 mes, todo), cursor con valor y modo claro/oscuro. Solo se muestra si la UPS informa `ups.temperature` o `battery.temperature`; si no, no aparece. Usa el historial que ya se guardaba en `history.db`, así que muestra de inmediato lo registrado antes.
