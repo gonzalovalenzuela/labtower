@@ -54,7 +54,7 @@ svg.spark{width:100%;height:42px;display:block}
 .hc i{display:inline-block;width:8px;height:8px;border-radius:2px;margin:0 4px 0 9px}
 .hc i:first-child{margin-left:0}
 .hc b{font-weight:600}
-@media (max-height:900px){body.kiosk .xh{display:none}}
+@media (min-height:701px) and (max-height:900px){body.kiosk .xh{display:none}}
 .donutbox{display:flex;align-items:center;gap:14px}
 .legend{display:flex;flex-direction:column;gap:3px;font-size:.76rem;color:var(--text-mid)}
 .legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px}
@@ -242,7 +242,7 @@ function upsTemp(h){
   const v=h.map(r=>r.temp).filter(x=>isFinite(x)&&x>0);if(v.length<2)return '';
   const lo=Math.floor(Math.min.apply(null,v)-1),hi=Math.max(Math.ceil(Math.max.apply(null,v)+1),lo+6),W=300,H=40,n=h.length;
   const pts=[];h.forEach((r,i)=>{if(r.temp>0)pts.push((i/(n-1)*W).toFixed(1)+','+(H-2-(r.temp-lo)/(hi-lo)*(H-4)).toFixed(1))});
-  return `<div class="xh"><svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><polyline points="${pts.join(' ')}" fill="none" stroke="var(--amber)" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg><div class="hc"><i style="background:var(--amber)"></i>${T('h_utemp')} · ${v[v.length-1].toFixed(0)}° · ${T('h_min')} ${Math.min.apply(null,v).toFixed(0)}° · ${T('h_max')} ${Math.max.apply(null,v).toFixed(0)}°</div></div>`;
+  return `<div class="xh kp"><svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><polyline points="${pts.join(' ')}" fill="none" stroke="var(--amber)" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg><div class="hc"><i style="background:var(--amber)"></i>${T('h_utemp')} · ${v[v.length-1].toFixed(0)}° · ${T('h_min')} ${Math.min.apply(null,v).toFixed(0)}° · ${T('h_max')} ${Math.max.apply(null,v).toFixed(0)}°</div></div>`;
 }
 // Gráfico de varias líneas 0–100 % (CPU y memoria) / multi-line 0–100 % chart (CPU and memory)
 function lchart(series){ // series: [{vals:[…],color}]
