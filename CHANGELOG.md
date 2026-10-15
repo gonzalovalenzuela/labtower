@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.0t — 2026-10-15
+
+- **Resumen, kiosko:** el gráfico de temperatura de la UPS se muestra ahora en cualquier tamaño de pantalla, de forma compacta (en 1.2.0s seguía oculto entre 701 y 900 px de alto, que es el caso de varias tablets de 7").
+
 ## 1.2.0s — 2026-10-15
 
 - **Resumen, kiosko de 7":** el gráfico de temperatura de la UPS no aparecía en pantallas de 700 px de alto o menos; ahora se muestra compacto, como los de la Pi y Proxmox. Entre 701 y 900 px sigue oculto para que quepa la pantalla.
