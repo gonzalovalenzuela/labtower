@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.0v — 2026-10-15
+
+- **Resumen, kiosko y pantallas anchas:** la línea de tiempo estaba dentro de la grilla de tarjetas y, al ocupar todas las columnas, reservaba una columna vacía a la derecha: con 4 tarjetas y un ancho de ~1100–1200 px quedaba cerca de un 20 % de la pantalla sin usar. Ahora la línea de tiempo va debajo de la grilla y las tarjetas reparten todo el ancho.
+
 ## 1.2.0u — 2026-10-15
 
 ### Seguridad (auditoría: 13 hallazgos)

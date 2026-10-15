@@ -69,11 +69,11 @@ El código fuente está comentado en español e inglés (los comentarios en ingl
 
 ```bash
 # Descargar el .deb desde Releases
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0u/pi-console_1.2.0u_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0v/pi-console_1.2.0v_all.deb
 
 # Instalar (apt resuelve e instala las dependencias: python3, nginx, nut, nut-client, snmp, sudo…)
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.0u_all.deb
+sudo apt-get install -y ./pi-console_1.2.0v_all.deb
 ```
 
 Usa `apt-get install ./archivo.deb` (no `dpkg -i`): así `apt` instala las dependencias que falten.
@@ -112,13 +112,13 @@ sudo nginx -t && sudo systemctl reload nginx
 ## Actualizar
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0u/pi-console_1.2.0u_all.deb
-sudo apt-get install -y ./pi-console_1.2.0u_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0v/pi-console_1.2.0v_all.deb
+sudo apt-get install -y ./pi-console_1.2.0v_all.deb
 pi-console-health
 ```
 
 - Funciona desde cualquier 1.1.x o 1.2.x anterior. Los datos (`/var/lib/pi-console`) se conservan y el instalador guarda además una copia en `/var/backups/pi-console`.
-- Si el número de versión que instalas es **menor** que el que ya tienes (por ejemplo, volver a 1.2.0 teniendo 1.2.0u), `apt` lo trata como bajar de versión y pide `--allow-downgrades`:
+- Si el número de versión que instalas es **menor** que el que ya tienes (por ejemplo, volver a 1.2.0 teniendo 1.2.0v), `apt` lo trata como bajar de versión y pide `--allow-downgrades`:
   `sudo apt-get install -y --allow-downgrades ./pi-console_1.2.0_all.deb`.
 - Los cambios de cada versión están en [CHANGELOG.md](CHANGELOG.md).
 
