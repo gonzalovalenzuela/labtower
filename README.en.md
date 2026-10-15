@@ -34,9 +34,9 @@ Raspberry Pi OS, DietPi or Debian 12+ (also works on an x86 VM), Python 3.9+, ng
 ## Install
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0u/pi-console_1.2.0u_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.0v/pi-console_1.2.0v_all.deb
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.0u_all.deb
+sudo apt-get install -y ./pi-console_1.2.0v_all.deb
 ```
 
 Then open `http://<pi-ip>/`. The installer prints the initial user `admin` with a **random password** (it is also in `/var/lib/pi-console/initial-admin-password` until changed); you **must set a new password** on first login. UPS Monitor starts with no servers, and Net Monitor scans nothing until you press "Run initial scan".
