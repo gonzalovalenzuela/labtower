@@ -1,4 +1,4 @@
-# Pi Console 1.2.0r
+# Pi Console 1.2.0s
 
 ## Español
 
@@ -13,6 +13,7 @@ Primer release de la serie 1.2. Reúne todo lo hecho desde 1.1.8 y deja el códi
 - Mensajes de error y de log del backend en inglés.
 - **Instalación nueva más limpia:** el primer ingreso con `admin`/`admin` obliga a cambiar la contraseña antes de usar cualquier módulo; UPS Monitor empieza sin servidores (no exige tener una UPS); Net Monitor no escanea nada hasta que lo pides («Hacer escaneo inicial», con la lista llenándose en vivo) y autodetecta tu red; `snmp` es dependencia; los ejemplos usan IP neutras; menú por defecto: UPS, Net, Proxmox, WOL, Admin.
 - **Permisos entre módulos:** un admin solo da o quita permisos en los módulos donde él mismo tiene ese nivel, y los respaldos (Teleporter) los maneja solo quien administra todos los módulos. Proxmox avisa de forma permanente de los clusters sin certificado fijado. Cookie `Secure` opcional (`PICONSOLE_SECURE_COOKIE=1`) y sección [*Seguridad*](README.md#seguridad) en el README.
+- **1.2.0s:** Resumen: en el kiosko de 7" (altura ≤ 700 px) vuelve a verse el gráfico de temperatura de la UPS; la leyenda de la torta de Net Monitor y el título del gráfico de temperatura de la Pi quedan más compactos en kiosko; sin referencias a redes privadas (el servidor SFTP por defecto ahora es `storage.example.lan`: hay que poner el real en `SFTP_HOST`).
 - **1.2.0r:** Resumen: la torta de Net Monitor muestra todos los tipos de equipo en su leyenda (TV, teléfono, tablet, cámara…), y el gráfico de temperatura de la Pi se ajusta a los datos acumulados, como los de la UPS.
 - **1.2.0q:** UPS Monitor: nuevo gráfico de **temperatura de la UPS** (1 h, 1 día, 1 mes, todo) en el detalle de cada UPS que informe temperatura.
 - **1.2.0p:** los históricos de la Pi y de Proxmox pasan a una base SQLite (`metrics.db`): cada muestra se guarda al instante (un corte de luz no pierde datos), retención de 7 días configurable, importa solos los JSON de la 1.2.0o y Teleporter respalda `metrics.db`.
@@ -32,8 +33,8 @@ Primer release de la serie 1.2. Reúne todo lo hecho desde 1.1.8 y deja el códi
 
 **Actualizar desde cualquier 1.1.x**
 ```bash
-wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0r_all.deb?n=$RANDOM" -O pi-console_1.2.0r_all.deb
-sudo apt-get install -y ./pi-console_1.2.0r_all.deb
+wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0s_all.deb?n=$RANDOM" -O pi-console_1.2.0s_all.deb
+sudo apt-get install -y ./pi-console_1.2.0s_all.deb
 pi-console-health
 ```
 Los datos (`/var/lib/pi-console`) se conservan; el instalador además guarda una copia en `/var/backups/pi-console`.
@@ -53,7 +54,9 @@ First release of the 1.2 series. It gathers everything done since 1.1.8 and leav
 - Backend error and log messages in English.
 - **Cleaner fresh install:** the first login with `admin`/`admin` forces a password change before any module can be used; UPS Monitor starts with no servers (no UPS required); Net Monitor scans nothing until you ask ("Run initial scan", with the list filling in live) and autodetects your network; `snmp` is a dependency; examples use neutral IPs; default menu: UPS, Net, Proxmox, WOL, Admin.
 - **Cross-module permissions:** an admin can only grant or remove permissions on the modules where they hold that level themselves, and backups (Teleporter) are handled only by someone who administers every module. Proxmox permanently warns about clusters without a pinned certificate. Optional `Secure` cookie (`PICONSOLE_SECURE_COOKIE=1`) and a [*Security*](README.md#seguridad) section in the README.
+- **1.2.0s:** Resumen: en el kiosko de 7" (altura ≤ 700 px) vuelve a verse el gráfico de temperatura de la UPS; la leyenda de la torta de Net Monitor y el título del gráfico de temperatura de la Pi quedan más compactos en kiosko; sin referencias a redes privadas (el servidor SFTP por defecto ahora es `storage.example.lan`: hay que poner el real en `SFTP_HOST`).
 - **1.2.0r:** Resumen: la torta de Net Monitor muestra todos los tipos de equipo en su leyenda (TV, teléfono, tablet, cámara…), y el gráfico de temperatura de la Pi se ajusta a los datos acumulados, como los de la UPS.
+- **1.2.0s:** Overview: the UPS temperature chart shows again in the 7" kiosk (height ≤ 700 px); the Net Monitor pie legend and the Pi temperature chart title are more compact in kiosk; no private-network references (the default SFTP server is now `storage.example.lan`: set the real one in `SFTP_HOST`).
 - **1.2.0r:** Overview: the Net Monitor pie shows every device type in its legend (TV, phone, tablet, camera…), and the Pi temperature chart fits the data collected so far, like the UPS ones.
 - **1.2.0q:** UPS Monitor: new **UPS temperature** chart (1 h, 1 day, 1 month, all) in the detail of each UPS that reports a temperature.
 - **1.2.0p:** the Pi and Proxmox histories move to a SQLite database (`metrics.db`): every sample is stored at once (a power cut loses nothing), configurable 7-day retention, the 1.2.0o JSON files are imported automatically and Teleporter backs up `metrics.db`.
@@ -73,8 +76,8 @@ First release of the 1.2 series. It gathers everything done since 1.1.8 and leav
 
 **Upgrade from any 1.1.x**
 ```bash
-wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0r_all.deb?n=$RANDOM" -O pi-console_1.2.0r_all.deb
-sudo apt-get install -y ./pi-console_1.2.0r_all.deb
+wget "https://raw.githubusercontent.com/gonzalovalenzuela/pi-console/deb-builds/pi-console_1.2.0s_all.deb?n=$RANDOM" -O pi-console_1.2.0s_all.deb
+sudo apt-get install -y ./pi-console_1.2.0s_all.deb
 pi-console-health
 ```
 Data in `/var/lib/pi-console` is kept; the installer also saves a copy in `/var/backups/pi-console`.
