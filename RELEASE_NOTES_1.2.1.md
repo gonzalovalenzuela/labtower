@@ -2,7 +2,7 @@
 
 ## Español
 
-Versión estable de la serie 1.2. Reúne 1.2.0a–x ([historial](RELEASE_NOTES_1.2.0.md)).
+Versión estable de la serie 1.2. Reúne 1.2.0a–x ([historial](https://github.com/gonzalovalenzuela/pi-console/blob/main/RELEASE_NOTES_1.2.0.md)).
 
 **Qué incluye**
 - **Resumen** (`/overview/`): UPS, Proxmox, red y Raspberry Pi en una pantalla, línea de tiempo y modo kiosko.
@@ -32,11 +32,11 @@ Los datos (`/var/lib/pi-console`) se conservan; el instalador guarda además una
 - La CSP aún permite `'unsafe-inline'`. WOL, Net Monitor y Admin Panel tienen menos aislamiento systemd porque usan `ping` y `sudo`.
 - Las unidades systemd se validaron con `systemd-analyze verify`; no se probaron en una Pi real.
 
-Detalle en [CHANGELOG.md](CHANGELOG.md).
+Detalle en [CHANGELOG.md](https://github.com/gonzalovalenzuela/pi-console/blob/main/CHANGELOG.md).
 
 ## English
 
-Stable release of the 1.2 series. It gathers 1.2.0a–x ([history](RELEASE_NOTES_1.2.0.md)).
+Stable release of the 1.2 series. It gathers 1.2.0a–x ([history](https://github.com/gonzalovalenzuela/pi-console/blob/main/RELEASE_NOTES_1.2.0.md)).
 
 **What it includes**
 - **Overview** (`/overview/`): UPS, Proxmox, network and Raspberry Pi on one screen, event timeline and kiosk mode.
@@ -65,4 +65,4 @@ Data in `/var/lib/pi-console` is kept; the installer also saves a copy in `/var/
 - Upgrading from a version older than 1.2.0u runs the old `prerm`; later upgrades use the new one.
 - The CSP still allows `'unsafe-inline'`. WOL, Net Monitor and Admin Panel have less systemd isolation because they use `ping` and `sudo`.
 
-Details in [CHANGELOG.md](CHANGELOG.md).
+Details in [CHANGELOG.md](https://github.com/gonzalovalenzuela/pi-console/blob/main/CHANGELOG.md).
