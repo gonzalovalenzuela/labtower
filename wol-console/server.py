@@ -255,11 +255,10 @@ class H(BaseHTTPRequestHandler):
     def log_message(self, fmt, *a):
         if int(a[1]) >= 400: log.warning(f"{self.client_address[0]} {a[1]}")
 
-    # IP del cliente (nginx la pasa en X-Forwarded-For); se usa para el límite de encendidos.
-    # EN: Client IP (nginx passes it in X-Forwarded-For); used for the wake-up limit.
+    # IP del cliente para el límite de encendidos. Usa auth.client_ip (X-Real-IP de nginx, solo si la conexión es local): X-Forwarded-For lo puede falsear el cliente.
+    # EN: Client IP for the wake-up limit. Uses auth.client_ip (nginx's X-Real-IP, only if the connection is local): X-Forwarded-For can be forged by the client.
     def _ip(self):
-        fwd = self.headers.get("X-Forwarded-For")
-        return fwd.split(",")[0].strip() if fwd else self.client_address[0]
+        return auth.client_ip(self)
 
     def _json(self, code, payload):
         body = json.dumps(payload).encode()
