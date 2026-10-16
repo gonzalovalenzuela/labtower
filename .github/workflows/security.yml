@@ -1,0 +1,41 @@
+# Escaneo de seguridad: secretos (todo el historial), análisis estático de Python, shell y GitHub Actions.
+# EN: Security scan: secrets (full history), Python static analysis, shell scripts and GitHub Actions.
+# Pi Console no usa paquetes de terceros de Python (solo la biblioteca estándar): las dependencias son paquetes de Debian (python3, nginx, nut, snmp, sudo).
+# EN: Pi Console uses no third-party Python packages (standard library only): its dependencies are Debian packages.
+name: security
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 5 * * 1"
+permissions:
+  contents: read
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks (full history)
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks detect --source . --redact --verbose
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: bandit (medium and above)
+        run: |
+          pip install bandit==1.7.9
+          bandit -q -r . -x ./docs -ll
+      - name: compile
+        run: python -I -m compileall -q .
+      - name: shellcheck (errors)
+        run: |
+          sudo apt-get install -y shellcheck >/dev/null
+          shellcheck -S error scripts/teleporter.sh scripts/pi-console-* debian/postinst debian/preinst debian/prerm debian/postrm

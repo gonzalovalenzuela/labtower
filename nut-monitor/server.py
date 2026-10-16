@@ -777,6 +777,7 @@ class H(BaseHTTPRequestHandler):
     # POST: login/logout, alta de servidor y prueba de conexión. Alta y prueba requieren nivel «admin» de UPS.
     # EN: POST: login/logout, add server and connection test. Adding and testing require UPS "admin" level.
     def do_POST(self):
+        if auth.cross_origin(self.headers): return self._json(403, {"error": "Cross-origin request blocked"})
         path = urlparse(self.path).path.rstrip("/")
         tok  = self._token()
         body = self._body()
@@ -850,6 +851,7 @@ class H(BaseHTTPRequestHandler):
     # PUT /api/servers/<id>: edita nombre, host o puerto de un servidor (solo admin); el hilo se reconecta solo.
     # EN: PUT /api/servers/<id>: edit name, host or port of a server (admin only); the thread reconnects by itself.
     def do_PUT(self):
+        if auth.cross_origin(self.headers): return self._json(403, {"error": "Cross-origin request blocked"})
         path = urlparse(self.path).path.rstrip("/")
         tok  = self._token()
         if not auth.check_permission(tok, "nut", "admin"):
@@ -881,6 +883,7 @@ class H(BaseHTTPRequestHandler):
     # DELETE /api/servers/<id>: elimina un servidor y detiene su consulta (solo admin).
     # EN: DELETE /api/servers/<id>: remove a server and stop its polling (admin only).
     def do_DELETE(self):
+        if auth.cross_origin(self.headers): return self._json(403, {"error": "Cross-origin request blocked"})
         path = urlparse(self.path).path
         tok  = self._token()
         if not auth.check_permission(tok, "nut", "admin"):

@@ -220,6 +220,7 @@ class H(BaseHTTPRequestHandler):
     # POST: login y logout (mismo comportamiento que en los otros módulos).
     # EN: POST: login and logout (same behaviour as in the other modules).
     def do_POST(self):
+        if auth.cross_origin(self.headers): return self._json(403, {"error": "Cross-origin request blocked"})
         path = urlparse(self.path).path.rstrip("/")
         tok  = self._tok()
         body = self._body()

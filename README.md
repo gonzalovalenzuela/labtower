@@ -69,11 +69,11 @@ El código fuente está comentado en español e inglés (los comentarios en ingl
 
 ```bash
 # Descargar el .deb desde Releases
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1/pi-console_1.2.1_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.2/pi-console_1.2.2_all.deb
 
 # Instalar (apt resuelve e instala las dependencias: python3, nginx, nut, nut-client, snmp, sudo…)
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.1_all.deb
+sudo apt-get install -y ./pi-console_1.2.2_all.deb
 ```
 
 Usa `apt-get install ./archivo.deb` (no `dpkg -i`): así `apt` instala las dependencias que falten.
@@ -112,13 +112,13 @@ sudo nginx -t && sudo systemctl reload nginx
 ## Actualizar
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1/pi-console_1.2.1_all.deb
-sudo apt-get install -y ./pi-console_1.2.1_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.2/pi-console_1.2.2_all.deb
+sudo apt-get install -y ./pi-console_1.2.2_all.deb
 pi-console-health
 ```
 
 - Funciona desde cualquier 1.1.x o 1.2.x anterior. Los datos (`/var/lib/pi-console`) se conservan y el instalador guarda además una copia en `/var/backups/pi-console`.
-- Si el número de versión que instalas es **menor** que el que ya tienes (por ejemplo, volver a 1.2.0 teniendo 1.2.1), `apt` lo trata como bajar de versión y pide `--allow-downgrades`:
+- Si el número de versión que instalas es **menor** que el que ya tienes (por ejemplo, volver a 1.2.0 teniendo 1.2.2), `apt` lo trata como bajar de versión y pide `--allow-downgrades`:
   `sudo apt-get install -y --allow-downgrades ./pi-console_1.2.0_all.deb`.
 - Los cambios de cada versión están en [CHANGELOG.md](CHANGELOG.md).
 
@@ -279,6 +279,7 @@ pi-console-health                     # diagnóstico general
 Pi Console está pensado para una **red local de confianza** y se sirve por **HTTP en el puerto 80** (nginx):
 
 - **HTTP por defecto, HTTPS con un comando.** Por defecto las credenciales y la cookie viajan sin cifrar por la LAN: no expongas el puerto 80 a internet. Para cifrar: `sudo pi-console-https enable` (certificado autofirmado, el navegador avisa una vez) o con tu certificado: `sudo pi-console-https enable --cert fullchain.pem --key privkey.pem`. Con `--redirect` el puerto 80 redirige a HTTPS, la cookie pasa a `Secure` y se envía HSTS. `sudo pi-console-https disable` lo deshace; `status` muestra el estado.
+- **Escrituras solo desde la propia página (CSRF).** Toda petición que modifica datos se rechaza (403) si el navegador indica que no viene del mismo origen (`Sec-Fetch-Site`, o `Origin` frente a `Host` en navegadores antiguos). `SameSite=Strict` no bastaba: otra página del mismo host en otro puerto podía escribir con tu sesión.
 - **Los servicios Python escuchan solo en `127.0.0.1`** (8080–8085); únicamente nginx es accesible desde la red.
 - **Cookie `Secure` (opcional).** La cookie de sesión lleva `HttpOnly` y `SameSite=Strict` y dura 24 h. Con `pi-console-https enable --redirect` (o `PICONSOLE_SECURE_COOKIE=1` detrás de tu propio proxy HTTPS, ver [Configuración](#configuración-variables-de-entorno)) lleva además `Secure`. Está apagado por defecto porque con HTTP el navegador no enviaría una cookie `Secure` y no podrías iniciar sesión.
 - **Contraseñas e intentos.** Las contraseñas (mínimo 8 caracteres) se guardan con scrypt. Tras 5 intentos de login fallidos desde una IP en 10 minutos, esa IP queda bloqueada 5 minutos; además cada cuenta tiene su propio límite. El contador es **compartido por todos los módulos** (un archivo con bloqueo), cambiar la contraseña exige la actual y esos intentos también se limitan. nginx añade límite de peticiones por IP (más estricto en el login) y de conexiones simultáneas, y no revela su versión.
@@ -368,6 +369,7 @@ pi-console/
 ├── CHANGELOG.md
 ├── RELEASE_NOTES_1.2.0.md
 ├── RELEASE_NOTES_1.2.1.md
+├── RELEASE_NOTES_1.2.2.md
 ├── LICENSE
 ├── README.md                # Español
 └── README.en.md             # English
