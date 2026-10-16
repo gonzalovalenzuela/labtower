@@ -1412,7 +1412,10 @@ class H(BaseHTTPRequestHandler):
                 if "alias" in body:
                     h["alias"] = str(body["alias"])[:40]
                 if "os" in body:
-                    h["os"]        = str(body["os"])[:30]
+                    os_v = str(body["os"]).strip()[:30]
+                    if not re.fullmatch(r"[\w .+/()-]{1,30}", os_v):
+                        return self._json(400, {"error": "Invalid OS name"})
+                    h["os"]        = os_v
                     h["os_manual"] = True   # marked as manually edited
                 if dt is not None:
                     if dt == "auto":
@@ -1421,7 +1424,10 @@ class H(BaseHTTPRequestHandler):
                         h["device_type"] = dt
                         h["type_manual"] = True
                 if "group" in body:
-                    h["group"] = str(body["group"])[:20]
+                    grp = str(body["group"]).strip()[:20]
+                    if grp and not re.fullmatch(r"[\w .+/()-]{1,20}", grp):
+                        return self._json(400, {"error": "Invalid group name"})
+                    h["group"] = grp
                 save_hosts(hosts)
             self._json(200, {"ok": True})
 

@@ -886,7 +886,7 @@ function renderUsers(users) {
       <td data-label="${esc(t('colStatus'))}">${u.must_change_password ? `<span class="must-change">${t('mustChangeBadge')}</span>` : '<span style="font-size:11px;color:var(--text-dim)">—</span>'}</td>
       <td data-label="${esc(t('colCreated'))}"><span class="ucreated">${u.created ? new Date(u.created*1000).toLocaleDateString(locale) : '—'}</span></td>
       <td class="col-actions">
-        <button class="btn-ri edit" onclick='editUser(${JSON.stringify(u)})' title="Edit">✎</button>
+        <button class="btn-ri edit" onclick="editUser(${esc(JSON.stringify(u))})" title="Edit">✎</button>
         ${u.username !== me?.username
           ? `<button class="btn-ri del" onclick="confirmDelete(${jsa(u.username)})" title="Delete">✕</button>`
           : '<span style="width:30px;display:inline-block"></span>'}

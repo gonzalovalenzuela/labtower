@@ -218,8 +218,10 @@ def load_net_hosts():
 # Valida un equipo nuevo: nombre no vacío, MAC válida, puerto 1-65535 y categoría conocida. Devuelve (ok, mensaje).
 # EN: Validate a new device: non-empty name, valid MAC, port 1-65535 and known category. Returns (ok, message).
 def validate_device(d):
-    if not isinstance(d.get("name"), str) or not d["name"].strip():
+    if not isinstance(d.get("name"), str) or not d["name"].strip() or re.search(r"[\x00-\x1f\x7f]", d["name"]):
         return False, "Invalid name"
+    if d.get("notes") not in (None, "") and (not isinstance(d["notes"], str) or re.search(r"[\x00-\x1f\x7f]", d["notes"])):
+        return False, "Invalid notes"
     if not isinstance(d.get("mac"), str) or not norm_mac(d["mac"]):
         return False, "Invalid MAC address"
     p = d.get("port", 9)

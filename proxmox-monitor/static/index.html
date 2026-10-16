@@ -703,7 +703,7 @@ function renderDashboard(){
           <span style="font-size:11px;font-weight:700;color:${cephColor};background:${cephStatus==='HEALTH_OK'?'rgba(34,197,94,.12)':cephStatus==='HEALTH_WARN'?'rgba(249,115,22,.12)':'rgba(239,68,68,.12)'};padding:2px 8px;border-radius:99px">${cephStatus}</span>
         </div>
         <div style="display:flex;gap:24px;font-size:12px;color:var(--text-mid)">
-          <div>OSDs: <strong>${osdsUp}/${osds}</strong> online</div>
+          <div>OSDs: <strong>${esc(osdsUp)}/${esc(osds)}</strong> online</div>
           <div>Pools: <strong>${pools}</strong></div>
           ${ceph.pgmap?.bytes_used!=null?`<div>Usado: <strong>${fmtBytes(ceph.pgmap.bytes_used)}</strong> / ${fmtBytes(ceph.pgmap.bytes_total||0)}</div>`:''}
         </div>
@@ -920,14 +920,14 @@ function buildVMSection(items, type, running, nodeName){
           const dotCls=v.status==='running'?'running':v.status==='paused'?'paused':'stopped';
           return `<div class="vm-row">
             <span class="vm-dot ${dotCls}"></span>
-            <span class="vm-id">${v.vmid}</span>
+            <span class="vm-id">${esc(v.vmid)}</span>
             <span class="vm-name" title="${esc(v.name||'')}">${esc(v.name||'—')}${v.lock==='migrate'?' <span title="migrating" style="color:var(--orange)">⇄</span>':''}</span>
             <span class="vm-type ${type.toLowerCase()}">${type}</span>
             ${v.status==='running'?`
               <span class="vm-cpu">${cpuPct}%</span>
               <span class="vm-mem">${fmtBytes(v.mem||0)}</span>
               <span class="vm-uptime">${fmtUptime(v.uptime)}</span>
-            `:`<span style="font-size:10px;color:var(--text-dim);flex:1;text-align:right">${v.status}</span>`}
+            `:`<span style="font-size:10px;color:var(--text-dim);flex:1;text-align:right">${esc(v.status)}</span>`}
           </div>`;
         }).join('')}
       </div>
