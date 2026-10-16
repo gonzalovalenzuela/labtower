@@ -69,11 +69,11 @@ El código fuente está comentado en español e inglés (los comentarios en ingl
 
 ```bash
 # Descargar el .deb desde Releases
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1d/pi-console_1.2.1d_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1e/pi-console_1.2.1e_all.deb
 
 # Instalar (apt resuelve e instala las dependencias: python3, nginx, nut, nut-client, snmp, sudo…)
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.1d_all.deb
+sudo apt-get install -y ./pi-console_1.2.1e_all.deb
 ```
 
 Usa `apt-get install ./archivo.deb` (no `dpkg -i`): así `apt` instala las dependencias que falten.
@@ -112,8 +112,8 @@ sudo nginx -t && sudo systemctl reload nginx
 ## Actualizar
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1d/pi-console_1.2.1d_all.deb
-sudo apt-get install -y ./pi-console_1.2.1d_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1e/pi-console_1.2.1e_all.deb
+sudo apt-get install -y ./pi-console_1.2.1e_all.deb
 pi-console-health
 ```
 
@@ -369,7 +369,7 @@ pi-console/
 ├── CHANGELOG.md
 ├── RELEASE_NOTES_1.2.0.md
 ├── RELEASE_NOTES_1.2.1.md
-├── RELEASE_NOTES_1.2.1d.md
+├── RELEASE_NOTES_1.2.1e.md
 ├── LICENSE
 ├── README.md                # Español
 └── README.en.md             # English

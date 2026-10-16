@@ -1010,7 +1010,7 @@ function renderOsFilters(){
     div.className='os-filter'+(filterOs===os?' active':'');
     div.dataset.os=os;
     div.onclick=()=>setOsFilter(div);
-    div.innerHTML=`<span class="os-dot dot-${os.replace(/\s/g,'')}"></span>
+    div.innerHTML=`<span class="os-dot dot-${cssId(os)}"></span>
       <span class="os-filter-name">${esc(tOs(os))}</span>
       <span class="os-count">${counts[os]}</span>`;
     container.appendChild(div);
@@ -1094,7 +1094,7 @@ function renderTable(){
         <div style="display:flex;align-items:center;gap:4px">
           <span class="os-badge">
             <span style="font-size:12px">${OS_ICONS[os]||'❓'}</span>
-            <span class="os-${os.replace(/\s/g,'')}" style="font-size:11px;font-weight:600">${esc(tOs(os))}</span>
+            <span class="os-${cssId(os)}" style="font-size:11px;font-weight:600">${esc(tOs(os))}</span>
           </span>
           ${h.os_manual?'<span class="os-manual-badge">manual</span>':''}
           <button onclick="editOs(${jsa(h.ip)})" title="${esc(t('editDevice'))}"
@@ -1541,6 +1541,8 @@ async function editAlias(ip){
 // ── Helpers ───────────────────────────────────────────────────────────────────
 // Escapa HTML antes de insertar texto de usuarios, equipos o la red en la página: evita inyección de código (XSS).
 // EN: Escape HTML before inserting text from users, devices or the network into the page: prevents code injection (XSS).
+// Identificador seguro para class="…": solo letras, números, guion y guion bajo.
+function cssId(s){return String(s).replace(/[^A-Za-z0-9_-]/g,'');}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 // Valor seguro dentro de un handler on*="…": literal JS entre comillas, escapado también para HTML.
 function jsa(s){return esc(JSON.stringify(String(s)));}

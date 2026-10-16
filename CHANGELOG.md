@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.1e — 2026-10-16
+
+Auditoría exhaustiva. Sin cambios visibles en la interfaz.
+
+### Seguridad
+- **XSS desde el servidor NUT (Alto):** el valor de las variables del UPS (`battery.voltage`, `input.voltage`, …) y el estado (`ups.status`) se insertaban sin escapar. El protocolo NUT no tiene autenticación ni cifrado: quien responda en el puerto 3493 (un equipo de la LAN o un intermediario) podía ejecutar JavaScript en el navegador del administrador. Probado en Chromium con un upsd falso: antes se ejecutaba, ahora no. También se escapan los datos de la API de Proxmox (estado, vmid, Ceph).
+- **XSS por nombre de SO en Net Monitor (Medio):** el SO editable (30 caracteres) iba dentro de `class="…"`; un usuario con permiso de edición podía romper el atributo. Ahora el servidor solo acepta `[\w .+/()-]` en SO y grupo, y la página sanea el nombre de clase.
+- **Redirección abierta en cambio de contraseña (Bajo):** `?next=/%09/sitio` pasaba el filtro y el navegador lo leía como `//sitio`. Ahora se rechazan caracteres de control.
+- **Editar usuario:** el objeto JSON ya no va en un atributo con comillas simples.
+- **WOL:** nombre y notas rechazan caracteres de control (evita falsificar líneas de log).
+
+### Revisado sin hallazgos
+Matriz de permisos de los ~70 endpoints (todos con compuerta de sesión y nivel; las escrituras exigen además `admin`/`execute`), escalada entre administradores (`_outranks` / `_grant_denied`), SQL (sin consultas dinámicas), CSV exportado (solo números), cabeceras (sin CORS ni redirecciones), protocolo NUT (nombres sin espacios ni saltos), Pi-hole (huella fijada), scripts de root (copias con el usuario del servicio, `chown -h`, sudoers acotado), `pi-console-https` (argumentos validados).
+
 ## 1.2.1d — 2026-10-16
 
 Endurecimiento tras la auditoría de 1.2.1c. Sin cambios visibles en la interfaz.

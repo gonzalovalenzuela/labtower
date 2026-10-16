@@ -972,7 +972,7 @@ function renderDashboard(){
         <span class="ups-cell-sub">${esc(row.v['_desc']||'UPS')}${row.v['_serial']?' &nbsp;·&nbsp; <span style="font-family:var(--mono);letter-spacing:.3px">SN '+esc(row.v['_serial'])+'</span>':''}</span>
         <span class="ups-cell-sub" style="font-family:var(--mono);letter-spacing:.3px">${esc(row.srv.host)}<span style="color:var(--border-b)">:</span>${row.srv.port}</span>
       </td>
-      <td><span class="ups-badge ${badgeCls}">${badgeTxt}</span></td>
+      <td><span class="ups-badge ${badgeCls}">${esc(badgeTxt)}</span></td>
       <td>
         <div class="charge-wrap">
           <div class="charge-bar"><div class="charge-fill" style="width:${charge}%;background:${barColor}"></div></div>
@@ -1071,7 +1071,7 @@ function renderDashboard(){
           })()}
         </div>
         <div class="vars-section">
-          ${VARS.map(([k,l,u])=>{const val=row.v[k];return`<div class="var-cell"><span class="var-key">${l}</span><span class="var-val">${val?val+' '+u:'<span style="opacity:.3">—</span>'}</span></div>`;}).join('')}
+          ${VARS.map(([k,l,u])=>{const val=row.v[k];return`<div class="var-cell"><span class="var-key">${l}</span><span class="var-val">${val?esc(val)+' '+u:'<span style="opacity:.3">—</span>'}</span></div>`;}).join('')}
         </div>
         ${row.clients.length?`<div class="clients-section">
           <span class="clients-lbl">${t('clientsLabel')}</span>
