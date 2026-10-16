@@ -69,11 +69,11 @@ El código fuente está comentado en español e inglés (los comentarios en ingl
 
 ```bash
 # Descargar el .deb desde Releases
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1e/pi-console_1.2.1e_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1f/pi-console_1.2.1f_all.deb
 
 # Instalar (apt resuelve e instala las dependencias: python3, nginx, nut, nut-client, snmp, sudo…)
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.1e_all.deb
+sudo apt-get install -y ./pi-console_1.2.1f_all.deb
 ```
 
 Usa `apt-get install ./archivo.deb` (no `dpkg -i`): así `apt` instala las dependencias que falten.
@@ -112,8 +112,8 @@ sudo nginx -t && sudo systemctl reload nginx
 ## Actualizar
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1e/pi-console_1.2.1e_all.deb
-sudo apt-get install -y ./pi-console_1.2.1e_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1f/pi-console_1.2.1f_all.deb
+sudo apt-get install -y ./pi-console_1.2.1f_all.deb
 pi-console-health
 ```
 
@@ -286,7 +286,7 @@ Pi Console está pensado para una **red local de confianza** y se sirve por **HT
 - **Sesiones.** El token vive solo en la cookie `HttpOnly`; en disco (`sessions.json`) se guarda únicamente su hash SHA-256, el login no lo devuelve en el JSON y los respaldos no incluyen las sesiones. Un `/api/health` público solo dice «ok/degraded/fail»; la versión y los detalles piden sesión.
 - **Servicios con privilegios mínimos.** El código de `/opt/pi-console` es de root y de solo lectura para los servicios; lo que escriben vive en `/var/lib/pi-console/<módulo>/`. Las unidades systemd llevan endurecimiento (sin `/home`, `/tmp` propio, kernel de solo lectura, sin nuevos privilegios y sistema de archivos de solo lectura salvo los datos, en UPS, Proxmox y Resumen). Los scripts que corren como root (instalador, Teleporter) **nunca siguen enlaces simbólicos** dentro de las carpetas de los servicios.
 - **Entradas validadas.** Hosts y nombres de NUT, Proxmox y Pi-hole se validan; el certificado de Pi-hole se fija en la primera conexión (TOFU) y si cambia no se envía la contraseña; el nombre del CSV exportado no puede inyectar cabeceras; un usuario de solo lectura no puede lanzar escaneos; un admin parcial (p. ej. solo WOL) no puede degradar, borrar ni cambiar la contraseña del administrador principal.
-- **Límite conocido.** La política CSP de nginx todavía admite `'unsafe-inline'` porque las páginas llevan sus scripts y estilos en línea; las demás cabeceras (nosniff, frame, referrer, permisos) sí están.
+- **CSP estricta.** Las páginas no llevan scripts, manejadores ni `<style>` en línea: la política de nginx usa `script-src 'self'` (sin `'unsafe-inline'`). Solo se permiten atributos `style="…"` (`style-src-attr`). Las demás cabeceras (nosniff, frame, referrer, permisos) sí están.
 - **Permisos por módulo.** Cada módulo (WOL, UPS, Net, Proxmox) tiene su propio nivel (ninguno, solo lectura, ejecutar, admin). Un administrador **solo puede dar o quitar permisos en los módulos donde él mismo tiene ese nivel**, y no puede borrar ni cambiar la contraseña de un usuario con más permisos que él. Los respaldos (Teleporter) solo los maneja quien es admin de todos los módulos.
 - **Proxmox: certificado fijado.** Los clusters nuevos exigen fijar la huella SHA-256 del certificado. Un cluster antiguo sin huella se conecta sin validar la identidad del servidor: la página muestra un aviso permanente y el servicio lo anota en el log al arrancar; usa «Fijar certificado» para corregirlo.
 - **Primer ingreso.** Ya no existe `admin`/`admin`: la cuenta inicial tiene una contraseña aleatoria (la muestra el instalador) y obliga a cambiarla antes de usar cualquier módulo.
@@ -369,7 +369,7 @@ pi-console/
 ├── CHANGELOG.md
 ├── RELEASE_NOTES_1.2.0.md
 ├── RELEASE_NOTES_1.2.1.md
-├── RELEASE_NOTES_1.2.1e.md
+├── RELEASE_NOTES_1.2.1f.md
 ├── LICENSE
 ├── README.md                # Español
 └── README.en.md             # English

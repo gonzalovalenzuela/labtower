@@ -819,6 +819,37 @@ def cross_origin(headers) -> bool:
     return not oh or oh != hh
 
 
+# ─── Archivos estáticos de las páginas (.js / .css) ──────────────────────────
+# Las páginas no llevan JavaScript ni <style> en línea (CSP sin 'unsafe-inline'): su código y su CSS se sirven como archivos aparte desde la
+# carpeta static/ de cada módulo. Solo nombres simples «<nombre>.js|css» (sin rutas), archivos normales (nunca enlaces) y con ETag para que el
+# navegador revalide en vez de volver a descargar.
+# EN: Static page files (.js / .css). The pages carry no inline JavaScript or <style> (CSP without 'unsafe-inline'): their code and CSS are served as separate
+#     files from each module's static/ folder. Plain names only (no paths), regular files (never links), with an ETag so the browser revalidates.
+_ASSET_RE    = re.compile(r"/([a-z0-9][a-z0-9._-]{0,40})\.(js|css)")
+_ASSET_TYPES = {"js": "application/javascript; charset=utf-8", "css": "text/css; charset=utf-8"}
+
+def serve_asset(handler, static_dir, path) -> bool:
+    """Serve static_dir/<name>.js|css for a request path like /app.js. Returns True if it answered."""
+    m = _ASSET_RE.fullmatch(path or "")
+    if not m: return False
+    p = Path(static_dir) / f"{m.group(1)}.{m.group(2)}"
+    try:
+        if p.is_symlink() or not p.is_file(): return False
+        st = p.stat(); data = p.read_bytes()
+    except OSError:
+        return False
+    etag = '"%x-%x"' % (int(st.st_mtime), st.st_size)
+    handler.send_response(304 if handler.headers.get("If-None-Match") == etag else 200)
+    handler.send_header("ETag", etag)
+    handler.send_header("Cache-Control", "no-cache")
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    if handler.headers.get("If-None-Match") == etag:
+        handler.end_headers(); return True
+    handler.send_header("Content-Type", _ASSET_TYPES[m.group(2)])
+    handler.send_header("Content-Length", str(len(data)))
+    handler.end_headers(); handler.wfile.write(data)
+    return True
+
 # ─── Version ──────────────────────────────────────────────────────────────────
 # Versión instalada: la variable PICONSOLE_VERSION si existe; si no, el archivo VERSION de la raíz de la instalación.
 # EN: Installed version: the PICONSOLE_VERSION variable if set; otherwise the VERSION file at the install root.

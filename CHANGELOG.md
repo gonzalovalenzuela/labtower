@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.1f — 2026-10-16
+
+CSP estricta. Sin cambios visibles en la interfaz.
+
+### Seguridad
+- **CSP sin `'unsafe-inline'` en scripts:** las 8 páginas (inicio, WOL, UPS, Admin, Net, Proxmox, Overview y cambio de contraseña) ya no llevan JavaScript, manejadores `on…=` ni `<style>` en línea. El código está en `app.js`, `footer.js`, `csp-bind.js` y `app.css` de cada módulo. Los manejadores se declaran con `data-on-<evento>` y los enlaza `csp-bind.js` (también en el HTML que se genera dinámicamente). Así, aunque se colara HTML inyectado, el navegador no ejecutaría su script.
+- **Nueva política (nginx):** `script-src 'self'`; `style-src 'self' fonts.googleapis.com`; `style-src-attr 'unsafe-inline'`. Los atributos `style="…"` (~300) siguen permitidos; quitarlos no aporta protección frente a scripts.
+- Los servidores Python sirven solo `/<nombre>.js|css` con lista blanca, `ETag`, `no-cache` y `nosniff`.
+
+### Pruebas
+Chromium con la CSP real: 0 manejadores sin enlazar, 0 errores de JS, 0 violaciones de CSP en todas las páginas; comparación de comportamiento antiguo vs. nuevo en WOL/UPS/Net/Proxmox/Admin sin diferencias; el nombre malicioso `x');window.__pwn=1;('` llega intacto al botón y no se ejecuta. Regresión del servidor sin cambios.
+
+### Notas de actualización
+- `/etc/nginx/snippets/pi-console-site.conf` es conffile: si lo editaste, dpkg preguntará qué hacer; conserva el nuevo para tener la CSP estricta.
+- Navegadores: `style-src-attr` requiere Chrome 75+, Firefox 105+ o Safari 15.4+.
+- Tras actualizar, recarga con Ctrl+Shift+R.
+
 ## 1.2.1e — 2026-10-16
 
 Auditoría exhaustiva. Sin cambios visibles en la interfaz.
@@ -25,8 +42,6 @@ Endurecimiento tras la auditoría de 1.2.1c. Sin cambios visibles en la interfaz
 - **Errores:** los 12 `except:` sin tipo ahora capturan solo los errores esperados (ya no `KeyboardInterrupt`/`SystemExit`).
 - El instalador recomienda `pi-console-https enable --redirect` (cifra contraseña y sesión).
 
-### No incluido
-- CSP sin `'unsafe-inline'`: hay ~170 manejadores `on…=` y ~300 atributos `style=` en las páginas; requiere reescribirlas. Queda pendiente.
 
 ## 1.2.1c — 2026-10-16
 
@@ -116,7 +131,7 @@ Versión estable de la serie 1.2 (reúne 1.2.0a–x). El funcionamiento es el de
 - **nginx:** `server_tokens off`, límites de peticiones y conexiones por IP (más estricto en el login), `Content-Length` negativo rechazado, cabeceras adicionales; `/api/health` público solo informa el estado y `/api/version` pide sesión. Se quita el endpoint `/wol/api/token` (sin uso).
 - **Sesiones:** se guardan solo como hash SHA-256 y el login ya no devuelve el token en el JSON. **Hay que iniciar sesión otra vez tras actualizar.**
 - **Admin Panel:** un usuario válido que no es admin recibe la misma respuesta que una contraseña incorrecta (sin oráculo de credenciales).
-- **Límite conocido:** la CSP todavía permite `'unsafe-inline'` (las páginas llevan scripts y estilos en línea).
+- **Límite conocido:** la CSP todavía permite `'unsafe-inline'` (resuelto en 1.2.1f).
 
 ## 1.2.0t — 2026-10-15
 
