@@ -2,10 +2,29 @@
 
 ## 1.2.1a — 2026-10-15
 
+Seguridad sobre 1.2.1. No hay cambios visibles en la interfaz.
+
 ### Seguridad
-- **CSRF:** las peticiones que modifican datos (POST, PUT, DELETE) se rechazan con 403 si no son del mismo origen. Antes, otra página del mismo host en otro puerto podía crear o borrar datos con la sesión del usuario. curl y scripts, que no llevan cookie del navegador, siguen funcionando.
-- **Escaneo automático** en GitHub (`security.yml`): gitleaks sobre todo el historial, bandit, compilación y shellcheck, en cada push y cada semana. Dependabot para las Actions.
-- bandit limpio: tres falsos positivos documentados en el código.
+- **CSRF (escrituras desde otra página):** toda petición que modifica datos (POST, PUT, DELETE) se rechaza con 403 si el navegador indica que no viene de la propia página. Se aplica en los 6 servicios (WOL, UPS, Net, Proxmox, Resumen y Admin Panel, incluida la subida de respaldos).
+  - Antes: otra página del mismo host en otro puerto podía crear o borrar datos con la sesión del usuario. `SameSite=Strict` no lo impedía porque no distingue puertos.
+  - Cómo decide: usa `Sec-Fetch-Site`; si el navegador no lo envía (Safari/iOS antiguos), compara el host de `Origin` con el de `Host`. Sin ninguna de las dos cabeceras (curl, scripts) se permite, porque no llevan la cookie del navegador.
+  - Código: función `cross_origin()` en `auth/auth.py`, llamada al inicio de cada `do_POST`, `do_PUT` y `do_DELETE`.
+
+### Automatización
+- **Escaneo en GitHub** (`.github/workflows/security.yml`), en cada push, en cada pull request y cada lunes:
+  - gitleaks: busca claves y secretos en todo el historial.
+  - bandit: análisis estático de Python (severidad media o más).
+  - compilación de todo el código Python y shellcheck de los scripts (solo errores).
+- **Dependabot** (`.github/dependabot.yml`): avisa semanalmente si una GitHub Action tiene versión nueva.
+- Pi Console solo usa la biblioteca estándar de Python, así que no hay paquetes de terceros que escanear; sus dependencias son paquetes de Debian.
+
+### Mantenimiento (sin cambio de funcionamiento)
+- Cuatro avisos de bandit eran falsos positivos y ahora están marcados en el código con su motivo: dos `urlopen` con URL fija (`http://127.0.0.1` y una constante `https`) y el MD5/SHA-1 de `scripts/apt-repo.py`, que el formato de repositorio APT exige.
+
+### Pruebas
+- 38 pruebas de integración y 19 de CSRF (navegador normal, curl, Safari antiguo, detrás de nginx, otro puerto, `Origin: null`, escrituras de cada servicio).
+- Prueba en Chromium: la interfaz sigue funcionando y una página de otro puerto ya no logra escribir.
+- Instalación y purga del `.deb`.
 
 ## 1.2.1 — 2026-10-15
 

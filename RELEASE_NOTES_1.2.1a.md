@@ -2,10 +2,13 @@
 
 ## Español
 
-Corrección de seguridad sobre 1.2.1.
+Seguridad sobre 1.2.1. No hay cambios visibles en la interfaz.
 
-- **CSRF:** las peticiones que modifican datos se rechazan (403) si no son del mismo origen. `SameSite=Strict` no frenaba a otra página del mismo host en otro puerto.
-- **Escaneo automático** en GitHub: secretos en todo el historial, bandit, shellcheck y Actions al día.
+- **CSRF:** las peticiones que modifican datos se rechazan (403) si no vienen de la propia página. Antes, otra página del mismo host en otro puerto podía crear o borrar datos con tu sesión.
+- **Escaneo automático** en GitHub: claves y secretos en todo el historial, análisis de Python (bandit), shellcheck y Actions al día.
+- Cuatro falsos positivos del escáner quedaron marcados en el código. Sin cambio de funcionamiento.
+
+**Qué notarás:** nada. curl y los scripts siguen funcionando; solo se bloquean las escrituras que un navegador marca como ajenas.
 
 **Instalar o actualizar**
 ```bash
@@ -17,10 +20,13 @@ Los datos se conservan. Recarga el navegador con Ctrl+Shift+R. Detalle en [CHANG
 
 ## English
 
-Security fix on top of 1.2.1.
+Security update on top of 1.2.1. No visible UI changes.
 
-- **CSRF:** requests that change data are rejected (403) unless same-origin. `SameSite=Strict` did not stop another page on the same host and a different port.
-- **Automatic scanning** on GitHub: secrets across the whole history, bandit, shellcheck and up-to-date Actions.
+- **CSRF:** requests that change data are rejected (403) unless they come from the page itself. Before, another page on the same host and a different port could create or delete data with your session.
+- **Automatic scanning** on GitHub: keys and secrets across the whole history, Python analysis (bandit), shellcheck and up-to-date Actions.
+- Four scanner false positives are now marked in the code. No behaviour change.
+
+**What you will notice:** nothing. curl and scripts keep working; only writes that a browser flags as foreign are blocked.
 
 **Install or upgrade**
 ```bash
