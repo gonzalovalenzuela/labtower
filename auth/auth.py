@@ -327,7 +327,7 @@ def _burn_time(password: str):
 # Cuenta inicial de una instalación nueva: «admin» con una contraseña ALEATORIA (ya no existe admin/admin) y cambio obligatorio en el primer
 # inicio de sesión. La contraseña se guarda en initial-admin-password (modo 600) hasta que se cambia, y se muestra al instalar y en el journal.
 # EN: Initial account of a fresh install: "admin" with a RANDOM password (admin/admin no longer exists) and a mandatory change at first login.
-#     The password is kept in initial-admin-password (mode 600) until it is changed, and shown at install time and in the journal.
+#     The password is kept in initial-admin-password (mode 600) until it is changed, and shown at install time (never in the journal).
 INITIAL_PW_FILE = USERS_FILE.with_name("initial-admin-password")
 
 def clear_initial_password():
@@ -350,8 +350,10 @@ def ensure_initial_user() -> bool:
         save_users(users)
         try: atomic_write(INITIAL_PW_FILE, pw + "\n")
         except OSError as e: log.warning(f"cannot write {INITIAL_PW_FILE}: {e}")
-        log.warning(f"Initial administrator created. User: admin  Password: {pw}  (you must change it at the first login; "
-                    f"it is also in {INITIAL_PW_FILE})")
+        # La contraseña NO se escribe en el journal (lo leen otros usuarios del sistema): está en el archivo 0600 y el instalador la muestra.
+        # EN: The password is NOT written to the journal (other system users can read it): it is in the 0600 file and the installer shows it.
+        log.warning(f"Initial administrator created (user: admin). Password: see {INITIAL_PW_FILE} (mode 600); "
+                    f"you must change it at the first login")
         return True
 
 # Caché de users.json: se vuelve a leer del disco solo cuando cambia el archivo (firma = fecha de modificación + tamaño).
@@ -620,7 +622,9 @@ def authenticate(username: str, password: str) -> dict | None:
                 users = load_users()
                 if username in users and users[username].get("password_hash") == stored:
                     users[username]["password_hash"] = _hash(password)
+                    users[username]["must_change_password"] = True    # old fixed-salt hash: ask for a new password
                     save_users(users)
+            user = copy.deepcopy(user); user["must_change_password"] = True
         except Exception as e:
             log.warning(f"could not upgrade the password hash of {username}: {e}")
     return copy.deepcopy(user)

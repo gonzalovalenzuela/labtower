@@ -888,7 +888,7 @@ function renderUsers(users) {
       <td class="col-actions">
         <button class="btn-ri edit" onclick='editUser(${JSON.stringify(u)})' title="Edit">✎</button>
         ${u.username !== me?.username
-          ? `<button class="btn-ri del" onclick="confirmDelete('${esc(u.username)}')" title="Delete">✕</button>`
+          ? `<button class="btn-ri del" onclick="confirmDelete(${jsa(u.username)})" title="Delete">✕</button>`
           : '<span style="width:30px;display:inline-block"></span>'}
       </td>`;
     tbody.appendChild(tr);
@@ -1057,10 +1057,10 @@ function tpRender() {
       <td><span class="ucreated">${tpFmtSize(b.size)}</span></td>
       <td><span class="ucreated">${new Date(b.mtime*1000).toLocaleString(locale)}</span></td>
       <td class="col-actions">
-        <button class="btn-ri edit" onclick="tpDownload('${n}')" title="${t('tpDownload')}">⬇</button>
-        <button class="btn-ri edit" onclick="tpCheck('${n}')" title="${t('tpCheck')}">✔</button>
-        <button class="btn-ri edit" onclick="tpRestoreOpen('${n}')" title="${t('tpRestore')}">⟲</button>
-        <button class="btn-ri del" onclick="tpDelete('${n}')" title="${t('tpDelete')}">✕</button>
+        <button class="btn-ri edit" onclick="tpDownload(${jsa(b.name)})" title="${t('tpDownload')}">⬇</button>
+        <button class="btn-ri edit" onclick="tpCheck(${jsa(b.name)})" title="${t('tpCheck')}">✔</button>
+        <button class="btn-ri edit" onclick="tpRestoreOpen(${jsa(b.name)})" title="${t('tpRestore')}">⟲</button>
+        <button class="btn-ri del" onclick="tpDelete(${jsa(b.name)})" title="${t('tpDelete')}">✕</button>
       </td>`;
     tb.appendChild(tr);
   });
@@ -1186,6 +1186,8 @@ function tpProgEnd(state) {
 // Escapa HTML antes de insertar texto de usuarios, equipos o la red en la página: evita inyección de código (XSS).
 // EN: Escape HTML before inserting text from users, devices or the network into the page: prevents code injection (XSS).
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// Valor seguro dentro de un handler on*="…": literal JS entre comillas, escapado también para HTML.
+function jsa(s){return esc(JSON.stringify(String(s)));}
 let _tt;
 // Aviso emergente breve (error si isErr).
 // EN: Short pop-up notice (error if isErr).

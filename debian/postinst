@@ -325,4 +325,4 @@ if [ -n "$INIT_PW" ]; then
     echo "  Initial password: $INIT_PW"
     echo "  (random; you must change it at the first login; also in $DATA_DIR/initial-admin-password until then)"
 fi
-echo "  HTTPS (optional): sudo pi-console-https enable [--redirect]"
+echo "  HTTPS (recommended, encrypts password and session): sudo pi-console-https enable --redirect"

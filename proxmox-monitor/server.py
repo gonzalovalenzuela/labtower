@@ -590,7 +590,7 @@ class H(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length", 0))
             if n < 0 or n > 8192: return None
             return json.loads(self.rfile.read(n))
-        except: return None
+        except (ValueError, TypeError, OSError): return None
 
     def _tok(self):
         return auth.token_from_request(dict(self.headers), self.headers.get("Cookie", ""))

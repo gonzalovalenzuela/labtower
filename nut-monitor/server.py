@@ -280,28 +280,28 @@ def _calc_watts(vars_):
     try:
         rp = float(vars_.get("ups.realpower") or 0)
         if rp > 0: return rp
-    except: pass
+    except (TypeError, ValueError): pass
     try:
         pva = float(vars_.get("ups.power") or 0)
         pf  = float(vars_.get("ups.powerfactor") or 0)
         if pva > 0 and pf > 0: return round(pva * pf, 1)
-    except: pass
+    except (TypeError, ValueError): pass
     try:
         vout = float(vars_.get("output.voltage") or 0)
         iout = float(vars_.get("output.current") or 0)
         if vout > 0 and iout > 0: return round(vout * iout, 1)
-    except: pass
+    except (TypeError, ValueError): pass
     try:
         pva  = float(vars_.get("ups.power") or 0)
         load = float(vars_.get("ups.load") or 0)
         if pva > 0 and load > 0: return round(pva * (load / 100) * 0.8, 1)
-    except: pass
+    except (TypeError, ValueError): pass
     try:
         nom  = float(vars_.get("ups.realpower.nominal") or
                      vars_.get("ups.power.nominal") or 0)
         load = float(vars_.get("ups.load") or 0)
         if nom > 0 and load > 0: return round(nom * (load / 100), 1)
-    except: pass
+    except (TypeError, ValueError): pass
     return 0.0
 
 # ─── NUT Client ───────────────────────────────────────────────────────────────
@@ -385,7 +385,7 @@ class NUTClient:
         try:
             with self._conn() as s: lines = self._cmd(s, "VER")
             return next((l.strip() for l in lines if l.strip()), "")
-        except: return ""
+        except (OSError, ValueError): return ""
 
 # Anota en la línea de tiempo del Resumen los cambios de estado del UPS: pasa a batería, batería baja o vuelve la red.
 # El estado se agrupa en tres modos (red, batería, batería baja) para no anotar cada variación de carga («OL CHRG»).
@@ -660,7 +660,7 @@ class H(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length", 0))
             if n < 0 or n > 8192: return None
             return json.loads(self.rfile.read(n))
-        except: return None
+        except (ValueError, TypeError, OSError): return None
 
     def _token(self):
         return auth.token_from_request(dict(self.headers),

@@ -1085,7 +1085,7 @@ function renderTable(){
         ${h.new_device?`<span style="margin-left:5px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:rgba(67,97,238,.15);color:var(--blue);vertical-align:middle">${t('newDevice')}</span>`:''}
       </td>
       <td onclick="event.stopPropagation()">
-        <span class="os-badge" style="cursor:pointer" onclick="editOs('${esc(h.ip)}')" title="${esc(t('editDevice'))}">
+        <span class="os-badge" style="cursor:pointer" onclick="editOs(${jsa(h.ip)})" title="${esc(t('editDevice'))}">
           <span style="font-size:12px">${TYPE_META[devType(h)].icon}</span>
           <span style="font-size:11px;font-weight:600;color:${TYPE_META[devType(h)].color}">${esc(tType(devType(h)))}</span>
         </span>${h.type_manual?'<span class="os-manual-badge">manual</span>':''}
@@ -1097,7 +1097,7 @@ function renderTable(){
             <span class="os-${os.replace(/\s/g,'')}" style="font-size:11px;font-weight:600">${esc(tOs(os))}</span>
           </span>
           ${h.os_manual?'<span class="os-manual-badge">manual</span>':''}
-          <button onclick="editOs('${esc(h.ip)}')" title="${esc(t('editDevice'))}"
+          <button onclick="editOs(${jsa(h.ip)})" title="${esc(t('editDevice'))}"
             style="background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:11px;padding:2px 4px;border-radius:4px;transition:color .15s"
             onmouseover="this.style.color='var(--teal)'" onmouseout="this.style.color='var(--text-dim)'">✎</button>
         </div>
@@ -1128,11 +1128,11 @@ function renderTable(){
           ${h.vendor?`<div class="detail-value">Vendor: ${esc(h.vendor)}</div>`:''}${h.mac?`<div class="detail-value">MAC: ${esc(h.mac)}</div>`:''}
           ${h.os_raw?`<div class="detail-value" style="color:var(--text-dim);font-size:10px">${esc(h.os_raw)}</div>`:''}
           <div class="detail-value" style="margin-top:6px">
-            <button class="btn-rescan"${canScan()?'':' style="display:none"'} onclick="rescanHost('${esc(h.ip)}');event.stopPropagation()">
+            <button class="btn-rescan"${canScan()?'':' style="display:none"'} onclick="rescanHost(${jsa(h.ip)});event.stopPropagation()">
               <svg style="width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2" viewBox="0 0 24 24"><polyline points="23,4 23,10 17,10"/><path d="M20.49,15a9,9,0,1,1-2.12-9.36L23,10"/></svg>
               Re-escanear
             </button>
-            <button class="btn-edit-host" onclick="editAlias('${esc(h.ip)}');event.stopPropagation()">✎ Alias</button>
+            <button class="btn-edit-host" onclick="editAlias(${jsa(h.ip)});event.stopPropagation()">✎ Alias</button>
           </div>
         </div>
         <div class="detail-section">
@@ -1542,6 +1542,8 @@ async function editAlias(ip){
 // Escapa HTML antes de insertar texto de usuarios, equipos o la red en la página: evita inyección de código (XSS).
 // EN: Escape HTML before inserting text from users, devices or the network into the page: prevents code injection (XSS).
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+// Valor seguro dentro de un handler on*="…": literal JS entre comillas, escapado también para HTML.
+function jsa(s){return esc(JSON.stringify(String(s)));}
 function relTime(ts){const d=Math.floor((Date.now()-ts)/1000);if(d<60)return t('ago',d+'s');if(d<3600)return t('ago',Math.floor(d/60)+'m');if(d<86400)return t('ago',Math.floor(d/3600)+'h');return new Date(ts).toLocaleDateString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit'});}
 function updateClock(){const el=document.getElementById('clock');if(el)el.textContent=new Date().toTimeString().slice(0,8);}
 let _tt;

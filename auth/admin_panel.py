@@ -135,7 +135,7 @@ class H(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length", 0))
             if n < 0 or n > 8192: return None
             return json.loads(self.rfile.read(n))
-        except: return None
+        except (ValueError, TypeError, OSError): return None
 
     # Token de sesión de la petición, desde la cabecera Authorization o la cookie.
     # EN: Session token of the request, from the Authorization header or the cookie.
