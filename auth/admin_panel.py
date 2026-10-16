@@ -212,6 +212,7 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path.rstrip("/") or "/"
         tok  = self._tok()
+        if auth.serve_asset(self, STATIC_DIR, path): return   # .js / .css de la página
 
         # La página de administración es pública; los datos no (se piden con la sesión).
         # EN: The admin page is public; the data is not (it is requested with the session).
