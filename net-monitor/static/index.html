@@ -507,7 +507,7 @@ const LANG={
     noResults:'No results',noHosts2:'No hosts discovered',filterHint:'Try a different filter.',
     startScanHint:'Start a scan to discover hosts on the network.',
     initialScanNet:(n)=>`Nothing has been scanned yet. Network detected: ${n}`,initialScanBtn:'Run initial scan',
-    uptimeEmpty:'No events recorded yet',uptimeStats:(h,d)=>`${h}h monitored · ${d} outage${d!==1?'s':''}`,
+    uptimeEmpty:'No events recorded yet',uptimeStats:(h,d)=>`${h} monitored · ${d} outage${d!==1?'s':''}`,
     availHistory:'Availability history',
     chartMonitoring:'Monitoring — data will appear after several scans',
     snmpTitle:'SNMP source',snmpDesc:'Reads the ARP table of a switch or router to get MAC addresses (and vendor) for hosts the Pi cannot see directly. Requires the snmp package on the Pi.',snmpMissing:'snmpwalk is not installed — run: apt install snmp',snmpEnable:'Use SNMP during scans',snmpHost:'Switch / router IP',snmpPort:'Port',snmpVersion:'Version',snmpTimeout:'Timeout (s)',snmpCommunity:'Community',snmpUser:'Username',snmpLevel:'Security level',snmpAuthProto:'Auth',snmpAuthPass:'Auth password',snmpPrivProto:'Privacy',snmpPrivPass:'Privacy password',snmpTest:'Test',snmpTesting:'Testing…',snmpSaved:'SNMP settings saved',snmpEntries:'ARP entries found',snmpKeep:'unchanged',snmpLast:'Last scan',ouiTitle:'MAC vendor database',ouiDesc:'Wireshark manuf list, downloaded weekly (ieee-data is used as fallback).',ouiAuto:'Update weekly',ouiUpdate:'Update now',ouiUpdating:'Downloading…',ouiPrefixes:'prefixes',ouiNever:'not downloaded yet',ouiDone:'Vendor database updated',osUnknown:'Unknown',colType:'Type',deviceTypes:'Device type',editDevice:'Edit device',fieldType:'Device type',fieldOs:'Operating system',autoDetect:'Auto-detect',saved:'Device updated',tComputer:'Computer',tRouter:'Router',tSwitch:'Switch',tAp:'Access point',tStorage:'Storage / NAS',tPhone:'Phone',tTv:'TV',tCamera:'Camera',tAppliance:'Appliance',tPrinter:'Printer',tTablet:'Tablet',tOther:'Other',newDevice:'NEW',
@@ -538,7 +538,7 @@ const LANG={
     noResults:'Sin resultados',noHosts2:'Sin hosts descubiertos',filterHint:'Prueba otro filtro.',
     startScanHint:'Inicia un escaneo para descubrir hosts en la red.',
     initialScanNet:(n)=>`Aún no se ha escaneado nada. Red detectada: ${n}`,initialScanBtn:'Hacer escaneo inicial',
-    uptimeEmpty:'Sin eventos registrados aún',uptimeStats:(h,d)=>`${h}h monitoreado · ${d} caída${d!==1?'s':''}`,
+    uptimeEmpty:'Sin eventos registrados aún',uptimeStats:(h,d)=>`${h} monitoreado · ${d} caída${d!==1?'s':''}`,
     availHistory:'Historial de disponibilidad',
     chartMonitoring:'Monitoreando — los datos aparecerán tras varios escaneos',
     snmpTitle:'Fuente SNMP',snmpDesc:'Lee la tabla ARP de un switch o router para obtener MAC (y vendor) de equipos que el Pi no ve directamente. Requiere el paquete snmp en el Pi.',snmpMissing:'snmpwalk no está instalado — ejecuta: apt install snmp',snmpEnable:'Usar SNMP en los escaneos',snmpHost:'IP del switch / router',snmpPort:'Puerto',snmpVersion:'Versión',snmpTimeout:'Timeout (s)',snmpCommunity:'Community',snmpUser:'Usuario',snmpLevel:'Nivel de seguridad',snmpAuthProto:'Auth',snmpAuthPass:'Password auth',snmpPrivProto:'Privacidad',snmpPrivPass:'Password privacidad',snmpTest:'Probar',snmpTesting:'Probando…',snmpSaved:'Configuración SNMP guardada',snmpEntries:'entradas ARP encontradas',snmpKeep:'sin cambios',snmpLast:'Último escaneo',ouiTitle:'Base de datos de vendors MAC',ouiDesc:'Lista manuf de Wireshark, descargada cada semana (ieee-data como respaldo).',ouiAuto:'Actualizar cada semana',ouiUpdate:'Actualizar ahora',ouiUpdating:'Descargando…',ouiPrefixes:'prefijos',ouiNever:'aún no descargada',ouiDone:'Base de vendors actualizada',osUnknown:'Desconocido',colType:'Tipo',deviceTypes:'Tipo de dispositivo',editDevice:'Editar dispositivo',fieldType:'Tipo de dispositivo',fieldOs:'Sistema operativo',autoDetect:'Detección automática',saved:'Dispositivo actualizado',tComputer:'Equipo',tRouter:'Router',tSwitch:'Switch',tAp:'Access point',tStorage:'Storage / NAS',tPhone:'Teléfono',tTv:'TV',tCamera:'Cámara',tAppliance:'Electrodoméstico',tPrinter:'Impresora',tTablet:'Tablet',tOther:'Otro',newDevice:'NUEVO',
@@ -1180,7 +1180,7 @@ function renderTable(){
                 const since=hist[0]?.ts||now;
                 const hrs=Math.round((now-since)/3600);
                 const downs=hist.filter(e=>e.event==='down').length;
-                return t('uptimeStats',hrs,downs);
+                return t('uptimeStats',hrs>=24?Math.floor(hrs/24)+'d '+(hrs%24)+'h':hrs+'h',downs);
               })()}
             </div>
           </div>
