@@ -89,7 +89,7 @@ def _local_ip():
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.connect(("8.8.8.8", 80)); return s.getsockname()[0]
-    except: return "127.0.0.1"
+    except OSError: return "127.0.0.1"
 
 # Dirección de broadcast de la subred, suponiendo /24 (x.x.x.255). Se puede forzar con WOL_BROADCAST.
 # EN: Broadcast address of the subnet, assuming /24 (x.x.x.255). Can be forced with WOL_BROADCAST.
@@ -273,7 +273,7 @@ class H(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length", 0))
             if n < 0 or n > 8192: return None
             return json.loads(self.rfile.read(n))
-        except: return None
+        except (ValueError, TypeError, OSError): return None
 
     def _tok(self):
         return auth.token_from_request(dict(self.headers),

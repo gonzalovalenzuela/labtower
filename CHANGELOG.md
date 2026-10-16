@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.1d — 2026-10-16
+
+Endurecimiento tras la auditoría de 1.2.1c. Sin cambios visibles en la interfaz.
+
+### Seguridad
+- **XSS almacenado en botones de las páginas (Medio):** nombres de servidores UPS, clústeres Proxmox, etc. se insertaban dentro de `onclick="…('${nombre}')"`. El escape HTML no protege ahí: un nombre con `'` ejecutaba JavaScript en el navegador de otro administrador. Ahora todos los valores van como literal JS (`jsa()` = `JSON.stringify` + escape HTML) en los 5 paneles (29 botones). Probado en Chromium con el nombre `x');window.__pwn=1;('`: el botón recibe el texto exacto y no se ejecuta nada.
+- **Contraseña inicial fuera del journal:** el log solo indica el archivo (modo 600); el instalador la sigue mostrando en pantalla.
+- **Hash antiguo (SHA-256 con sal fija):** al iniciar sesión se migra a scrypt **y** se exige cambiar la contraseña.
+- **Errores:** los 12 `except:` sin tipo ahora capturan solo los errores esperados (ya no `KeyboardInterrupt`/`SystemExit`).
+- El instalador recomienda `pi-console-https enable --redirect` (cifra contraseña y sesión).
+
+### No incluido
+- CSP sin `'unsafe-inline'`: hay ~170 manejadores `on…=` y ~300 atributos `style=` en las páginas; requiere reescribirlas. Queda pendiente.
+
 ## 1.2.1c — 2026-10-16
 
 Revisión de seguridad del código. Sin cambios visibles en la interfaz.

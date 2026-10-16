@@ -798,8 +798,8 @@ function renderTable(){
       <td class="col-ip">${ipCell(d)}</td>
       <td class="col-lw">${lwText}</td>
       <td class="col-act">
-        <button class="btn-wake" id="wake-${d.id}" onclick="wakeDevice('${d.id}')" ${canWake?'':'disabled title="'+esc(t('noPerm'))+'"'}>Wake</button>
-        ${canEdit?`<button class="btn-ri e" onclick="editDevice('${d.id}')" title="${esc(t('titEdit'))}">✎</button><button class="btn-ri d" onclick="confirmDelete('${d.id}')" title="${esc(t('titDelete'))}">✕</button>`:''}
+        <button class="btn-wake" id="wake-${d.id}" onclick="wakeDevice(${jsa(d.id)})" ${canWake?'':'disabled title="'+esc(t('noPerm'))+'"'}>Wake</button>
+        ${canEdit?`<button class="btn-ri e" onclick="editDevice(${jsa(d.id)})" title="${esc(t('titEdit'))}">✎</button><button class="btn-ri d" onclick="confirmDelete(${jsa(d.id)})" title="${esc(t('titDelete'))}">✕</button>`:''}
       </td>`;
     tbody.appendChild(tr);
   });
@@ -1030,6 +1030,8 @@ function closeModals(){document.querySelectorAll('.overlay').forEach(o=>o.classL
 // Escapa HTML antes de insertar texto de usuarios, equipos o la red en la página: evita inyección de código (XSS).
 // EN: Escape HTML before inserting text from users, devices or the network into the page: prevents code injection (XSS).
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+// Valor seguro dentro de un handler on*="…": literal JS entre comillas, escapado también para HTML.
+function jsa(s){return esc(JSON.stringify(String(s)));}
 function relTime(ts){const d=Math.floor((Date.now()-ts)/1000);if(d<60)return t('ago',d+'s');if(d<3600)return t('ago',Math.floor(d/60)+'m');if(d<86400)return t('ago',Math.floor(d/3600)+'h');return new Date(ts).toLocaleDateString((_lang==='es'?'es-CL':'en-GB'),{day:'2-digit',month:'2-digit'});}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 function updateClock(){const el=document.getElementById('hclock');if(el)el.textContent=new Date().toTimeString().slice(0,8);}

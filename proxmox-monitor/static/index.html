@@ -614,7 +614,7 @@ function renderSidebar(){
         <div class="cluster-nav-name ${isActive?'act':''}">${esc(c.name)}</div>
         <div class="cluster-nav-host">${esc(c.host)}:${c.port}${nodeCount?' · '+t('nodeCountNav',nodeCount):''}</div>
       </div>
-      ${c.id!=='local'&&ME?.permissions?.pve==='admin'?`<button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;padding:2px 4px" onclick="confirmDelete('${c.id}','${esc(c.name)}');event.stopPropagation()">✕</button>`:''}`;
+      ${c.id!=='local'&&ME?.permissions?.pve==='admin'?`<button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;padding:2px 4px" onclick="confirmDelete(${jsa(c.id)},${jsa(c.name)});event.stopPropagation()">✕</button>`:''}`;
     list.appendChild(div);
   });
 }
@@ -681,7 +681,7 @@ function renderDashboard(){
   const names=nodes.map(n=>n.name), pinnedSet=new Set(cluster.layout?.pinned||[]);
   if(isPveAdmin()&&(cluster.layout?.order?.length||cluster.layout?.pinned?.length)){
     const bar=document.createElement('div');bar.className='layout-bar';
-    bar.innerHTML=`<button onclick="resetLayout('${esc(cluster.id)}')">${esc(t('resetOrder'))}</button>`;
+    bar.innerHTML=`<button onclick="resetLayout(${jsa(cluster.id)})">${esc(t('resetOrder'))}</button>`;
     main.appendChild(bar);
   }
   nodes.forEach(node=>{const card=buildNodeCard(node);decorateCard(card,cluster,node.name,names,pinnedSet);grid.appendChild(card);});
@@ -781,10 +781,10 @@ function decorateCard(card,cluster,name,names,pinned){
   const canL=names.slice(0,i).some(n=>!pinned.has(n)), canR=names.slice(i+1).some(n=>!pinned.has(n));
   const tools=document.createElement('div');tools.className='node-tools';
   tools.innerHTML=admin
-    ?`<button class="node-tool" ${isPinned||!canL?'disabled':''} title="${esc(t('moveEarlier'))}" onclick="moveNode('${cid}','${nm}',-1)">‹</button>
-      <button class="node-tool" ${isPinned||!canR?'disabled':''} title="${esc(t('moveLater'))}" onclick="moveNode('${cid}','${nm}',1)">›</button>
+    ?`<button class="node-tool" ${isPinned||!canL?'disabled':''} title="${esc(t('moveEarlier'))}" onclick="moveNode(${jsa(cluster.id)},${jsa(name)},-1)">‹</button>
+      <button class="node-tool" ${isPinned||!canR?'disabled':''} title="${esc(t('moveLater'))}" onclick="moveNode(${jsa(cluster.id)},${jsa(name)},1)">›</button>
       ${isPinned?'':`<span class="node-tool grab" title="${esc(t('dragReorder'))}" data-grab>⠿</span>`}
-      <button class="node-tool pin${isPinned?' on':''}" title="${esc(t(isPinned?'unpinNode':'pinNode'))}" onclick="togglePin('${cid}','${nm}')">${isPinned?'📌':'📍'}</button>`
+      <button class="node-tool pin${isPinned?' on':''}" title="${esc(t(isPinned?'unpinNode':'pinNode'))}" onclick="togglePin(${jsa(cluster.id)},${jsa(name)})">${isPinned?'📌':'📍'}</button>`
     :(isPinned?`<span class="node-tool pin on" title="${esc(t('unpinNode'))}">📌</span>`:'');
   const badge=hd.querySelector('.node-badge');
   hd.insertBefore(tools,badge);
@@ -905,7 +905,7 @@ function buildVMSection(items, type, running, nodeName){
     return(a.vmid||0)-(b.vmid||0);
   });
   return `<div>
-    <div class="section-hd" onclick="toggleSection('${id}')">
+    <div class="section-hd" onclick="toggleSection(${jsa(id)})">
       <span class="section-title">${type === 'VM' ? t('sectionVMs') : t('sectionCTs')}</span>
       <div style="display:flex;align-items:center;gap:8px">
         <span class="section-count">${running}/${items.length} ${t('running')}</span>
@@ -1038,6 +1038,8 @@ function fmtUptime(s){if(!s)return'—';const d=Math.floor(s/86400),h=Math.floor
 // Escapa HTML antes de insertar texto de usuarios, equipos o la red en la página: evita inyección de código (XSS).
 // EN: Escape HTML before inserting text from users, devices or the network into the page: prevents code injection (XSS).
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+// Valor seguro dentro de un handler on*="…": literal JS entre comillas, escapado también para HTML.
+function jsa(s){return esc(JSON.stringify(String(s)));}
 function updateClock(){const el=document.getElementById('clock');if(el)el.textContent=new Date().toTimeString().slice(0,8);}
 function closeModals(){document.querySelectorAll('.overlay').forEach(o=>o.classList.remove('show'));}
 let _tt;
