@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.1c — 2026-10-16
+
+Revisión de seguridad del código. Sin cambios visibles en la interfaz.
+
+### Seguridad
+- **WOL: el límite de encendidos por IP se podía evadir.** Tomaba la IP de `X-Forwarded-For`, que el cliente puede falsear. Ahora usa la IP que fija nginx (`auth.client_ip`), igual que el resto de módulos.
+- **Net Monitor: escaneo de una IP solo dentro de la red escaneada.** Antes `POST /api/scan/start` aceptaba cualquier IP (Internet, `127.0.0.1`, `169.254.x`) con permiso `execute`, lo que servía para sondear desde la Pi. Ahora responde 400 fuera de la red.
+- **Validación de entradas más estricta:** `valid_host` y el nombre de usuario usan `fullmatch` (con `match` + `$` pasaba un salto de línea final).
+- **Escape de HTML:** en UPS y Proxmox `esc()` ahora también escapa comillas, para los valores que van dentro de atributos.
+
+### Revisado sin hallazgos
+Restauración de respaldos como root (lista blanca, sin enlaces ni `..`, copia privada, NUT/nginx solo por consola), sudoers, SNMP (credenciales fuera de la línea de comandos), fijado de certificado de Proxmox, hashing scrypt, cookies, cabeceras y límites de nginx, endurecimiento de systemd, bandit (sin severidad media/alta) y shellcheck.
+
 ## 1.2.1b — 2026-10-16
 
 ### Cambios

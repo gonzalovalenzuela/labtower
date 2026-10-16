@@ -1310,8 +1310,12 @@ class H(BaseHTTPRequestHandler):
                 return self._json(409, {"error": "Scan already running"})
             single = (body.get("ip") or "").strip() or None
             if single:
-                try: ipaddress.ip_address(single)
+                try: ip_obj = ipaddress.ip_address(single)
                 except ValueError: return self._json(400, {"error": "Invalid IP"})
+                # Solo equipos de la red escaneada: así la Pi no sirve para sondear Internet ni ella misma (127.0.0.1, 169.254.x).
+                # EN: Only hosts of the scanned network: so the Pi cannot be used to probe the Internet or itself (127.0.0.1, 169.254.x).
+                if ip_obj.version != ipaddress.ip_network(NETWORK, strict=False).version or ip_obj not in ipaddress.ip_network(NETWORK, strict=False):
+                    return self._json(400, {"error": "IP outside the scanned network"})
             threading.Thread(target=run_scan, kwargs={"single_ip": single}, daemon=True).start()
             self._json(200, {"ok": True, "message": single or NETWORK})
 

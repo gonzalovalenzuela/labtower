@@ -395,7 +395,7 @@ class H(BaseHTTPRequestHandler):
                 perms[k] = body.get(k + "_permission", dflt)
             if not uname or not pwd:
                 return self._json(400, {"error": "Username and password are required"})
-            if not re.match(r'^[a-zA-Z0-9_\-]{2,32}$', uname):
+            if not re.fullmatch(r'[a-zA-Z0-9_\-]{2,32}', uname):
                 return self._json(400, {"error": "Invalid username (2-32 alphanumeric chars)"})
             perr = auth.password_error(pwd, uname)
             if perr:

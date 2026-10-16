@@ -725,7 +725,7 @@ def safe_filename(name, maxlen: int = 120) -> str:
 _HOSTNAME_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,251}[A-Za-z0-9])?$")
 def valid_host(h) -> bool:
     if not isinstance(h, str) or not h or len(h) > 253: return False
-    if _HOSTNAME_RE.match(h): return True
+    if _HOSTNAME_RE.fullmatch(h): return True
     try:
         import ipaddress
         ipaddress.ip_address(h); return True
