@@ -51,7 +51,8 @@ def parse_fields(text: str) -> list:
 
 
 def hashes(p: Path):
-    md5, s1, s256 = hashlib.md5(), hashlib.sha1(), hashlib.sha256()
+    # MD5 and SHA1 are fields the APT Release format requires; they are not used for security here.
+    md5, s1, s256 = hashlib.md5(usedforsecurity=False), hashlib.sha1(usedforsecurity=False), hashlib.sha256()
     with open(p, "rb") as f:
         for blk in iter(lambda: f.read(1 << 20), b""):
             md5.update(blk); s1.update(blk); s256.update(blk)

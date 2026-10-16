@@ -708,6 +708,7 @@ class H(BaseHTTPRequestHandler):
     # EN: POST: login/logout, node order, add cluster, certificate fingerprint, pin certificate and connection test.
     #     Administration actions require Proxmox "admin" level.
     def do_POST(self):
+        if auth.cross_origin(self.headers): return self._json(403, {"error": "Cross-origin request blocked"})
         path = urlparse(self.path).path.rstrip("/")
         tok  = self._tok()
         body = self._body()
@@ -867,6 +868,7 @@ class H(BaseHTTPRequestHandler):
     # DELETE /api/clusters/<id>: elimina un cluster y detiene su consulta (solo admin).
     # EN: DELETE /api/clusters/<id>: remove a cluster and stop its polling (admin only).
     def do_DELETE(self):
+        if auth.cross_origin(self.headers): return self._json(403, {"error": "Cross-origin request blocked"})
         path = urlparse(self.path).path
         tok  = self._tok()
         if not auth.check_permission(tok, "pve", "admin"):

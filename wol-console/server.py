@@ -371,6 +371,7 @@ class H(BaseHTTPRequestHandler):
     # EN: POST: login/logout, add device, ping, wake one and wake all.
     #     Order: login (public) → require a session → protected routes according to the level needed.
     def do_POST(self):
+        if auth.cross_origin(self.headers): return self._json(403, {"error": "Cross-origin request blocked"})
         path = urlparse(self.path).path.rstrip("/")
         tok  = self._tok()
         body = self._body()
@@ -506,6 +507,7 @@ class H(BaseHTTPRequestHandler):
     # DELETE /api/devices/<id>: elimina un equipo (solo admin). El id debe ser un UUID.
     # EN: DELETE /api/devices/<id>: remove a device (admin only). The id must be a UUID.
     def do_DELETE(self):
+        if auth.cross_origin(self.headers): return self._json(403, {"error": "Cross-origin request blocked"})
         path = urlparse(self.path).path
         tok  = self._tok()
         if not auth.check_permission(tok, "wol", "admin"):

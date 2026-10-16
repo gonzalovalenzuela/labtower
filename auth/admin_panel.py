@@ -75,7 +75,7 @@ def _module_health(name, port, tok):
     hdr = {"Authorization": f"Bearer {tok}"} if tok else {}
     try:
         req = urllib.request.Request(f"http://127.0.0.1:{port}/api/health", headers=hdr)
-        with urllib.request.urlopen(req, timeout=4) as r:
+        with urllib.request.urlopen(req, timeout=4) as r:  # fixed http://127.0.0.1 URL  # nosec B310
             return json.loads(r.read())
     except urllib.error.HTTPError as e:              # 503 still carries the report
         try: return json.loads(e.read())
@@ -268,6 +268,7 @@ class H(BaseHTTPRequestHandler):
     # EN: POST: login, logout, backups (create / verify / restore), user creation and password change.
     #     Order: public routes (login) → require admin → protected routes.
     def do_POST(self):
+        if auth.cross_origin(self.headers): return self._json(403, {"error": "Cross-origin request blocked"})
         path = urlparse(self.path).path.rstrip("/")
         tok  = self._tok()
         if path == "/api/teleporter/upload":
@@ -466,6 +467,7 @@ class H(BaseHTTPRequestHandler):
     # PUT /api/users/<nombre>: actualiza niveles de permiso (WOL, UPS, Net, Proxmox). Solo admins.
     # EN: PUT /api/users/<name>: updates permission levels (WOL, UPS, Net, Proxmox). Admins only.
     def do_PUT(self):
+        if auth.cross_origin(self.headers): return self._json(403, {"error": "Cross-origin request blocked"})
         path = urlparse(self.path).path.rstrip("/")
         tok  = self._tok()
         body = self._body()
@@ -510,6 +512,7 @@ class H(BaseHTTPRequestHandler):
     # DELETE: borrar un respaldo o un usuario. Un usuario no puede eliminarse a sí mismo; al borrar se cierran sus sesiones.
     # EN: DELETE: remove a backup or a user. A user cannot delete themselves; deleting closes their sessions.
     def do_DELETE(self):
+        if auth.cross_origin(self.headers): return self._json(403, {"error": "Cross-origin request blocked"})
         path = urlparse(self.path).path
         tok  = self._tok()
         if not auth.check_permission(tok, "wol", "admin") and \

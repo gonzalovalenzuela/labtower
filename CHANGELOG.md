@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.2 — 2026-10-15
+
+### Seguridad
+- **CSRF:** las peticiones que modifican datos (POST, PUT, DELETE) se rechazan con 403 si no son del mismo origen. Antes, otra página del mismo host en otro puerto podía crear o borrar datos con la sesión del usuario. curl y scripts, que no llevan cookie del navegador, siguen funcionando.
+- **Escaneo automático** en GitHub (`security.yml`): gitleaks sobre todo el historial, bandit, compilación y shellcheck, en cada push y cada semana. Dependabot para las Actions.
+- bandit limpio: tres falsos positivos documentados en el código.
+
 ## 1.2.1 — 2026-10-15
 
 Versión estable de la serie 1.2 (reúne 1.2.0a–x). El funcionamiento es el de 1.2.0x, salvo lo indicado.

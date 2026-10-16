@@ -569,7 +569,7 @@ def oui_update() -> dict:
     """Download the Wireshark manuf file, validate it, replace the cache atomically, backfill hosts."""
     global _oui_db
     req = Request(OUI_URL, headers={"User-Agent": "pi-console-net-monitor"})
-    with urlopen(req, timeout=60) as r:
+    with urlopen(req, timeout=60) as r:  # constant https URL  # nosec B310
         data = r.read(10 * 1024 * 1024 + 1)
     if len(data) > 10 * 1024 * 1024:
         raise RuntimeError("Downloaded file too large")
@@ -1271,6 +1271,7 @@ class H(BaseHTTPRequestHandler):
     # EN: POST: login/logout, start scan and, for admin only, OUI, SNMP, Pi-hole, edit/delete devices and interval.
     #     Order: login (public) → require a session → protected routes.
     def do_POST(self):
+        if auth.cross_origin(self.headers): return self._json(403, {"error": "Cross-origin request blocked"})
         path = urlparse(self.path).path.rstrip("/")
         tok  = self._tok()
         body = self._body()

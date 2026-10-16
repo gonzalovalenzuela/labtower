@@ -789,6 +789,32 @@ def token_from_request(headers, cookie_str="") -> str | None:
     return None
 
 
+# ─── Defensa CSRF ─────────────────────────────────────────────────────────────
+# SameSite=Strict no distingue puertos ni subdominios del mismo host, y un POST «text/plain» no necesita preflight CORS: otra página del
+# mismo host podría escribir con la sesión del usuario. Toda petición que modifica datos se rechaza si el navegador dice que no es del mismo origen.
+# Sec-Fetch-Site (navegadores modernos) manda; si falta (Safari/iOS antiguos) se compara el host de «Origin» con el de «Host» (nginx pasa Host sin puerto).
+# Sin ninguna de las dos cabeceras (curl, scripts) no hay cookie ambiente que abusar y se permite.
+# EN: CSRF defence. SameSite=Strict does not tell ports or sibling subdomains of the same host apart, and a "text/plain" POST needs no CORS
+#     preflight: another page on the same host could write with the user's session. Every request that changes data is rejected when the browser
+#     says it is not same-origin. Sec-Fetch-Site (modern browsers) decides; if missing (old Safari/iOS) the host of "Origin" is compared with "Host"
+#     (nginx passes Host without the port). With neither header (curl, scripts) there is no ambient cookie to abuse, so it is allowed.
+def cross_origin(headers) -> bool:
+    site = headers.get("Sec-Fetch-Site")
+    if site is not None:
+        return site.strip().lower() not in ("same-origin", "none")
+    origin = headers.get("Origin")
+    if origin is None:
+        return False
+    try:
+        from urllib.parse import urlsplit
+        oh = (urlsplit(origin).hostname or "").lower()
+    except ValueError:
+        return True
+    hh = headers.get("Host", "").strip().lower()
+    hh = hh[1:hh.index("]")] if hh.startswith("[") and "]" in hh else hh.split(":")[0]
+    return not oh or oh != hh
+
+
 # ─── Version ──────────────────────────────────────────────────────────────────
 # Versión instalada: la variable PICONSOLE_VERSION si existe; si no, el archivo VERSION de la raíz de la instalación.
 # EN: Installed version: the PICONSOLE_VERSION variable if set; otherwise the VERSION file at the install root.
