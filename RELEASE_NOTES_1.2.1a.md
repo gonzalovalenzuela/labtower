@@ -1,4 +1,4 @@
-# Pi Console 1.2.2
+# Pi Console 1.2.1a
 
 ## Español
 
@@ -9,9 +9,9 @@ Corrección de seguridad sobre 1.2.1.
 
 **Instalar o actualizar**
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.2/pi-console_1.2.2_all.deb
-sha256sum pi-console_1.2.2_all.deb    # 8cbc57e78cae8318fa04851971a1f7050ac4f57bd744f96925cecdc76aea3379
-sudo apt-get install -y ./pi-console_1.2.2_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1a/pi-console_1.2.1a_all.deb
+sha256sum pi-console_1.2.1a_all.deb    # b093b39f0445f976f023cc89b77aeaec6ca0a9e2081a2340019488b0b44df92f
+sudo apt-get install -y ./pi-console_1.2.1a_all.deb
 ```
 Los datos se conservan. Recarga el navegador con Ctrl+Shift+R. Detalle en [CHANGELOG.md](https://github.com/gonzalovalenzuela/pi-console/blob/main/CHANGELOG.md).
 
@@ -24,8 +24,8 @@ Security fix on top of 1.2.1.
 
 **Install or upgrade**
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.2/pi-console_1.2.2_all.deb
-sha256sum pi-console_1.2.2_all.deb    # 8cbc57e78cae8318fa04851971a1f7050ac4f57bd744f96925cecdc76aea3379
-sudo apt-get install -y ./pi-console_1.2.2_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1a/pi-console_1.2.1a_all.deb
+sha256sum pi-console_1.2.1a_all.deb    # b093b39f0445f976f023cc89b77aeaec6ca0a9e2081a2340019488b0b44df92f
+sudo apt-get install -y ./pi-console_1.2.1a_all.deb
 ```
 Data is kept. Hard-reload the browser (Ctrl+Shift+R). Details in [CHANGELOG.md](https://github.com/gonzalovalenzuela/pi-console/blob/main/CHANGELOG.md).
