@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.2 — 2026-10-15
+## 1.2.1a — 2026-10-15
 
 ### Seguridad
 - **CSRF:** las peticiones que modifican datos (POST, PUT, DELETE) se rechazan con 403 si no son del mismo origen. Antes, otra página del mismo host en otro puerto podía crear o borrar datos con la sesión del usuario. curl y scripts, que no llevan cookie del navegador, siguen funcionando.
