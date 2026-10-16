@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.1b — 2026-10-16
+
+### Cambios
+- **Duraciones en días desde las 24 h**, igual en todos los paneles. Ejemplo: `40h` ahora se ve `1d 16h`.
+  - Resumen: tiempo encendida de la Pi y "hace …" de la línea de tiempo (antes pasaba a días a las 48 h).
+  - Net Monitor: "monitoreado" (antes `40h monitoreado`, ahora `1d 16h monitoreado`).
+  - Proxmox y Admin Panel ya lo hacían así; sin cambios.
+
 ## 1.2.1a — 2026-10-15
 
 Seguridad sobre 1.2.1. No hay cambios visibles en la interfaz.

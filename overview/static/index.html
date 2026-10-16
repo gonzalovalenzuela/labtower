@@ -229,7 +229,7 @@ const worst=(...a)=>a.reduce((m,x)=>LV[x]>LV[m]?x:m,'ok');
 const barCls=(p,w,c)=>p>=c?'c':p>=w?'w':'g';
 const bar=(p,w,c)=>`<div class="bar ${barCls(p,w,c)}"><div style="width:${Math.max(0,Math.min(100,p))}%"></div></div>`;
 const pill=(lv,txt)=>`<span class="pill ${lv}"><i></i>${esc(txt)}</span>`;
-function dur(sec){sec=Math.floor(sec);if(sec<60)return sec+T('s');const m=Math.floor(sec/60);if(m<60)return m+' '+T('min');const h=Math.floor(m/60);if(h<48)return h+T('h')+(m%60?' '+(m%60)+T('min'):'');return Math.floor(h/24)+T('d')+' '+(h%24)+T('h')}
+function dur(sec){sec=Math.floor(sec);if(sec<60)return sec+T('s');const m=Math.floor(sec/60);if(m<60)return m+' '+T('min');const h=Math.floor(m/60);if(h<24)return h+T('h')+(m%60?' '+(m%60)+T('min'):'');return Math.floor(h/24)+T('d')+' '+(h%24)+T('h')}
 function ago(ts){const s=Math.floor(Date.now()/1000-ts);if(s<30)return T('now');return (lang==='es'?T('ago')+' ':'')+dur(s)+(lang==='es'?'':' '+T('ago'))}
 async function jget(url){const r=await fetch(url,{credentials:'same-origin'});if(r.status===401||r.status===403){const e=new Error('auth');e.code=r.status;throw e}if(!r.ok)throw new Error(url+' '+r.status);return r.json()}
 function spark(vals,cls){ // mini gráfico de línea / tiny line chart
