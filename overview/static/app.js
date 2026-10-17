@@ -139,10 +139,10 @@ function renderPVE(d){
   return sev;
 }
 // ───────── Net ─────────
-const TYPE_SH_EN={computer:'PC',phone:'Phone',router:'Router',switch:'Switch',ap:'Wi-Fi',storage:'NAS',tv:'TV',camera:'Cam',appliance:'Appl.',printer:'Print.',tablet:'Tablet',other:'Other'};
-const TYPE_SH_ES={computer:'PC',phone:'Teléf.',router:'Router',switch:'Switch',ap:'Wi-Fi',storage:'NAS',tv:'TV',camera:'Cám.',appliance:'Electro.',printer:'Impres.',tablet:'Tablet',other:'Otro'};
-const TYPE_ES={computer:'Computador',phone:'Teléfono',router:'Router',switch:'Switch',ap:'AP Wi-Fi',storage:'Almacenamiento',tv:'TV',camera:'Cámara',appliance:'Electrodoméstico',printer:'Impresora',tablet:'Tablet',other:'Otro'};
-const TYPE_EN={computer:'Computer',phone:'Phone',router:'Router',switch:'Switch',ap:'Wi-Fi AP',storage:'Storage',tv:'TV',camera:'Camera',appliance:'Appliance',printer:'Printer',tablet:'Tablet',other:'Other'};
+const TYPE_SH_EN={computer:'PC',phone:'Phone',router:'Router',switch:'Switch',ap:'Wi-Fi',storage:'NAS',tv:'TV',camera:'Cam',appliance:'Appl.',printer:'Print.',tablet:'Tablet',console:'Console',server:'Server',voip:'VoIP',ups:'UPS',speaker:'Speaker',other:'Other'};
+const TYPE_SH_ES={computer:'PC',phone:'Teléf.',router:'Router',switch:'Switch',ap:'Wi-Fi',storage:'NAS',tv:'TV',camera:'Cám.',appliance:'Electro.',printer:'Impres.',tablet:'Tablet',console:'Consola',server:'Servidor',voip:'Tel. IP',ups:'UPS',speaker:'Altavoz',other:'Otro'};
+const TYPE_ES={computer:'Computador',phone:'Teléfono',router:'Router',switch:'Switch',ap:'AP Wi-Fi',storage:'Almacenamiento',tv:'TV',camera:'Cámara',appliance:'Electrodoméstico',printer:'Impresora',tablet:'Tablet',console:'Consola de juegos',server:'Servidor',voip:'Teléfono IP',ups:'UPS',speaker:'Altavoz inteligente',other:'Otro'};
+const TYPE_EN={computer:'Computer',phone:'Phone',router:'Router',switch:'Switch',ap:'Wi-Fi AP',storage:'Storage',tv:'TV',camera:'Camera',appliance:'Appliance',printer:'Printer',tablet:'Tablet',console:'Game Console',server:'Server',voip:'IP Phone',ups:'UPS',speaker:'Smart Speaker',other:'Other'};
 function renderNet(d){
   const el=$('c-net'),hosts=d.hosts||[],sc=d.scan||{};let sev='ok';
   const on=hosts.filter(h=>h.online),off=hosts.length-on.length;

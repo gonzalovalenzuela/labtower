@@ -222,3 +222,13 @@ td{padding:10px 14px;vertical-align:middle}
 /* Pie con la versión (lo rellena footer.js) */
 .pc-footer{margin-top:auto;padding:14px 20px;text-align:center;font-size:11px;color:var(--text-dim);font-family:var(--mono);letter-spacing:.2px}
 .pc-ver{margin-top:18px;text-align:center;font-size:11px;color:var(--text-dim);font-family:var(--mono)}
+
+
+/* iPad / pantallas táctiles y app web (Añadir a pantalla de inicio) / EN: iPad, touch screens and web-app mode */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+body{overscroll-behavior:none}
+a,button,select,summary,label,[role=button]{touch-action:manipulation}
+@media (hover:none) and (pointer:coarse){
+  input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{font-size:16px!important}
+  button,.btn{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+}
