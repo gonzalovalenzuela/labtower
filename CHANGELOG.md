@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.1g — 2026-10-17
+
+### iPad y app web
+- **Manifest de app web** (`/manifest.webmanifest`) e iconos PNG (180, 192, 512 y maskable). Al usar *Añadir a pantalla de inicio* en iPad (o instalar en Android/Chrome) la página se abre a pantalla completa, sin barra de Safari ni botón X. Atajo a `/overview/?kiosk=1`.
+- Las 8 páginas llevan las metas de iOS (`apple-mobile-web-app-capable`, título, icono, `theme-color` claro/oscuro).
+- CSS táctil: sin zoom automático al enfocar un campo (16 px en pantallas táctiles), sin resaltado al tocar, sin zoom por doble toque y sin rebote al desplazar.
+- nginx: `location = /manifest.webmanifest` con tipo `application/manifest+json` (cambia el conffile `pi-console-site.conf`; si lo editaste, dpkg preguntará).
+
+### Net Monitor: menos «Other»
+- **Nueva categoría Game Console**, detectada sola por fabricante de la MAC (Nintendo, Sony Interactive Entertainment, Valve, Oculus/Meta), por nombre (`Nintendo-Switch`, `PS4/PS5`, `Xbox`, `SteamDeck`, `Quest`…) y por puertos (PS Remote Play 9295–9297, Xbox Live 3074). Un «Nintendo-Switch» ya no se confunde con un switch de red.
+- **Cuatro categorías nuevas:** Servidor (Proxmox 8006, ESXi 902, VMware/Supermicro, nombres como `pve`, `srv`, `plex`, `pihole`…), Teléfono IP (Yealink, Polycom, Snom, SIP 5060/5061…), UPS (APC, Eaton, CyberPower, Tripp Lite, NUT 3493) y Altavoz inteligente (Sonos, Echo, HomePod, Nest, Bose…). Sonos y Echo dejan de contarse como electrodoméstico.
+- Puertos nuevos en el escaneo: 902, 3074, 3493, 5060, 5061, 8006, 9295. Si definiste `SCAN_PORTS` a mano, añádelos para usar la detección por puerto (la detección por fabricante y nombre funciona igual).
+- Los equipos se reclasifican en el siguiente escaneo; los tipos elegidos a mano se respetan. Overview muestra también las categorías nuevas.
+
 ## 1.2.1f — 2026-10-16
 
 CSP estricta. Sin cambios visibles en la interfaz.

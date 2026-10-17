@@ -86,7 +86,7 @@ def _default_network():
     except Exception:
         return "192.0.2.0/24"
 NETWORK       = os.environ.get("SCAN_NETWORK",   _default_network())
-SCAN_PORTS    = os.environ.get("SCAN_PORTS",     "21,22,23,25,53,80,111,135,139,443,445,548,554,873,1883,2049,3260,3306,3389,5000,5001,5357,5432,5555,5900,6379,7547,8001,8002,8008,8009,8080,8291,8443,9100,27017,62078")
+SCAN_PORTS    = os.environ.get("SCAN_PORTS",     "21,22,23,25,53,80,111,135,139,443,445,548,554,873,902,1883,2049,3074,3260,3306,3389,3493,5000,5001,5060,5061,5357,5432,5555,5900,6379,7547,8001,8002,8006,8008,8009,8080,8291,8443,9100,9295,27017,62078")
 SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL", 3600))
 PORT_TIMEOUT  = float(os.environ.get("PORT_TIMEOUT", 0.5))
 MAX_WORKERS   = int(os.environ.get("MAX_WORKERS", 30))
@@ -114,7 +114,8 @@ PORT_NAMES = {
     8080:"HTTP-Alt", 8443:"HTTPS-Alt", 27017:"MongoDB", 62078:"iTunes",
     111:"RPC", 135:"MSRPC", 548:"AFP", 873:"rsync", 2049:"NFS", 3260:"iSCSI",
     5000:"DSM/HTTP", 5001:"DSM/HTTPS", 5357:"WSDD", 5555:"ADB", 7547:"TR-069",
-    8001:"Tizen", 8002:"Tizen-TLS", 8008:"Cast", 8009:"Cast", 8291:"Winbox", 9100:"Print"
+    8001:"Tizen", 8002:"Tizen-TLS", 8008:"Cast", 8009:"Cast", 8291:"Winbox", 9100:"Print",
+    902:"VMware", 3074:"Xbox Live", 3493:"NUT", 5060:"SIP", 5061:"SIP-TLS", 8006:"Proxmox", 9295:"PS Remote Play"
 }
 
 # Grupos de sistema operativo que la página ofrece para filtrar y editar.
@@ -476,7 +477,8 @@ def refresh_snmp():
 # ─── Device identification (OS + device type, no nmap) ───────────────────────
 # Tipos de dispositivo que identify() puede asignar (y que el usuario puede elegir a mano).
 # EN: Device types identify() can assign (and the user can choose by hand).
-DEVICE_TYPES = ["computer", "phone", "router", "switch", "ap", "storage", "tv", "camera", "appliance", "printer", "tablet", "other"]
+DEVICE_TYPES = ["computer", "phone", "router", "switch", "ap", "storage", "tv", "camera", "appliance", "printer", "tablet",
+                "console", "server", "voip", "ups", "speaker", "other"]
 
 # OUI = los 3 primeros bytes de una MAC identifican al fabricante. Fuentes: la lista de Wireshark (se descarga y se actualiza cada semana) y, opcional, el paquete ieee-data del sistema.
 # EN: OUI = the first 3 bytes of a MAC identify the manufacturer. Sources: the Wireshark list (downloaded and updated weekly) and, optionally, the system's ieee-data package.
@@ -689,11 +691,11 @@ V_CAMERA  = ("hikvision", "dahua", "axis communications", "reolink", "amcrest", 
              "vivotek", "uniview", "annke", "hanwha", "wyze", "lorex", "swann", "tp-link tapo")
 V_TV      = ("roku", "vizio", "hisense", "tcl ", "tcl,", "lg electronics", "sony visual", "skyworth")
 V_APPL    = ("espressif", "tuya", "shelly", "allterco", "sonoff", "itead", "irobot", "roborock", "ecovacs",
-             "dyson", "signify", "philips lighting", "sonos", "amazon technologies", "ecobee", "nest labs",
+             "dyson", "signify", "philips lighting", "amazon technologies", "ecobee", "nest labs",
              "lifx", "meross", "govee", "bsh", "miele", "whirlpool", "electrolux", "smartthings", "xiaomi communications")
 H_CAMERA  = re.compile(r"cam(era)?([-_.\d]|$)|^ipc|nvr|dvr|doorbell|hikvision|dahua|reolink", re.I)
 H_TV      = re.compile(r"(^|[-_.])tv([-_.\d]|$)|bravia|roku|fire-?tv|apple-?tv|chromecast|webos|tizen|android-?tv|shield|smarttv", re.I)
-H_APPL    = re.compile(r"^esp[-_]?\d|esp32|esp8266|shelly|tasmota|roomba|alexa|echo|sonos|homekit|plug|bulb|lamp|fridge|washer|dryer|oven|vacuum|robot|aspirad|thermostat", re.I)
+H_APPL    = re.compile(r"^esp[-_]?\d|esp32|esp8266|shelly|tasmota|roomba|homekit|plug|bulb|lamp|fridge|washer|dryer|oven|vacuum|robot|aspirad|thermostat", re.I)
 V_PRINTER = ("brother industries", "canon", "seiko epson", "epson", "lexmark", "xerox", "ricoh", "kyocera",
              "konica minolta", "oki data", "zebra technologies", "fuji xerox", "toshiba tec", "pantum", "sindoh")
 H_PRINTER = re.compile(r"print|laserjet|officejet|deskjet|photosmart|pixma|(^|[-_])mfc-?\d|(^|[-_])dcp-?\d|^npi[0-9a-f]|^hp[0-9a-f]{6}|epson|brother|xerox|lexmark|ricoh|kyocera|(^|[-_.])mfp([-_.\d]|$)", re.I)
@@ -704,6 +706,20 @@ H_STORAGE = re.compile(r"nas|diskstation|synology|qnap|truenas|freenas|openmedia
 H_ROUTER  = re.compile(r"router|gateway|gw\d*\b|firewall|opnsense|pfsense|mikrotik|openwrt|fritz|^rt[-_]", re.I)
 H_AP      = re.compile(r"(^|[-_.])(ap|uap|wap|wifi|wlan|unifi)([-_.\d]|$)|access.?point|eap\d", re.I)
 H_SWITCH  = re.compile(r"switch|(^|[-_.])(sw|usw)([-_.\d]|$)|poe", re.I)
+
+# Consolas de juegos, servidores, telefonía IP, UPS y altavoces: categorías que antes caían en «other».
+# EN: Game consoles, servers, IP telephony, UPS and speakers: categories that used to end up as "other".
+V_CONSOLE = ("nintendo", "sony interactive entertainment", "sony computer entertainment", "valve corp", "oculus vr",
+             "meta platforms technologies")
+H_CONSOLE = re.compile(r"nintendo|(^|[-_.])(ps[2-5]|psp|psvita|vita)([-_.\d]|$)|playstation|xbox|steam-?deck|(^|[-_.])(oculus|quest)([-_.\d]|$)|(^|[-_.])wii(u)?([-_.\d]|$)", re.I)
+V_SERVER  = ("vmware", "super micro", "supermicro", "proxmox")
+H_SERVER  = re.compile(r"(^|[-_.])(pve|proxmox|esxi|vcenter|hyperv|docker|k8s|kube|srv|server|node|vm|sql|plex|jellyfin|emby|grafana|nextcloud|gitea|portainer|homeassistant|hass|pihole|pi-hole)([-_.\d]|$)", re.I)
+V_VOIP    = ("yealink", "polycom", "fanvil", "snom", "avaya", "mitel", "sangoma", "digium", "obihai", "alcatel-lucent enterprise")
+H_VOIP    = re.compile(r"voip|(^|[-_.])sip([-_.\d]|$)|ip-?phone|yealink|polycom|snom|fanvil|asterisk|freepbx|(^|[-_.])(sep|spa)[0-9a-f]{6,}|^gxp\d|^ht\d{3}|^phone[-_]", re.I)
+V_UPS     = ("american power conversion", "cyber power", "cyberpower", "tripp lite", "eaton", "riello", "apc ")
+H_UPS     = re.compile(r"(^|[-_.])ups([-_.\d]|$)|apc[-_]?\d|^(smt|srt|smx)\d|cyberpower|eaton|powerware|^pdu", re.I)
+V_SPEAKER = ("sonos", "bose", "harman", "denon", "marantz", "libratone", "bang & olufsen")
+H_SPEAKER = re.compile(r"sonos|homepod|(^|[-_.])echo([-_.\d]|$)|echo[-_ ]?(dot|show|studio|pop|flex)|alexa|google[-_ ]?home|nest[-_ ]?(mini|audio|hub)|bose|soundbar|speaker|airplay|chromecast-?audio", re.I)
 
 # Decide (SO, tipo) sumando puntos por cada pista: fabricante, banner, nombre, puertos abiertos y TTL. Gana el tipo con más puntos; sin pistas suficientes queda «other».
 # EN: Decide (OS, type) by adding points for each clue: vendor, banner, name, open ports and TTL. The type with the most points wins; without enough clues it stays "other".
@@ -778,6 +794,33 @@ def identify(ip: str, open_ports: list, ttl: int, hostname: str, banner: str,
     if _has(ban, ("printer", "jetdirect", "laserjet", "officejet", "cups", "brother", "lexmark", "xerox", "ricoh")): s["printer"] += 3
     # tablet
     if H_TABLET.search(host):                         s["tablet"] += 5
+    # game console (Nintendo, PlayStation, Xbox, Steam Deck, Quest)
+    if _has(ven, V_CONSOLE):                          s["console"] += 6
+    if H_CONSOLE.search(host):                        s["console"] += 8
+    if 3074 in ports:                                 s["console"] += 2
+    if ports & {9295, 9296, 9297}:                    s["console"] += 4
+    if s["console"] >= 6:                             # «Nintendo-Switch» no es un switch de red / a "Nintendo-Switch" is not a network switch
+        s["switch"] = s["tv"] = s["appliance"] = s["tablet"] = 0
+    # server / hypervisor / self-hosted services
+    if _has(ven, V_SERVER):                           s["server"] += 3
+    if H_SERVER.search(host):                         s["server"] += 4
+    if 8006 in ports:                                 s["server"] += 5
+    if 902 in ports:                                  s["server"] += 3
+    if _has(ban, ("proxmox", "esxi", "vmware", "idrac", "supermicro", "cockpit", "portainer")): s["server"] += 4
+    if ports & {3306, 5432, 6379, 27017}:             s["server"] += 2
+    # IP phone / PBX
+    if _has(ven, V_VOIP):                             s["voip"] += 5
+    if H_VOIP.search(host):                           s["voip"] += 5
+    if ports & {5060, 5061}:                          s["voip"] += 5
+    # UPS / power
+    if _has(ven, V_UPS):                              s["ups"] += 5
+    if H_UPS.search(host):                            s["ups"] += 5
+    if 3493 in ports:                                 s["ups"] += 5
+    if _has(ban, ("apc", "powernet", "network management card", "eaton", "cyberpower")): s["ups"] += 4
+    if "schneider electric" in ven:                   s["ups"] += 3
+    # smart speaker
+    if _has(ven, V_SPEAKER):                          s["speaker"] += 5
+    if H_SPEAKER.search(host):                        s["speaker"] += 6
 
     best = max(DEVICE_TYPES[:-1], key=lambda t: s[t])
     dtype = best if s[best] >= 4 else ("computer" if s["computer"] >= 1 else "other")
@@ -785,7 +828,7 @@ def identify(ip: str, open_ports: list, ttl: int, hostname: str, banner: str,
     # ── OS ──
     win_strong = ("windows" in ban or "microsoft" in ban or "iis" in ban or H_WIN.search(host)
                   or "microsoft" in ven)
-    if dtype in ("router", "switch", "ap", "tv", "camera", "appliance", "printer"):
+    if dtype in ("router", "switch", "ap", "tv", "camera", "appliance", "printer", "console", "voip", "ups", "speaker"):
         os_name = "IoT"
     elif dtype == "storage":
         os_name = "Linux"
