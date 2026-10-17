@@ -273,11 +273,14 @@ window.addEventListener('resize',fitGrid);
 
 // ───────── Modo kiosko / kiosk mode ─────────
 let wl=null;
+// Como app web (iPad: «Añadir a pantalla de inicio») la página ya ocupa toda la pantalla; pedir pantalla completa además hace que iPadOS dibuje un botón X para salir.
+// EN: As a web app (iPad "Add to Home Screen") the page already fills the screen; also asking for fullscreen makes iPadOS draw an exit X button.
+const isStandalone=()=>navigator.standalone===true||(window.matchMedia&&matchMedia('(display-mode: standalone)').matches);
 async function setKiosk(on){
   document.body.classList.toggle('kiosk',on);document.documentElement.classList.toggle('kiosk',on);fitGrid();if(on&&typeof asOn!=='undefined'){asOn=false;asPaint()}
   try{const u=new URL(location.href);on?u.searchParams.set('kiosk','1'):u.searchParams.delete('kiosk');history.replaceState(null,'',u)}catch(e){}
   try{
-    if(on){if(document.documentElement.requestFullscreen&&!document.fullscreenElement)await document.documentElement.requestFullscreen();if(navigator.wakeLock)wl=await navigator.wakeLock.request('screen')}
+    if(on){if(!isStandalone()&&document.documentElement.requestFullscreen&&!document.fullscreenElement)await document.documentElement.requestFullscreen();if(navigator.wakeLock)wl=await navigator.wakeLock.request('screen')}
     else{if(document.fullscreenElement)await document.exitFullscreen();if(wl){wl.release();wl=null}}
   }catch(e){}
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1h — 2026-10-17
+
+- **iPad: sin botón X en modo kiosko.** Instalada como app web, la página ya ocupa toda la pantalla; el botón *Kiosko* además pedía pantalla completa al navegador y iPadOS dibujaba una X para salir. Ahora no la pide cuando se abre desde el icono de pantalla de inicio (en un navegador normal sigue igual). El manifest ya no declara `fullscreen`.
+
 ## 1.2.1g — 2026-10-17
 
 ### iPad y app web
