@@ -94,6 +94,9 @@ function setLang(l){
 
 // Estado: sesión, equipos, filtros activos, búsqueda y equipo expandido.
 // EN: State: session, devices, active filters, search and expanded device.
+// Enlace profundo desde otras páginas: /net/?ip=192.168.0.10 abre ese equipo expandido.
+// EN: Deep link from other pages: /net/?ip=192.168.0.10 opens that device expanded.
+let _deepIp=(()=>{try{const v=new URLSearchParams(location.search).get('ip')||'';return /^\d{1,3}(\.\d{1,3}){3}$/.test(v)?v:null}catch(e){return null}})();
 let ME=null, scanNetwork='', scanRunning=false, hosts=[], filterOs='ALL', filterType='ALL', filterStatus='ALL', searchQ='', expanded=null, pollTimer=null;
 let sortKeyName=null, sortDir=1;   // null = orden por defecto (online primero, luego IP)
 try{const sv=JSON.parse(localStorage.getItem('pi-net-sort')||'null');if(sv&&['status','ip','os','vendor','ports','latency','seen'].includes(sv.k)){sortKeyName=sv.k;sortDir=sv.d===-1?-1:1;}}catch(e){}
@@ -333,6 +336,7 @@ async function fetchData(){
       hosts = d.hosts||[];
       renderOsFilters();
       renderStats(d.scan);
+      if(_deepIp){const dh=hosts.find(x=>x.ip===_deepIp);_deepIp=null;if(dh){expanded=dh.ip;filterOs='ALL';filterType='ALL';filterStatus='ALL';searchQ='';renderOsFilters();renderTable();requestAnimationFrame(()=>{const r=document.querySelector('tr.expanded');if(r)r.scrollIntoView({block:'center'})});return}}
       renderTable();
     }
   }catch(e){console.error(e);}

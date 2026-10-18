@@ -266,7 +266,7 @@ function renderSidebar(){
     div.innerHTML=`<span class="cluster-dot ${dotCls}"></span>
       <div style="flex:1;min-width:0">
         <div class="cluster-nav-name ${isActive?'act':''}">${esc(c.name)}</div>
-        <div class="cluster-nav-host">${esc(c.host)}:${c.port}${nodeCount?' · '+t('nodeCountNav',nodeCount):''}</div>
+        <div class="cluster-nav-host"><span data-nethost="${esc(c.host)}">${esc(c.host)}</span>:${c.port}${nodeCount?' · '+t('nodeCountNav',nodeCount):''}</div>
       </div>
       ${c.id!=='local'&&ME?.permissions?.pve==='admin'?`<button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;padding:2px 4px" data-on-click="confirmDelete" data-on-click-args="${jsargs([c.id,c.name])}" data-on-click-stop="1">✕</button>`:''}`;
     list.appendChild(div);
@@ -306,7 +306,7 @@ function renderDashboard(){
   if(!cluster) return;
   const snap=cluster.snap;
   document.getElementById('tb-title').textContent=cluster.name;
-  document.getElementById('tb-sub').textContent=cluster.host+':'+cluster.port+(snap?.data?.version?' · PVE '+snap.data.version:'');
+  {const sub=document.getElementById('tb-sub');sub.textContent='';const hs=document.createElement('span');hs.textContent=cluster.host;hs.setAttribute('data-nethost',cluster.host);hs.setAttribute('data-nethost-click','1');sub.appendChild(hs);sub.appendChild(document.createTextNode(':'+cluster.port+(snap?.data?.version?' · PVE '+snap.data.version:'')));}
   const bn=document.getElementById('pin-banner');
   if(bn){
     bn.style.display=cluster.pinned?'none':'';

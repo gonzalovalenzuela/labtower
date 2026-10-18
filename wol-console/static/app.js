@@ -362,8 +362,8 @@ function renderTable(){
 }
 function ipCell(d){
   const n=d.net;
-  if(n&&n.ip&&n.ip!==d.ip)return '<span title="'+esc(t('netIp'))+'">'+esc(n.ip)+'</span>'+(d.ip?'<span style="color:var(--text-dim);font-size:10px;display:block;text-decoration:line-through">'+esc(d.ip)+'</span>':'');
-  return d.ip?esc(d.ip):'<span style="opacity:.25">—</span>';
+  if(n&&n.ip&&n.ip!==d.ip)return '<span title="'+esc(t('netIp'))+'" data-nethost="'+esc(n.ip)+'" data-nethost-click="1">'+esc(n.ip)+'</span>'+(d.ip?'<span style="color:var(--text-dim);font-size:10px;display:block;text-decoration:line-through">'+esc(d.ip)+'</span>':'');
+  return d.ip?'<span data-nethost="'+esc(d.ip)+'" data-nethost-click="1">'+esc(d.ip)+'</span>':'<span style="opacity:.25">—</span>';
 }
 // ── Net Monitor: pick a detected host (shared MAC/IP/name) ──
 // Integración con Net Monitor: al agregar un equipo se puede elegir uno ya detectado en la red (se copian su MAC, IP y nombre).

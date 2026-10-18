@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.1i — 2026-10-18
+
+- **Tarjeta de Net Monitor al pasar el ratón por una IP.** En UPS Monitor (servidores NUT), Proxmox (clústeres), WOL Console (columna IP) y Overview (eventos y «nuevos dispositivos») la IP o el nombre del equipo se subraya con puntos; al pasar el ratón aparece una tarjeta con lo que Net Monitor sabe del equipo: nombre/alias, estado, tipo, SO, fabricante, MAC, latencia, puertos abiertos y última vez visto. El botón *Ver detalle completo en Net Monitor* abre `/net/?ip=…` con ese equipo ya expandido. En WOL, Proxmox (barra superior) y Overview, el clic sobre la IP lleva directo al detalle; en pantallas táctiles el toque abre la tarjeta. En las listas de servidores laterales el clic sigue seleccionando el servidor.
+- Se busca por IP o, si el módulo guarda un nombre, por nombre de equipo/alias. Si el equipo no está en Net Monitor, la tarjeta lo dice. Quien no tenga permiso sobre Net Monitor ve «Sin acceso».
+- Net Monitor acepta `?ip=192.168.0.10` (enlace profundo) y quita los filtros para mostrar ese equipo.
+- Seguridad: la tarjeta se construye con `textContent` (sin `innerHTML`); probado con un nombre de equipo `<img onerror=…>`. Cumple la CSP estricta (`ipcard.js`/`ipcard.css` propios de cada módulo).
+
 ## 1.2.1h — 2026-10-17
 
 - **iPad: sin botón X en modo kiosko.** Instalada como app web, la página ya ocupa toda la pantalla; el botón *Kiosko* además pedía pantalla completa al navegador y iPadOS dibujaba una X para salir. Ahora no la pide cuando se abre desde el icono de pantalla de inicio (en un navegador normal sigue igual). El manifest ya no declara `fullscreen`.
