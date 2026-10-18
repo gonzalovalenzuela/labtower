@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1k — 2026-10-18
+
+- **UPS Monitor: las IP de los clientes conectados** (chips de la sección *Clientes* del detalle de cada UPS) también abren la tarjeta de Net Monitor (al pasar el ratón, o al tocar en iPhone/iPad) y llevan al detalle completo del equipo.
+
 ## 1.2.1j — 2026-10-18
 
 - **iPhone/iPad: la tarjeta de Net Monitor no se abría al tocar una IP.** El toque genera eventos de ratón sintéticos que cerraban la tarjeta al instante. Ahora se ignoran en pantallas táctiles, y cualquier IP subrayada abre la tarjeta al tocarla (también en las listas laterales); el área táctil es más grande. Un segundo toque la cierra; el botón *Ver detalle completo* abre Net Monitor con el equipo expandido. Probado con emulación de iPhone y datos de UPS simulados.
