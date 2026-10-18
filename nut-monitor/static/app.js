@@ -562,7 +562,7 @@ function renderDashboard(){
         </div>
         ${row.clients.length?`<div class="clients-section">
           <span class="clients-lbl">${t('clientsLabel')}</span>
-          <div class="client-chips">${row.clients.map(c=>`<span class="client-chip">${esc(c)}</span>`).join('')}</div>
+          <div class="client-chips">${row.clients.map(c=>`<span class="client-chip"><span data-nethost="${esc(c)}" data-nethost-click="1">${esc(c)}</span></span>`).join('')}</div>
         </div>`:''}
         <div class="vchart-section">
           <div class="vchart-header">
