@@ -155,7 +155,7 @@ function renderNet(d){
   el.innerHTML=`<div class="ch"><h2>${T('net')}</h2>${hosts.length?pill(sev,sev==='ok'?'OK':T('attn')):''}<a class="go" href="/net/">${T('open')}</a></div>`+
    (hosts.length?`<div class="kpis"><div class="kpi"><b>${on.length}</b><span>${T('online')}</span></div><div class="kpi"><b>${hosts.length}</b><span>${T('known')}</span></div><div class="kpi"><b>${off}</b><span>${T('offline')}</span></div><div class="kpi"><b style="font-size:1rem;white-space:nowrap">${esc(scanTxt)}</b><span>${T('lastscan')}</span></div></div>
    <div class="donutbox">${donut(parts)}<div class="legend${parts.length>5?' lg2':''}">${parts.map(p=>`<div><i style="background:${p.color}"></i><span class="lb"><span class="lf">${esc(p.label)}</span><span class="ls">${esc(p.short)}</span></span><span class="ln">· ${p.n}</span></div>`).join('')}</div></div>
-   <div><div class="sub" style="margin-bottom:5px;font-weight:600">${T('newdev')} (48 ${T('h')})</div>${fresh.length?`<div class="list">${fresh.slice(0,5).map(h=>`<div>${pill('warn','NEW')}<code>${esc(h.ip)}</code><span>${esc(h.alias||h.hostname||h.vendor||'')}</span></div>`).join('')}</div>`:`<div class="empty">${T('nonew')}</div>`}</div>`:`<div class="empty">${T('nonet')}</div>`);
+   <div><div class="sub" style="margin-bottom:5px;font-weight:600">${T('newdev')} (48 ${T('h')})</div>${fresh.length?`<div class="list">${fresh.slice(0,5).map(h=>`<div>${pill('warn','NEW')}<code data-nethost="${esc(h.ip)}" data-nethost-click="1">${esc(h.ip)}</code><span>${esc(h.alias||h.hostname||h.vendor||'')}</span></div>`).join('')}</div>`:`<div class="empty">${T('nonew')}</div>`}</div>`:`<div class="empty">${T('nonet')}</div>`);
   return hosts.length?sev:'ok';
 }
 // ───────── Pi ─────────
@@ -187,8 +187,11 @@ const EVT={
 };
 // Texto de un evento en el idioma actual; si la clave no se conoce, el texto en inglés guardado / Event text in the current language; unknown key → stored English text
 function evText(e){const t=e.k&&EVT[lang][e.k];return t?t.replace(/\{(\w+)\}/g,(_,k)=>(e.p&&e.p[k]!=null?e.p[k]:'')).replace(/\s+/g,' ').trim():e.tx}
+// Texto del evento con la IP (si la trae) marcada para la tarjeta de Net Monitor. Todo va escapado; el span lo crea este código.
+// EN: Event text with the IP (if any) marked for the Net Monitor card. Everything is escaped; the span is created by this code.
+function evHtml(e){const s=esc(evText(e)),ip=e.m==='net'&&e.p&&/^\d{1,3}(\.\d{1,3}){3}$/.test(String(e.p.ip||''))?String(e.p.ip):'';return ip&&s.includes(ip)?s.replace(ip,`<span data-nethost="${ip}" data-nethost-click="1">${ip}</span>`):s}
 function renderEvents(list){
-  $('c-ev').innerHTML=`<div class="ch"><h2>${T('ev')}</h2></div>`+(list.length?`<div class="tl">${list.map(e=>`<div class="ev"><i class="d ${esc(e.lv)}"></i><span class="m">${esc({nut:'UPS',pve:'PVE',net:'NET'}[e.m]||e.m)}</span><span>${esc(evText(e))}</span><span class="t" title="${new Date(e.t*1000).toLocaleString()}">${esc(ago(e.t))}</span></div>`).join('')}</div>`:`<div class="empty">${T('noev')}</div>`);
+  $('c-ev').innerHTML=`<div class="ch"><h2>${T('ev')}</h2></div>`+(list.length?`<div class="tl">${list.map(e=>`<div class="ev"><i class="d ${esc(e.lv)}"></i><span class="m">${esc({nut:'UPS',pve:'PVE',net:'NET'}[e.m]||e.m)}</span><span>${evHtml(e)}</span><span class="t" title="${new Date(e.t*1000).toLocaleString()}">${esc(ago(e.t))}</span></div>`).join('')}</div>`:`<div class="empty">${T('noev')}</div>`);
 }
 
 // ───────── Ciclo de actualización / refresh loop ─────────

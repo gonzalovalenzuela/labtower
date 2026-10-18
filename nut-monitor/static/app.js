@@ -324,7 +324,7 @@ function renderSidebar(){
     div.innerHTML=`<span class="srv-dot-sm ${dotCls}"></span>
       <div class="srv-nav-info">
         <div class="srv-nav-top"><div class="srv-nav-name">${esc(s.name)}</div>${canAdmin()?`<span class="srv-acts"><button class="btn-ghost-sm edit" data-on-click="openEditServer" data-on-click-args="${jsargs([s.id])}" title="${t('editServerTitle')}"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button><button class="btn-ghost-sm" data-on-click="confirmDeleteServer" data-on-click-args="${jsargs([s.id,s.name])}" title="${t('deleteServerTitle')}"><svg viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6"/></svg></button></span>`:''}</div>
-        <div class="srv-nav-host" title="${esc(s.host)}:${s.port}">${esc(s.host)}:${s.port}</div>
+        <div class="srv-nav-host" title="${esc(s.host)}:${s.port}"><span data-nethost="${esc(s.host)}">${esc(s.host)}</span>:${s.port}</div>
         ${upsCount?`<div class="srv-nav-host">${t('upsCountUnit',upsCount)}</div>`:''}
       </div>
       `;
@@ -457,7 +457,7 @@ function renderDashboard(){
       <td>
         <span class="ups-cell-name">${esc(row.upsName)} <span class="srv-tag">${esc(row.srv.name)}</span></span>
         <span class="ups-cell-sub">${esc(row.v['_desc']||'UPS')}${row.v['_serial']?' &nbsp;·&nbsp; <span style="font-family:var(--mono);letter-spacing:.3px">SN '+esc(row.v['_serial'])+'</span>':''}</span>
-        <span class="ups-cell-sub" style="font-family:var(--mono);letter-spacing:.3px">${esc(row.srv.host)}<span style="color:var(--border-b)">:</span>${row.srv.port}</span>
+        <span class="ups-cell-sub" style="font-family:var(--mono);letter-spacing:.3px"><span data-nethost="${esc(row.srv.host)}" data-nethost-click="1">${esc(row.srv.host)}</span><span style="color:var(--border-b)">:</span>${row.srv.port}</span>
       </td>
       <td><span class="ups-badge ${badgeCls}">${esc(badgeTxt)}</span></td>
       <td>
