@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1j — 2026-10-18
+
+- **iPhone/iPad: la tarjeta de Net Monitor no se abría al tocar una IP.** El toque genera eventos de ratón sintéticos que cerraban la tarjeta al instante. Ahora se ignoran en pantallas táctiles, y cualquier IP subrayada abre la tarjeta al tocarla (también en las listas laterales); el área táctil es más grande. Un segundo toque la cierra; el botón *Ver detalle completo* abre Net Monitor con el equipo expandido. Probado con emulación de iPhone y datos de UPS simulados.
+
 ## 1.2.1i — 2026-10-18
 
 - **Tarjeta de Net Monitor al pasar el ratón por una IP.** En UPS Monitor (servidores NUT), Proxmox (clústeres), WOL Console (columna IP) y Overview (eventos y «nuevos dispositivos») la IP o el nombre del equipo se subraya con puntos; al pasar el ratón aparece una tarjeta con lo que Net Monitor sabe del equipo: nombre/alias, estado, tipo, SO, fabricante, MAC, latencia, puertos abiertos y última vez visto. El botón *Ver detalle completo en Net Monitor* abre `/net/?ip=…` con ese equipo ya expandido. En WOL, Proxmox (barra superior) y Overview, el clic sobre la IP lleva directo al detalle; en pantallas táctiles el toque abre la tarjeta. En las listas de servidores laterales el clic sigue seleccionando el servidor.
