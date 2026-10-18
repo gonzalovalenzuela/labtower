@@ -136,6 +136,7 @@
     clearTimeout(showT); showT = setTimeout(function () { show(t); }, SHOW_MS);
   });
   document.addEventListener('mouseout', function (e) {
+    if (touch.matches) return;                                   // los eventos de ratón sintetizados por el toque no deben cerrarla / mouse events synthesised by a tap must not close it
     var t = tgt(e.target); if (!t) return;
     if (e.relatedTarget && (t.contains(e.relatedTarget) || (card && card.contains(e.relatedTarget)))) return;
     schedHide();
@@ -143,7 +144,9 @@
   document.addEventListener('click', function (e) {
     var t = tgt(e.target);
     if (card && card.contains(e.target)) return;                 // el enlace de la tarjeta navega solo / the card link navigates by itself
-    if (!t || !t.hasAttribute('data-nethost-click')) { if (touch.matches) hide(); return; }
+    // Táctil: cualquier IP marcada abre la tarjeta al tocarla; con ratón solo las marcadas con data-nethost-click (el resto muestran la tarjeta al pasar el ratón).
+    // EN: Touch: any marked IP opens the card on tap; with a mouse only those marked data-nethost-click (the rest show the card on hover).
+    if (!t || (!touch.matches && !t.hasAttribute('data-nethost-click'))) { if (touch.matches) hide(); return; }
     e.preventDefault(); e.stopPropagation();
     if (touch.matches) { if (cur === t) hide(); else show(t); return; }   // táctil: el toque abre la tarjeta / touch: tap opens the card
     var q = t.getAttribute('data-nethost');

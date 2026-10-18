@@ -22,3 +22,4 @@
 .pi-ipc-msg{color:var(--text-mid,#4b5870);padding:2px 0}
 .pi-ipc-go{display:block;margin-top:9px;padding:7px 10px;border-radius:8px;text-align:center;font-weight:600;font-size:12px;text-decoration:none;background:var(--blue,var(--teal,#4361ee));color:#fff}
 .pi-ipc-go:hover{filter:brightness(1.08)}
+@media (hover:none){[data-nethost]{display:inline-block;padding:4px 5px;margin:-4px -5px;cursor:pointer}}
