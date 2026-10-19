@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1q — 2026-10-19
+
+- **iPad/iPhone: el icono de la app ya no depende de una segunda descarga.** Al abrir «Añadir a pantalla de inicio», iOS descargaba `apple-touch-icon.png` por separado y, si no confiaba en el certificado HTTPS (autofirmado), mostraba la letra «P». Ahora el `apple-touch-icon` va incrustado (`data:`) en todas las páginas (inicio, Admin, WOL, UPS, Net, Proxmox y Overview), así que no hay descarga que falle. El script `assets/icons/make-icons.py` lo regenera junto con los PNG.
+
 ## 1.2.1p — 2026-10-19
 
 - **HTTPS: el certificado autofirmado ahora es aceptado por iPad/iPhone.** iOS exige la extensión «Extended Key Usage: serverAuth» (además del SAN y ≤ 825 días); sin ella Safari seguía diciendo «no confiable» aunque se instalara y confiara el certificado, y al añadir la app a la pantalla de inicio solo aparecía la letra «P» (no se podía descargar el icono). `pi-console-https enable` lo genera con esas extensiones y **regenera una sola vez** el autofirmado antiguo; los certificados propios (`--cert/--key`) no se tocan. Después hay que volver a instalar el certificado en cada dispositivo.
