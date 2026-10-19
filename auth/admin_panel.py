@@ -296,13 +296,14 @@ class H(BaseHTTPRequestHandler):
                auth.LEVELS.get(u["permissions"].get("nut",""),0) < 3:
                 auth.login_failed(self, body.get("username", ""))
                 return self._json(401, {"error": "Invalid credentials"})
-            token = auth.create_session(body["username"], u["permissions"])
+            ttl = auth.remember_ttl(body.get("remember"))     # «Recordarme»: solo valores de la lista blanca / EN: only whitelisted values
+            token = auth.create_session(body["username"], u["permissions"], ttl)
             users = auth.load_users()
             must  = users.get(body["username"],{}).get("must_change_password", False)
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Set-Cookie",
-                auth.session_cookie(token))
+                auth.session_cookie(token, ttl))
             br = json.dumps({"ok": True, "username": body["username"],
                              "permissions": u["permissions"],
                              "must_change_password": must}).encode()

@@ -8,7 +8,7 @@ let me = null;
 const LANG = {
   en: {
     loginTitle:'Admin access', loginSub:'Only administrators can access.',
-    loginUser:'Username', loginPass:'Password', loginBtn:'Sign in',
+    loginUser:'Username', loginPass:'Password', loginBtn:'Sign in',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',
     loginFill:'Fill in all fields', loginErr:'Invalid credentials', loginEntering:'Signing in…',
     navLabel:'Navigation', dragHandle:'Drag',
     userRole:'Administrator',
@@ -62,7 +62,7 @@ const LANG = {
   },
   es: {
     loginTitle:'Acceso de administrador', loginSub:'Solo administradores pueden acceder.',
-    loginUser:'Usuario', loginPass:'Contraseña', loginBtn:'Entrar',
+    loginUser:'Usuario', loginPass:'Contraseña', loginBtn:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',
     loginFill:'Completa todos los campos', loginErr:'Credenciales incorrectas', loginEntering:'Entrando…',
     navLabel:'Navegación', dragHandle:'Arrastrar',
     userRole:'Administrador',
@@ -252,7 +252,7 @@ async function doLogin() {
   try {
     const r = await fetch('api/login', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({username:u, password:p})
+      body: JSON.stringify({username:u, password:p, remember:remValue()})
     });
     const d = await r.json();
     if (!r.ok || !d.ok) { err.textContent = d.error||t('loginErr'); err.className='login-err show'; return; }
@@ -746,3 +746,9 @@ function toggleNav(force){
   document.addEventListener('keydown',e=>{if(e.key==='Escape')toggleNav(false);});
   window.addEventListener('resize',()=>{if(window.innerWidth>960)toggleNav(false);});
 })();
+
+// ───────── Recordarme / Remember me ─────────
+// Devuelve la duración elegida ("day","week","month","forever") o "" si no se marcó. Recuerda la última elección en este navegador.
+// EN: Returns the chosen duration ("day","week","month","forever") or "" if unchecked. Remembers the last choice in this browser.
+function remValue(){const c=document.getElementById('l-rem'),s=document.getElementById('l-remsel');const v=c&&c.checked&&s?s.value:'';try{localStorage.setItem('pi-remember',v)}catch(e){}return v}
+(function remInit(){try{const v=localStorage.getItem('pi-remember')||'';const c=document.getElementById('l-rem'),s=document.getElementById('l-remsel');if(c&&s&&['day','week','month','forever'].includes(v)){c.checked=true;s.disabled=false;s.value=v}}catch(e){}})();

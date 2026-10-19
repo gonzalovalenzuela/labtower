@@ -232,3 +232,10 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
   input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{font-size:16px!important}
   button,.btn{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 }
+
+/* Recordarme (login) / EN: Remember me (login) */
+.remember-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 14px;font-size:12px;color:var(--text-mid,#4b5870)}
+.remember-chk{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none}
+.remember-chk input{width:15px;height:15px;margin:0;cursor:pointer}
+.remember-row select{font:inherit;font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--border,#e3e8ef);background:var(--surface,#fff);color:var(--text,#1a2233)}
+.remember-row select:disabled{opacity:.45}

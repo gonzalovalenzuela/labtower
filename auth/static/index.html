@@ -23,6 +23,7 @@
     <div class="login-err" id="login-err"></div>
     <div class="field" style="margin-bottom:12px"><label data-i18n="loginUser">Username</label><input type="text" id="l-user" autocomplete="username" autofocus></div>
     <div class="field" style="margin-bottom:16px"><label data-i18n="loginPass">Password</label><input type="password" id="l-pass" autocomplete="current-password"></div>
+    <div class="remember-row"><label class="remember-chk"><input type="checkbox" id="l-rem" data-on-change="@disable-unless-checked" data-on-change-args="[&quot;l-remsel&quot;]"><span data-i18n="rememberMe">Remember me</span></label><select id="l-remsel" disabled aria-label="Remember me"><option value="day" data-i18n="rem1d">1 day</option><option value="week" data-i18n="rem1w">1 week</option><option value="month" data-i18n="rem1m">1 month</option><option value="forever" data-i18n="remForever">Forever</option></select></div>
     <button class="btn-login" id="btn-l" data-on-click="doLogin" data-i18n="loginBtn">Sign in</button>
   </div>
 </div>
