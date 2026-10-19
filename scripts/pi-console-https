@@ -38,6 +38,16 @@ set_cookie_secure() {  # on|off  (PICONSOLE_SECURE_COOKIE in /etc/default/pi-con
   [ "$SKIP_SYSTEM" = 1 ] || for s in $SERVICES; do systemctl try-restart "$s" 2>/dev/null || true; done
 }
 
+# ¿El certificado existente es uno autofirmado nuestro de versiones anteriores (sin serverAuth)? Entonces se regenera una vez. Los certificados propios (--cert) no se tocan.
+# EN: Is the existing certificate a self-signed one of ours from earlier versions (without serverAuth)? Then it is regenerated once. Your own certificates (--cert) are never touched.
+_old_selfsigned() {
+  local f="$TLS_DIR/server.crt"
+  [ -s "$f" ] || return 1
+  [ "$(openssl x509 -in "$f" -noout -subject 2>/dev/null | sed 's/^subject= *//')" = "$(openssl x509 -in "$f" -noout -issuer 2>/dev/null | sed 's/^issuer= *//')" ] || return 1
+  openssl x509 -in "$f" -noout -ext extendedKeyUsage 2>/dev/null | grep -q "TLS Web Server Authentication" && return 1
+  return 0
+}
+
 cmd_enable() {
   need_root enable
   local cert="" key="" redirect=0 name
@@ -56,13 +66,17 @@ cmd_enable() {
     openssl pkey -in "$key" -noout 2>/dev/null || die "$key is not a valid private key"
     [ "$(openssl x509 -in "$cert" -noout -pubkey 2>/dev/null)" = "$(openssl pkey -in "$key" -pubout 2>/dev/null)" ] || die "the key does not match the certificate"
     install -m 0644 "$cert" "$TLS_DIR/server.crt"; install -m 0600 "$key" "$TLS_DIR/server.key"
-  elif [ ! -s "$TLS_DIR/server.crt" ] || [ ! -s "$TLS_DIR/server.key" ]; then
+  elif [ ! -s "$TLS_DIR/server.crt" ] || [ ! -s "$TLS_DIR/server.key" ] || _old_selfsigned; then
+    # iOS/macOS exigen SAN + «Extended Key Usage: serverAuth» (y ≤ 825 días); sin ellos Safari dice «no confiable» aunque instales el certificado.
+    # EN: iOS/macOS require SAN + "Extended Key Usage: serverAuth" (and ≤ 825 days); without them Safari says "not trusted" even after installing the certificate.
     local san="DNS:$name,DNS:localhost" ip
     for ip in $(hostname -I 2>/dev/null); do san="$san,IP:$ip"; done
     ( umask 077; openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 825 -subj "/CN=$name" \
-        -addext "subjectAltName=$san" -keyout "$TLS_DIR/server.key" -out "$TLS_DIR/server.crt" 2>/dev/null ) || die "could not create the certificate"
+        -addext "subjectAltName=$san" -addext "extendedKeyUsage=serverAuth" -addext "keyUsage=digitalSignature,keyAgreement" \
+        -addext "basicConstraints=critical,CA:TRUE" \
+        -keyout "$TLS_DIR/server.key" -out "$TLS_DIR/server.crt" 2>/dev/null ) || die "could not create the certificate"
     chmod 644 "$TLS_DIR/server.crt"
-    echo "Self-signed certificate created: $TLS_DIR/server.crt"
+    echo "Self-signed certificate created: $TLS_DIR/server.crt (install it on each device and trust it; re-install it if you had an older one)"
   fi
   local hsts=""
   [ "$redirect" = 1 ] && hsts='add_header Strict-Transport-Security "max-age=15552000" always;'
