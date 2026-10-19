@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1l — 2026-10-19
+
+- **UPS Monitor: el anillo de batería y de carga se veía cortado en los extremos.** El trazo (grosor 5) con radio 15,9 sobrepasaba el lienzo SVG de 36 unidades; ahora radio 14,5 y grosor 4,5, con el anillo completo dentro del recuadro. Con 0 % ya no queda un punto suelto.
+- **Gráficos de voltaje, consumo y temperatura:** las etiquetas del valor actual (p. ej. `230V`, `165W`) quedaban recortadas en el borde derecho; se amplió el margen derecho (también en el cálculo del cursor y el tooltip).
+
 ## 1.2.1k — 2026-10-18
 
 - **UPS Monitor: las IP de los clientes conectados** (chips de la sección *Clientes* del detalle de cada UPS) también abren la tarjeta de Net Monitor (al pasar el ratón, o al tocar en iPhone/iPad) y llevan al detalle completo del equipo.
