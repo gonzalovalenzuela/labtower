@@ -1,6 +1,6 @@
 # Pi Console 1.2.0 (historial de las compilaciones 1.2.0a–x)
 
-> Versión vigente: ver [RELEASE_NOTES_1.2.1p.md](RELEASE_NOTES_1.2.1p.md).
+> Versión vigente: ver [RELEASE_NOTES_1.2.1q.md](RELEASE_NOTES_1.2.1q.md).
 
 ## Español
 
