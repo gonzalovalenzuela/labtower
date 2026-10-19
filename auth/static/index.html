@@ -122,6 +122,25 @@
       <div class="hl-grid" id="hl-grid"></div>
     </div>
 
+    <div class="card" id="ss-card" style="margin-top:16px">
+      <div class="card-hd">
+        <span class="card-title" data-i18n="ssTitle">Active sessions</span>
+        <button class="btn-sec" id="ss-others" data-on-click="ssCloseOthers" data-i18n="ssCloseOthers">Close my other sessions</button>
+      </div>
+      <div class="tp-hint" data-i18n="ssHint">Devices signed in right now. Closing a session signs that device out immediately. Times are approximate.</div>
+      <div class="tbl-wrap"><table id="ss-table">
+        <thead><tr>
+          <th data-i18n="colUser">User</th>
+          <th data-i18n="ssDevice">Device</th>
+          <th data-i18n="ssIp">IP</th>
+          <th data-i18n="ssLast">Last activity</th>
+          <th data-i18n="ssExpires">Expires</th>
+          <th style="text-align:right" data-i18n="colActions">Actions</th>
+        </tr></thead>
+        <tbody id="ss-tbody"></tbody>
+      </table></div>
+    </div>
+
     <div class="card" id="tp-card" style="margin-top:16px">
       <div class="card-hd">
         <span class="card-title" data-i18n="tpTitle">Backup &amp; restore</span>

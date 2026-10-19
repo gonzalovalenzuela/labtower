@@ -212,6 +212,11 @@ input.err{border-color:var(--red)}
   #users-tbody td.col-actions{grid-column:2;grid-row:1;white-space:nowrap}
   #users-tbody td[data-label]{grid-column:1/-1;display:flex;align-items:center;gap:10px}
   #users-tbody td[data-label]::before{content:attr(data-label);flex:0 0 84px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim)}
+  #ss-table thead{display:none}
+  #ss-table,#ss-table tbody{display:block;width:100%}
+  #ss-tbody tr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:12px 14px}
+  #ss-tbody td{padding:0;display:block;min-width:0}
+  #ss-tbody td.col-actions{margin-left:auto;white-space:nowrap}
   #tp-table thead{display:none}
   #tp-table,#tp-table tbody{display:block;width:100%}
   #tp-tbody tr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:12px 14px}

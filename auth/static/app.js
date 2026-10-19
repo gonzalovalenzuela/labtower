@@ -34,6 +34,9 @@ const LANG = {
     modalDeleteTitle:'Delete user', modalDeleteBtn:'Delete',
     mustChangeBadge:'Change pwd',
     hlTitle:'System health', hl_ok:'All healthy', hl_degraded:'Degraded', hl_fail:'Failing', hlSystem:'system', hlDown:'Service not answering', hlUptime:'Running for',
+    ssTitle:'Active sessions', ssCloseOthers:'Close my other sessions', ssHint:'Devices signed in right now. Closing a session signs that device out immediately. Times are approximate.',
+    ssDevice:'Device', ssIp:'IP', ssLast:'Last activity', ssExpires:'Expires', ssThis:'This session', ssClose:'Close session', ssOld:'Unknown', ssNone:'No active sessions.',
+    ssConfirm:(u,d)=>`Close the session of "${u}" on ${d}?`, ssConfirmOthers:'Close all your other sessions?', ssClosed:'Session closed', ssClosedN:n=>`${n} session(s) closed`, ssNow:'now',
     tpTitle:'Backup & restore', tpUpload:'Upload backup', tpCreate:'Create backup',
     tpHint:'Back up users, WOL devices, UPS servers and history, Net Monitor, Proxmox and the NUT configuration. To move to a new installation: install the package, sign in with the default user, upload the backup here and press Restore.',
     tpColName:'Backup', tpColType:'Type', tpColSize:'Size', tpColDate:'Date', tpEmpty:'No backups yet.',
@@ -88,6 +91,9 @@ const LANG = {
     modalDeleteTitle:'Eliminar usuario', modalDeleteBtn:'Eliminar',
     mustChangeBadge:'Cambiar pwd',
     hlTitle:'Salud del sistema', hl_ok:'Todo bien', hl_degraded:'Degradado', hl_fail:'Con fallas', hlSystem:'sistema', hlDown:'El servicio no responde', hlUptime:'Activo hace',
+    ssTitle:'Sesiones activas', ssCloseOthers:'Cerrar mis otras sesiones', ssHint:'Dispositivos con sesión iniciada ahora. Cerrar una sesión desconecta ese dispositivo de inmediato. Las horas son aproximadas.',
+    ssDevice:'Dispositivo', ssIp:'IP', ssLast:'Última actividad', ssExpires:'Vence', ssThis:'Esta sesión', ssClose:'Cerrar sesión', ssOld:'Desconocido', ssNone:'No hay sesiones activas.',
+    ssConfirm:(u,d)=>`¿Cerrar la sesión de "${u}" en ${d}?`, ssConfirmOthers:'¿Cerrar todas tus otras sesiones?', ssClosed:'Sesión cerrada', ssClosedN:n=>`${n} sesión(es) cerrada(s)`, ssNow:'ahora',
     tpTitle:'Respaldo y restauración', tpUpload:'Subir respaldo', tpCreate:'Crear respaldo',
     tpHint:'Respalda usuarios, dispositivos WOL, servidores UPS e historial, Net Monitor, Proxmox y la configuración de NUT. Para migrar a una instalación nueva: instala el paquete, entra con el usuario por defecto, sube el respaldo aquí y pulsa Restaurar.',
     tpColName:'Respaldo', tpColType:'Tipo', tpColSize:'Tamaño', tpColDate:'Fecha', tpEmpty:'Aún no hay respaldos.',
@@ -130,6 +136,7 @@ function setLang(l){
   // Update logout button title
   document.getElementById('btn-logout').title = t('logoutTitle');
   try{tpRender();}catch(e){}
+  try{ssRender();}catch(e){}
   // Update new-pw placeholder
   const npw = document.getElementById('d-new-pw');
   if(npw) npw.placeholder = t('fieldNewPwPlaceholder');
@@ -297,7 +304,7 @@ async function loadUsers() {
   const users = d.users || [];
   renderUsers(users);
   updateStats(users);
-  tpLoad();
+  tpLoad(); ssLoad();
   hlLoad(); if (!window._hlTimer) window._hlTimer = setInterval(hlLoad, 30000);
 }
 
@@ -709,7 +716,6 @@ function toast(msg, isErr=false) {
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o&&!o.classList.contains('noclose'))closeModals();}));
 document.getElementById('drawer-overlay').addEventListener('click', e=>{ if(e.target===document.getElementById('drawer-overlay')) closeDrawer(); });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape'){closeModals();closeDrawer();} });
-document.getElementById('l-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 
 // ── Check session on load ──────────────────────────────
 // Al cargar: si hay sesión de administrador válida se muestra el panel; si no, el login.
@@ -752,3 +758,64 @@ function toggleNav(force){
 // EN: Returns the chosen duration ("day","week","month","forever") or "" if unchecked. Remembers the last choice in this browser.
 function remValue(){const c=document.getElementById('l-rem'),s=document.getElementById('l-remsel');const v=c&&c.checked&&s?s.value:'';try{localStorage.setItem('pi-remember',v)}catch(e){}return v}
 (function remInit(){try{const v=localStorage.getItem('pi-remember')||'';const c=document.getElementById('l-rem'),s=document.getElementById('l-remsel');if(c&&s&&['day','week','month','forever'].includes(v)){c.checked=true;s.disabled=false;s.value=v}}catch(e){}})();
+
+// ── Sesiones activas ───────────────────────────────────
+// Lista las sesiones abiertas (todas las cuentas) y permite cerrarlas.
+// EN: List the open sessions (all accounts) and allow closing them.
+let _ss = [];
+async function ssLoad() {
+  try {
+    const r = await fetch('api/sessions');
+    if (!r.ok) return;
+    _ss = (await r.json()).sessions || [];
+    ssRender();
+  } catch(e) {}
+}
+// Resume el User-Agent en «Navegador · Sistema».
+// EN: Summarize the User-Agent as "Browser · System".
+function ssDevice(ua) {
+  if (!ua) return t('ssOld');
+  const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Mac OS X/.test(ua) ? 'macOS' : /Windows/.test(ua) ? 'Windows' : /CrOS/.test(ua) ? 'ChromeOS' : /Linux/.test(ua) ? 'Linux' : '';
+  const br = /Edg\//.test(ua) ? 'Edge' : /OPR\/|Opera/.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox' : /(Chrome|CriOS)\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : /curl/i.test(ua) ? 'curl' : ua.slice(0,24);
+  return os ? br + ' · ' + os : br;
+}
+function ssAgo(ts) {
+  const d = Math.max(0, Date.now()/1000 - ts);
+  if (d < 90) return t('ssNow');
+  const rtf = new Intl.RelativeTimeFormat(_lang === 'es' ? 'es' : 'en', {numeric:'auto'});
+  if (d < 5400) return rtf.format(-Math.round(d/60), 'minute');
+  if (d < 129600) return rtf.format(-Math.round(d/3600), 'hour');
+  return rtf.format(-Math.round(d/86400), 'day');
+}
+function ssRender() {
+  const tb = document.getElementById('ss-tbody'); if (!tb) return;
+  tb.innerHTML = '';
+  const locale = _lang === 'es' ? 'es-CL' : 'en-US';
+  if (!_ss.length) { tb.innerHTML = `<tr><td colspan="6" class="tp-empty">${esc(t('ssNone'))}</td></tr>`; }
+  _ss.forEach(s => {
+    const tr = document.createElement('tr'), dev = ssDevice(s.ua);
+    tr.innerHTML = `
+      <td><b>${esc(s.username)}</b>${s.current ? ` <span class="tp-kind">${esc(t('ssThis'))}</span>` : ''}</td>
+      <td><span class="ucreated" title="${esc(s.ua||'')}">${esc(dev)}</span></td>
+      <td><span class="ucreated">${esc(s.ip||'—')}</span></td>
+      <td><span class="ucreated">${esc(ssAgo(s.last))}</span></td>
+      <td><span class="ucreated">${new Date(s.expires*1000).toLocaleDateString(locale)}</span></td>
+      <td class="col-actions">${s.current ? '' : `<button class="btn-ri del" data-on-click="ssClose" data-on-click-args="${jsargs([s.id, s.username, dev])}" title="${esc(t('ssClose'))}">✕</button>`}</td>`;
+    tb.appendChild(tr);
+  });
+  const o = document.getElementById('ss-others');
+  const me = (_ss.find(x => x.current) || {}).username;
+  if (o) o.disabled = !_ss.some(x => !x.current && x.username === me);
+}
+async function ssClose(id, user, dev) {
+  if (!confirm(t('ssConfirm', user, dev))) return;
+  const r = await fetch('api/sessions/'+encodeURIComponent(id), {method:'DELETE'});
+  if (r.ok) toast(t('ssClosed')); else toast((await r.json().catch(()=>({}))).error || t('tpFailed'), true);
+  ssLoad();
+}
+async function ssCloseOthers() {
+  if (!confirm(t('ssConfirmOthers'))) return;
+  const r = await fetch('api/sessions/others', {method:'DELETE'});
+  if (r.ok) toast(t('ssClosedN', (await r.json()).closed)); else toast(t('tpFailed'), true);
+  ssLoad();
+}

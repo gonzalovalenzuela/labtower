@@ -527,9 +527,16 @@ def _tkey(token: str) -> str:
 # vencimiento. Aprovecha para purgar las sesiones vencidas.
 # EN: Open a session: random 256-bit token. Stores the user, the permissions at login time and the expiry.
 #     It takes the chance to purge expired sessions.
-def create_session(username: str, permissions: dict, ttl: int = SESSION_TTL) -> str:
+def create_session(username: str, permissions: dict, ttl: int = SESSION_TTL, handler=None) -> str:
     if ttl != SESSION_TTL and ttl not in REMEMBER.values(): ttl = SESSION_TTL
     token = secrets.token_hex(32)
+    meta = {}
+    if handler is not None:     # IP y navegador, solo para mostrarlos en «Sesiones activas» / EN: IP and browser, only to show them in "Active sessions"
+        try:
+            meta = {"ip": client_ip(handler)[:64],
+                    "ua": re.sub(r"[\x00-\x1f\x7f]", "", handler.headers.get("User-Agent") or "")[:200]}
+        except Exception:
+            meta = {}
     with _sessions_lock:
         sessions = _load_sessions()
         sessions[_tkey(token)] = {
@@ -537,6 +544,8 @@ def create_session(username: str, permissions: dict, ttl: int = SESSION_TTL) -> 
             "permissions": permissions,
             "expires":     time.time() + ttl,
             "ttl":         ttl,
+            "created":     time.time(),
+            **meta,
         }
         _purge(sessions)
         _save_sessions(sessions)
@@ -600,6 +609,40 @@ def delete_user_sessions(username: str, keep: str | None = None):
         gone = [t for t, s in sessions.items() if s.get("username") == username and t != keep_key]
         for t in gone: del sessions[t]
         if gone: _save_sessions(sessions)
+
+# Sesiones activas para el panel Admin. El id es un prefijo del SHA-256 del token (no sirve para usar la sesión).
+# «last» es la última renovación (se persiste como máximo cada RENEW_EVERY s), así que es aproximada.
+# EN: Active sessions for the Admin panel. The id is a prefix of the token's SHA-256 (useless to use the session).
+#     "last" is the last renewal (persisted at most every RENEW_EVERY s), so it is approximate.
+def list_sessions(current_token: str | None = None) -> list:
+    cur = _tkey(current_token)[:16] if current_token else None
+    now = time.time()
+    with _sessions_lock:
+        sessions = _load_sessions()
+    out = []
+    for k, v in sessions.items():
+        if now > v.get("expires", 0): continue
+        ttl = v.get("ttl", SESSION_TTL)
+        out.append({"id": k[:16], "username": v.get("username", ""),
+                    "created": v.get("created"), "last": v.get("expires", 0) - ttl,
+                    "expires": v.get("expires", 0), "ttl": ttl,
+                    "ip": v.get("ip", ""), "ua": v.get("ua", ""), "current": k[:16] == cur})
+    out.sort(key=lambda x: x["last"], reverse=True)
+    return out
+
+# Cierra una sesión por su id; devuelve el nombre de usuario o None. `allow(username)` decide si se puede cerrar.
+# EN: Close a session by its id; returns the username or None. `allow(username)` decides whether it may be closed.
+def revoke_session_id(sid: str, allow=None, keep: str | None = None):
+    if not re.fullmatch(r"[0-9a-f]{16}", sid or ""): return None
+    keep_id = _tkey(keep)[:16] if keep else None
+    with _sessions_lock:
+        sessions = _load_sessions()
+        found = [k for k in sessions if k[:16] == sid]
+        if len(found) != 1 or sid == keep_id: return None
+        uname = sessions[found[0]].get("username", "")
+        if allow and not allow(uname): return False
+        del sessions[found[0]]; _save_sessions(sessions)
+    return uname
 
 # Elimina las sesiones vencidas del diccionario recibido.
 # EN: Remove the expired sessions from the given dictionary.
