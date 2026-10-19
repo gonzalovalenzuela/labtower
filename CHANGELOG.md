@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1m — 2026-10-19
+
+- **Login: opción «Recordarme».** Casilla con selector de duración: 1 día, 1 semana, 1 mes o siempre. Sin marcar, la sesión sigue durando 24 h como antes. Disponible en el login de todos los módulos (Admin, WOL, UPS, Net, Proxmox y Overview); la última elección se recuerda en el navegador.
+- «Siempre» equivale a 400 días con renovación al usar (límite que aplican los navegadores a las cookies). Cada sesión guarda su duración; las sesiones antiguas conservan 24 h. El servidor solo acepta los cuatro valores. Cambiar la contraseña o eliminar al usuario sigue cerrando sus sesiones.
+
 ## 1.2.1l — 2026-10-19
 
 - **UPS Monitor: el anillo de batería y de carga se veía cortado en los extremos.** El trazo (grosor 5) con radio 15,9 sobrepasaba el lienzo SVG de 36 unidades; ahora radio 14,5 y grosor 4,5, con el anillo completo dentro del recuadro. Con 0 % ya no queda un punto suelto.

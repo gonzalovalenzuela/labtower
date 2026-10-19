@@ -1,6 +1,6 @@
 const LANG={
   en:{connecting:'Connecting…',connectingMsg:'Fetching data from Proxmox.',noNodes:'No nodes',noNodesMsg:'No nodes were found in this cluster.',loginTitle:'Sign in',loginSub:'Enter your credentials to continue.',
-    username:'Username',password:'Password',loginBtn:'Sign in',
+    username:'Username',password:'Password',loginBtn:'Sign in',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',
     navSection:'Navigation',clustersPVE:'PVE Clusters',addCluster:'Add cluster',
     themeLight:'Light',themeDark:'Dark',
     statNodesOnline:'Nodes online',statVMsRunning:'VMs running',
@@ -31,7 +31,7 @@ const LANG={
     deleteClusterConfirm:(name)=>`Delete cluster "${name}"?`,
     cpuAlert:(pct)=>`CPU at ${pct}%`,ramAlert:(pct)=>`RAM at ${pct}%`},
   es:{connecting:'Conectando…',connectingMsg:'Obteniendo datos de Proxmox.',noNodes:'Sin nodos',noNodesMsg:'No se encontraron nodos en este cluster.',loginTitle:'Iniciar sesión',loginSub:'Ingresa tus credenciales para continuar.',
-    username:'Usuario',password:'Contraseña',loginBtn:'Entrar',
+    username:'Usuario',password:'Contraseña',loginBtn:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',
     navSection:'Navegación',clustersPVE:'Clusters PVE',addCluster:'Agregar cluster',
     themeLight:'Claro',themeDark:'Oscuro',
     statNodesOnline:'Nodos online',statVMsRunning:'VMs corriendo',
@@ -166,7 +166,7 @@ async function doLogin(){
   if(!u||!p){err.textContent='Completa todos los campos';err.className='login-err show';return;}
   btn.disabled=true;btn.innerHTML='<span class="spin">⟳</span>';
   try{
-    const r=await fetch('api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+    const r=await fetch('api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p,remember:remValue()})});
     const d=await r.json();
     if(!r.ok||!d.ok){err.textContent=d.error||'Credenciales incorrectas';err.className='login-err show';return;}
     // Cuenta con contraseña por cambiar (admin/admin inicial): se va a la pantalla obligatoria antes de entrar.
@@ -727,3 +727,9 @@ function toggleNav(force){
   document.addEventListener('keydown',e=>{if(e.key==='Escape')toggleNav(false);});
   window.addEventListener('resize',()=>{if(window.innerWidth>960)toggleNav(false);});
 })();
+
+// ───────── Recordarme / Remember me ─────────
+// Devuelve la duración elegida ("day","week","month","forever") o "" si no se marcó. Recuerda la última elección en este navegador.
+// EN: Returns the chosen duration ("day","week","month","forever") or "" if unchecked. Remembers the last choice in this browser.
+function remValue(){const c=document.getElementById('l-rem'),s=document.getElementById('l-remsel');const v=c&&c.checked&&s?s.value:'';try{localStorage.setItem('pi-remember',v)}catch(e){}return v}
+(function remInit(){try{const v=localStorage.getItem('pi-remember')||'';const c=document.getElementById('l-rem'),s=document.getElementById('l-remsel');if(c&&s&&['day','week','month','forever'].includes(v)){c.checked=true;s.disabled=false;s.value=v}}catch(e){}})();

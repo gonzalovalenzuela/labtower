@@ -230,11 +230,12 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/login":
             u, err = auth.login(self, body.get("username", ""), body.get("password", ""))
             if not u: return self._json(err[0], {"error": err[1]})
-            token = auth.create_session(body["username"], u["permissions"])
+            ttl = auth.remember_ttl(body.get("remember"))     # «Recordarme»: solo valores de la lista blanca / EN: only whitelisted values
+            token = auth.create_session(body["username"], u["permissions"], ttl)
             must  = auth.load_users().get(body["username"], {}).get("must_change_password", False)
             return self._json(200, {"ok": True, "username": body["username"],
                                     "permissions": u["permissions"], "must_change_password": must},
-                              [("Set-Cookie", auth.session_cookie(token))])
+                              [("Set-Cookie", auth.session_cookie(token, ttl))])
         if path == "/api/logout":
             auth.delete_session(tok); return self._json(200, {"ok": True})
         self._json(404, {"error": "Not found"})

@@ -98,11 +98,16 @@ def adopt_legacy(old_dir, new_dir, names):
 # Duración de una sesión sin actividad.
 # EN: How long a session lasts without activity.
 SESSION_TTL = 24 * 3600   # 24 horas
+# «Recordarme» en el login: duraciones permitidas (ventana deslizante: cada uso la renueva). El servidor solo acepta estos valores. «forever» son 400 días porque los navegadores limitan la vida de una cookie a ~400 días; mientras se use, no vence.
+# EN: "Remember me" at login: allowed durations (sliding window: every use renews it). The server accepts only these values. "forever" is 400 days because browsers cap a cookie's lifetime at ~400 days; as long as it is used, it does not expire.
+REMEMBER = {"day": 24 * 3600, "week": 7 * 24 * 3600, "month": 30 * 24 * 3600, "forever": 400 * 24 * 3600}
+def remember_ttl(value) -> int:
+    return REMEMBER.get(value, SESSION_TTL) if isinstance(value, str) else SESSION_TTL
 # Cookie de sesión. Por defecto sin «Secure» (Pi Console se usa por HTTP en la LAN: con «Secure» el navegador no la enviaría). Si se publica detrás de HTTPS, PICONSOLE_SECURE_COOKIE=1 agrega «Secure». No se deduce de encabezados del cliente.
 # EN: Session cookie. Without "Secure" by default (Pi Console is used over HTTP on the LAN: with "Secure" the browser would not send it). If published behind HTTPS, PICONSOLE_SECURE_COOKIE=1 adds "Secure". It is never inferred from client-supplied headers.
 SECURE_COOKIE = os.environ.get("PICONSOLE_SECURE_COOKIE", "").strip().lower() in ("1", "true", "yes", "on")
-def session_cookie(token: str) -> str:
-    return (f"session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={SESSION_TTL}"
+def session_cookie(token: str, ttl: int = SESSION_TTL) -> str:
+    return (f"session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={ttl if ttl == SESSION_TTL or ttl in REMEMBER.values() else SESSION_TTL}"
             + ("; Secure" if SECURE_COOKIE else ""))
 # La ventana deslizante se renueva como máximo cada RENEW_EVERY segundos: renovar en
 # cada request reescribiría sessions.json (y la SD) varias veces por segundo.
@@ -522,14 +527,16 @@ def _tkey(token: str) -> str:
 # vencimiento. Aprovecha para purgar las sesiones vencidas.
 # EN: Open a session: random 256-bit token. Stores the user, the permissions at login time and the expiry.
 #     It takes the chance to purge expired sessions.
-def create_session(username: str, permissions: dict) -> str:
+def create_session(username: str, permissions: dict, ttl: int = SESSION_TTL) -> str:
+    if ttl != SESSION_TTL and ttl not in REMEMBER.values(): ttl = SESSION_TTL
     token = secrets.token_hex(32)
     with _sessions_lock:
         sessions = _load_sessions()
         sessions[_tkey(token)] = {
             "username":    username,
             "permissions": permissions,
-            "expires":     time.time() + SESSION_TTL,
+            "expires":     time.time() + ttl,
+            "ttl":         ttl,
         }
         _purge(sessions)
         _save_sessions(sessions)
@@ -564,8 +571,10 @@ def get_session(token: str, allow_pending: bool = False) -> dict | None:
             sessions.pop(key, None); _save_sessions(sessions); return None
         # Ventana deslizante de 24h, pero persistida solo si pasaron > RENEW_EVERY s
         # desde la última renovación (evita una escritura a disco por request).
-        if s["expires"] - now < SESSION_TTL - RENEW_EVERY:
-            s["expires"] = now + SESSION_TTL
+        ttl = s.get("ttl", SESSION_TTL)
+        if ttl != SESSION_TTL and ttl not in REMEMBER.values(): ttl = SESSION_TTL
+        if s["expires"] - now < ttl - RENEW_EVERY:
+            s["expires"] = now + ttl
             sessions[key] = s
             _save_sessions(sessions)
         if user.get("must_change_password") and not allow_pending:
