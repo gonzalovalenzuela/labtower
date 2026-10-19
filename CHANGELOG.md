@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1p — 2026-10-19
+
+- **HTTPS: el certificado autofirmado ahora es aceptado por iPad/iPhone.** iOS exige la extensión «Extended Key Usage: serverAuth» (además del SAN y ≤ 825 días); sin ella Safari seguía diciendo «no confiable» aunque se instalara y confiara el certificado, y al añadir la app a la pantalla de inicio solo aparecía la letra «P» (no se podía descargar el icono). `pi-console-https enable` lo genera con esas extensiones y **regenera una sola vez** el autofirmado antiguo; los certificados propios (`--cert/--key`) no se tocan. Después hay que volver a instalar el certificado en cada dispositivo.
+
 ## 1.2.1o — 2026-10-19
 
 - **Nuevo icono de la app** (pantalla de inicio de iPad/iPhone, Android y pestañas): tres equipos apilados en isométrico sobre fondo azul marino con LED de estado verde, más sobrio y de estilo TI. Tamaños: `apple-touch-icon` 180, `icon-192`, `icon-512` y `icon-maskable-512`. Si ya habías añadido la app a la pantalla de inicio, quítala y vuelve a añadirla para ver el icono nuevo.
