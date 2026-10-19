@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1o — 2026-10-19
+
+- **Nuevo icono de la app** (pantalla de inicio de iPad/iPhone, Android y pestañas): tres equipos apilados en isométrico sobre fondo azul marino con LED de estado verde, más sobrio y de estilo TI. Tamaños: `apple-touch-icon` 180, `icon-192`, `icon-512` y `icon-maskable-512`. Si ya habías añadido la app a la pantalla de inicio, quítala y vuelve a añadirla para ver el icono nuevo.
+- Los SVG fuente y el script que regenera los PNG quedan en el repositorio (`assets/icons/`, `python3 assets/icons/make-icons.py`), así que las versiones siguientes conservan el icono.
+
 ## 1.2.1n — 2026-10-19
 
 - **Admin: tarjeta «Sesiones activas».** Lista los dispositivos con sesión iniciada (usuario, navegador y sistema, IP, última actividad y vencimiento) y permite cerrar una sesión con ✕ o todas tus otras sesiones. No se puede cerrar la propia ni la de un usuario con más permisos que tú. Las sesiones nuevas guardan IP y navegador; las anteriores aparecen como «Desconocido». El identificador es un prefijo del hash del token, nunca el token.
