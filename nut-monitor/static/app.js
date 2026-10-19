@@ -117,9 +117,11 @@ let ME=null, servers=[], allData={}, expanded=null, pollTimer=null, _firstChartD
 // El estado actual se refresca cada 5 segundos.
 // EN: The current state is refreshed every 5 seconds.
 const POLL=5000;
-// Circunferencia del anillo de carga de batería (r = 15.9), para calcular el trazo.
-// EN: Circumference of the battery charge ring (r = 15.9), used to compute the stroke.
-const CIRC=2*Math.PI*15.9;
+// Anillo de carga/carga de batería: radio 14.5 y trazo 4.5 en un viewBox de 36, así el borde exterior (16.75) queda dentro del lienzo y no se corta.
+// EN: Battery/load ring: radius 14.5 and stroke 4.5 in a 36 viewBox, so the outer edge (16.75) stays inside the canvas and is not clipped.
+const RING_R=14.5, CIRC=2*Math.PI*RING_R;
+const ringDash=pct=>{const p=Math.max(0,Math.min(100,+pct||0));return p<=0?`0 ${CIRC}`:`${CIRC} ${CIRC}`};
+const ringOff=pct=>CIRC-(Math.max(0,Math.min(100,+pct||0))/100)*CIRC;
 
 // ¿Puede agregar, editar y borrar servidores? (nivel «admin» de UPS).
 // EN: Can it add, edit and delete servers? (UPS "admin" level).
@@ -496,9 +498,9 @@ function renderDashboard(){
         <div class="gauge-box">
           <span class="gauge-lbl">${t('gaugeLabel_battery')}</span>
           <div class="circle-wrap">
-            <svg viewBox="0 0 36 36"><circle class="circle-bg" cx="18" cy="18" r="15.9"/>
-            <circle class="circle-fill" cx="18" cy="18" r="15.9"
-              style="stroke-dasharray:${CIRC} ${CIRC};stroke-dashoffset:${CIRC-(charge/100)*CIRC};stroke:${charge>60?'var(--green)':charge>25?'var(--yellow)':'var(--red)'}"/></svg>
+            <svg viewBox="0 0 36 36"><circle class="circle-bg" cx="18" cy="18" r="14.5"/>
+            <circle class="circle-fill" cx="18" cy="18" r="14.5"
+              style="opacity:${charge>0?1:0};stroke-dasharray:${ringDash(charge)};stroke-dashoffset:${ringOff(charge)};stroke:${charge>60?'var(--green)':charge>25?'var(--yellow)':'var(--red)'}"/></svg>
             <span class="circle-val">${charge?Math.round(charge):'—'}</span>
           </div>
           <span class="gauge-unit">%</span>
@@ -506,9 +508,9 @@ function renderDashboard(){
         <div class="gauge-box">
           <span class="gauge-lbl">${t('gaugeLabel_load')}</span>
           <div class="circle-wrap">
-            <svg viewBox="0 0 36 36"><circle class="circle-bg" cx="18" cy="18" r="15.9"/>
-            <circle class="circle-fill" cx="18" cy="18" r="15.9"
-              style="stroke-dasharray:${CIRC} ${CIRC};stroke-dashoffset:${CIRC-(load/100)*CIRC};stroke:${load<60?'var(--blue)':load<85?'var(--orange)':'var(--red)'}"/></svg>
+            <svg viewBox="0 0 36 36"><circle class="circle-bg" cx="18" cy="18" r="14.5"/>
+            <circle class="circle-fill" cx="18" cy="18" r="14.5"
+              style="opacity:${load>0?1:0};stroke-dasharray:${ringDash(load)};stroke-dashoffset:${ringOff(load)};stroke:${load<60?'var(--blue)':load<85?'var(--orange)':'var(--red)'}"/></svg>
             <span class="circle-val">${load?Math.round(load):'—'}</span>
           </div>
           <span class="gauge-unit">%</span>
@@ -770,7 +772,7 @@ function drawVoltageChart(canvasId, history, range, hoverIdx=-1){
   }
 
   const N=filtered.length;
-  const PL=34, PR=8, PT=8, PB=18;
+  const PL=34, PR=30, PT=8, PB=18;
   const W2=W-PL-PR, H2=H-PT-PB;
 
   // Calcular rango de voltaje con margen
@@ -836,11 +838,11 @@ function drawVoltageChart(canvasId, history, range, hoverIdx=-1){
   const last=filtered[N-1];
   if(last.vin){
     ctx.fillStyle='#4361ee'; ctx.font='bold 9px DM Mono,monospace'; ctx.textAlign='left';
-    ctx.fillText(Math.round(last.vin)+'V', W-PR+2, yOf(last.vin)+3);
+    ctx.fillText(Math.round(last.vin)+'V', W-PR+4, yOf(last.vin)+3);
   }
   if(last.vout){
     ctx.fillStyle='#22c55e'; ctx.font='bold 9px DM Mono,monospace'; ctx.textAlign='left';
-    ctx.fillText(Math.round(last.vout)+'V', W-PR+2, yOf(last.vout)+12);
+    ctx.fillText(Math.round(last.vout)+'V', W-PR+4, yOf(last.vout)+12);
   }
 
   // Crosshair
@@ -893,7 +895,7 @@ function drawWattsChart(canvasId, history, range, hoverIdx=-1){
   }
 
   const N=filtered.length;
-  const PL=40, PR=8, PT=8, PB=18;
+  const PL=40, PR=36, PT=8, PB=18;
   const W2=W-PL-PR, H2=H-PT-PB;
 
   const allW = filtered.map(p=>p.watts||0);
@@ -949,7 +951,7 @@ function drawWattsChart(canvasId, history, range, hoverIdx=-1){
   const last=filtered[N-1];
   if(last.watts){
     ctx.fillStyle='#f97316'; ctx.font='bold 9px DM Mono,monospace'; ctx.textAlign='left';
-    ctx.fillText(Math.round(last.watts)+'W', W-PR+2, yOf(last.watts)+3);
+    ctx.fillText(Math.round(last.watts)+'W', W-PR+4, yOf(last.watts)+3);
   }
 
   // Crosshair
@@ -984,7 +986,7 @@ function drawTempChart(canvasId, history, range, hoverIdx=-1){
     ctx.fillText(filtered&&filtered.length===1?t('accumulating'):t('noDataChart'),W/2,H/2);
     ctx.scale(1/dpr,1/dpr); return;
   }
-  const N=filtered.length, PL=34, PR=8, PT=8, PB=18, W2=W-PL-PR, H2=H-PT-PB;
+  const N=filtered.length, PL=34, PR=30, PT=8, PB=18, W2=W-PL-PR, H2=H-PT-PB;
   const tMin=Math.floor(Math.min(...temps)-2), tMax=Math.max(Math.ceil(Math.max(...temps)+2), tMin+6), tRange=tMax-tMin||1;
   const xOf=i=>PL+(i/(N-1))*W2, yOf=v=>PT+H2-((v-tMin)/tRange)*H2;
   const gridSteps=4;
@@ -1014,7 +1016,7 @@ function drawTempChart(canvasId, history, range, hoverIdx=-1){
   const last=filtered[N-1];
   if(last.temp>0){
     ctx.fillStyle='#ef4444'; ctx.font='bold 9px DM Mono,monospace'; ctx.textAlign='left';
-    ctx.fillText(parseFloat(last.temp).toFixed(0)+'°', W-PR+2, yOf(last.temp)+3);
+    ctx.fillText(parseFloat(last.temp).toFixed(0)+'°', W-PR+4, yOf(last.temp)+3);
   }
   if(hoverIdx>=0 && hoverIdx<N && filtered[hoverIdx].temp>0){
     const cx=xOf(hoverIdx), pt=filtered[hoverIdx];
@@ -1168,7 +1170,7 @@ function onVChartMove(e, canvas, key, type){
   const rect = canvas.getBoundingClientRect();
   const mouseX = e.clientX - rect.left;
   const W = canvas.offsetWidth;
-  const PL = type==='w'?40:34, PR=8;
+  const PL = type==='w'?40:34, PR = type==='w'?36:30;
   const W2 = W-PL-PR;
   const N = history.length;
 
