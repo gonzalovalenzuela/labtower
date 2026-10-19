@@ -231,7 +231,7 @@ class H(BaseHTTPRequestHandler):
             u, err = auth.login(self, body.get("username", ""), body.get("password", ""))
             if not u: return self._json(err[0], {"error": err[1]})
             ttl = auth.remember_ttl(body.get("remember"))     # «Recordarme»: solo valores de la lista blanca / EN: only whitelisted values
-            token = auth.create_session(body["username"], u["permissions"], ttl)
+            token = auth.create_session(body["username"], u["permissions"], ttl, self)
             must  = auth.load_users().get(body["username"], {}).get("must_change_password", False)
             return self._json(200, {"ok": True, "username": body["username"],
                                     "permissions": u["permissions"], "must_change_password": must},

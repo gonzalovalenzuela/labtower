@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1n — 2026-10-19
+
+- **Admin: tarjeta «Sesiones activas».** Lista los dispositivos con sesión iniciada (usuario, navegador y sistema, IP, última actividad y vencimiento) y permite cerrar una sesión con ✕ o todas tus otras sesiones. No se puede cerrar la propia ni la de un usuario con más permisos que tú. Las sesiones nuevas guardan IP y navegador; las anteriores aparecen como «Desconocido». El identificador es un prefijo del hash del token, nunca el token.
+- **Admin: el login con Enter se enviaba dos veces** (manejador duplicado) y abría dos sesiones; ahora una.
+- README: la duración de la sesión (24 h o «Recordarme») y la nueva tarjeta.
+
 ## 1.2.1m — 2026-10-19
 
 - **Login: opción «Recordarme».** Casilla con selector de duración: 1 día, 1 semana, 1 mes o siempre. Sin marcar, la sesión sigue durando 24 h como antes. Disponible en el login de todos los módulos (Admin, WOL, UPS, Net, Proxmox y Overview); la última elección se recuerda en el navegador.

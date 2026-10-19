@@ -257,6 +257,8 @@ class H(BaseHTTPRequestHandler):
                       "created": d.get("created")}
                      for u, d in users.items()]
             self._json(200, {"users": out})
+        elif path == "/api/sessions":
+            self._json(200, {"sessions": auth.list_sessions(tok)})
         elif path == "/api/me":
             sess = auth.get_session(tok)
             self._json(200, {"username": sess["username"],
@@ -297,7 +299,7 @@ class H(BaseHTTPRequestHandler):
                 auth.login_failed(self, body.get("username", ""))
                 return self._json(401, {"error": "Invalid credentials"})
             ttl = auth.remember_ttl(body.get("remember"))     # «Recordarme»: solo valores de la lista blanca / EN: only whitelisted values
-            token = auth.create_session(body["username"], u["permissions"], ttl)
+            token = auth.create_session(body["username"], u["permissions"], ttl, self)
             users = auth.load_users()
             must  = users.get(body["username"],{}).get("must_change_password", False)
             self.send_response(200)
@@ -530,6 +532,22 @@ class H(BaseHTTPRequestHandler):
                 log.info(f"Backup deleted: {mt.group(1)} by {me}")
                 return self._json(200, {"ok": True})
             return self._json(404, {"error": "Backup not found"})
+        # Sesiones activas: cerrar una (por id) o todas las demás. No se puede cerrar la propia (para eso está «Salir») ni la de un usuario con más permisos.
+        # EN: Active sessions: close one (by id) or all the others. You cannot close your own (that is what "Sign out" is for) nor one of a user with higher permissions.
+        if path == "/api/sessions/others":
+            n = 0
+            for s2 in auth.list_sessions(tok):
+                if s2["current"] or s2["username"] != me: continue
+                if auth.revoke_session_id(s2["id"], None, tok): n += 1
+            log.info(f"Sessions closed: {n} (others of {me})")
+            return self._json(200, {"ok": True, "closed": n})
+        ms = re.match(r'^/api/sessions/([0-9a-f]{16})$', path)
+        if ms:
+            r = auth.revoke_session_id(ms.group(1), lambda u: not _outranks(sess["permissions"], (auth.load_users().get(u) or {}).get("permissions")), tok)
+            if r is False: return self._json(403, {"error": "You cannot close the session of a user with higher permissions than yours"})
+            if r is None: return self._json(404, {"error": "Session not found (or it is your current session)"})
+            log.info(f"Session closed: {r} by {me}")
+            return self._json(200, {"ok": True})
         m = re.match(r'^/api/users/([a-zA-Z0-9_\-]+)$', path)
         if not m: return self._json(400, {"error": "Invalid user"})
         uname = m.group(1)

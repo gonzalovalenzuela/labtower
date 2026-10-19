@@ -69,11 +69,11 @@ El código fuente está comentado en español e inglés (los comentarios en ingl
 
 ```bash
 # Descargar el .deb desde Releases
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1m/pi-console_1.2.1m_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1n/pi-console_1.2.1n_all.deb
 
 # Instalar (apt resuelve e instala las dependencias: python3, nginx, nut, nut-client, snmp, sudo…)
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.1m_all.deb
+sudo apt-get install -y ./pi-console_1.2.1n_all.deb
 ```
 
 Usa `apt-get install ./archivo.deb` (no `dpkg -i`): así `apt` instala las dependencias que falten.
@@ -112,8 +112,8 @@ sudo nginx -t && sudo systemctl reload nginx
 ## Actualizar
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1m/pi-console_1.2.1m_all.deb
-sudo apt-get install -y ./pi-console_1.2.1m_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1n/pi-console_1.2.1n_all.deb
+sudo apt-get install -y ./pi-console_1.2.1n_all.deb
 pi-console-health
 ```
 
@@ -147,7 +147,7 @@ Cada persona ve solo las tarjetas y los eventos de los módulos a los que tiene 
 
 **Modo kiosko:** el botón *Kiosko* (o abrir `/overview/?kiosk=1`) deja la página a pantalla completa, con letra grande, sin botones y sin cursor, y evita que la pantalla se apague. Pensado para un monitor o tablet fijo; el mouse o un toque en la pantalla muestran un botón para salir. La letra se adapta al tamaño de la pantalla (tablet de 7", portátil, monitor); se puede ajustar con `?zoom=0.8` (entre 0.5 y 2). Si el contenido no cabe, el botón *Auto-desplazar* (aparece junto a *Salir de kiosko* al tocar la pantalla) hace que suba y baje solo, despacio; viene apagado y se detiene 30 s al tocar la pantalla. Con `?autoscroll=1` arranca encendido. Ejemplo: `/overview/?kiosk=1&zoom=0.9`. La sesión se renueva sola mientras la página está abierta; para dejarlo permanente conviene un usuario con permisos de solo lectura. Mientras el Resumen está abierto, Proxmox Monitor consulta a sus clusters cada 5 s (igual que con su propia página abierta).
 
-**iPad como pantalla (app web):** abre `http://IP-DEL-PI/overview/?kiosk=1` en Safari → Compartir → *Añadir a pantalla de inicio* y deja activado *Abrir como app web*. Desde el icono se abre a pantalla completa, sin barra de Safari ni botón de cerrar. Si ya habías añadido un acceso directo antes de 1.2.1m, bórralo y créalo de nuevo. Para que el iPad no se bloquee, activa *Acceso guiado* (Ajustes → Accesibilidad) o pon *Bloqueo automático* en *Nunca*.
+**iPad como pantalla (app web):** abre `http://IP-DEL-PI/overview/?kiosk=1` en Safari → Compartir → *Añadir a pantalla de inicio* y deja activado *Abrir como app web*. Desde el icono se abre a pantalla completa, sin barra de Safari ni botón de cerrar. Si ya habías añadido un acceso directo antes de 1.2.1n, bórralo y créalo de nuevo. Para que el iPad no se bloquee, activa *Acceso guiado* (Ajustes → Accesibilidad) o pon *Bloqueo automático* en *Nunca*.
 
 ### UPS Monitor
 Empieza **sin servidores** (no hace falta tener una UPS). Un administrador agrega uno con *Agregar servidor* (nombre, host y puerto de `upsd`, por defecto 3493) y puede probar la conexión antes de guardar. Consulta `upsd` cada 10 s y guarda el historial en una base SQLite. La primera lectura aparece en pocos segundos; las dos primeras se guardan de inmediato para que los gráficos tengan puntos enseguida.
@@ -283,7 +283,7 @@ Pi Console está pensado para una **red local de confianza** y se sirve por **HT
 - **HTTP por defecto, HTTPS con un comando.** Por defecto las credenciales y la cookie viajan sin cifrar por la LAN: no expongas el puerto 80 a internet. Para cifrar: `sudo pi-console-https enable` (certificado autofirmado, el navegador avisa una vez) o con tu certificado: `sudo pi-console-https enable --cert fullchain.pem --key privkey.pem`. Con `--redirect` el puerto 80 redirige a HTTPS, la cookie pasa a `Secure` y se envía HSTS. `sudo pi-console-https disable` lo deshace; `status` muestra el estado.
 - **Escrituras solo desde la propia página (CSRF).** Toda petición que modifica datos se rechaza (403) si el navegador indica que no viene del mismo origen (`Sec-Fetch-Site`, o `Origin` frente a `Host` en navegadores antiguos). `SameSite=Strict` no bastaba: otra página del mismo host en otro puerto podía escribir con tu sesión.
 - **Los servicios Python escuchan solo en `127.0.0.1`** (8080–8085); únicamente nginx es accesible desde la red.
-- **Cookie `Secure` (opcional).** La cookie de sesión lleva `HttpOnly` y `SameSite=Strict` y dura 24 h. Con `pi-console-https enable --redirect` (o `PICONSOLE_SECURE_COOKIE=1` detrás de tu propio proxy HTTPS, ver [Configuración](#configuración-variables-de-entorno)) lleva además `Secure`. Está apagado por defecto porque con HTTP el navegador no enviaría una cookie `Secure` y no podrías iniciar sesión.
+- **Cookie `Secure` (opcional).** La cookie de sesión lleva `HttpOnly` y `SameSite=Strict` y dura 24 h, o 1 día, 1 semana, 1 mes o «siempre» (400 días renovables) si marcas **Recordarme** al iniciar sesión. En el panel Admin, **Sesiones activas** muestra los dispositivos con sesión (usuario, navegador, IP, última actividad) y permite cerrar cualquiera o todas tus otras sesiones. Con `pi-console-https enable --redirect` (o `PICONSOLE_SECURE_COOKIE=1` detrás de tu propio proxy HTTPS, ver [Configuración](#configuración-variables-de-entorno)) lleva además `Secure`. Está apagado por defecto porque con HTTP el navegador no enviaría una cookie `Secure` y no podrías iniciar sesión.
 - **Contraseñas e intentos.** Las contraseñas (mínimo 8 caracteres) se guardan con scrypt. Tras 5 intentos de login fallidos desde una IP en 10 minutos, esa IP queda bloqueada 5 minutos; además cada cuenta tiene su propio límite. El contador es **compartido por todos los módulos** (un archivo con bloqueo), cambiar la contraseña exige la actual y esos intentos también se limitan. nginx añade límite de peticiones por IP (más estricto en el login) y de conexiones simultáneas, y no revela su versión.
 - **Sesiones.** El token vive solo en la cookie `HttpOnly`; en disco (`sessions.json`) se guarda únicamente su hash SHA-256, el login no lo devuelve en el JSON y los respaldos no incluyen las sesiones. Un `/api/health` público solo dice «ok/degraded/fail»; la versión y los detalles piden sesión.
 - **Servicios con privilegios mínimos.** El código de `/opt/pi-console` es de root y de solo lectura para los servicios; lo que escriben vive en `/var/lib/pi-console/<módulo>/`. Las unidades systemd llevan endurecimiento (sin `/home`, `/tmp` propio, kernel de solo lectura, sin nuevos privilegios y sistema de archivos de solo lectura salvo los datos, en UPS, Proxmox y Resumen). Los scripts que corren como root (instalador, Teleporter) **nunca siguen enlaces simbólicos** dentro de las carpetas de los servicios.
@@ -371,7 +371,7 @@ pi-console/
 ├── CHANGELOG.md
 ├── RELEASE_NOTES_1.2.0.md
 ├── RELEASE_NOTES_1.2.1.md
-├── RELEASE_NOTES_1.2.1m.md
+├── RELEASE_NOTES_1.2.1n.md
 ├── LICENSE
 ├── README.md                # Español
 └── README.en.md             # English
