@@ -482,6 +482,8 @@ class H(BaseHTTPRequestHandler):
         elif path == "/api/wake_all":
             if not auth.check_permission(tok, "wol", "execute"):
                 return self._json(403, {"error": "Execute permission required"})
+            if not check_rate(self._ip()):
+                return self._json(429, {"error": "Rate limit"})
             devs = load_devices()
             sess = auth.get_session(tok)
             username = sess["username"] if sess else "?"

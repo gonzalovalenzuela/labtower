@@ -121,7 +121,7 @@ def save_upload(rfile, length):
         os.chmod(SPOOL, 0o700)
     except OSError as e:
         return None, f"Cannot use the backup directory: {e}"
-    tmp = SPOOL / f".upload-{os.getpid()}.tmp"
+    tmp = SPOOL / f".upload-{os.getpid()}-{os.urandom(4).hex()}.tmp"   # unique per upload: two simultaneous uploads must not share a file
     got, first = 0, b""
     try:
         with open(tmp, "wb") as f:
@@ -143,10 +143,13 @@ def save_upload(rfile, length):
         for _ in range(5):
             name = time.strftime("upload-%Y%m%d_%H%M%S.tar.gz")
             dest = SPOOL / name
-            if not dest.exists():
-                os.replace(tmp, dest)
-                return name, None
-            time.sleep(1.1)
+            try:
+                os.link(tmp, dest)            # atomic and fails if the name is taken: simultaneous uploads never overwrite each other
+            except FileExistsError:
+                time.sleep(1.1)
+                continue
+            tmp.unlink(missing_ok=True)
+            return name, None
         tmp.unlink(missing_ok=True)
         return None, "Could not allocate a file name"
     except OSError as e:

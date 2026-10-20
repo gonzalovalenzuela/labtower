@@ -27,7 +27,7 @@ More screenshots (light/dark, 4 resolutions) are in [`docs/screenshots/`](docs/s
 
 **Kiosk mode:** the *Kiosk* button (or `/overview/?kiosk=1`) goes full screen with large text, no buttons or cursor, and keeps the screen awake. Meant for a fixed monitor or tablet; moving the mouse or touching the screen shows an exit button. Text size adapts to the screen (7" tablet, laptop, monitor); adjust it with `?zoom=0.8` (0.5 to 2). If the content doesn't fit, the *Auto-scroll* button (it shows up next to *Exit kiosk* when the screen is touched) makes it scroll slowly up and down by itself; it starts off and pauses for 30 s when the screen is touched. With `?autoscroll=1` it starts on. Example: `/overview/?kiosk=1&zoom=0.9`. The session renews itself while the page is open, so a read-only user is advisable. While Overview is open, Proxmox Monitor polls its clusters every 5 s (as it does with its own page open).
 
-**iPad as a display (web app):** open `http://PI-IP/overview/?kiosk=1` in Safari → Share → *Add to Home Screen* and keep *Open as Web App* on. From the icon it opens full screen, with no Safari bar or close button. If you added a shortcut before 1.2.1s, delete it and add it again. To stop the iPad from locking, use *Guided Access* (Settings → Accessibility) or set *Auto-Lock* to *Never*.
+**iPad as a display (web app):** open `http://PI-IP/overview/?kiosk=1` in Safari → Share → *Add to Home Screen* and keep *Open as Web App* on. From the icon it opens full screen, with no Safari bar or close button. If you added a shortcut before 1.2.1t, delete it and add it again. To stop the iPad from locking, use *Guided Access* (Settings → Accessibility) or set *Auto-Lock* to *Never*.
 
 ## Requirements
 
@@ -36,9 +36,9 @@ Raspberry Pi OS, DietPi or Debian 12+ (also works on an x86 VM), Python 3.9+, ng
 ## Install
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1s/pi-console_1.2.1s_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1t/pi-console_1.2.1t_all.deb
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.1s_all.deb
+sudo apt-get install -y ./pi-console_1.2.1t_all.deb
 ```
 
 Then open `http://<pi-ip>/`. The installer prints the initial user `admin` with a **random password** (it is also in `/var/lib/pi-console/initial-admin-password` until changed); you **must set a new password** on first login. UPS Monitor starts with no servers, and Net Monitor scans nothing until you press "Run initial scan".
