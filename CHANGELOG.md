@@ -2,174 +2,35 @@
 
 ## 1.2.2 — 2026-10-20
 
-Revisión de seguridad completa (Python, shell, SQL, nginx, systemd, scripts de instalación y JavaScript; análisis con bandit y shellcheck).
+Reúne todos los cambios desde 1.2.1 (builds 1.2.1a a 1.2.1t).
 
-- **Respaldo SFTP: el archivo de estado ya no se escribe como root dentro de una carpeta del servicio.** `backup.status` estaba en `/var/lib/pi-console` (dueño `pi-console`); un servicio comprometido podía dejar un enlace simbólico y, cuando cron (root) escribía el estado, cambiarle permisos o sobrescribir un archivo cualquiera. Ahora está en `/var/log/pi-console/backup.status` (carpeta de root). Se comprobó el ataque antes del arreglo.
-- **Teleporter: tope de 2 GiB descomprimidos** al verificar/restaurar (un `.tar.gz` de 3 MB que expande a 3 GiB llenaba el disco). Las subidas ya tenían tope de 200 MB comprimidos.
-- **Teleporter: subidas simultáneas** ya no se pisan (nombre temporal único y renombrado atómico); los temporales abandonados se limpian a las 24 h.
-- **WOL: «Despertar todos»** ahora tiene el mismo límite de frecuencia que «Despertar».
-- Sin hallazgos críticos ni altos: SQL parametrizado, sin `shell=True`/`eval`, CSRF en todos los métodos que modifican, escape de HTML en todo lo que viene del servidor, huellas TLS fijadas para Pi-hole y Proxmox.
+**Seguridad**
+- CSRF: las peticiones que modifican datos se rechazan si no vienen de la propia página.
+- CSP estricta: sin scripts ni manejadores en línea (`script-src 'self'`). Navegadores: Chrome 75+, Firefox 105+, Safari 15.4+.
+- XSS corregido en los 5 paneles. Incluye el que venía del servidor NUT (un equipo de la red podía ejecutar código en el navegador del administrador).
+- WOL: el límite por IP ya no se evade con `X-Forwarded-For`. "Despertar todos" también tiene límite.
+- Net Monitor: el escaneo de una IP solo acepta equipos de la red escaneada.
+- Redirección abierta en el cambio de contraseña corregida.
+- La contraseña inicial del admin ya no se escribe en el journal. Los hashes antiguos se migran a scrypt.
+- Respaldo SFTP: el archivo de estado ahora está en `/var/log/pi-console/backup.status` (carpeta de root).
+- Teleporter: se rechazan respaldos que descomprimen a más de 2 GiB. Dos subidas simultáneas ya no se pisan.
+- Revisión final del código con bandit y shellcheck. Sin hallazgos críticos ni altos.
 
-## 1.2.1s — 2026-10-20
+**Nuevo**
+- Login: "Recordarme" (1 día, 1 semana, 1 mes o siempre). Sin marcar, 24 h.
+- Admin: tarjeta "Sesiones activas" para ver y cerrar sesiones.
+- Overview: selector de intervalo de actualización (10 s a 5 min, o manual).
+- Net Monitor: botón de basurero para eliminar equipos. Categorías nuevas: Game Console, Servidor, Teléfono IP, UPS y Altavoz inteligente.
+- Tarjeta de Net Monitor al pasar el mouse (o tocar en iPad) por una IP en UPS, Proxmox, WOL y Overview.
+- Nuevo icono de la app y soporte para pantalla de inicio en iPad/iPhone (pantalla completa, icono incrustado).
+- HTTPS autofirmado compatible con iOS. `pi-console-https enable` regenera el certificado antiguo una vez; hay que instalarlo de nuevo en cada dispositivo.
 
-- **Overview: intervalo de actualización a elegir** (10 s, 30 s, 1 min, 2 min, 5 min o manual con botón ↻). Se guarda en cada navegador, así que el iPad del kiosko puede ir a 30 s y el móvil a 5 min. Por defecto sigue en 10 s. Con la pestaña oculta no se consulta nada y al volver se actualiza si ya tocaba.
-- Solo cambia cada cuánto se redibuja la pantalla: los módulos siguen vigilando y anotando eventos en el servidor aunque nadie mire, así que un intervalo largo no pierde eventos (quedan en la línea de tiempo).
+**Correcciones**
+- Admin: el login con Enter abría dos sesiones.
+- UPS Monitor: anillos y etiquetas de los gráficos ya no se cortan.
+- Las duraciones de más de 24 h se ven en días (`1d 16h`).
 
-## 1.2.1r — 2026-10-20
-
-- **Net Monitor: botón de basurero para eliminar equipos.** Cada fila de la tabla tiene un icono de basurero (solo para administradores de Net Monitor) que pide confirmación y quita el equipo de la lista. Si sigue conectado, el próximo escaneo lo vuelve a descubrir.
-
-## 1.2.1q — 2026-10-19
-
-- **iPad/iPhone: el icono de la app ya no depende de una segunda descarga.** Al abrir «Añadir a pantalla de inicio», iOS descargaba `apple-touch-icon.png` por separado y, si no confiaba en el certificado HTTPS (autofirmado), mostraba la letra «P». Ahora el `apple-touch-icon` va incrustado (`data:`) en todas las páginas (inicio, Admin, WOL, UPS, Net, Proxmox y Overview), así que no hay descarga que falle. El script `assets/icons/make-icons.py` lo regenera junto con los PNG.
-
-## 1.2.1p — 2026-10-19
-
-- **HTTPS: el certificado autofirmado ahora es aceptado por iPad/iPhone.** iOS exige la extensión «Extended Key Usage: serverAuth» (además del SAN y ≤ 825 días); sin ella Safari seguía diciendo «no confiable» aunque se instalara y confiara el certificado, y al añadir la app a la pantalla de inicio solo aparecía la letra «P» (no se podía descargar el icono). `pi-console-https enable` lo genera con esas extensiones y **regenera una sola vez** el autofirmado antiguo; los certificados propios (`--cert/--key`) no se tocan. Después hay que volver a instalar el certificado en cada dispositivo.
-
-## 1.2.1o — 2026-10-19
-
-- **Nuevo icono de la app** (pantalla de inicio de iPad/iPhone, Android y pestañas): tres equipos apilados en isométrico sobre fondo azul marino con LED de estado verde, más sobrio y de estilo TI. Tamaños: `apple-touch-icon` 180, `icon-192`, `icon-512` y `icon-maskable-512`. Si ya habías añadido la app a la pantalla de inicio, quítala y vuelve a añadirla para ver el icono nuevo.
-- Los SVG fuente y el script que regenera los PNG quedan en el repositorio (`assets/icons/`, `python3 assets/icons/make-icons.py`), así que las versiones siguientes conservan el icono.
-
-## 1.2.1n — 2026-10-19
-
-- **Admin: tarjeta «Sesiones activas».** Lista los dispositivos con sesión iniciada (usuario, navegador y sistema, IP, última actividad y vencimiento) y permite cerrar una sesión con ✕ o todas tus otras sesiones. No se puede cerrar la propia ni la de un usuario con más permisos que tú. Las sesiones nuevas guardan IP y navegador; las anteriores aparecen como «Desconocido». El identificador es un prefijo del hash del token, nunca el token.
-- **Admin: el login con Enter se enviaba dos veces** (manejador duplicado) y abría dos sesiones; ahora una.
-- README: la duración de la sesión (24 h o «Recordarme») y la nueva tarjeta.
-
-## 1.2.1m — 2026-10-19
-
-- **Login: opción «Recordarme».** Casilla con selector de duración: 1 día, 1 semana, 1 mes o siempre. Sin marcar, la sesión sigue durando 24 h como antes. Disponible en el login de todos los módulos (Admin, WOL, UPS, Net, Proxmox y Overview); la última elección se recuerda en el navegador.
-- «Siempre» equivale a 400 días con renovación al usar (límite que aplican los navegadores a las cookies). Cada sesión guarda su duración; las sesiones antiguas conservan 24 h. El servidor solo acepta los cuatro valores. Cambiar la contraseña o eliminar al usuario sigue cerrando sus sesiones.
-
-## 1.2.1l — 2026-10-19
-
-- **UPS Monitor: el anillo de batería y de carga se veía cortado en los extremos.** El trazo (grosor 5) con radio 15,9 sobrepasaba el lienzo SVG de 36 unidades; ahora radio 14,5 y grosor 4,5, con el anillo completo dentro del recuadro. Con 0 % ya no queda un punto suelto.
-- **Gráficos de voltaje, consumo y temperatura:** las etiquetas del valor actual (p. ej. `230V`, `165W`) quedaban recortadas en el borde derecho; se amplió el margen derecho (también en el cálculo del cursor y el tooltip).
-
-## 1.2.1k — 2026-10-18
-
-- **UPS Monitor: las IP de los clientes conectados** (chips de la sección *Clientes* del detalle de cada UPS) también abren la tarjeta de Net Monitor (al pasar el ratón, o al tocar en iPhone/iPad) y llevan al detalle completo del equipo.
-
-## 1.2.1j — 2026-10-18
-
-- **iPhone/iPad: la tarjeta de Net Monitor no se abría al tocar una IP.** El toque genera eventos de ratón sintéticos que cerraban la tarjeta al instante. Ahora se ignoran en pantallas táctiles, y cualquier IP subrayada abre la tarjeta al tocarla (también en las listas laterales); el área táctil es más grande. Un segundo toque la cierra; el botón *Ver detalle completo* abre Net Monitor con el equipo expandido. Probado con emulación de iPhone y datos de UPS simulados.
-
-## 1.2.1i — 2026-10-18
-
-- **Tarjeta de Net Monitor al pasar el ratón por una IP.** En UPS Monitor (servidores NUT), Proxmox (clústeres), WOL Console (columna IP) y Overview (eventos y «nuevos dispositivos») la IP o el nombre del equipo se subraya con puntos; al pasar el ratón aparece una tarjeta con lo que Net Monitor sabe del equipo: nombre/alias, estado, tipo, SO, fabricante, MAC, latencia, puertos abiertos y última vez visto. El botón *Ver detalle completo en Net Monitor* abre `/net/?ip=…` con ese equipo ya expandido. En WOL, Proxmox (barra superior) y Overview, el clic sobre la IP lleva directo al detalle; en pantallas táctiles el toque abre la tarjeta. En las listas de servidores laterales el clic sigue seleccionando el servidor.
-- Se busca por IP o, si el módulo guarda un nombre, por nombre de equipo/alias. Si el equipo no está en Net Monitor, la tarjeta lo dice. Quien no tenga permiso sobre Net Monitor ve «Sin acceso».
-- Net Monitor acepta `?ip=192.168.0.10` (enlace profundo) y quita los filtros para mostrar ese equipo.
-- Seguridad: la tarjeta se construye con `textContent` (sin `innerHTML`); probado con un nombre de equipo `<img onerror=…>`. Cumple la CSP estricta (`ipcard.js`/`ipcard.css` propios de cada módulo).
-
-## 1.2.1h — 2026-10-17
-
-- **iPad: sin botón X en modo kiosko.** Instalada como app web, la página ya ocupa toda la pantalla; el botón *Kiosko* además pedía pantalla completa al navegador y iPadOS dibujaba una X para salir. Ahora no la pide cuando se abre desde el icono de pantalla de inicio (en un navegador normal sigue igual). El manifest ya no declara `fullscreen`.
-
-## 1.2.1g — 2026-10-17
-
-### iPad y app web
-- **Manifest de app web** (`/manifest.webmanifest`) e iconos PNG (180, 192, 512 y maskable). Al usar *Añadir a pantalla de inicio* en iPad (o instalar en Android/Chrome) la página se abre a pantalla completa, sin barra de Safari ni botón X. Atajo a `/overview/?kiosk=1`.
-- Las 8 páginas llevan las metas de iOS (`apple-mobile-web-app-capable`, título, icono, `theme-color` claro/oscuro).
-- CSS táctil: sin zoom automático al enfocar un campo (16 px en pantallas táctiles), sin resaltado al tocar, sin zoom por doble toque y sin rebote al desplazar.
-- nginx: `location = /manifest.webmanifest` con tipo `application/manifest+json` (cambia el conffile `pi-console-site.conf`; si lo editaste, dpkg preguntará).
-
-### Net Monitor: menos «Other»
-- **Nueva categoría Game Console**, detectada sola por fabricante de la MAC (Nintendo, Sony Interactive Entertainment, Valve, Oculus/Meta), por nombre (`Nintendo-Switch`, `PS4/PS5`, `Xbox`, `SteamDeck`, `Quest`…) y por puertos (PS Remote Play 9295–9297, Xbox Live 3074). Un «Nintendo-Switch» ya no se confunde con un switch de red.
-- **Cuatro categorías nuevas:** Servidor (Proxmox 8006, ESXi 902, VMware/Supermicro, nombres como `pve`, `srv`, `plex`, `pihole`…), Teléfono IP (Yealink, Polycom, Snom, SIP 5060/5061…), UPS (APC, Eaton, CyberPower, Tripp Lite, NUT 3493) y Altavoz inteligente (Sonos, Echo, HomePod, Nest, Bose…). Sonos y Echo dejan de contarse como electrodoméstico.
-- Puertos nuevos en el escaneo: 902, 3074, 3493, 5060, 5061, 8006, 9295. Si definiste `SCAN_PORTS` a mano, añádelos para usar la detección por puerto (la detección por fabricante y nombre funciona igual).
-- Los equipos se reclasifican en el siguiente escaneo; los tipos elegidos a mano se respetan. Overview muestra también las categorías nuevas.
-
-## 1.2.1f — 2026-10-16
-
-CSP estricta. Sin cambios visibles en la interfaz.
-
-### Seguridad
-- **CSP sin `'unsafe-inline'` en scripts:** las 8 páginas (inicio, WOL, UPS, Admin, Net, Proxmox, Overview y cambio de contraseña) ya no llevan JavaScript, manejadores `on…=` ni `<style>` en línea. El código está en `app.js`, `footer.js`, `csp-bind.js` y `app.css` de cada módulo. Los manejadores se declaran con `data-on-<evento>` y los enlaza `csp-bind.js` (también en el HTML que se genera dinámicamente). Así, aunque se colara HTML inyectado, el navegador no ejecutaría su script.
-- **Nueva política (nginx):** `script-src 'self'`; `style-src 'self' fonts.googleapis.com`; `style-src-attr 'unsafe-inline'`. Los atributos `style="…"` (~300) siguen permitidos; quitarlos no aporta protección frente a scripts.
-- Los servidores Python sirven solo `/<nombre>.js|css` con lista blanca, `ETag`, `no-cache` y `nosniff`.
-
-### Pruebas
-Chromium con la CSP real: 0 manejadores sin enlazar, 0 errores de JS, 0 violaciones de CSP en todas las páginas; comparación de comportamiento antiguo vs. nuevo en WOL/UPS/Net/Proxmox/Admin sin diferencias; el nombre malicioso `x');window.__pwn=1;('` llega intacto al botón y no se ejecuta. Regresión del servidor sin cambios.
-
-### Notas de actualización
-- `/etc/nginx/snippets/pi-console-site.conf` es conffile: si lo editaste, dpkg preguntará qué hacer; conserva el nuevo para tener la CSP estricta.
-- Navegadores: `style-src-attr` requiere Chrome 75+, Firefox 105+ o Safari 15.4+.
-- Tras actualizar, recarga con Ctrl+Shift+R.
-
-## 1.2.1e — 2026-10-16
-
-Auditoría exhaustiva. Sin cambios visibles en la interfaz.
-
-### Seguridad
-- **XSS desde el servidor NUT (Alto):** el valor de las variables del UPS (`battery.voltage`, `input.voltage`, …) y el estado (`ups.status`) se insertaban sin escapar. El protocolo NUT no tiene autenticación ni cifrado: quien responda en el puerto 3493 (un equipo de la LAN o un intermediario) podía ejecutar JavaScript en el navegador del administrador. Probado en Chromium con un upsd falso: antes se ejecutaba, ahora no. También se escapan los datos de la API de Proxmox (estado, vmid, Ceph).
-- **XSS por nombre de SO en Net Monitor (Medio):** el SO editable (30 caracteres) iba dentro de `class="…"`; un usuario con permiso de edición podía romper el atributo. Ahora el servidor solo acepta `[\w .+/()-]` en SO y grupo, y la página sanea el nombre de clase.
-- **Redirección abierta en cambio de contraseña (Bajo):** `?next=/%09/sitio` pasaba el filtro y el navegador lo leía como `//sitio`. Ahora se rechazan caracteres de control.
-- **Editar usuario:** el objeto JSON ya no va en un atributo con comillas simples.
-- **WOL:** nombre y notas rechazan caracteres de control (evita falsificar líneas de log).
-
-### Revisado sin hallazgos
-Matriz de permisos de los ~70 endpoints (todos con compuerta de sesión y nivel; las escrituras exigen además `admin`/`execute`), escalada entre administradores (`_outranks` / `_grant_denied`), SQL (sin consultas dinámicas), CSV exportado (solo números), cabeceras (sin CORS ni redirecciones), protocolo NUT (nombres sin espacios ni saltos), Pi-hole (huella fijada), scripts de root (copias con el usuario del servicio, `chown -h`, sudoers acotado), `pi-console-https` (argumentos validados).
-
-## 1.2.1d — 2026-10-16
-
-Endurecimiento tras la auditoría de 1.2.1c. Sin cambios visibles en la interfaz.
-
-### Seguridad
-- **XSS almacenado en botones de las páginas (Medio):** nombres de servidores UPS, clústeres Proxmox, etc. se insertaban dentro de `onclick="…('${nombre}')"`. El escape HTML no protege ahí: un nombre con `'` ejecutaba JavaScript en el navegador de otro administrador. Ahora todos los valores van como literal JS (`jsa()` = `JSON.stringify` + escape HTML) en los 5 paneles (29 botones). Probado en Chromium con el nombre `x');window.__pwn=1;('`: el botón recibe el texto exacto y no se ejecuta nada.
-- **Contraseña inicial fuera del journal:** el log solo indica el archivo (modo 600); el instalador la sigue mostrando en pantalla.
-- **Hash antiguo (SHA-256 con sal fija):** al iniciar sesión se migra a scrypt **y** se exige cambiar la contraseña.
-- **Errores:** los 12 `except:` sin tipo ahora capturan solo los errores esperados (ya no `KeyboardInterrupt`/`SystemExit`).
-- El instalador recomienda `pi-console-https enable --redirect` (cifra contraseña y sesión).
-
-
-## 1.2.1c — 2026-10-16
-
-Revisión de seguridad del código. Sin cambios visibles en la interfaz.
-
-### Seguridad
-- **WOL: el límite de encendidos por IP se podía evadir.** Tomaba la IP de `X-Forwarded-For`, que el cliente puede falsear. Ahora usa la IP que fija nginx (`auth.client_ip`), igual que el resto de módulos.
-- **Net Monitor: escaneo de una IP solo dentro de la red escaneada.** Antes `POST /api/scan/start` aceptaba cualquier IP (Internet, `127.0.0.1`, `169.254.x`) con permiso `execute`, lo que servía para sondear desde la Pi. Ahora responde 400 fuera de la red.
-- **Validación de entradas más estricta:** `valid_host` y el nombre de usuario usan `fullmatch` (con `match` + `$` pasaba un salto de línea final).
-- **Escape de HTML:** en UPS y Proxmox `esc()` ahora también escapa comillas, para los valores que van dentro de atributos.
-
-### Revisado sin hallazgos
-Restauración de respaldos como root (lista blanca, sin enlaces ni `..`, copia privada, NUT/nginx solo por consola), sudoers, SNMP (credenciales fuera de la línea de comandos), fijado de certificado de Proxmox, hashing scrypt, cookies, cabeceras y límites de nginx, endurecimiento de systemd, bandit (sin severidad media/alta) y shellcheck.
-
-## 1.2.1b — 2026-10-16
-
-### Cambios
-- **Duraciones en días desde las 24 h**, igual en todos los paneles. Ejemplo: `40h` ahora se ve `1d 16h`.
-  - Resumen: tiempo encendida de la Pi y "hace …" de la línea de tiempo (antes pasaba a días a las 48 h).
-  - Net Monitor: "monitoreado" (antes `40h monitoreado`, ahora `1d 16h monitoreado`).
-  - Proxmox y Admin Panel ya lo hacían así; sin cambios.
-
-## 1.2.1a — 2026-10-15
-
-Seguridad sobre 1.2.1. No hay cambios visibles en la interfaz.
-
-### Seguridad
-- **CSRF (escrituras desde otra página):** toda petición que modifica datos (POST, PUT, DELETE) se rechaza con 403 si el navegador indica que no viene de la propia página. Se aplica en los 6 servicios (WOL, UPS, Net, Proxmox, Resumen y Admin Panel, incluida la subida de respaldos).
-  - Antes: otra página del mismo host en otro puerto podía crear o borrar datos con la sesión del usuario. `SameSite=Strict` no lo impedía porque no distingue puertos.
-  - Cómo decide: usa `Sec-Fetch-Site`; si el navegador no lo envía (Safari/iOS antiguos), compara el host de `Origin` con el de `Host`. Sin ninguna de las dos cabeceras (curl, scripts) se permite, porque no llevan la cookie del navegador.
-  - Código: función `cross_origin()` en `auth/auth.py`, llamada al inicio de cada `do_POST`, `do_PUT` y `do_DELETE`.
-
-### Automatización
-- **Escaneo en GitHub** (`.github/workflows/security.yml`), en cada push, en cada pull request y cada lunes:
-  - gitleaks: busca claves y secretos en todo el historial.
-  - bandit: análisis estático de Python (severidad media o más).
-  - compilación de todo el código Python y shellcheck de los scripts (solo errores).
-- **Dependabot** (`.github/dependabot.yml`): avisa semanalmente si una GitHub Action tiene versión nueva.
-- Pi Console solo usa la biblioteca estándar de Python, así que no hay paquetes de terceros que escanear; sus dependencias son paquetes de Debian.
-
-### Mantenimiento (sin cambio de funcionamiento)
-- Cuatro avisos de bandit eran falsos positivos y ahora están marcados en el código con su motivo: dos `urlopen` con URL fija (`http://127.0.0.1` y una constante `https`) y el MD5/SHA-1 de `scripts/apt-repo.py`, que el formato de repositorio APT exige.
-
-### Pruebas
-- 38 pruebas de integración y 19 de CSRF (navegador normal, curl, Safari antiguo, detrás de nginx, otro puerto, `Origin: null`, escrituras de cada servicio).
-- Prueba en Chromium: la interfaz sigue funcionando y una página de otro puerto ya no logra escribir.
-- Instalación y purga del `.deb`.
+**Al actualizar:** `pi-console-site.conf` cambió. Si lo editaste, dpkg preguntará; conserva el nuevo. Si ya tenías la app en la pantalla de inicio, quítala y agrégala otra vez.
 
 ## 1.2.1 — 2026-10-15
 
