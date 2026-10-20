@@ -169,3 +169,15 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
 .remember-chk input{width:15px;height:15px;margin:0;cursor:pointer}
 .remember-row select{font:inherit;font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--border,#e3e8ef);background:var(--surface,#fff);color:var(--text,#1a2233)}
 .remember-row select:disabled{opacity:.45}
+
+/* Orden de las tarjetas: herramientas solo en modo «Ordenar» / Card order: tools only in "Reorder" mode */
+.card{position:relative}
+.btn.on{background:var(--blue-dim);border-color:var(--blue);color:var(--blue)}
+.card.sorting{outline:2px dashed var(--blue);outline-offset:-2px}
+.card.dragging{opacity:.45}
+.card.dragover{outline-style:solid;background:var(--blue-dim)}
+.otools{position:absolute;top:-13px;right:12px;display:flex;gap:2px;background:var(--surface);border:1px solid var(--blue);border-radius:99px;padding:1px 4px;z-index:2;box-shadow:var(--shadow)}
+.otool{background:none;border:0;color:var(--blue);font:inherit;font-size:1rem;line-height:1;min-width:28px;min-height:26px;padding:2px 6px;cursor:pointer;border-radius:99px}
+.otool:disabled{opacity:.3;cursor:default}
+.otool.grab{cursor:grab;font-size:.95rem;display:inline-flex;align-items:center;justify-content:center;user-select:none}
+body.kiosk .otools{display:none}

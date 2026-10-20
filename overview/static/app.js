@@ -1,13 +1,13 @@
 // ───────── Textos / texts ─────────
 const TXT={
- en:{title:'Overview',home:'Home',kiosk:'Kiosk',logout:'Sign out',login:'Sign in',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',exitk:'Exit kiosk',rint:'Refresh every',rman:'Manual',rnow:'Refresh now',ascroll:'Auto-scroll',updated:'Updated',allok:'All good',attn:'Attention',fail:'Failure',
+ en:{title:'Overview',sortBtn:'Reorder',sortDone:'Done',sortReset:'Reset order',mvEarlier:'Move earlier',mvLater:'Move later',mvDrag:'Drag to move',home:'Home',kiosk:'Kiosk',logout:'Sign out',login:'Sign in',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',exitk:'Exit kiosk',rint:'Refresh every',rman:'Manual',rnow:'Refresh now',ascroll:'Auto-scroll',updated:'Updated',allok:'All good',attn:'Attention',fail:'Failure',
   ups:'UPS Monitor',pve:'Proxmox',net:'Net Monitor',pi:'Raspberry Pi',ev:'Timeline',open:'Open →',noups:'No UPS servers configured',nopve:'No clusters configured',nonet:'No scan yet',noev:'No events yet',
   mains:'On mains',batt:'On battery',lowb:'Low battery',unreach:'Unreachable',battery:'Battery',load:'Load',runtime:'Runtime',power:'Power',nodes:'Nodes',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memory',disk:'Disk',temp:'Temp',uptime:'Uptime',
   online:'Online',known:'Known',offline:'Offline',newdev:'New devices',lastscan:'Last scan',scanning:'Scanning…',ceph:'Ceph',types:'By device type',nonew:'No new devices',
   ago:'ago',now:'now',min:'min',h:'h',d:'d',s:'s',power_uv:'Under-voltage',power_th:'Throttled',power_ok:'Power supply OK',invalid:'Invalid credentials',
   issue_batt:'is running on battery',issue_lowb:'has low battery',issue_srv:'unreachable',issue_node:'node offline',issue_cl:'cluster unreachable',issue_cpu:'high CPU',issue_ram:'high memory',issue_ceph:'Ceph',
   issue_temp:'Pi temperature high',issue_disk:'Pi disk almost full',issue_mem:'Pi memory high',issue_pwr:'Pi power supply problem',issue_scan:'scan error',h_temp:'Temp',h_min:'min',h_max:'max',h_uv:'Under-voltage',h_nouv:'no under-voltage',h_utemp:'UPS temperature 24 h'},
- es:{title:'Resumen',home:'Inicio',kiosk:'Kiosko',logout:'Cerrar sesión',login:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',exitk:'Salir de kiosko',rint:'Actualizar cada',rman:'Manual',rnow:'Actualizar ahora',ascroll:'Auto-desplazar',updated:'Actualizado',allok:'Todo en orden',attn:'Atención',fail:'Falla',
+ es:{title:'Resumen',sortBtn:'Ordenar',sortDone:'Listo',sortReset:'Restablecer orden',mvEarlier:'Mover antes',mvLater:'Mover después',mvDrag:'Arrastra para mover',home:'Inicio',kiosk:'Kiosko',logout:'Cerrar sesión',login:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',exitk:'Salir de kiosko',rint:'Actualizar cada',rman:'Manual',rnow:'Actualizar ahora',ascroll:'Auto-desplazar',updated:'Actualizado',allok:'Todo en orden',attn:'Atención',fail:'Falla',
   ups:'UPS Monitor',pve:'Proxmox',net:'Net Monitor',pi:'Raspberry Pi',ev:'Línea de tiempo',open:'Abrir →',noups:'Sin servidores UPS configurados',nopve:'Sin clusters configurados',nonet:'Aún sin escaneo',noev:'Sin eventos todavía',
   mains:'En red eléctrica',batt:'Con batería',lowb:'Batería baja',unreach:'Sin conexión',battery:'Batería',load:'Carga',runtime:'Autonomía',power:'Consumo',nodes:'Nodos',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memoria',disk:'Disco',temp:'Temp',uptime:'Encendida',
   online:'En línea',known:'Conocidos',offline:'Apagados',newdev:'Equipos nuevos',lastscan:'Último escaneo',scanning:'Escaneando…',ceph:'Ceph',types:'Por tipo de equipo',nonew:'Sin equipos nuevos',
@@ -233,6 +233,7 @@ async function refresh(){
   issues.sort((a,b)=>LV[b.lv]-LV[a.lv]);
   $('attnl').innerHTML=issues.map(i=>`<li><b class="${i.lv}" style="background:none">${esc(String(i.m).toUpperCase())}</b>${i.href?`<a href="${esc(i.href)}">${esc(i.t)}</a>`:esc(i.t)}</li>`).join('');
   $('upd').textContent=T('updated')+' '+PCT.time(new Date(),true);
+  decorate();
 }
 // Intervalo de actualización elegible (se guarda en este navegador). Solo cambia cuánto se redibuja ESTA pantalla: los módulos siguen vigilando y anotando eventos en el servidor aunque nadie mire, y los eventos quedan en la línea de tiempo.
 // EN: Selectable refresh interval (stored in this browser). It only changes how often THIS screen redraws: the modules keep watching and recording events on the server even when nobody looks, and events stay in the timeline.
@@ -272,6 +273,7 @@ function applyLang(){
   document.documentElement.lang=lang;document.title='Pi Console — '+T('title');
   document.querySelectorAll('[data-i]').forEach(e=>e.textContent=T(e.dataset.i));
   $('bl').textContent=lang==='es'?'EN':'ES';riFill();
+  paintSort();
   $('lu').placeholder=lang==='es'?'Usuario':'User';$('lp').placeholder=lang==='es'?'Contraseña':'Password';
 }
 $('ri').onchange=e=>{riSec=parseInt(e.target.value,10);try{localStorage.setItem('pi-refresh',String(riSec))}catch(x){}if(me&&me.username){riNext();if(riSec>0&&Date.now()-lastRef>riSec*1000)loop()}};
@@ -288,6 +290,47 @@ function fitGrid(){
   if(n>t&&t>0){const rows=Math.ceil(n/t);g.style.gridTemplateColumns='repeat('+Math.ceil(n/rows)+',minmax(0,1fr))'}
 }
 window.addEventListener('resize',fitGrid);
+
+
+// ───────── Orden de las tarjetas / card order ─────────
+// ES: Las tarjetas se pueden reordenar con el botón «Ordenar» (flechas o arrastrando). El orden se guarda en este navegador (clave pi-card-order); por defecto es el de siempre: UPS, Proxmox, Red, Pi. La línea de tiempo siempre va debajo.
+// EN: Cards can be reordered with the "Reorder" button (arrows or drag). The order is stored in this browser (key pi-card-order); the default is the usual one: UPS, Proxmox, Network, Pi. The timeline always stays below.
+const CARDS=['c-nut','c-pve','c-net','c-pi'];
+let ord=CARDS.slice(),sortMode=false,dragId=null;
+try{const v=JSON.parse(localStorage.getItem('pi-card-order')||'[]');if(Array.isArray(v)){const k=v.filter((x,i)=>CARDS.includes(x)&&v.indexOf(x)===i);ord=k.concat(CARDS.filter(x=>!k.includes(x)))}}catch(e){}
+function saveOrd(){try{if(ord.join()===CARDS.join())localStorage.removeItem('pi-card-order');else localStorage.setItem('pi-card-order',JSON.stringify(ord))}catch(e){}}
+function applyOrder(){ord.forEach((id,i)=>{const c=$(id);if(c)c.style.order=i})}
+const visCards=()=>ord.filter(id=>$(id)&&!$(id).classList.contains('hide'));
+function moveCard(id,dir){const v=visCards(),j=v.indexOf(id)+dir;if(j<0||j>=v.length)return;const a=ord.indexOf(id),b=ord.indexOf(v[j]);[ord[a],ord[b]]=[ord[b],ord[a]];saveOrd();applyOrder();decorate()}
+function dropCard(src,dst){if(!src||src===dst)return;ord.splice(ord.indexOf(src),1);ord.splice(ord.indexOf(dst),0,src);saveOrd();applyOrder();decorate()}
+function mkBtn(txt,title,fn,off){const b=document.createElement('button');b.type='button';b.className='otool';b.textContent=txt;b.title=title;b.setAttribute('aria-label',title);b.disabled=!!off;b.addEventListener('click',fn);return b}
+// Las tarjetas se reescriben en cada actualización, así que las herramientas se vuelven a poner al final de cada una.
+// EN: The cards are rewritten on every refresh, so the tools are put back at the end of each one.
+function decorate(){
+  const g=$('grid');if(!g)return;
+  g.querySelectorAll('.otools').forEach(e=>e.remove());
+  CARDS.forEach(id=>{const c=$(id);if(c){c.classList.toggle('sorting',sortMode);c.draggable=false}});
+  if(!sortMode)return;
+  const v=visCards();
+  v.forEach((id,i)=>{
+    const c=$(id),t=document.createElement('div');t.className='otools';
+    const grab=document.createElement('span');grab.className='otool grab';grab.textContent='⠿';grab.title=T('mvDrag');
+    grab.addEventListener('mousedown',()=>{c.draggable=true});grab.addEventListener('mouseup',()=>{c.draggable=false});
+    t.appendChild(mkBtn('‹',T('mvEarlier'),()=>moveCard(id,-1),i===0));t.appendChild(grab);t.appendChild(mkBtn('›',T('mvLater'),()=>moveCard(id,1),i===v.length-1));
+    c.appendChild(t);
+  });
+}
+CARDS.forEach(id=>{const c=$(id);if(!c)return;
+  c.addEventListener('dragstart',e=>{if(!sortMode||!c.draggable){e.preventDefault();return}dragId=id;e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',id)}catch(x){}c.classList.add('dragging')});
+  c.addEventListener('dragend',()=>{c.draggable=false;c.classList.remove('dragging');CARDS.forEach(k=>$(k)&&$(k).classList.remove('dragover'));dragId=null});
+  c.addEventListener('dragover',e=>{if(!sortMode||!dragId)return;e.preventDefault();e.dataTransfer.dropEffect='move';c.classList.add('dragover')});
+  c.addEventListener('dragleave',()=>c.classList.remove('dragover'));
+  c.addEventListener('drop',e=>{if(!sortMode||!dragId)return;e.preventDefault();c.classList.remove('dragover');dropCard(dragId,id)});
+});
+function paintSort(){const b=$('bs'),r=$('bs0');if(!b)return;b.textContent=sortMode?T('sortDone'):T('sortBtn');b.classList.toggle('on',sortMode);r.textContent=T('sortReset');r.classList.toggle('hide',!sortMode)}
+$('bs').onclick=()=>{sortMode=!sortMode;paintSort();decorate()};
+$('bs0').onclick=()=>{ord=CARDS.slice();saveOrd();applyOrder();decorate()};
+applyOrder();
 
 // ───────── Modo kiosko / kiosk mode ─────────
 let wl=null;
