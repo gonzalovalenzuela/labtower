@@ -69,11 +69,11 @@ El código fuente está comentado en español e inglés (los comentarios en ingl
 
 ```bash
 # Descargar el .deb desde Releases
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1s/pi-console_1.2.1s_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1t/pi-console_1.2.1t_all.deb
 
 # Instalar (apt resuelve e instala las dependencias: python3, nginx, nut, nut-client, snmp, sudo…)
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.2.1s_all.deb
+sudo apt-get install -y ./pi-console_1.2.1t_all.deb
 ```
 
 Usa `apt-get install ./archivo.deb` (no `dpkg -i`): así `apt` instala las dependencias que falten.
@@ -112,8 +112,8 @@ sudo nginx -t && sudo systemctl reload nginx
 ## Actualizar
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1s/pi-console_1.2.1s_all.deb
-sudo apt-get install -y ./pi-console_1.2.1s_all.deb
+wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.1t/pi-console_1.2.1t_all.deb
+sudo apt-get install -y ./pi-console_1.2.1t_all.deb
 pi-console-health
 ```
 
@@ -147,7 +147,7 @@ Cada persona ve solo las tarjetas y los eventos de los módulos a los que tiene 
 
 **Modo kiosko:** el botón *Kiosko* (o abrir `/overview/?kiosk=1`) deja la página a pantalla completa, con letra grande, sin botones y sin cursor, y evita que la pantalla se apague. Pensado para un monitor o tablet fijo; el mouse o un toque en la pantalla muestran un botón para salir. La letra se adapta al tamaño de la pantalla (tablet de 7", portátil, monitor); se puede ajustar con `?zoom=0.8` (entre 0.5 y 2). Si el contenido no cabe, el botón *Auto-desplazar* (aparece junto a *Salir de kiosko* al tocar la pantalla) hace que suba y baje solo, despacio; viene apagado y se detiene 30 s al tocar la pantalla. Con `?autoscroll=1` arranca encendido. Ejemplo: `/overview/?kiosk=1&zoom=0.9`. La sesión se renueva sola mientras la página está abierta; para dejarlo permanente conviene un usuario con permisos de solo lectura. Mientras el Resumen está abierto, Proxmox Monitor consulta a sus clusters cada 5 s (igual que con su propia página abierta).
 
-**iPad como pantalla (app web):** abre `http://IP-DEL-PI/overview/?kiosk=1` en Safari → Compartir → *Añadir a pantalla de inicio* y deja activado *Abrir como app web*. Desde el icono se abre a pantalla completa, sin barra de Safari ni botón de cerrar. Si ya habías añadido un acceso directo antes de 1.2.1s, bórralo y créalo de nuevo. Para que el iPad no se bloquee, activa *Acceso guiado* (Ajustes → Accesibilidad) o pon *Bloqueo automático* en *Nunca*.
+**iPad como pantalla (app web):** abre `http://IP-DEL-PI/overview/?kiosk=1` en Safari → Compartir → *Añadir a pantalla de inicio* y deja activado *Abrir como app web*. Desde el icono se abre a pantalla completa, sin barra de Safari ni botón de cerrar. Si ya habías añadido un acceso directo antes de 1.2.1t, bórralo y créalo de nuevo. Para que el iPad no se bloquee, activa *Acceso guiado* (Ajustes → Accesibilidad) o pon *Bloqueo automático* en *Nunca*.
 
 ### UPS Monitor
 Empieza **sin servidores** (no hace falta tener una UPS). Un administrador agrega uno con *Agregar servidor* (nombre, host y puerto de `upsd`, por defecto 3493) y puede probar la conexión antes de guardar. Consulta `upsd` cada 10 s y guarda el historial en una base SQLite. La primera lectura aparece en pocos segundos; las dos primeras se guardan de inmediato para que los gráficos tengan puntos enseguida.
@@ -371,7 +371,7 @@ pi-console/
 ├── CHANGELOG.md
 ├── RELEASE_NOTES_1.2.0.md
 ├── RELEASE_NOTES_1.2.1.md
-├── RELEASE_NOTES_1.2.1s.md
+├── RELEASE_NOTES_1.2.1t.md
 ├── LICENSE
 ├── README.md                # Español
 └── README.en.md             # English

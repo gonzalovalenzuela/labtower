@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.1t — 2026-10-20
+
+Revisión de seguridad completa (Python, shell, SQL, nginx, systemd, scripts de instalación y JavaScript; análisis con bandit y shellcheck).
+
+- **Respaldo SFTP: el archivo de estado ya no se escribe como root dentro de una carpeta del servicio.** `backup.status` estaba en `/var/lib/pi-console` (dueño `pi-console`); un servicio comprometido podía dejar un enlace simbólico y, cuando cron (root) escribía el estado, cambiarle permisos o sobrescribir un archivo cualquiera. Ahora está en `/var/log/pi-console/backup.status` (carpeta de root). Se comprobó el ataque antes del arreglo.
+- **Teleporter: tope de 2 GiB descomprimidos** al verificar/restaurar (un `.tar.gz` de 3 MB que expande a 3 GiB llenaba el disco). Las subidas ya tenían tope de 200 MB comprimidos.
+- **Teleporter: subidas simultáneas** ya no se pisan (nombre temporal único y renombrado atómico); los temporales abandonados se limpian a las 24 h.
+- **WOL: «Despertar todos»** ahora tiene el mismo límite de frecuencia que «Despertar».
+- Sin hallazgos críticos ni altos: SQL parametrizado, sin `shell=True`/`eval`, CSRF en todos los métodos que modifican, escape de HTML en todo lo que viene del servidor, huellas TLS fijadas para Pi-hole y Proxmox.
+
 ## 1.2.1s — 2026-10-20
 
 - **Overview: intervalo de actualización a elegir** (10 s, 30 s, 1 min, 2 min, 5 min o manual con botón ↻). Se guarda en cada navegador, así que el iPad del kiosko puede ir a 30 s y el móvil a 5 min. Por defecto sigue en 10 s. Con la pestaña oculta no se consulta nada y al volver se actualiza si ya tocaba.

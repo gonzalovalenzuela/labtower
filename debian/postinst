@@ -96,6 +96,7 @@ done
 # ES: Las sesiones antiguas guardaban el token en claro: se descartan (todos deben iniciar sesión otra vez) y se borran de los respaldos.
 # EN: Old sessions stored the token in clear: they are discarded (everyone logs in again) and removed from the backups.
 as_svc rm -f "$DATA_DIR/sessions.json"
+as_svc rm -f "$DATA_DIR/backup.status"   # old location (the status file now lives in root-owned /var/log/pi-console)
 rm -f /var/backups/pi-console/sessions.json.*.bak
 
 # ── 4. Permisos de directorios de código ─────────────────────────────────────

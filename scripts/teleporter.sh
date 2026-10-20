@@ -198,7 +198,7 @@ def main():
         keep = int(a[0])
         try: d = opendir(base, parts)
         except FileNotFoundError: return
-        bk = re.compile(r"^pi-console-[A-Za-z0-9._-]{1,80}\.tar\.gz$"); up = re.compile(r"^upload-\d{8}_\d{6}\.tar\.gz$")
+        bk = re.compile(r"^pi-console-[A-Za-z0-9._-]{1,80}\.tar\.gz$"); up = re.compile(r"^(upload-\d{8}_\d{6}\.tar\.gz|\.upload-[0-9]+-[0-9a-f]{8}\.tmp)$")
         files = []
         for n in os.listdir(d):
             try: st = os.stat(n, dir_fd=d, follow_symlinks=False)
@@ -271,6 +271,11 @@ archive_is_safe() {  # archive
       *) err "archive contains a link or special file: $line"; return 1;;
     esac
   done <<<"$listing"
+  # ES: Tope de tamaño descomprimido (anti «bomba gzip»): un .tar.gz de 200 MB podría expandirse a decenas de GB y llenar el disco.
+  # EN: Cap on the uncompressed size (anti gzip bomb): a 200 MB .tar.gz could expand to tens of GB and fill the disk.
+  local total
+  total=$(awk '{s+=$3} END{printf "%d", s}' <<<"$listing")
+  [ "${total:-0}" -le 2147483648 ] || { err "archive expands to more than 2 GiB — refusing"; return 1; }
   while IFS= read -r m; do
     m="${m#./}"; m="${m%/}"
     if [ -z "$m" ] || [ "$m" = "." ]; then continue; fi

@@ -17,12 +17,12 @@
 #     password hashes and API tokens. It is uploaded as <name>.gpg.part and renamed when complete, and the remote size is compared.
 #  4. Old copies are pruned (KEEP_LOCAL here, KEEP_REMOTE on the storage). Only files named
 #     pi-console-auto-<this host>-<date>_<time>.tar.gz are ever deleted, nothing else.
-#  5. The result is written to /var/lib/pi-console/backup.status and to the system log
+#  5. The result is written to /var/log/pi-console/backup.status and to the system log
 #     (journalctl -t pi-console-sftp-backup).
 # ES: Respaldo automático de Pi Console por SFTP. `teleporter backup` crea el archivo, `teleporter check` lo verifica antes de
 #     subirlo, se sube con nombre temporal (.part) y se renombra al terminar, se compara el tamaño remoto con el local y se borran
 #     las copias viejas (solo las que se llaman pi-console-auto-<este equipo>-<fecha>_<hora>.tar.gz). Solo usa llave SSH, nunca
-#     contraseña, para poder correr desde cron. El resultado queda en /var/lib/pi-console/backup.status y en el log del sistema.
+#     contraseña, para poder correr desde cron. El resultado queda en /var/log/pi-console/backup.status y en el log del sistema.
 set -uo pipefail
 
 CONF="${PICONSOLE_BACKUP_CONF:-/etc/pi-console/backup.conf}"
@@ -38,7 +38,7 @@ KNOWN_HOSTS="/etc/pi-console/backup_known_hosts"
 KEEP_LOCAL=7
 KEEP_REMOTE=30
 LOCAL_DIR="/var/backups/pi-console"
-STATUS_FILE="/var/lib/pi-console/backup.status"
+STATUS_FILE="/var/log/pi-console/backup.status"   # root-owned dir: never write as root inside a folder the service user controls
 TELEPORTER="/usr/local/bin/teleporter.sh"
 LOCK_FILE="/run/lock/pi-console-sftp-backup.lock"
 ENCRYPT="yes"                                  # yes | no — encrypt the copy that is uploaded / cifrar la copia que se sube
