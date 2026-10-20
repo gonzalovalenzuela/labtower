@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1r — 2026-10-20
+
+- **Net Monitor: botón de basurero para eliminar equipos.** Cada fila de la tabla tiene un icono de basurero (solo para administradores de Net Monitor) que pide confirmación y quita el equipo de la lista. Si sigue conectado, el próximo escaneo lo vuelve a descubrir.
+
 ## 1.2.1q — 2026-10-19
 
 - **iPad/iPhone: el icono de la app ya no depende de una segunda descarga.** Al abrir «Añadir a pantalla de inicio», iOS descargaba `apple-touch-icon.png` por separado y, si no confiaba en el certificado HTTPS (autofirmado), mostraba la letra «P». Ahora el `apple-touch-icon` va incrustado (`data:`) en todas las páginas (inicio, Admin, WOL, UPS, Net, Proxmox y Overview), así que no hay descarga que falle. El script `assets/icons/make-icons.py` lo regenera junto con los PNG.

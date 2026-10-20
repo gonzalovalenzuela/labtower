@@ -161,6 +161,9 @@ td{padding:10px 14px;vertical-align:middle}
 .btn-rescan{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:5px 10px;border-radius:var(--r-sm);border:1px solid var(--teal);background:transparent;color:var(--teal);cursor:pointer;transition:all .15s}
 .btn-rescan:hover{background:var(--teal);color:#fff}
 .btn-edit-host{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:5px 10px;border-radius:var(--r-sm);border:1px solid var(--border);background:transparent;color:var(--text-mid);cursor:pointer;transition:all .15s;margin-left:6px}
+.btn-trash{background:none;border:none;cursor:pointer;color:var(--text-dim);padding:4px 6px;margin-right:4px;border-radius:6px;line-height:0;vertical-align:middle;transition:color .15s,background .15s}
+.btn-trash svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.btn-trash:hover,.btn-trash:focus-visible{color:var(--red);background:rgba(220,38,38,.1)}
 .btn-edit-host:hover{border-color:var(--blue);color:var(--blue)}
 /* Edit inline */
 .alias-input{background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:12px;padding:4px 8px;outline:none;width:150px}

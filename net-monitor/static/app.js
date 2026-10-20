@@ -27,7 +27,7 @@ const LANG={
     uptimeEmpty:'No events recorded yet',uptimeStats:(h,d)=>`${h} monitored · ${d} outage${d!==1?'s':''}`,
     availHistory:'Availability history',
     chartMonitoring:'Monitoring — data will appear after several scans',
-    snmpTitle:'SNMP source',snmpDesc:'Reads the ARP table of a switch or router to get MAC addresses (and vendor) for hosts the Pi cannot see directly. Requires the snmp package on the Pi.',snmpMissing:'snmpwalk is not installed — run: apt install snmp',snmpEnable:'Use SNMP during scans',snmpHost:'Switch / router IP',snmpPort:'Port',snmpVersion:'Version',snmpTimeout:'Timeout (s)',snmpCommunity:'Community',snmpUser:'Username',snmpLevel:'Security level',snmpAuthProto:'Auth',snmpAuthPass:'Auth password',snmpPrivProto:'Privacy',snmpPrivPass:'Privacy password',snmpTest:'Test',snmpTesting:'Testing…',snmpSaved:'SNMP settings saved',snmpEntries:'ARP entries found',snmpKeep:'unchanged',snmpLast:'Last scan',ouiTitle:'MAC vendor database',ouiDesc:'Wireshark manuf list, downloaded weekly (ieee-data is used as fallback).',ouiAuto:'Update weekly',ouiUpdate:'Update now',ouiUpdating:'Downloading…',ouiPrefixes:'prefixes',ouiNever:'not downloaded yet',ouiDone:'Vendor database updated',osUnknown:'Unknown',colType:'Type',deviceTypes:'Device type',editDevice:'Edit device',fieldType:'Device type',fieldOs:'Operating system',autoDetect:'Auto-detect',saved:'Device updated',tComputer:'Computer',tRouter:'Router',tSwitch:'Switch',tAp:'Access point',tStorage:'Storage / NAS',tPhone:'Phone',tTv:'TV',tCamera:'Camera',tAppliance:'Appliance',tPrinter:'Printer',tTablet:'Tablet',tConsole:'Game Console',tServer:'Server',tVoip:'IP Phone',tUps:'UPS',tSpeaker:'Smart Speaker',tOther:'Other',newDevice:'NEW',
+    snmpTitle:'SNMP source',snmpDesc:'Reads the ARP table of a switch or router to get MAC addresses (and vendor) for hosts the Pi cannot see directly. Requires the snmp package on the Pi.',snmpMissing:'snmpwalk is not installed — run: apt install snmp',snmpEnable:'Use SNMP during scans',snmpHost:'Switch / router IP',snmpPort:'Port',snmpVersion:'Version',snmpTimeout:'Timeout (s)',snmpCommunity:'Community',snmpUser:'Username',snmpLevel:'Security level',snmpAuthProto:'Auth',snmpAuthPass:'Auth password',snmpPrivProto:'Privacy',snmpPrivPass:'Privacy password',snmpTest:'Test',snmpTesting:'Testing…',snmpSaved:'SNMP settings saved',snmpEntries:'ARP entries found',snmpKeep:'unchanged',snmpLast:'Last scan',ouiTitle:'MAC vendor database',ouiDesc:'Wireshark manuf list, downloaded weekly (ieee-data is used as fallback).',ouiAuto:'Update weekly',ouiUpdate:'Update now',ouiUpdating:'Downloading…',ouiPrefixes:'prefixes',ouiNever:'not downloaded yet',ouiDone:'Vendor database updated',osUnknown:'Unknown',colType:'Type',deviceTypes:'Device type',editDevice:'Edit device',fieldType:'Device type',fieldOs:'Operating system',autoDetect:'Auto-detect',saved:'Device updated',tComputer:'Computer',tRouter:'Router',tSwitch:'Switch',tAp:'Access point',tStorage:'Storage / NAS',tPhone:'Phone',tTv:'TV',tCamera:'Camera',tAppliance:'Appliance',tPrinter:'Printer',tTablet:'Tablet',tConsole:'Game Console',tServer:'Server',tVoip:'IP Phone',tUps:'UPS',tSpeaker:'Smart Speaker',tOther:'Other',newDevice:'NEW',delHost:'Delete host',delConfirm:(n,ip)=>`Delete "${n}" (${ip}) from Net Monitor?\n\nIf it is still connected, the next scan will discover it again.`,delDone:'Host deleted',
     newDeviceMsg:(n,names,more)=>`${n} new device${n>1?'s':''} detected: ${names}${more?' and more':''}`,
     osEditTitle:'Edit OS',unitSec:'sec',titleSeconds:'Seconds',titleMinutes:'Minutes',titleLogout:'Sign out',titleDrag:'Drag',every:'every',manual:'manual',autoOff:'disabled (manual)',detailInfo:'Information',seen:'Seen',discovered:'Discovered',noOpenPortsDetected:'No open ports detected',ago:x=>x+' ago',},
   es:{loginTitle:'Iniciar sesión',loginSub:'Ingresa tus credenciales para continuar.',
@@ -58,7 +58,7 @@ const LANG={
     uptimeEmpty:'Sin eventos registrados aún',uptimeStats:(h,d)=>`${h} monitoreado · ${d} caída${d!==1?'s':''}`,
     availHistory:'Historial de disponibilidad',
     chartMonitoring:'Monitoreando — los datos aparecerán tras varios escaneos',
-    snmpTitle:'Fuente SNMP',snmpDesc:'Lee la tabla ARP de un switch o router para obtener MAC (y vendor) de equipos que el Pi no ve directamente. Requiere el paquete snmp en el Pi.',snmpMissing:'snmpwalk no está instalado — ejecuta: apt install snmp',snmpEnable:'Usar SNMP en los escaneos',snmpHost:'IP del switch / router',snmpPort:'Puerto',snmpVersion:'Versión',snmpTimeout:'Timeout (s)',snmpCommunity:'Community',snmpUser:'Usuario',snmpLevel:'Nivel de seguridad',snmpAuthProto:'Auth',snmpAuthPass:'Password auth',snmpPrivProto:'Privacidad',snmpPrivPass:'Password privacidad',snmpTest:'Probar',snmpTesting:'Probando…',snmpSaved:'Configuración SNMP guardada',snmpEntries:'entradas ARP encontradas',snmpKeep:'sin cambios',snmpLast:'Último escaneo',ouiTitle:'Base de datos de vendors MAC',ouiDesc:'Lista manuf de Wireshark, descargada cada semana (ieee-data como respaldo).',ouiAuto:'Actualizar cada semana',ouiUpdate:'Actualizar ahora',ouiUpdating:'Descargando…',ouiPrefixes:'prefijos',ouiNever:'aún no descargada',ouiDone:'Base de vendors actualizada',osUnknown:'Desconocido',colType:'Tipo',deviceTypes:'Tipo de dispositivo',editDevice:'Editar dispositivo',fieldType:'Tipo de dispositivo',fieldOs:'Sistema operativo',autoDetect:'Detección automática',saved:'Dispositivo actualizado',tComputer:'Equipo',tRouter:'Router',tSwitch:'Switch',tAp:'Access point',tStorage:'Storage / NAS',tPhone:'Teléfono',tTv:'TV',tCamera:'Cámara',tAppliance:'Electrodoméstico',tPrinter:'Impresora',tTablet:'Tablet',tConsole:'Consola de juegos',tServer:'Servidor',tVoip:'Teléfono IP',tUps:'UPS',tSpeaker:'Altavoz inteligente',tOther:'Otro',newDevice:'NUEVO',
+    snmpTitle:'Fuente SNMP',snmpDesc:'Lee la tabla ARP de un switch o router para obtener MAC (y vendor) de equipos que el Pi no ve directamente. Requiere el paquete snmp en el Pi.',snmpMissing:'snmpwalk no está instalado — ejecuta: apt install snmp',snmpEnable:'Usar SNMP en los escaneos',snmpHost:'IP del switch / router',snmpPort:'Puerto',snmpVersion:'Versión',snmpTimeout:'Timeout (s)',snmpCommunity:'Community',snmpUser:'Usuario',snmpLevel:'Nivel de seguridad',snmpAuthProto:'Auth',snmpAuthPass:'Password auth',snmpPrivProto:'Privacidad',snmpPrivPass:'Password privacidad',snmpTest:'Probar',snmpTesting:'Probando…',snmpSaved:'Configuración SNMP guardada',snmpEntries:'entradas ARP encontradas',snmpKeep:'sin cambios',snmpLast:'Último escaneo',ouiTitle:'Base de datos de vendors MAC',ouiDesc:'Lista manuf de Wireshark, descargada cada semana (ieee-data como respaldo).',ouiAuto:'Actualizar cada semana',ouiUpdate:'Actualizar ahora',ouiUpdating:'Descargando…',ouiPrefixes:'prefijos',ouiNever:'aún no descargada',ouiDone:'Base de vendors actualizada',osUnknown:'Desconocido',colType:'Tipo',deviceTypes:'Tipo de dispositivo',editDevice:'Editar dispositivo',fieldType:'Tipo de dispositivo',fieldOs:'Sistema operativo',autoDetect:'Detección automática',saved:'Dispositivo actualizado',tComputer:'Equipo',tRouter:'Router',tSwitch:'Switch',tAp:'Access point',tStorage:'Storage / NAS',tPhone:'Teléfono',tTv:'TV',tCamera:'Cámara',tAppliance:'Electrodoméstico',tPrinter:'Impresora',tTablet:'Tablet',tConsole:'Consola de juegos',tServer:'Servidor',tVoip:'Teléfono IP',tUps:'UPS',tSpeaker:'Altavoz inteligente',tOther:'Otro',newDevice:'NUEVO',delHost:'Eliminar equipo',delConfirm:(n,ip)=>`¿Eliminar "${n}" (${ip}) de Net Monitor?\n\nSi sigue conectado, el próximo escaneo lo volverá a descubrir.`,delDone:'Equipo eliminado',
     newDeviceMsg:(n,names,more)=>`${n} nuevo${n>1?'s dispositivos':'dispositivo'} detectado${n>1?'s':''}: ${names}${more?' y más':''}`,
     osEditTitle:'Editar OS',unitSec:'seg',titleSeconds:'Segundos',titleMinutes:'Minutos',titleLogout:'Cerrar sesión',titleDrag:'Arrastrar',every:'cada',manual:'manual',autoOff:'desactivado (manual)',detailInfo:'Información',seen:'Visto',discovered:'Descubierto',noOpenPortsDetected:'Sin puertos abiertos detectados',ago:x=>'hace '+x,}
 };
@@ -373,6 +373,24 @@ async function startScan(){
 
 // Reescanea una sola IP (botón en la fila del equipo).
 // EN: Rescan a single IP (button in the device row).
+
+// Elimina un equipo de la lista (solo admin de Net Monitor). Si sigue conectado, el próximo escaneo lo vuelve a descubrir.
+// EN: Remove a host from the list (Net Monitor admins only). If it is still connected, the next scan discovers it again.
+async function deleteHost(ip){
+  if(!canAdmin())return;
+  const h=(typeof hosts!=='undefined'?hosts:[]).find(x=>x.ip===ip);
+  const name=(h&&(h.alias||h.hostname))||ip;
+  if(!confirm(t('delConfirm',name,ip)))return;
+  try{
+    const r=await fetch('api/hosts/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
+    if(expanded===ip)expanded=null;
+    toast(t('delDone'));
+    await fetchData();
+  }catch(e){toast(e.message,true);}
+}
+
 async function rescanHost(ip){
   if(!canScan())return;
   try{
@@ -633,7 +651,7 @@ function renderTable(){
       </td>
       <td style="font-family:var(--mono);font-size:11px;color:${(h.latency||0)>100?'var(--orange)':(h.latency||0)>200?'var(--red)':'var(--text-mid)'}">${h.online&&h.latency?h.latency+'ms':'<span style="color:var(--border-b)">—</span>'}</td>
       <td class="last-seen">${h.last_seen?relTime(h.last_seen*1000):'—'}</td>
-      <td><span class="expand-arrow ${isExp?'open':''}">▶</span></td>`;
+      <td style="white-space:nowrap">${canAdmin()?`<button class="btn-trash" data-on-click="deleteHost" data-on-click-args="${jsargs([h.ip])}" data-on-click-stop="1" title="${esc(t('delHost'))}" aria-label="${esc(t('delHost'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>`:''}<span class="expand-arrow ${isExp?'open':''}">▶</span></td>`;
     newTbody.appendChild(tr);
 
     // Detail row
