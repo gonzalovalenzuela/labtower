@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1s — 2026-10-20
+
+- **Overview: intervalo de actualización a elegir** (10 s, 30 s, 1 min, 2 min, 5 min o manual con botón ↻). Se guarda en cada navegador, así que el iPad del kiosko puede ir a 30 s y el móvil a 5 min. Por defecto sigue en 10 s. Con la pestaña oculta no se consulta nada y al volver se actualiza si ya tocaba.
+- Solo cambia cada cuánto se redibuja la pantalla: los módulos siguen vigilando y anotando eventos en el servidor aunque nadie mire, así que un intervalo largo no pierde eventos (quedan en la línea de tiempo).
+
 ## 1.2.1r — 2026-10-20
 
 - **Net Monitor: botón de basurero para eliminar equipos.** Cada fila de la tabla tiene un icono de basurero (solo para administradores de Net Monitor) que pide confirmación y quita el equipo de la lista. Si sigue conectado, el próximo escaneo lo vuelve a descubrir.
