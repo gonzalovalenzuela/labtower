@@ -830,7 +830,7 @@ function drawVoltageChart(canvasId, history, range, hoverIdx=-1){
     const d=new Date(filtered[i].ts*1000);
     const label = range==='1mo'?
       d.toLocaleDateString((_lang==='es'?'es-CL':'en-GB'),{day:'2-digit',month:'2-digit'}):
-      d.toTimeString().slice(0,5);
+      PCT.time(d);
     ctx.fillText(label, xOf(i), H-3);
   }
 
@@ -943,7 +943,7 @@ function drawWattsChart(canvasId, history, range, hoverIdx=-1){
     const d=new Date(filtered[i].ts*1000);
     const label=range==='1mo'?
       d.toLocaleDateString((_lang==='es'?'es-CL':'en-GB'),{day:'2-digit',month:'2-digit'}):
-      d.toTimeString().slice(0,5);
+      PCT.time(d);
     ctx.fillText(label, xOf(i), H-3);
   }
 
@@ -1010,7 +1010,7 @@ function drawTempChart(canvasId, history, range, hoverIdx=-1){
     const d=new Date(filtered[i].ts*1000);
     const label=range==='1mo'?
       d.toLocaleDateString((_lang==='es'?'es-CL':'en-GB'),{day:'2-digit',month:'2-digit'}):
-      d.toTimeString().slice(0,5);
+      PCT.time(d);
     ctx.fillText(label, xOf(i), H-3);
   }
   const last=filtered[N-1];
@@ -1179,7 +1179,7 @@ function onVChartMove(e, canvas, key, type){
   if(!pt){tip.className='vchart-tooltip';return;}
 
   const d = new Date(pt.ts*1000);
-  const timeStr = d.toLocaleString((_lang==='es'?'es-CL':'en-GB'),{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  const timeStr = PCT.ls(d,(_lang==='es'?'es-CL':'en-GB'),{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
 
   if(type==='t'){
     tip.innerHTML = `<div style="color:var(--text-dim);margin-bottom:4px;font-size:10px">${timeStr}</div>`+
@@ -1230,14 +1230,14 @@ function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 function jsa(s){return esc(JSON.stringify(String(s)));}
 // Lista de argumentos para data-on-*-args="…" (JSON escapado para HTML).
 function jsargs(a){return esc(JSON.stringify(a));}
-function updateClock(){const el=document.getElementById('clock');if(el)el.textContent=new Date().toTimeString().slice(0,8);}
+function updateClock(){const el=document.getElementById('clock');if(el)el.textContent=PCT.time(new Date(),true);}
 let _tt;
 // Aviso emergente breve (error si isErr).
 // EN: Short pop-up notice (error if isErr).
 function toast(msg,isErr=false){const el=document.getElementById('toast');el.textContent=msg;el.className=isErr?'err':'';void el.offsetWidth;el.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>el.classList.remove('show'),3400);}
 // Línea en el registro de actividad de la pantalla.
 // EN: Line in the on-screen activity log.
-function log(level,msg){const out=document.getElementById('log-out'),ts=new Date().toTimeString().slice(0,8);const el=document.createElement('div');el.className='log-row';el.innerHTML='<span class="lt">'+ts+'</span><span class="lv '+level+'">'+level+'</span><span class="lm">'+esc(msg)+'</span>';out.appendChild(el);out.scrollTop=out.scrollHeight;while(out.children.length>80)out.removeChild(out.firstChild);}
+function log(level,msg){const out=document.getElementById('log-out'),ts=PCT.time(new Date(),true);const el=document.createElement('div');el.className='log-row';el.innerHTML='<span class="lt">'+ts+'</span><span class="lv '+level+'">'+level+'</span><span class="lm">'+esc(msg)+'</span>';out.appendChild(el);out.scrollTop=out.scrollHeight;while(out.children.length>80)out.removeChild(out.firstChild);}
 function clearLog(){document.getElementById('log-out').innerHTML='';}
 
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)closeModals();}));

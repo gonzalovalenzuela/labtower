@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.2a — 2026-10-20
+
+- **Formato de hora 24 h / 12 h.** Botón "24H/12H" junto al idioma (en el Resumen, antes del botón de idioma). Por defecto 24 h. Se guarda en el navegador y vale para todos los módulos. Afecta relojes, horas de gráficos, eventos, fechas con hora y registros.
+
 ## 1.2.2 — 2026-10-20
 
 Reúne todos los cambios desde 1.2.1 (builds 1.2.1a a 1.2.1t).

@@ -592,7 +592,7 @@ function jsa(s){return esc(JSON.stringify(String(s)));}
 function jsargs(a){return esc(JSON.stringify(a));}
 function relTime(ts){const d=Math.floor((Date.now()-ts)/1000);if(d<60)return t('ago',d+'s');if(d<3600)return t('ago',Math.floor(d/60)+'m');if(d<86400)return t('ago',Math.floor(d/3600)+'h');return new Date(ts).toLocaleDateString((_lang==='es'?'es-CL':'en-GB'),{day:'2-digit',month:'2-digit'});}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
-function updateClock(){const el=document.getElementById('hclock');if(el)el.textContent=new Date().toTimeString().slice(0,8);}
+function updateClock(){const el=document.getElementById('hclock');if(el)el.textContent=PCT.time(new Date(),true);}
 function updateUptime(){const s=Math.floor((Date.now()-sessionStart)/1000);const el=document.getElementById('st-uptime');if(el)el.textContent=String(Math.floor(s/3600)).padStart(2,'0')+':'+String(Math.floor(s/60)%60).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
 let _tt;
 // Aviso emergente breve (error si isErr).
@@ -600,7 +600,7 @@ let _tt;
 function toast(msg,isErr=false){const el=document.getElementById('toast');el.textContent=msg;el.className=isErr?'err':'';void el.offsetWidth;el.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>el.classList.remove('show'),3400);}
 // Línea en el registro de actividad de la pantalla (INFO, OK, ERR).
 // EN: Line in the on-screen activity log (INFO, OK, ERR).
-function log(level,msg){const out=document.getElementById('log-out'),ts=new Date().toTimeString().slice(0,8);const el=document.createElement('div');el.className='log-row';el.innerHTML='<span class="lt">'+ts+'</span><span class="lv '+level+'">'+level+'</span><span class="lm">'+esc(msg)+'</span>';out.appendChild(el);out.scrollTop=out.scrollHeight;while(out.children.length>120)out.removeChild(out.firstChild);}
+function log(level,msg){const out=document.getElementById('log-out'),ts=PCT.time(new Date(),true);const el=document.createElement('div');el.className='log-row';el.innerHTML='<span class="lt">'+ts+'</span><span class="lv '+level+'">'+level+'</span><span class="lm">'+esc(msg)+'</span>';out.appendChild(el);out.scrollTop=out.scrollHeight;while(out.children.length>120)out.removeChild(out.firstChild);}
 function clearLog(){document.getElementById('log-out').innerHTML='';}
 let _wakeLogData = [];
 // Muestra el historial de encendidos guardado en el servidor (quién y cuándo).
@@ -624,7 +624,7 @@ async function showWakeLog(){
     document.getElementById('wl-overlay').classList.add('show');
   }catch(e){ toast(t('errHistory')+': '+e.message, true); }
 }
-function fmtTs(ts){ const d=new Date(ts*1000); return d.toLocaleDateString((_lang==='es'?'es-CL':'en-GB'))+' '+d.toTimeString().slice(0,8); }
+function fmtTs(ts){ const d=new Date(ts*1000); return d.toLocaleDateString((_lang==='es'?'es-CL':'en-GB'))+' '+PCT.time(d,true); }
 _i18nReady = true;
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('f-mac').addEventListener('input',function(){let v=this.value.replace(/[^0-9a-fA-F]/g,'');if(v.length>12)v=v.slice(0,12);const pos=this.selectionStart;this.value=(v.match(/.{1,2}/g)||[]).join(':').toUpperCase();try{this.setSelectionRange(pos,pos);}catch{}});

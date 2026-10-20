@@ -568,7 +568,7 @@ function renderStats(scan){
   document.getElementById('st-ports').textContent=totalPorts||'—';
   if(scan?.finished){
     const d=new Date(scan.finished*1000);
-    document.getElementById('st-last-scan').textContent=d.toTimeString().slice(0,5);
+    document.getElementById('st-last-scan').textContent=PCT.time(d);
   }else{
     document.getElementById('st-last-scan').textContent='—';
   }
@@ -676,7 +676,7 @@ function renderTable(){
         </div>
         <div class="detail-section">
           <div class="detail-label">Tiempos</div>
-          <div class="detail-value">${esc(t('seen'))}: ${h.last_seen?new Date(h.last_seen*1000).toLocaleString(_lang==='es'?'es-CL':'en-GB'):'—'}</div>
+          <div class="detail-value">${esc(t('seen'))}: ${h.last_seen?PCT.ls(new Date(h.last_seen*1000),_lang==='es'?'es-CL':'en-GB'):'—'}</div>
           <div class="detail-value">${esc(t('discovered'))}: ${h.first_seen?new Date(h.first_seen*1000).toLocaleDateString(_lang==='es'?'es-CL':'en-GB'):'—'}</div>
           <div class="detail-value" style="margin-top:4px">${esc(t("colStatus"))}: <span style="color:${h.online?'var(--green)':'var(--text-dim)'};font-weight:600">${h.online?'Online':'Offline'}</span></div>
           ${h.latency?`<div class="detail-value">${esc(t("colLatency"))}: <span style="font-family:var(--mono);font-weight:600">${h.latency} ms</span></div>`:''}
@@ -805,7 +805,7 @@ async function loadSnmp(){
     });
     snmpLayout();snmpDot(!!c.enabled);
     const s=d.status||{};
-    if(c.enabled&&s.ts){snmpStatus(s.error?s.error:`${s.count} ${t('snmpEntries')} — ${new Date(s.ts*1000).toLocaleTimeString()}`,!s.error);}else snmpStatus('');
+    if(c.enabled&&s.ts){snmpStatus(s.error?s.error:`${s.count} ${t('snmpEntries')} — ${PCT.time(new Date(s.ts*1000),true)}`,!s.error);}else snmpStatus('');
   }catch(e){snmpStatus(e.message,false);}
 }
 function snmpBody(){
@@ -874,7 +874,7 @@ async function loadPiholeConfig(){
     document.getElementById('ph-hosts').value=d.pihole_hosts||'';
     const st=document.getElementById('ph-status');
     if(d.pihole_enabled){
-      const ts=d.pihole_cache_ts?new Date(d.pihole_cache_ts*1000).toLocaleTimeString():'—';
+      const ts=d.pihole_cache_ts?PCT.time(new Date(d.pihole_cache_ts*1000),true):'—';
       st.style.display='block';st.style.background='var(--teal-dim)';st.style.color='var(--teal)';
       st.style.border='1px solid rgba(20,184,166,.2)';
       st.textContent=`✓ ${t('piholeConnected')||'Connected'} — ${d.pihole_entries} hosts | ${ts}`;
@@ -992,7 +992,7 @@ function drawUptimeChart(ip, history){
   ctx.fillStyle = css('--text-dim')||'#94a3b8';
   ctx.font = '9px DM Mono,monospace';
   ctx.textAlign = 'left';
-  ctx.fillText(new Date(history[0].ts*1000).toLocaleString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}), 4, H-3);
+  ctx.fillText(PCT.ls(new Date(history[0].ts*1000),_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}), 4, H-3);
   ctx.textAlign = 'right';
   ctx.fillText('Ahora', W-4, H-3);
 
@@ -1088,7 +1088,7 @@ function jsa(s){return esc(JSON.stringify(String(s)));}
 // Lista de argumentos para data-on-*-args="…" (JSON escapado para HTML).
 function jsargs(a){return esc(JSON.stringify(a));}
 function relTime(ts){const d=Math.floor((Date.now()-ts)/1000);if(d<60)return t('ago',d+'s');if(d<3600)return t('ago',Math.floor(d/60)+'m');if(d<86400)return t('ago',Math.floor(d/3600)+'h');return new Date(ts).toLocaleDateString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit'});}
-function updateClock(){const el=document.getElementById('clock');if(el)el.textContent=new Date().toTimeString().slice(0,8);}
+function updateClock(){const el=document.getElementById('clock');if(el)el.textContent=PCT.time(new Date(),true);}
 let _tt;
 // Aviso emergente breve (error si isErr).
 // EN: Short pop-up notice (error if isErr).
