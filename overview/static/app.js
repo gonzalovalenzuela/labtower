@@ -1,13 +1,13 @@
 // ───────── Textos / texts ─────────
 const TXT={
- en:{title:'Overview',home:'Home',kiosk:'Kiosk',logout:'Sign out',login:'Sign in',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',exitk:'Exit kiosk',ascroll:'Auto-scroll',updated:'Updated',allok:'All good',attn:'Attention',fail:'Failure',
+ en:{title:'Overview',home:'Home',kiosk:'Kiosk',logout:'Sign out',login:'Sign in',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',exitk:'Exit kiosk',rint:'Refresh every',rman:'Manual',rnow:'Refresh now',ascroll:'Auto-scroll',updated:'Updated',allok:'All good',attn:'Attention',fail:'Failure',
   ups:'UPS Monitor',pve:'Proxmox',net:'Net Monitor',pi:'Raspberry Pi',ev:'Timeline',open:'Open →',noups:'No UPS servers configured',nopve:'No clusters configured',nonet:'No scan yet',noev:'No events yet',
   mains:'On mains',batt:'On battery',lowb:'Low battery',unreach:'Unreachable',battery:'Battery',load:'Load',runtime:'Runtime',power:'Power',nodes:'Nodes',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memory',disk:'Disk',temp:'Temp',uptime:'Uptime',
   online:'Online',known:'Known',offline:'Offline',newdev:'New devices',lastscan:'Last scan',scanning:'Scanning…',ceph:'Ceph',types:'By device type',nonew:'No new devices',
   ago:'ago',now:'now',min:'min',h:'h',d:'d',s:'s',power_uv:'Under-voltage',power_th:'Throttled',power_ok:'Power supply OK',invalid:'Invalid credentials',
   issue_batt:'is running on battery',issue_lowb:'has low battery',issue_srv:'unreachable',issue_node:'node offline',issue_cl:'cluster unreachable',issue_cpu:'high CPU',issue_ram:'high memory',issue_ceph:'Ceph',
   issue_temp:'Pi temperature high',issue_disk:'Pi disk almost full',issue_mem:'Pi memory high',issue_pwr:'Pi power supply problem',issue_scan:'scan error',h_temp:'Temp',h_min:'min',h_max:'max',h_uv:'Under-voltage',h_nouv:'no under-voltage',h_utemp:'UPS temperature 24 h'},
- es:{title:'Resumen',home:'Inicio',kiosk:'Kiosko',logout:'Cerrar sesión',login:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',exitk:'Salir de kiosko',ascroll:'Auto-desplazar',updated:'Actualizado',allok:'Todo en orden',attn:'Atención',fail:'Falla',
+ es:{title:'Resumen',home:'Inicio',kiosk:'Kiosko',logout:'Cerrar sesión',login:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',exitk:'Salir de kiosko',rint:'Actualizar cada',rman:'Manual',rnow:'Actualizar ahora',ascroll:'Auto-desplazar',updated:'Actualizado',allok:'Todo en orden',attn:'Atención',fail:'Falla',
   ups:'UPS Monitor',pve:'Proxmox',net:'Net Monitor',pi:'Raspberry Pi',ev:'Línea de tiempo',open:'Abrir →',noups:'Sin servidores UPS configurados',nopve:'Sin clusters configurados',nonet:'Aún sin escaneo',noev:'Sin eventos todavía',
   mains:'En red eléctrica',batt:'Con batería',lowb:'Batería baja',unreach:'Sin conexión',battery:'Batería',load:'Carga',runtime:'Autonomía',power:'Consumo',nodes:'Nodos',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memoria',disk:'Disco',temp:'Temp',uptime:'Encendida',
   online:'En línea',known:'Conocidos',offline:'Apagados',newdev:'Equipos nuevos',lastscan:'Último escaneo',scanning:'Escaneando…',ceph:'Ceph',types:'Por tipo de equipo',nonew:'Sin equipos nuevos',
@@ -234,7 +234,20 @@ async function refresh(){
   $('attnl').innerHTML=issues.map(i=>`<li><b class="${i.lv}" style="background:none">${esc(String(i.m).toUpperCase())}</b>${i.href?`<a href="${esc(i.href)}">${esc(i.t)}</a>`:esc(i.t)}</li>`).join('');
   $('upd').textContent=T('updated')+' '+new Date().toLocaleTimeString();
 }
-function loop(){clearTimeout(timer);refresh().catch(()=>{}).finally(()=>{timer=setTimeout(loop,10000)})}
+// Intervalo de actualización elegible (se guarda en este navegador). Solo cambia cuánto se redibuja ESTA pantalla: los módulos siguen vigilando y anotando eventos en el servidor aunque nadie mire, y los eventos quedan en la línea de tiempo.
+// EN: Selectable refresh interval (stored in this browser). It only changes how often THIS screen redraws: the modules keep watching and recording events on the server even when nobody looks, and events stay in the timeline.
+const RI=[10,30,60,120,300,0];            // segundos; 0 = manual / seconds; 0 = manual
+let riSec=10;try{const v=parseInt(localStorage.getItem('pi-refresh'),10);if(RI.includes(v))riSec=v}catch(e){}
+let lastRef=0;
+const riLabel=v=>v===0?T('rman'):v<60?v+' s':(v/60)+' min';
+function riFill(){const s=$('ri');if(!s)return;s.title=T('rint');s.setAttribute('aria-label',T('rint'));s.innerHTML='';RI.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=riLabel(v);if(v===riSec)o.selected=true;s.appendChild(o)});const b=$('rr');if(b){b.title=T('rnow');b.setAttribute('aria-label',T('rnow'))}}
+function riNext(){clearTimeout(timer);timer=null;if(riSec>0)timer=setTimeout(loop,Math.max(0,lastRef+riSec*1000-Date.now()))}
+// Con la pestaña oculta no se consulta nada (ahorra CPU de la Pi); al volver se actualiza si ya tocaba.
+// EN: With the tab hidden nothing is queried (saves the Pi's CPU); on return it refreshes if it was due.
+function loop(){clearTimeout(timer);timer=null;
+  if(document.hidden){if(riSec>0)timer=setTimeout(loop,Math.max(riSec,10)*1000);return}
+  refresh().catch(()=>{}).finally(()=>{lastRef=Date.now();riNext()})}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&me&&me.username&&(riSec===0?false:Date.now()-lastRef>riSec*1000))loop()});
 
 // ───────── Sesión / session ─────────
 function showLogin(){clearTimeout(timer);$('app').classList.add('hide');$('loginbox').classList.remove('hide');$('lu').focus()}
@@ -258,9 +271,11 @@ $('bo').onclick=async()=>{await fetch('api/logout',{method:'POST',headers:{'Cont
 function applyLang(){
   document.documentElement.lang=lang;document.title='Pi Console — '+T('title');
   document.querySelectorAll('[data-i]').forEach(e=>e.textContent=T(e.dataset.i));
-  $('bl').textContent=lang==='es'?'EN':'ES';
+  $('bl').textContent=lang==='es'?'EN':'ES';riFill();
   $('lu').placeholder=lang==='es'?'Usuario':'User';$('lp').placeholder=lang==='es'?'Contraseña':'Password';
 }
+$('ri').onchange=e=>{riSec=parseInt(e.target.value,10);try{localStorage.setItem('pi-refresh',String(riSec))}catch(x){}if(me&&me.username){riNext();if(riSec>0&&Date.now()-lastRef>riSec*1000)loop()}};
+$('rr').onclick=()=>{if(me&&me.username)loop()};
 $('bl').onclick=()=>{lang=lang==='es'?'en':'es';try{localStorage.setItem('pi-lang',lang)}catch(e){}applyLang();if(me&&me.username){histTs=0;refresh()}};
 
 // ES: Reparto equilibrado de las tarjetas: si no caben todas en una fila, se reparten en filas parejas (4 tarjetas con sitio para 3 → 2×2) en vez de dejar una sola tarjeta huérfana con un hueco a su derecha.
