@@ -568,7 +568,7 @@ function tpRender() {
       <td><span class="tp-name">${n}</span></td>
       <td><span class="tp-kind ${b.kind==='upload'?'upload':''}">${t(b.kind==='upload'?'tpKindUpload':'tpKindBackup')}</span></td>
       <td><span class="ucreated">${tpFmtSize(b.size)}</span></td>
-      <td><span class="ucreated">${new Date(b.mtime*1000).toLocaleString(locale)}</span></td>
+      <td><span class="ucreated">${PCT.ls(new Date(b.mtime*1000), locale)}</span></td>
       <td class="col-actions">
         <button class="btn-ri edit" data-on-click="tpDownload" data-on-click-args="${jsargs([b.name])}" title="${t('tpDownload')}">⬇</button>
         <button class="btn-ri edit" data-on-click="tpCheck" data-on-click-args="${jsargs([b.name])}" title="${t('tpCheck')}">✔</button>

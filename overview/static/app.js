@@ -191,7 +191,7 @@ function evText(e){const t=e.k&&EVT[lang][e.k];return t?t.replace(/\{(\w+)\}/g,(
 // EN: Event text with the IP (if any) marked for the Net Monitor card. Everything is escaped; the span is created by this code.
 function evHtml(e){const s=esc(evText(e)),ip=e.m==='net'&&e.p&&/^\d{1,3}(\.\d{1,3}){3}$/.test(String(e.p.ip||''))?String(e.p.ip):'';return ip&&s.includes(ip)?s.replace(ip,`<span data-nethost="${ip}" data-nethost-click="1">${ip}</span>`):s}
 function renderEvents(list){
-  $('c-ev').innerHTML=`<div class="ch"><h2>${T('ev')}</h2></div>`+(list.length?`<div class="tl">${list.map(e=>`<div class="ev"><i class="d ${esc(e.lv)}"></i><span class="m">${esc({nut:'UPS',pve:'PVE',net:'NET'}[e.m]||e.m)}</span><span>${evHtml(e)}</span><span class="t" title="${new Date(e.t*1000).toLocaleString()}">${esc(ago(e.t))}</span></div>`).join('')}</div>`:`<div class="empty">${T('noev')}</div>`);
+  $('c-ev').innerHTML=`<div class="ch"><h2>${T('ev')}</h2></div>`+(list.length?`<div class="tl">${list.map(e=>`<div class="ev"><i class="d ${esc(e.lv)}"></i><span class="m">${esc({nut:'UPS',pve:'PVE',net:'NET'}[e.m]||e.m)}</span><span>${evHtml(e)}</span><span class="t" title="${PCT.ls(new Date(e.t*1000))}">${esc(ago(e.t))}</span></div>`).join('')}</div>`:`<div class="empty">${T('noev')}</div>`);
 }
 
 // ───────── Ciclo de actualización / refresh loop ─────────
@@ -232,7 +232,7 @@ async function refresh(){
   const at=$('attn');at.classList.toggle('show',issues.length>0);at.classList.toggle('c',issues.some(i=>i.lv==='crit'));
   issues.sort((a,b)=>LV[b.lv]-LV[a.lv]);
   $('attnl').innerHTML=issues.map(i=>`<li><b class="${i.lv}" style="background:none">${esc(String(i.m).toUpperCase())}</b>${i.href?`<a href="${esc(i.href)}">${esc(i.t)}</a>`:esc(i.t)}</li>`).join('');
-  $('upd').textContent=T('updated')+' '+new Date().toLocaleTimeString();
+  $('upd').textContent=T('updated')+' '+PCT.time(new Date(),true);
 }
 // Intervalo de actualización elegible (se guarda en este navegador). Solo cambia cuánto se redibuja ESTA pantalla: los módulos siguen vigilando y anotando eventos en el servidor aunque nadie mire, y los eventos quedan en la línea de tiempo.
 // EN: Selectable refresh interval (stored in this browser). It only changes how often THIS screen redraws: the modules keep watching and recording events on the server even when nobody looks, and events stay in the timeline.
