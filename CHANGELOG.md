@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.1t — 2026-10-20
+## 1.2.2 — 2026-10-20
 
 Revisión de seguridad completa (Python, shell, SQL, nginx, systemd, scripts de instalación y JavaScript; análisis con bandit y shellcheck).
 
