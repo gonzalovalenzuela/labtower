@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.2b — 2026-10-20
+
+- **Overview: tarjetas ordenables.** Botón *Ordenar*: cada tarjeta muestra flechas ‹ › y una manija ⠿ para arrastrar (las flechas sirven en iPad y celular). *Restablecer orden* vuelve al de siempre (UPS, Proxmox, Red, Pi). El orden se guarda en cada navegador y también se usa en modo kiosko. La línea de tiempo siempre queda abajo.
+
 ## 1.2.2a — 2026-10-20
 
 - **Formato de hora 24 h / 12 h.** Botón "24H/12H" junto al idioma (en el Resumen, antes del botón de idioma). Por defecto 24 h. Se guarda en el navegador y vale para todos los módulos. Afecta relojes, horas de gráficos, eventos, fechas con hora y registros.
