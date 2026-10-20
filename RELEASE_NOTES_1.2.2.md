@@ -34,7 +34,7 @@ Reúne todos los cambios desde 1.2.1 (builds 1.2.1a a 1.2.1t).
 **Instalar o actualizar**
 ```bash
 wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.2/pi-console_1.2.2_all.deb
-sha256sum pi-console_1.2.2_all.deb    # 4ad59661320cf5540ac4a250454af820eb92fbbdecea23b92efded7568d416db
+sha256sum pi-console_1.2.2_all.deb    # 052118769a143c9bd0017f3f4a48bd0508f92d2151bc45b399565c8febf1991a
 sudo apt-get install -y ./pi-console_1.2.2_all.deb
 ```
 
@@ -72,6 +72,6 @@ Includes every change since 1.2.1 (builds 1.2.1a to 1.2.1t).
 **Install or upgrade**
 ```bash
 wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.2.2/pi-console_1.2.2_all.deb
-sha256sum pi-console_1.2.2_all.deb    # 4ad59661320cf5540ac4a250454af820eb92fbbdecea23b92efded7568d416db
+sha256sum pi-console_1.2.2_all.deb    # 052118769a143c9bd0017f3f4a48bd0508f92d2151bc45b399565c8febf1991a
 sudo apt-get install -y ./pi-console_1.2.2_all.deb
 ```
