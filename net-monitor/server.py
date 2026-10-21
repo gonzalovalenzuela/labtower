@@ -54,8 +54,8 @@ PORT          = 8083
 STATIC_DIR    = Path(__file__).parent / "static"
 # Los datos viven en /var/lib/pi-console/net-monitor (el código de /opt es de solo lectura para el servicio).
 # EN: The data lives in /var/lib/pi-console/net-monitor (the code in /opt is read-only for the service).
-DATA_DIR      = auth.module_data("net-monitor")
-auth.adopt_legacy(Path(__file__).parent, DATA_DIR, ("hosts.json", "config.json"))
+DATA_DIR      = auth.module_dir("net-monitor")      # solo la ruta; la carpeta se crea al arrancar (auth.prepare_module en main)
+LEGACY_FILES = ("hosts.json", "config.json")
 DATA_FILE     = DATA_DIR / "hosts.json"
 CONF_FILE     = DATA_DIR / "config.json"
 
@@ -965,24 +965,31 @@ _scan_lock        = threading.Lock()
 _scan_status      = {"running": False, "progress": 0, "total": 0,
                      "started": None, "finished": None, "error": None}
 _scan_timer       = None
-_saved            = load_config()
-_current_interval = _saved.get("scan_interval", SCAN_INTERVAL)
-# Instalación nueva (sin escaneos previos, sin intervalo guardado y sin SCAN_INTERVAL en el entorno): modo manual, no se escanea nada hasta que el usuario lo pida desde la página. Se guarda scan_interval=0 para que los reinicios no vuelvan al escaneo automático.
-# EN: Fresh install (no previous scan, no saved interval and no SCAN_INTERVAL in the environment): manual mode, nothing is scanned until the user asks from the page. scan_interval=0 is saved so restarts do not go back to automatic scanning.
-if "scan_interval" not in _saved and "SCAN_INTERVAL" not in os.environ and not DATA_FILE.exists():
-    _current_interval = 0
-    try:
-        with _cfg_lock:
-            _c = load_config(); _c["scan_interval"] = 0; save_config(_c)
-    except Exception as _e:
-        log.warning(f"could not save the default manual scan mode: {_e}")
-# Cargar credenciales Pi-hole guardadas
-# Credenciales de Pi-hole guardadas desde la página; una variable de entorno tiene prioridad.
-# EN: Pi-hole credentials saved from the page; an environment variable takes priority.
-if not PIHOLE_PASS and _saved.get("pihole_pass"):
-    PIHOLE_PASS = _saved["pihole_pass"]
-if _saved.get("pihole_hosts"):
-    PIHOLE_HOSTS = _saved["pihole_hosts"]
+_saved            = {}
+_current_interval = SCAN_INTERVAL
+# Ajustes guardados y modo manual de una instalación nueva. Se ejecuta al arrancar (después de preparar la carpeta de datos), no al importar el módulo.
+# EN: Saved settings and the manual mode of a fresh install. It runs at startup (after the data folder is prepared), not when the module is imported.
+def init_runtime():
+    global _saved, _current_interval, PIHOLE_PASS, PIHOLE_HOSTS
+    _saved = load_config()
+    _current_interval = _saved.get("scan_interval", SCAN_INTERVAL)
+    # Instalación nueva (sin escaneos previos, sin intervalo guardado y sin SCAN_INTERVAL en el entorno): modo manual, no se escanea nada hasta que el usuario lo pida desde la página. Se guarda scan_interval=0 para que los reinicios no vuelvan al escaneo automático.
+    # EN: Fresh install (no previous scan, no saved interval and no SCAN_INTERVAL in the environment): manual mode, nothing is scanned until the user asks from the page. scan_interval=0 is saved so restarts do not go back to automatic scanning.
+    if "scan_interval" not in _saved and "SCAN_INTERVAL" not in os.environ and not DATA_FILE.exists():
+        _current_interval = 0
+        try:
+            with _cfg_lock:
+                _c = load_config(); _c["scan_interval"] = 0; save_config(_c)
+        except Exception as _e:
+            log.warning(f"could not save the default manual scan mode: {_e}")
+    # Cargar credenciales Pi-hole guardadas
+    # Credenciales de Pi-hole guardadas desde la página; una variable de entorno tiene prioridad.
+    # EN: Pi-hole credentials saved from the page; an environment variable takes priority.
+    if not PIHOLE_PASS and _saved.get("pihole_pass"):
+        PIHOLE_PASS = _saved["pihole_pass"]
+    if _saved.get("pihole_hosts"):
+        PIHOLE_HOSTS = _saved["pihole_hosts"]
+
 
 # Escaneo completo (o de una sola IP). Reserva el escaneo de forma atómica para que dos disparos no corran a la vez, recorre las IP con un pool de hilos y mezcla cada resultado con lo ya conocido:
 # conserva alias, tipo y SO editados a mano, MAC/fabricante previos y el historial de conexión/desconexión. Guarda cada 20 equipos y al final. Pase lo que pase deja el estado en «no corriendo» y rearma el temporizador.
@@ -1510,6 +1517,8 @@ class H(BaseHTTPRequestHandler):
 # Arranque: completa el permiso «net» de usuarios antiguos (una vez), lanza el primer escaneo y sirve en loopback.
 # EN: Startup: fills in the "net" permission of old users (once), launches the first scan and serves on loopback.
 if __name__ == "__main__":
+    auth.prepare_module(DATA_DIR, Path(__file__).parent, LEGACY_FILES)
+    init_runtime()
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     # Explicit 'net' level for users that predate the module (one-time migration)
     try:

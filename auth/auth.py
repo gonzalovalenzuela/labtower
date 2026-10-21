@@ -67,11 +67,24 @@ USERS_FILE    = Path(os.environ.get("PICONSOLE_USERS",    "/var/lib/pi-console/u
 # EN: Data folder of the installation and the sub-folder of each module (/var/lib/pi-console/<module>). The code in /opt/pi-console is
 #     read-only for the services: everything they write lives here.
 DATA_ROOT = USERS_FILE.parent
+def module_dir(name: str) -> Path:
+    """Data folder of a module. Only computes the path: nothing is created (so importing a module has no side effects)."""
+    return DATA_ROOT / name
+
 def module_data(name: str) -> Path:
     """Writable data folder of a module (created on demand)."""
-    d = DATA_ROOT / name
+    d = module_dir(name)
     try: d.mkdir(parents=True, exist_ok=True)
     except OSError as e: log.warning(f"cannot create {d}: {e}")
+    return d
+
+# Prepara la carpeta de datos de un módulo al arrancar (no al importarlo): la crea y adopta los archivos antiguos.
+# EN: Prepare a module's data folder at startup (not at import): create it and adopt the old files.
+def prepare_module(data_dir, old_dir, names):
+    d = Path(data_dir)
+    try: d.mkdir(parents=True, exist_ok=True)
+    except OSError as e: log.warning(f"cannot create {d}: {e}")
+    adopt_legacy(old_dir, d, names)
     return d
 
 # Datos que antes vivían junto al código (versiones < 1.2.0u): si el archivo nuevo no existe, se copia el viejo (las bases SQLite con su API de

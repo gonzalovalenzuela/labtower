@@ -52,8 +52,8 @@ STATIC_DIR = Path(__file__).parent / "static"
 # EN: clusters.json: configured clusters, with their API token (so the file is private, mode 0600).
 # Los datos viven en /var/lib/pi-console/proxmox-monitor (el código de /opt es de solo lectura para el servicio).
 # EN: The data lives in /var/lib/pi-console/proxmox-monitor (the code in /opt is read-only for the service).
-DATA_DIR   = auth.module_data("proxmox-monitor")
-auth.adopt_legacy(Path(__file__).parent, DATA_DIR, ("clusters.json", "history.json"))
+DATA_DIR   = auth.module_dir("proxmox-monitor")      # solo la ruta; la carpeta se crea al arrancar (auth.prepare_module en main)
+LEGACY_FILES = ("clusters.json", "history.json")
 DATA_FILE  = DATA_DIR / "clusters.json"
 # Ritmos de consulta: rápido cuando hay alguien mirando, lento cuando no (variables PVE_POLL_*).
 # EN: Polling rates: fast when someone is looking, slow when not (PVE_POLL_* variables).
@@ -888,6 +888,7 @@ class H(BaseHTTPRequestHandler):
 # Arranque: completa el permiso «pve» de usuarios antiguos (una vez), lanza los hilos de consulta y sirve en loopback.
 # EN: Startup: fills in the "pve" permission of old users (once), starts the polling threads and serves on loopback.
 if __name__ == "__main__":
+    auth.prepare_module(DATA_DIR, Path(__file__).parent, LEGACY_FILES)
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     # Explicit 'pve' level for users that predate the module (one-time migration)
     try:

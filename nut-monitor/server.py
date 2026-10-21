@@ -54,8 +54,8 @@ STATIC_DIR  = Path(__file__).parent / "static"
 # EN: servers.json: list of configured NUT servers. history.db: history in SQLite.
 # Los datos viven en /var/lib/pi-console/nut-monitor (el código de /opt es de solo lectura para el servicio).
 # EN: The data lives in /var/lib/pi-console/nut-monitor (the code in /opt is read-only for the service).
-DATA_DIR    = auth.module_data("nut-monitor")
-auth.adopt_legacy(Path(__file__).parent, DATA_DIR, ("servers.json", "history.db"))
+DATA_DIR    = auth.module_dir("nut-monitor")      # solo la ruta; la carpeta se crea al arrancar (auth.prepare_module en main)
+LEGACY_FILES = ("servers.json", "history.db")
 DATA_FILE   = DATA_DIR / "servers.json"
 DB_FILE     = DATA_DIR / "history.db"
 
@@ -1026,6 +1026,7 @@ class H(BaseHTTPRequestHandler):
 # EN: Startup: starts the polling threads and makes sure the history buffer is written on exit.
 #     systemd stops the service with SIGTERM, so a handler is installed that empties the buffer before finishing.
 if __name__ == "__main__":
+    auth.prepare_module(DATA_DIR, Path(__file__).parent, LEGACY_FILES)
     import signal, atexit
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     start_all()
