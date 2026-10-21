@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.2e — 2026-10-21
+
+- **Detalle de la Pi: usuarios conectados.** Mostraba "Nadie conectado" aunque hubiera una sesión SSH, porque las versiones nuevas de Raspberry Pi OS (Debian 13) ya no llenan `/run/utmp`. Ahora también lee las sesiones de systemd-logind (lo mismo que muestra `w`).
+
 ## 1.2.2d — 2026-10-21
 
 Auditoría de seguridad de lo agregado en 1.2.2a–c. Sin hallazgos críticos ni altos; tres endurecimientos:

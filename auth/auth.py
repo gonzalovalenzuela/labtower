@@ -1074,23 +1074,47 @@ def _uid_name(pid):
         except KeyError: return str(uid)
     except Exception: return ""
 
-def _logged_users():
-    """Sessions in /run/utmp (same data as «who»). struct utmp is 384 bytes on Linux."""
+def _utmp_users(path="/run/utmp"):
+    """Sessions in /run/utmp (same data as the old «who»). struct utmp is 384 bytes on Linux."""
     import struct
     out = []
-    try:
-        data = Path("/run/utmp").read_bytes()
+    try: data = Path(path).read_bytes()
     except Exception: return out
     for i in range(0, len(data) - 383, 384):
         r = data[i:i + 384]
-        typ = struct.unpack_from("<h", r, 0)[0]
-        if typ != 7: continue                                   # USER_PROCESS
-        line = r[8:40].split(b"\0")[0].decode("utf-8", "ignore")
+        if struct.unpack_from("<h", r, 0)[0] != 7: continue          # USER_PROCESS
         user = r[44:76].split(b"\0")[0].decode("utf-8", "ignore")
-        host = r[76:332].split(b"\0")[0].decode("utf-8", "ignore")
-        sec = struct.unpack_from("<i", r, 340)[0]
-        if user: out.append({"user": user, "tty": line, "host": host, "since": sec})
+        if user: out.append({"user": user, "tty": r[8:40].split(b"\0")[0].decode("utf-8", "ignore"),
+                             "host": r[76:332].split(b"\0")[0].decode("utf-8", "ignore"), "since": struct.unpack_from("<i", r, 340)[0]})
     return out
+
+def _logind_users(path="/run/systemd/sessions"):
+    """Sessions known to systemd-logind (what «w» and «loginctl» show). Newer Raspberry Pi OS / Debian 13 no longer fill /run/utmp."""
+    out = []
+    try: names = os.listdir(path)
+    except OSError: return out
+    for n in names:
+        if not n.isalnum(): continue                                  # skips «.ref» and other helper files
+        kv = {}
+        try:
+            for line in Path(path, n).read_text().splitlines():
+                if "=" in line: k, v = line.split("=", 1); kv[k] = v
+        except Exception: continue
+        if kv.get("CLASS", "user") != "user" or kv.get("STATE") == "closing" or not kv.get("USER"): continue
+        try: since = int(kv.get("REALTIME", "0")) // 1000000
+        except ValueError: since = 0
+        out.append({"user": kv["USER"], "tty": kv.get("TTY") or kv.get("DISPLAY") or kv.get("TYPE", ""),
+                    "host": kv.get("REMOTE_HOST", ""), "since": since})
+    return out
+
+def _logged_users():
+    """Logged-in sessions from utmp and logind, without duplicates (same user and terminal)."""
+    seen, out = set(), []
+    for u in _utmp_users() + _logind_users():
+        k = (u["user"], u["tty"])
+        if k in seen: continue
+        seen.add(k); out.append(u)
+    return sorted(out, key=lambda u: u["since"])
 
 def _net_info(full=False):
     ifs = []
