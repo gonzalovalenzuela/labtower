@@ -262,6 +262,7 @@ pi-console/
 ├── scripts/           # teleporter.sh, pi-console-sftp-backup, -https, -health, -resources, apt-repo.py
 ├── debian/            # empaquetado .deb
 ├── assets/icons/      # iconos fuente y script que regenera los PNG
+├── tests/             # pruebas automáticas (unittest)
 ├── docs/              # APT.md y capturas
 ├── CHANGELOG.md, RELEASE_NOTES_*.md, VERSION, LICENSE
 └── README.md, README.en.md
@@ -279,6 +280,8 @@ En la Pi:
 | `/usr/local/bin/` | `teleporter`, `pi-console-sftp-backup`, `pi-console-https`, `pi-console-health`, `pi-console-resources` |
 
 Cada módulo es un servidor HTTP Python independiente. Todos usan `auth/auth.py` para usuarios y sesiones.
+
+Pruebas (solo biblioteca estándar, sin tocar `/var/lib`): `python3 -m unittest discover -s tests -t . -v`
 
 Los comentarios del código están en español e inglés (los de inglés llevan el prefijo `EN:`). Existe un generador de repositorio APT en `scripts/apt-repo.py` (aún sin publicar, ver [docs/APT.md](docs/APT.md)).
 

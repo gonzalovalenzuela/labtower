@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.3 — 2026-10-21
+
+- **Pruebas automáticas en el repositorio** (`tests/`, solo biblioteca estándar). 29 pruebas: cortes y disponibilidad del UPS, lectores de sesiones (utmp y logind), detalle de la Pi (qué ve un administrador y qué un lector), contrato de las APIs (sin sesión → 401, lectura sola no escribe, bloqueo de peticiones entre sitios), versión única en `VERSION`, `debian/control` y CHANGELOG, copias compartidas idénticas, textos en español e inglés con las mismas claves, y sintaxis de JS y shell. Se corren con `python3 -m unittest discover -s tests -t . -v` y en GitHub Actions (`tests.yml`, Python 3.11 y 3.13).
+- **Los módulos ya no hacen nada al importarse.** La carpeta de datos, los archivos antiguos y, en Net Monitor, el modo manual de una instalación nueva se preparan al arrancar el servicio, no al importar el archivo. Sin cambios para el usuario.
+- **Overview, modo kiosko:** el enlace *Abrir* de la tarjeta Raspberry Pi ahora también se ve (estaba oculto).
+
 ## 1.2.2e — 2026-10-21
 
 - **Detalle de la Pi: usuarios conectados.** Mostraba "Nadie conectado" aunque hubiera una sesión SSH, porque las versiones nuevas de Raspberry Pi OS (Debian 13) ya no llenan `/run/utmp`. Ahora también lee las sesiones de systemd-logind (lo mismo que muestra `w`).

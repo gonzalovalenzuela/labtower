@@ -1,0 +1,23 @@
+# Pruebas automáticas (solo biblioteca estándar; node solo para revisar la sintaxis de los .js y los textos en/es).
+# Se corren con: python3 -m unittest discover -s tests -t . -v
+# EN: Automated tests (standard library only; node only to check .js syntax and the en/es texts).
+name: tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.13"]     # Raspberry Pi OS bookworm (3.11) y trixie (3.13)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: pruebas
+        run: python -I -m unittest discover -s tests -t . -v

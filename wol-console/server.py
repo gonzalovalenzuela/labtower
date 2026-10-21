@@ -37,8 +37,8 @@ PORT       = 8080
 HOST       = "127.0.0.1"
 # Los datos viven en /var/lib/pi-console/wol-console (el código de /opt es de solo lectura para el servicio).
 # EN: The data lives in /var/lib/pi-console/wol-console (the code in /opt is read-only for the service).
-DATA_DIR   = auth.module_data("wol-console")
-auth.adopt_legacy(Path(__file__).parent, DATA_DIR, ("devices.json", "wake_log.json"))
+DATA_DIR   = auth.module_dir("wol-console")      # solo la ruta; la carpeta se crea al arrancar (auth.prepare_module en main)
+LEGACY_FILES = ("devices.json", "wake_log.json")
 DATA_FILE  = DATA_DIR / "devices.json"
 LOG_FILE   = DATA_DIR / "wake_log.json"
 # Net Monitor host table (shared info: MAC, IP, name, type). Read-only here.
@@ -529,6 +529,7 @@ class H(BaseHTTPRequestHandler):
 # Arranque del servidor en loopback, un hilo por petición; Ctrl-C termina limpio.
 # EN: Start the server on loopback, one thread per request; Ctrl-C ends cleanly.
 if __name__ == "__main__":
+    auth.prepare_module(DATA_DIR, Path(__file__).parent, LEGACY_FILES)
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     log.info(f"WOL Console en http://{HOST}:{PORT}")
     try:

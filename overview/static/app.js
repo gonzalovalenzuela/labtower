@@ -170,7 +170,7 @@ function renderPi(s){
   if(s.mem&&s.mem.pct>=92){sev=worst(sev,'warn');issues.push({lv:'warn',m:'pi',t:`${T('issue_mem')} (${s.mem.pct}%)`})}
   if(s.power&&(s.power.under_voltage||s.power.throttled||s.power.temp_limit)){sev=worst(sev,'warn');issues.push({lv:'warn',m:'pi',t:T('issue_pwr')})}
   const cpu=s.cpu==null?0:s.cpu;
-  el.innerHTML=`<div class="ch"><h2>${T('pi')}</h2>${pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail'))}<a class="go nokiosk" href="#" data-pi-open="1">${T('open')}</a></div>
+  el.innerHTML=`<div class="ch"><h2>${T('pi')}</h2>${pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail'))}<a class="go" href="#" data-pi-open="1">${T('open')}</a></div>
    ${s.model?`<div class="sub">${esc(s.model)}</div>`:''}
    <div class="kpis">${s.temp!=null?`<div class="kpi"><b>${s.temp}°</b><span>${T('temp')}</span></div>`:''}<div class="kpi"><b>${s.uptime!=null?dur(s.uptime):'—'}</b><span>${T('uptime')}</span></div>${s.load?`<div class="kpi"><b>${s.load[0]}</b><span>load</span></div>`:''}</div>
    ${piH?tchart(piH):''}
