@@ -27,6 +27,7 @@ const LANG={
     clientsLabel:'Clients',
     alertCritBatt:'Critical battery — connect to power immediately',
     alertOnBatt:'On battery —',alertMinLeft:'min left',
+    avStreak:'Online streak',avSince:'since monitoring began',avOnBatt:'On battery now',av24:'Availability 24 h',av7:'Availability 7 d',av30:'Availability 30 d',avLast:'Last outage',avNone:'None recorded',avCount:'Outages (30 d)',avMin:'min. charge',
     chartTitle_voltage:'Input vs output voltage',
     chartLegend_input:'Input',chartLegend_output:'Output',chartLegend_watts:'Watts',
     chartTitle_power:'Power consumption',chartTitle_temp:'UPS temperature',chartLegend_temp:'Temperature (°C)',
@@ -73,6 +74,7 @@ const LANG={
     clientsLabel:'Clientes',
     alertCritBatt:'Batería crítica — conectar a corriente inmediatamente',
     alertOnBatt:'En batería —',alertMinLeft:'min restantes',
+    avStreak:'Tiempo en línea',avSince:'desde que se monitorea',avOnBatt:'En batería ahora',av24:'Disponibilidad 24 h',av7:'Disponibilidad 7 d',av30:'Disponibilidad 30 d',avLast:'Último corte',avNone:'Ninguno registrado',avCount:'Cortes (30 d)',avMin:'carga mín.',
     chartTitle_voltage:'Voltaje entrada vs salida',
     chartLegend_input:'Entrada',chartLegend_output:'Salida',chartLegend_watts:'Watts',
     chartTitle_power:'Consumo',chartTitle_temp:'Temperatura de la UPS',chartLegend_temp:'Temperatura (°C)',
@@ -352,6 +354,7 @@ function renderDashboard(){
         v:    ups[upsName],
         clients: (snap.clients||{})[upsName]||[],
         history: (snap.history||{})[upsName]||[],
+        stats: (snap.stats||{})[upsName]||null,
         error: snap.error,
       });
     });
@@ -559,6 +562,7 @@ function renderDashboard(){
             </div>`;
           })()}
         </div>
+        ${availHtml(row.stats)}
         <div class="vars-section">
           ${VARS.map(([k,l,u])=>{const val=row.v[k];return`<div class="var-cell"><span class="var-key">${l}</span><span class="var-val">${val?esc(val)+' '+u:'<span style="opacity:.3">—</span>'}</span></div>`;}).join('')}
         </div>
@@ -1225,6 +1229,20 @@ function onVChartLeave(key, type){
 function closeModals(){document.querySelectorAll('.overlay').forEach(o=>o.classList.remove('show'));}
 // Escapa HTML antes de insertar texto de usuarios, equipos o la red en la página: evita inyección de código (XSS).
 // EN: Escape HTML before inserting text from users, devices or the network into the page: prevents code injection (XSS).
+// Duración en texto corto: 3d 4h, 2h 15m, 7m, 40s / Duration as short text
+function fmtDur(sec){sec=Math.max(0,Math.round(sec));const d=Math.floor(sec/86400),h=Math.floor(sec%86400/3600),m=Math.floor(sec%3600/60);
+  return d?`${d}d ${h}h`:h?`${h}h ${m}m`:m?`${m}m`:`${sec}s`}
+function fmtPct(v){return v==null?'—':(v>=99.995?'100':v.toFixed(v>=99?2:1))+' %'}
+// Fila de disponibilidad del UPS (racha en línea, 24h/7d/30d, último corte) / UPS availability row
+function availHtml(st){
+  if(!st)return'';
+  const cell=(k,v,c)=>`<div class="var-cell"><span class="var-key">${k}</span><span class="var-val"${c?` style="color:${c}"`:''}>${v}</span></div>`;
+  const a=st.avail||{},L=st.last;
+  const streak=st.on_battery?cell(t('avStreak'),t('avOnBatt'),'var(--red)')
+    :cell(t('avStreak'),fmtDur(st.streak)+(L?'':' <span style="opacity:.55;font-size:10px" title="'+esc(t('avSince'))+'">*</span>'));
+  const lastTxt=L?`${PCT.ls(new Date(L.start*1000))} · ${fmtDur(L.dur)}${L.min_charge!=null?' · '+t('avMin')+' '+Math.round(L.min_charge)+'%':''}`:t('avNone');
+  return `<div class="vars-section avail">${streak}${cell(t('av24'),fmtPct(a['24h']))}${cell(t('av7'),fmtPct(a['7d']))}${cell(t('av30'),fmtPct(a['30d']))}${cell(t('avCount'),st.count30)}${cell(t('avLast'),esc(lastTxt))}</div>`;
+}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 // Valor seguro dentro de un handler on*="…": literal JS entre comillas, escapado también para HTML.
 function jsa(s){return esc(JSON.stringify(String(s)));}

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.2c — 2026-10-21
+
+- **UPS Monitor: tiempo en línea y disponibilidad.** Cada UPS muestra el tiempo en línea desde el último corte, la disponibilidad de 24 h, 7 d y 30 d, la cantidad de cortes de los últimos 30 días y el último corte (fecha, duración y carga mínima). Los cortes se guardan en `history.db` (tabla `outages`). Al actualizar se reconstruyen los cortes pasados desde el historial (tramos con voltaje de entrada bajo 20 V; solo si el UPS informa voltaje de entrada). La disponibilidad aparece cuando hay al menos 1 hora de datos.
+- **Overview: línea de cortes en la tarjeta UPS** (tiempo en línea, último corte y disponibilidad de 30 días).
+- **Overview: detalle de la Raspberry Pi.** El botón *Abrir* de la tarjeta Raspberry Pi muestra equipo, sistema, kernel, encendido y uptime, CPU total y por núcleo, frecuencia, carga, memoria y swap, discos, interfaces de red con IP y tráfico, temperatura y estado de energía (bajo voltaje y limitación). Los administradores también ven usuarios conectados, procesos con más CPU y memoria, y servicios con falla. Se actualiza cada 5 s.
+
 ## 1.2.2b — 2026-10-20
 
 - **Overview: tarjetas ordenables.** Botón *Ordenar*: cada tarjeta muestra flechas ‹ › y una manija ⠿ para arrastrar (las flechas sirven en iPad y celular). *Restablecer orden* vuelve al de siempre (UPS, Proxmox, Red, Pi). El orden se guarda en cada navegador y también se usa en modo kiosko. La línea de tiempo siempre queda abajo.

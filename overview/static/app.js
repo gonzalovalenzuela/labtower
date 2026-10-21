@@ -2,6 +2,7 @@
 const TXT={
  en:{title:'Overview',sortBtn:'Reorder',sortDone:'Done',sortReset:'Reset order',mvEarlier:'Move earlier',mvLater:'Move later',mvDrag:'Drag to move',home:'Home',kiosk:'Kiosk',logout:'Sign out',login:'Sign in',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',exitk:'Exit kiosk',rint:'Refresh every',rman:'Manual',rnow:'Refresh now',ascroll:'Auto-scroll',updated:'Updated',allok:'All good',attn:'Attention',fail:'Failure',
   ups:'UPS Monitor',pve:'Proxmox',net:'Net Monitor',pi:'Raspberry Pi',ev:'Timeline',open:'Open →',noups:'No UPS servers configured',nopve:'No clusters configured',nonet:'No scan yet',noev:'No events yet',
+  uptimeOnl:'Online',avail:'Availability',lastOut:'Last outage',noOut:'no outages recorded',onbattNow:'on battery now',
   mains:'On mains',batt:'On battery',lowb:'Low battery',unreach:'Unreachable',battery:'Battery',load:'Load',runtime:'Runtime',power:'Power',nodes:'Nodes',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memory',disk:'Disk',temp:'Temp',uptime:'Uptime',
   online:'Online',known:'Known',offline:'Offline',newdev:'New devices',lastscan:'Last scan',scanning:'Scanning…',ceph:'Ceph',types:'By device type',nonew:'No new devices',
   ago:'ago',now:'now',min:'min',h:'h',d:'d',s:'s',power_uv:'Under-voltage',power_th:'Throttled',power_ok:'Power supply OK',invalid:'Invalid credentials',
@@ -9,6 +10,7 @@ const TXT={
   issue_temp:'Pi temperature high',issue_disk:'Pi disk almost full',issue_mem:'Pi memory high',issue_pwr:'Pi power supply problem',issue_scan:'scan error',h_temp:'Temp',h_min:'min',h_max:'max',h_uv:'Under-voltage',h_nouv:'no under-voltage',h_utemp:'UPS temperature 24 h'},
  es:{title:'Resumen',sortBtn:'Ordenar',sortDone:'Listo',sortReset:'Restablecer orden',mvEarlier:'Mover antes',mvLater:'Mover después',mvDrag:'Arrastra para mover',home:'Inicio',kiosk:'Kiosko',logout:'Cerrar sesión',login:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',exitk:'Salir de kiosko',rint:'Actualizar cada',rman:'Manual',rnow:'Actualizar ahora',ascroll:'Auto-desplazar',updated:'Actualizado',allok:'Todo en orden',attn:'Atención',fail:'Falla',
   ups:'UPS Monitor',pve:'Proxmox',net:'Net Monitor',pi:'Raspberry Pi',ev:'Línea de tiempo',open:'Abrir →',noups:'Sin servidores UPS configurados',nopve:'Sin clusters configurados',nonet:'Aún sin escaneo',noev:'Sin eventos todavía',
+  uptimeOnl:'En línea',avail:'Disponibilidad',lastOut:'Último corte',noOut:'sin cortes registrados',onbattNow:'en batería ahora',
   mains:'En red eléctrica',batt:'Con batería',lowb:'Batería baja',unreach:'Sin conexión',battery:'Batería',load:'Carga',runtime:'Autonomía',power:'Consumo',nodes:'Nodos',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memoria',disk:'Disco',temp:'Temp',uptime:'Encendida',
   online:'En línea',known:'Conocidos',offline:'Apagados',newdev:'Equipos nuevos',lastscan:'Último escaneo',scanning:'Escaneando…',ceph:'Ceph',types:'Por tipo de equipo',nonew:'Sin equipos nuevos',
   ago:'hace',now:'ahora',min:'min',h:'h',d:'d',s:'s',power_uv:'Subtensión',power_th:'Limitada',power_ok:'Fuente de poder OK',invalid:'Credenciales inválidas',
@@ -101,10 +103,12 @@ function renderUPS(d){
       else if(ob){issues.push({lv:'warn',m:'ups',t:`${name} ${T('issue_batt')} (${charge.toFixed(0)}%, ${dur(run)})`,href:'/nut/'})}
       sev=worst(sev,m[0]);
       const h=hist[sid+'|'+name]||[];const last=h.length?h[h.length-1]:null;
+      const us=(srv.stats||{})[name],ua=us&&us.avail||{};
+      const avTxt=us?`<div class="sub">${us.on_battery?T('onbattNow'):(us.last?`${T('lastOut')}: ${esc(ago(us.last.end||us.last.start))} · ${dur(us.last.dur)}`:T('noOut'))}${ua['30d']!=null?` · ${T('avail')} 30 ${T('d')}: ${ua['30d']>=99.995?'100':ua['30d'].toFixed(2)}%`:''}</div>`:'';
       body+=`<div class="unit"><div class="uh">${esc(v['_desc']||name)} <span class="sub">${esc(name)}</span>${pill(m[0],m[1])}</div>
        <div class="row"><span class="l">${T('battery')}</span><div class="bar ${charge<=20?'c':charge<=50?'w':'g'}"><div style="width:${Math.max(0,Math.min(100,charge))}%"></div></div><span class="v">${charge.toFixed(0)}%</span></div>
        <div class="row"><span class="l">${T('load')}</span>${bar(load,70,90)}<span class="v">${load.toFixed(0)}%</span></div>
-       <div class="kpis"><div class="kpi"><b>${run?dur(run):'—'}</b><span>${T('runtime')}</span></div><div class="kpi"><b>${last&&last.watts?Math.round(last.watts)+' W':'—'}</b><span>${T('power')}</span></div></div>${spark(h.map(r=>r.load))}${upsTemp(h)}</div>`;
+       <div class="kpis"><div class="kpi"><b>${run?dur(run):'—'}</b><span>${T('runtime')}</span></div><div class="kpi"><b>${last&&last.watts?Math.round(last.watts)+' W':'—'}</b><span>${T('power')}</span></div>${us&&us.streak!=null?`<div class="kpi"><b>${us.on_battery?'—':dur(us.streak)}</b><span>${T('uptimeOnl')}</span></div>`:''}</div>${avTxt}${spark(h.map(r=>r.load))}${upsTemp(h)}</div>`;
     }
   }
   el.innerHTML=`<div class="ch"><h2>${T('ups')}</h2>${n?pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail')):''}<a class="go" href="/nut/">${T('open')}</a></div>`+(n?body:`<div class="empty">${T('noups')}</div>`);
@@ -166,7 +170,7 @@ function renderPi(s){
   if(s.mem&&s.mem.pct>=92){sev=worst(sev,'warn');issues.push({lv:'warn',m:'pi',t:`${T('issue_mem')} (${s.mem.pct}%)`})}
   if(s.power&&(s.power.under_voltage||s.power.throttled||s.power.temp_limit)){sev=worst(sev,'warn');issues.push({lv:'warn',m:'pi',t:T('issue_pwr')})}
   const cpu=s.cpu==null?0:s.cpu;
-  el.innerHTML=`<div class="ch"><h2>${T('pi')}</h2>${pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail'))}</div>
+  el.innerHTML=`<div class="ch"><h2>${T('pi')}</h2>${pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail'))}<a class="go nokiosk" href="#" data-pi-open="1">${T('open')}</a></div>
    ${s.model?`<div class="sub">${esc(s.model)}</div>`:''}
    <div class="kpis">${s.temp!=null?`<div class="kpi"><b>${s.temp}°</b><span>${T('temp')}</span></div>`:''}<div class="kpi"><b>${s.uptime!=null?dur(s.uptime):'—'}</b><span>${T('uptime')}</span></div>${s.load?`<div class="kpi"><b>${s.load[0]}</b><span>load</span></div>`:''}</div>
    ${piH?tchart(piH):''}
@@ -278,7 +282,7 @@ function applyLang(){
 }
 $('ri').onchange=e=>{riSec=parseInt(e.target.value,10);try{localStorage.setItem('pi-refresh',String(riSec))}catch(x){}if(me&&me.username){riNext();if(riSec>0&&Date.now()-lastRef>riSec*1000)loop()}};
 $('rr').onclick=()=>{if(me&&me.username)loop()};
-$('bl').onclick=()=>{lang=lang==='es'?'en':'es';try{localStorage.setItem('pi-lang',lang)}catch(e){}applyLang();if(me&&me.username){histTs=0;refresh()}};
+$('bl').onclick=()=>{lang=lang==='es'?'en':'es';try{localStorage.setItem('pi-lang',lang)}catch(e){}applyLang();document.dispatchEvent(new Event('pi-lang'));if(me&&me.username){histTs=0;refresh()}};
 
 // ES: Reparto equilibrado de las tarjetas: si no caben todas en una fila, se reparten en filas parejas (4 tarjetas con sitio para 3 → 2×2) en vez de dejar una sola tarjeta huérfana con un hueco a su derecha.
 // EN: Balanced card layout: if they do not all fit in one row they are spread over even rows (4 cards with room for 3 → 2×2) instead of leaving one orphan card with a gap to its right.

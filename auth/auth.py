@@ -1024,6 +1024,199 @@ def system_stats():
     return out
 
 
+# ─── Detalle completo del equipo (vista «Raspberry Pi» del Resumen) ─────────────────────────────────────────
+# Todo sale de /proc, /sys y /run/utmp; solo «ip» y «systemctl --failed» son comandos externos (con tiempo máximo).
+# CPU por núcleo y por proceso se calculan con dos lecturas separadas por ~0,4 s. Usuarios conectados, procesos y
+# servicios solo se incluyen si `full` es True (administradores del panel).
+# EN: ─── Full host detail ("Raspberry Pi" view of the Overview) ────────────────────────────────────────────
+#     Everything comes from /proc, /sys and /run/utmp; only "ip" and "systemctl --failed" are external commands (with a timeout).
+#     Per-core and per-process CPU use two reads ~0.4 s apart. Logged-in users, processes and services are included
+#     only when `full` is True (panel administrators).
+_SKIP_FS = {"proc", "sysfs", "devtmpfs", "devpts", "tmpfs", "cgroup", "cgroup2", "securityfs", "debugfs", "tracefs",
+            "configfs", "fusectl", "mqueue", "hugetlbfs", "pstore", "bpf", "autofs", "binfmt_misc", "overlay", "squashfs",
+            "nsfs", "ramfs", "rpc_pipefs", "efivarfs", "fuse.gvfsd-fuse"}
+
+def _read(path, default=""):
+    try: return Path(path).read_text().strip()
+    except Exception: return default
+
+def _cpu_times():
+    """Per-core jiffies: [(idle, total), …] with the aggregate first."""
+    out = []
+    try:
+        with open("/proc/stat") as f:
+            for line in f:
+                if not line.startswith("cpu"): break
+                p = line.split(); v = [int(x) for x in p[1:8]]
+                out.append((v[3] + v[4], sum(v)))
+    except Exception: pass
+    return out
+
+def _proc_times():
+    """pid → (name, jiffies, rss_bytes, user, state) for every process we can read."""
+    page = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
+    res = {}
+    for d in os.listdir("/proc"):
+        if not d.isdigit(): continue
+        try:
+            raw = Path(f"/proc/{d}/stat").read_text()
+            name = raw[raw.index("(") + 1:raw.rindex(")")]
+            f = raw[raw.rindex(")") + 2:].split()
+            res[int(d)] = (name, int(f[11]) + int(f[12]), int(f[21]) * page, f[0])
+        except Exception: continue
+    return res
+
+def _uid_name(pid):
+    try:
+        import pwd
+        uid = os.stat(f"/proc/{pid}").st_uid
+        try: return pwd.getpwuid(uid).pw_name
+        except KeyError: return str(uid)
+    except Exception: return ""
+
+def _logged_users():
+    """Sessions in /run/utmp (same data as «who»). struct utmp is 384 bytes on Linux."""
+    import struct
+    out = []
+    try:
+        data = Path("/run/utmp").read_bytes()
+    except Exception: return out
+    for i in range(0, len(data) - 383, 384):
+        r = data[i:i + 384]
+        typ = struct.unpack_from("<h", r, 0)[0]
+        if typ != 7: continue                                   # USER_PROCESS
+        line = r[8:40].split(b"\0")[0].decode("utf-8", "ignore")
+        user = r[44:76].split(b"\0")[0].decode("utf-8", "ignore")
+        host = r[76:332].split(b"\0")[0].decode("utf-8", "ignore")
+        sec = struct.unpack_from("<i", r, 340)[0]
+        if user: out.append({"user": user, "tty": line, "host": host, "since": sec})
+    return out
+
+def _net_info():
+    ifs = []
+    addrs = {}
+    try:
+        o = subprocess.run(["ip", "-j", "addr"], capture_output=True, text=True, timeout=3).stdout
+        for it in json.loads(o or "[]"):
+            addrs[it.get("ifname")] = [f'{a.get("local")}/{a.get("prefixlen")}' for a in it.get("addr_info", []) if a.get("family") in ("inet", "inet6") and a.get("scope") != "host"]
+    except Exception: pass
+    base = Path("/sys/class/net")
+    try: names = sorted(os.listdir(base))
+    except OSError: names = []
+    for n in names:
+        if n == "lo" or n.startswith(("veth", "docker", "br-")): continue
+        d = base / n
+        try: rx = int(_read(d / "statistics/rx_bytes", "0")); tx = int(_read(d / "statistics/tx_bytes", "0"))
+        except ValueError: rx = tx = 0
+        sp = _read(d / "speed", "")
+        ifs.append({"name": n, "state": _read(d / "operstate", "?"), "mac": _read(d / "address"),
+                    "speed": int(sp) if sp.lstrip("-").isdigit() and int(sp) > 0 else None,
+                    "rx": rx, "tx": tx, "addrs": addrs.get(n, [])})
+    return ifs
+
+def _disk_info():
+    out, seen = [], set()
+    try:
+        with open("/proc/mounts") as f:
+            for line in f:
+                dev, mp, fs = line.split()[:3]
+                if fs in _SKIP_FS or not dev.startswith("/") or dev in seen: continue
+                if mp.startswith(("/proc", "/sys", "/dev", "/run", "/snap")): continue
+                seen.add(dev)
+                try: st = os.statvfs(mp)
+                except OSError: continue
+                total = st.f_blocks * st.f_frsize; free = st.f_bavail * st.f_frsize
+                if total: out.append({"dev": dev, "mount": mp.replace("\\040", " "), "fs": fs, "total": total, "used": total - free,
+                                      "pct": round(100.0 * (total - free) / total, 1)})
+    except Exception: pass
+    return out
+
+_THROTTLE_BITS = [(0, "under_voltage", True), (1, "freq_capped", True), (2, "throttled", True), (3, "soft_temp_limit", True),
+                  (16, "under_voltage", False), (17, "freq_capped", False), (18, "throttled", False), (19, "soft_temp_limit", False)]
+
+def system_detail(full=False):
+    """Everything the Overview's Raspberry Pi view shows. Never raises: a missing piece is just None / empty."""
+    out = system_stats()
+    t0 = _cpu_times(); p0 = _proc_times() if full else {}
+    time.sleep(0.4)
+    t1 = _cpu_times(); p1 = _proc_times() if full else {}
+    cores = []
+    for a, b in zip(t0, t1):
+        dt = b[1] - a[1]
+        cores.append(round(100.0 * (1 - (b[0] - a[0]) / dt), 1) if dt > 0 else 0.0)
+    out["cpu_total"] = cores[0] if cores else out.get("cpu")
+    out["cpu_cores"] = cores[1:]
+    try:
+        u = os.uname()
+        out["host"] = {"hostname": u.nodename, "kernel": u.release, "arch": u.machine}
+    except Exception: out["host"] = {}
+    osr = {}
+    for line in _read("/etc/os-release").splitlines():
+        if "=" in line: k, v = line.split("=", 1); osr[k] = v.strip('"')
+    out["host"]["os"] = osr.get("PRETTY_NAME")
+    try:
+        import platform
+        out["host"]["python"] = platform.python_version()
+    except Exception: pass
+    out["boot"] = int(time.time() - out["uptime"]) if out.get("uptime") is not None else None
+    out["time"] = int(time.time())
+    out["tz"] = time.strftime("%Z")
+    fq = {}
+    for k, n in (("cur", "scaling_cur_freq"), ("max", "scaling_max_freq"), ("min", "scaling_min_freq")):
+        v = _read(f"/sys/devices/system/cpu/cpu0/cpufreq/{n}")
+        if v.isdigit(): fq[k] = int(v) // 1000
+    out["freq_mhz"] = fq or None
+    out["governor"] = _read("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor") or None
+    try:
+        m = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                k, v = line.split(":", 1); m[k] = int(v.split()[0]) * 1024
+        out["mem_detail"] = {"total": m.get("MemTotal"), "available": m.get("MemAvailable"), "free": m.get("MemFree"),
+                             "buffers": m.get("Buffers"), "cached": m.get("Cached"),
+                             "swap_total": m.get("SwapTotal"), "swap_used": (m.get("SwapTotal", 0) - m.get("SwapFree", 0))}
+    except Exception: out["mem_detail"] = None
+    out["disks"] = _disk_info()
+    out["net"] = _net_info()
+    out["procs_total"] = len(p1) if full else None
+    try:
+        bits = _read_throttled() if _is_raspberry_pi() else None
+        if bits is not None:
+            out["throttle"] = {"raw": f"0x{bits:X}", "now": [n for b, n, now in _THROTTLE_BITS if now and bits & (1 << b)],
+                               "since_boot": [n for b, n, now in _THROTTLE_BITS if not now and bits & (1 << b)]}
+        else: out["throttle"] = None
+    except Exception: out["throttle"] = None
+    # Más sensores térmicos / other thermal zones
+    zones = []
+    try:
+        for z in sorted(Path("/sys/class/thermal").glob("thermal_zone*")):
+            v = _read(z / "temp")
+            if v.lstrip("-").isdigit(): zones.append({"name": _read(z / "type") or z.name, "temp": round(int(v) / 1000.0, 1)})
+    except Exception: pass
+    out["thermal"] = zones
+    out["full"] = bool(full)
+    if full:
+        out["users"] = _logged_users()
+        dt = (t1[0][1] - t0[0][1]) if t0 and t1 else 0
+        ncpu = max(1, len(t1) - 1)
+        procs = []
+        for pid, (name, j, rss, st) in p1.items():
+            cpu = 0.0
+            if pid in p0 and dt > 0: cpu = round(100.0 * ncpu * (j - p0[pid][1]) / dt, 1)
+            procs.append({"pid": pid, "name": name, "cpu": max(0.0, cpu), "rss": rss, "state": st})
+        top_cpu = sorted(procs, key=lambda p: (-p["cpu"], -p["rss"]))[:8]
+        top_mem = sorted(procs, key=lambda p: -p["rss"])[:8]
+        for p in {p["pid"]: p for p in top_cpu + top_mem}.values(): p["user"] = _uid_name(p["pid"])
+        out["top_cpu"], out["top_mem"] = top_cpu, top_mem
+        failed = []
+        try:
+            o = subprocess.run(["systemctl", "--failed", "--no-legend", "--plain", "--no-pager"], capture_output=True, text=True, timeout=4).stdout
+            failed = [ln.split()[0] for ln in o.splitlines() if ln.strip()]
+        except Exception: failed = None
+        out["failed_units"] = failed
+    return out
+
+
 # ─── Métricas: historiales de los gráficos del Resumen ──────────────────────────────────────────
 # Una base SQLite compartida (metrics.db, junto a users.json) con el historial de temperatura y subtensión de la Pi
 # (lo escribe el servicio Resumen) y el de CPU y memoria de los nodos Proxmox (lo escribe Proxmox Monitor). Cada
