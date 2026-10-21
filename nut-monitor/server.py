@@ -342,6 +342,10 @@ def db_prune():
         try:
             deleted = conn.execute("DELETE FROM history WHERE ts < ?", (cutoff,)).rowcount
             conn.execute("DELETE FROM outages WHERE t_end IS NOT NULL AND t_end < ?", (cutoff,))
+            # Un UPS o servidor NUT defectuoso (o malicioso) que alterne OL/OB sin parar no debe hacer crecer la tabla sin límite: se conservan los 2000 cortes más recientes de cada UPS.
+            # EN: A faulty (or malicious) UPS or NUT server flapping OL/OB must not grow the table without limit: the 2000 most recent outages of each UPS are kept.
+            conn.execute("""DELETE FROM outages WHERE t_end IS NOT NULL AND id NOT IN (
+                              SELECT id FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY srv_id, ups ORDER BY t_start DESC) AS rn FROM outages) WHERE rn <= 2000)""")
             conn.commit()    # close the DELETE transaction first: a checkpoint inside it fails
             conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         finally:

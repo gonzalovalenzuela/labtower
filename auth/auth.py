@@ -1092,7 +1092,7 @@ def _logged_users():
         if user: out.append({"user": user, "tty": line, "host": host, "since": sec})
     return out
 
-def _net_info():
+def _net_info(full=False):
     ifs = []
     addrs = {}
     try:
@@ -1109,7 +1109,7 @@ def _net_info():
         try: rx = int(_read(d / "statistics/rx_bytes", "0")); tx = int(_read(d / "statistics/tx_bytes", "0"))
         except ValueError: rx = tx = 0
         sp = _read(d / "speed", "")
-        ifs.append({"name": n, "state": _read(d / "operstate", "?"), "mac": _read(d / "address"),
+        ifs.append({"name": n, "state": _read(d / "operstate", "?"), "mac": _read(d / "address") if full else None,
                     "speed": int(sp) if sp.lstrip("-").isdigit() and int(sp) > 0 else None,
                     "rx": rx, "tx": tx, "addrs": addrs.get(n, [])})
     return ifs
@@ -1177,7 +1177,7 @@ def system_detail(full=False):
                              "swap_total": m.get("SwapTotal"), "swap_used": (m.get("SwapTotal", 0) - m.get("SwapFree", 0))}
     except Exception: out["mem_detail"] = None
     out["disks"] = _disk_info()
-    out["net"] = _net_info()
+    out["net"] = _net_info(full)
     out["procs_total"] = len(p1) if full else None
     try:
         bits = _read_throttled() if _is_raspberry_pi() else None

@@ -132,6 +132,17 @@ def pi_history(hours=24):
     return {"pi": True, "every": PI_EVERY, "samples": rows}
 
 
+# El detalle lee /proc dos veces con una pausa de 0,4 s: se comparte el resultado 2 s entre todas las sesiones y solo un hilo lo calcula a la vez, para que muchas peticiones no carguen la Pi.
+# EN: The detail reads /proc twice with a 0.4 s pause: the result is shared for 2 s among all sessions and only one thread computes it at a time, so many requests cannot load the Pi.
+_pd_lock = threading.Lock(); _pd_cache = {}
+def pi_detail_cached(full):
+    with _pd_lock:
+        t, d = _pd_cache.get(full, (0, None))
+        if d is None or time.time() - t > 2:
+            d = auth.system_detail(full); _pd_cache[full] = (time.time(), d)
+        return d
+
+
 # ─── Salud ───────────────────────────────────────────────────────────────────
 # Chequeos comunes (usuarios, sesiones, disco) y que el archivo de eventos se pueda leer y escribir.
 # EN: ─── Health ──────────────────────────────────────────────────────────────
@@ -206,7 +217,7 @@ class H(BaseHTTPRequestHandler):
         # EN: Full host detail. Logged-in users, processes and failed services: administrators only (WOL or UPS).
         if path == "/api/pidetail":
             full = auth.check_permission(tok, "wol", "admin") or auth.check_permission(tok, "nut", "admin")
-            try: return self._json(200, auth.system_detail(full))
+            try: return self._json(200, pi_detail_cached(full))
             except Exception as e:
                 log.warning(f"pidetail: {e}"); return self._json(500, {"error": "unavailable"})
 

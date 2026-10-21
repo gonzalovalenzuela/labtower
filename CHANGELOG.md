@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.2d — 2026-10-21
+
+Auditoría de seguridad de lo agregado en 1.2.2a–c. Sin hallazgos críticos ni altos; tres endurecimientos:
+- El detalle de la Pi (`/api/pidetail`) comparte el resultado 2 s entre sesiones y lo calcula un solo hilo a la vez, para que muchas peticiones no carguen la Raspberry Pi.
+- Las direcciones MAC del detalle de la Pi solo las ven los administradores.
+- Tabla de cortes del UPS: se conservan como máximo los 2000 cortes más recientes por UPS, para que un UPS defectuoso que alterne red/batería sin parar no haga crecer la base.
+
 ## 1.2.2c — 2026-10-21
 
 - **UPS Monitor: tiempo en línea y disponibilidad.** Cada UPS muestra el tiempo en línea desde el último corte, la disponibilidad de 24 h, 7 d y 30 d, la cantidad de cortes de los últimos 30 días y el último corte (fecha, duración y carga mínima). Los cortes se guardan en `history.db` (tabla `outages`). Al actualizar se reconstruyen los cortes pasados desde el historial (tramos con voltaje de entrada bajo 20 V; solo si el UPS informa voltaje de entrada). La disponibilidad aparece cuando hay al menos 1 hora de datos.
