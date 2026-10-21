@@ -6,12 +6,14 @@ Overview — resumen de UPS, Proxmox, red y la Pi / Overview of UPS, Proxmox, ne
 # más el estado de la Raspberry Pi y una línea de tiempo de eventos. La página consulta directamente las APIs de
 # los otros módulos (con la misma sesión); este servicio solo aporta lo que ellos no tienen:
 #   /api/system  → temperatura, CPU, memoria, disco y tiempo encendido de la Pi
+#   /api/pidetail → detalle completo de la Pi (CPU por núcleo, memoria, discos, red, usuarios, procesos)
 #   /api/events  → línea de tiempo (los módulos anotan sus cambios de estado con auth.record_event)
 # Estructura: salud · HTTP (GET/POST) · arranque.
 # EN: Overview (port 8085): a single page with the key points of UPS Monitor, Proxmox Monitor and Net Monitor,
 #     plus the Raspberry Pi status and an event timeline. The page queries the other modules' APIs directly (with
 #     the same session); this service only adds what they do not have:
 #       /api/system  → temperature, CPU, memory, disk and uptime of the Pi
+#       /api/pidetail → full Pi detail (per-core CPU, memory, disks, network, users, processes)
 #       /api/events  → timeline (modules record their state changes with auth.record_event)
 #     Structure: health · HTTP (GET/POST) · startup.
 import json, os, sys, logging, threading, time
@@ -199,6 +201,14 @@ class H(BaseHTTPRequestHandler):
 
         if path == "/api/system":
             return self._json(200, auth.system_stats())
+
+        # Detalle completo del equipo. Usuarios conectados, procesos y servicios fallidos: solo administradores (WOL o UPS).
+        # EN: Full host detail. Logged-in users, processes and failed services: administrators only (WOL or UPS).
+        if path == "/api/pidetail":
+            full = auth.check_permission(tok, "wol", "admin") or auth.check_permission(tok, "nut", "admin")
+            try: return self._json(200, auth.system_detail(full))
+            except Exception as e:
+                log.warning(f"pidetail: {e}"); return self._json(500, {"error": "unavailable"})
 
         # Historial de temperatura y subtensión: solo existe en una Raspberry Pi.
         # EN: Temperature and under-voltage history: it exists only on a Raspberry Pi.

@@ -115,8 +115,114 @@ def db_init():
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_hist_srv_ups_ts ON history(srv_id, ups, ts)")
-        conn.commit(); conn.close()
+        # Cortes de energía (UPS en batería): inicio, fin (NULL = sigue en curso) y carga mínima. src: 'live' o 'hist' (deducido del historial).
+        # EN: Power outages (UPS on battery): start, end (NULL = still going) and minimum charge. src: 'live' or 'hist' (inferred from history).
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS outages (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                srv_id     TEXT NOT NULL,
+                ups        TEXT NOT NULL,
+                t_start    INTEGER NOT NULL,
+                t_end      INTEGER,
+                min_charge REAL,
+                src        TEXT DEFAULT 'live'
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_out_srv_ups ON outages(srv_id, ups, t_start)")
+        conn.commit()
+        _outages_backfill(conn)
+        conn.close()
     log.info(f"DB: {DB_FILE}")
+
+# ─── Cortes de energía y disponibilidad ───────────────────────────────────────
+# Se deducen del estado del UPS: «OB» o «LB» abre un corte y «OL» lo cierra. Al crear la tabla por primera vez se
+# reconstruyen los cortes pasados desde el historial: tramos con voltaje de entrada bajo 20 V, solo en UPS que alguna
+# vez informaron más de 100 V (los que no miden voltaje de entrada no se deducen).
+# EN: ─── Power outages and availability ──────────────────────────────────────
+#     Derived from the UPS status: "OB" or "LB" opens an outage and "OL" closes it. When the table is first created,
+#     past outages are rebuilt from the history: runs with input voltage under 20 V, only for UPSs that ever reported
+#     more than 100 V (those that do not measure input voltage are not inferred).
+_open_out = {}               # (srv, ups) → id of the open outage row, or None; filled on first use
+_out_min  = {}               # (srv, ups) → minimum charge seen in the open outage
+_stats_cache = {}            # (srv, ups) → (time, stats)
+OUT_GAP = 600                # s: a hole longer than this in the history ends a run (service was off)
+
+def _outages_backfill(conn):
+    if conn.execute("SELECT 1 FROM outages LIMIT 1").fetchone(): return
+    if not conn.execute("SELECT 1 FROM history LIMIT 1").fetchone(): return
+    n = 0
+    for r in conn.execute("SELECT srv_id, ups FROM history GROUP BY srv_id, ups HAVING MAX(vin) > 100").fetchall():
+        sid, ups = r[0], r[1]
+        start = last = None; low = None
+        def close():
+            nonlocal n, start, last, low
+            if start is not None:
+                conn.execute("INSERT INTO outages (srv_id,ups,t_start,t_end,min_charge,src) VALUES (?,?,?,?,?, 'hist')",
+                             (sid, ups, start, max(last, start + 1), low)); n += 1
+            start = last = low = None
+        for ts, vin, ch in conn.execute("SELECT ts, vin, charge FROM history WHERE srv_id=? AND ups=? ORDER BY ts", (sid, ups)):
+            if vin < 20:
+                if start is not None and ts - last > OUT_GAP: close()
+                if start is None: start = ts; low = ch
+                last = ts; low = ch if low is None else min(low, ch)
+            else:
+                if start is not None: last = max(last, ts); close()
+        close()
+    conn.commit()
+    if n: log.info(f"outages: {n} rebuilt from history")
+
+# Registra el estado actual de un UPS: abre, actualiza o cierra el corte. Solo escribe al cambiar de estado o al bajar la carga mínima.
+# EN: Record a UPS current state: opens, updates or closes the outage. Writes only on a state change or a new minimum charge.
+def outage_track(sid, ups, status, charge, now=None):
+    now = int(now or time.time()); k = (sid, ups)
+    words = status.split(); out = "OB" in words or "LB" in words
+    with _db_lock:
+        conn = db_connect()
+        try:
+            if k not in _open_out:
+                r = conn.execute("SELECT id, min_charge FROM outages WHERE srv_id=? AND ups=? AND t_end IS NULL ORDER BY id DESC LIMIT 1", k).fetchone()
+                _open_out[k] = r[0] if r else None; _out_min[k] = r[1] if r else None
+            oid = _open_out[k]
+            if out and oid is None:
+                cur = conn.execute("INSERT INTO outages (srv_id,ups,t_start,min_charge) VALUES (?,?,?,?)", (sid, ups, now, charge))
+                _open_out[k] = cur.lastrowid; _out_min[k] = charge; conn.commit(); _stats_cache.pop(k, None)
+            elif out and (_out_min.get(k) is None or charge < _out_min[k]):
+                conn.execute("UPDATE outages SET min_charge=? WHERE id=?", (charge, oid)); _out_min[k] = charge; conn.commit()
+            elif not out and oid is not None:
+                conn.execute("UPDATE outages SET t_end=? WHERE id=?", (now, oid)); conn.commit()
+                _open_out[k] = None; _out_min[k] = None; _stats_cache.pop(k, None)
+        finally: conn.close()
+
+# Estadísticas de un UPS: racha en línea, disponibilidad en 24 h / 7 d / 30 d y último corte (se recalculan cada 30 s como mucho).
+# La disponibilidad se mide sobre el tiempo con datos: si hay menos historial que el período, se usa solo ese tiempo.
+# EN: Stats of one UPS: online streak, availability over 24 h / 7 d / 30 d and last outage (recomputed at most every 30 s).
+#     Availability is measured over the time with data: if there is less history than the period, only that time is used.
+def ups_stats(sid, ups):
+    k = (sid, ups); now = int(time.time())
+    c = _stats_cache.get(k)
+    if c and now - c[0] < 30: return c[1]
+    conn = db_connect()
+    try:
+        first = conn.execute("SELECT MIN(ts) FROM history WHERE srv_id=? AND ups=?", k).fetchone()[0]
+        rows = conn.execute("SELECT t_start, t_end, min_charge FROM outages WHERE srv_id=? AND ups=? ORDER BY t_start", k).fetchall()
+    finally: conn.close()
+    if first is None: first = now
+    first = min([first] + [r[0] for r in rows])
+    st = {"since": first, "tracked": now - first, "on_battery": False, "streak": None, "last": None, "count30": 0, "avail": {}}
+    for label, w in (("24h", 86400), ("7d", 604800), ("30d", 2592000)):
+        lo = max(now - w, first); cover = now - lo
+        down = sum(max(0, min(r[1] or now, now) - max(r[0], lo)) for r in rows)
+        st["avail"][label] = round(100.0 * (1 - down / cover), 3) if cover >= 3600 else None
+    st["count30"] = sum(1 for r in rows if (r[1] or now) >= now - 2592000)
+    if rows:
+        t0, t1, mc = rows[-1]
+        st["last"] = {"start": t0, "end": t1, "dur": (t1 or now) - t0, "min_charge": mc}
+        st["on_battery"] = t1 is None
+        st["streak"] = 0 if t1 is None else now - t1
+    else:
+        st["streak"] = now - first
+    _stats_cache[k] = (now, st)
+    return st
 
 # Las filas se acumulan en memoria y se escriben juntas cada DB_FLUSH_SEC segundos
 # (un commit por lote en vez de uno cada POLL_SEC por UPS: menos desgaste de la SD).
@@ -235,6 +341,7 @@ def db_prune():
         conn = db_connect()
         try:
             deleted = conn.execute("DELETE FROM history WHERE ts < ?", (cutoff,)).rowcount
+            conn.execute("DELETE FROM outages WHERE t_end IS NOT NULL AND t_end < ?", (cutoff,))
             conn.commit()    # close the DELETE transaction first: a checkpoint inside it fails
             conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         finally:
@@ -449,6 +556,7 @@ class SCache:
             }
             status = (vars_.get("ups.status") or "OL").strip()
             db_insert(self.id, name, entry, urgent=not status.startswith("OL"))
+            outage_track(self.id, name, status, entry["charge"], entry["ts"])
             _status_event(self.id, name, status, entry)
         except Exception as e:
             log.debug(f"db_insert error: {e}")
@@ -459,6 +567,15 @@ class SCache:
         with self._lock: self._error = msg
         ch = auth.state_changed(f"nut-srv:{self.id}", "down")
         if ch: auth.record_event("nut", "crit", f"UPS server {self.name} unreachable: {str(msg)[:80]}", "ups_srv_down", n=self.name, e=str(msg)[:80])
+
+    # Estadísticas de disponibilidad de cada UPS; un fallo no impide devolver el resto del estado.
+    # EN: Availability stats of each UPS; a failure does not prevent returning the rest of the state.
+    def _stats(self, ups_snap):
+        out = {}
+        for n in ups_snap:
+            try: out[n] = ups_stats(self.id, n)
+            except Exception as e: log.debug(f"ups_stats: {e}")
+        return out
 
     # Instantánea para la API: estado actual más historial según el rango pedido (1h, 1d, 1w, 1mo, all).
     # Con range=none solo se devuelve el estado actual y no se toca la base (así refresca la página sin costo).
@@ -476,7 +593,7 @@ class SCache:
         # range=none: solo estado actual, sin tocar la base (refresco automático de la página)
         if range_ == "none":
             return {"id": self.id, "ups": ups_snap, "clients": cli_snap,
-                    "history": {}, "error": error, "last_ok": last_ok,
+                    "history": {}, "stats": self._stats(ups_snap), "error": error, "last_ok": last_ok,
                     "version": ver, "ts": time.time()}
 
         # Cargar historial de DB según rango
@@ -491,7 +608,7 @@ class SCache:
             history[ups_name] = db_query(self.id, ups_name, since_ts=since, limit=limit)
 
         return {"id": self.id, "ups": ups_snap, "clients": cli_snap,
-                "history": history, "error": error, "last_ok": last_ok,
+                "history": history, "stats": self._stats(ups_snap), "error": error, "last_ok": last_ok,
                 "version": ver, "ts": time.time()}
 
 # Tablas globales: caché, hilo y evento de despertar por servidor, protegidas por _gl.

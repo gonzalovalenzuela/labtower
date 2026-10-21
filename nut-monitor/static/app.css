@@ -173,6 +173,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 .vars-section{grid-column:1 / -1;display:grid;grid-template-columns:repeat(6,1fr);gap:0;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden}
 .var-cell{padding:6px 10px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--surface)}
 .var-cell:nth-child(6n){border-right:none}
+@media(min-width:1181px){.vars-section.avail{grid-template-columns:repeat(5,1fr) 2.2fr}}
 .var-cell:nth-last-child(-n+6){border-bottom:none}
 .power-box{grid-column:span 3}
 .var-key{font-size:11px;color:var(--text-mid);font-weight:500}
