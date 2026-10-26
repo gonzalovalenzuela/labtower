@@ -881,7 +881,22 @@ def cross_origin(headers) -> bool:
         return True
     hh = headers.get("Host", "").strip().lower()
     hh = hh[1:hh.index("]")] if hh.startswith("[") and "]" in hh else hh.split(":")[0]
-    return not oh or oh != hh
+    if not oh or oh != hh:
+        return True
+    # nginx añade X-Forwarded-Proto/Port (los servicios solo escuchan en 127.0.0.1, así que el cliente no puede falsearlos): si están, también deben coincidir esquema y puerto.
+    # EN: nginx adds X-Forwarded-Proto/Port (the services listen on 127.0.0.1 only, so the client cannot forge them): when present, scheme and port must match too.
+    proto = (headers.get("X-Forwarded-Proto") or "").strip().lower()
+    port = (headers.get("X-Forwarded-Port") or "").strip()
+    if proto in ("http", "https") or port.isdigit():
+        try:
+            parts = urlsplit(origin)
+            if proto in ("http", "https") and parts.scheme.lower() != proto:
+                return True
+            if port.isdigit() and (parts.port or {"http": 80, "https": 443}.get(parts.scheme.lower(), 0)) != int(port):
+                return True
+        except ValueError:
+            return True
+    return False
 
 
 # ─── Archivos estáticos de las páginas (.js / .css) ──────────────────────────

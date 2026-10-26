@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3a — 2026-10-26
+
+Cambios a partir de una auditoría de seguridad externa. Se revisó cada punto contra el código.
+
+**Seguridad**
+- **Proxmox Monitor:** el estado de Ceph y la cantidad de núcleos del nodo se mostraban sin escapar. Un Proxmox comprometido podía meter HTML en la página. Ahora el estado de Ceph solo acepta `HEALTH_OK`, `HEALTH_WARN` o `HEALTH_ERR` (si no, muestra `UNKNOWN`), y los demás valores remotos se escapan o se convierten a número.
+- **Protección CSRF:** en navegadores que no envían `Sec-Fetch-Site` (Safari antiguo) ahora también se comparan el esquema y el puerto del origen, no solo el nombre del host. nginx pasa `X-Forwarded-Proto` y `X-Forwarded-Port` a los servicios.
+- Pruebas nuevas (`tests/test_security_hardening.py`) para ambos casos.
+
 ## 1.3 — 2026-10-23
 
 Reúne los cambios de los builds 1.2.2a a 1.2.2g.

@@ -345,9 +345,9 @@ function renderDashboard(){
   const ceph=cluster.snap?.data?.ceph;
   if(ceph&&!ceph.error){
     const cephDiv=document.createElement('div');
-    const cephStatus=ceph.health?.status||'UNKNOWN';
+    const cephStatus=['HEALTH_OK','HEALTH_WARN','HEALTH_ERR'].includes(ceph.health?.status)?ceph.health.status:'UNKNOWN';
     const cephColor=cephStatus==='HEALTH_OK'?'var(--green)':cephStatus==='HEALTH_WARN'?'var(--orange)':'var(--red)';
-    const pools=(ceph.pools||[]).length;
+    const pools=Number((ceph.pools||[]).length)||0;
     const osds=ceph.osdmap?.num_osds||'?';
     const osdsUp=ceph.osdmap?.num_up_osds||'?';
     cephDiv.innerHTML=`
@@ -493,7 +493,7 @@ function buildNodeCard(node){
       <div class="res-row">
         <span class="res-lbl">CPU</span>
         <div class="res-bar-wrap"><div class="res-bar" style="width:${cpuPct}%;background:${cpuPct>85?'var(--red)':cpuPct>60?'var(--orange)':'var(--blue)'}"></div></div>
-        <span class="res-val">${cpuPct}% / ${node.maxcpu} cores</span>
+        <span class="res-val">${cpuPct}% / ${esc(node.maxcpu??'?')} cores</span>
       </div>
       <div class="res-row">
         <span class="res-lbl">RAM</span>
@@ -687,8 +687,8 @@ function confirmDelete(id,name){
 // ── Helpers ──────────────────────────────────────────────────────────────────
 // Formateadores: bytes y tiempo encendido a texto legible.
 // EN: Formatters: bytes and uptime to readable text.
-function fmtBytes(b){if(!b)return'0B';const u=['B','KB','MB','GB','TB'];let i=0;while(b>=1024&&i<u.length-1){b/=1024;i++;}return b.toFixed(i>0?1:0)+' '+u[i];}
-function fmtUptime(s){if(!s)return'—';const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);if(d>0)return d+'d '+h+'h';if(h>0)return h+'h '+m+'m';return m+'m';}
+function fmtBytes(b){b=Number(b);if(!b)return'0B';const u=['B','KB','MB','GB','TB'];let i=0;while(b>=1024&&i<u.length-1){b/=1024;i++;}return b.toFixed(i>0?1:0)+' '+u[i];}
+function fmtUptime(s){s=Number(s);if(!s)return'—';const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);if(d>0)return d+'d '+h+'h';if(h>0)return h+'h '+m+'m';return m+'m';}
 // Escapa HTML antes de insertar texto de usuarios, equipos o la red en la página: evita inyección de código (XSS).
 // EN: Escape HTML before inserting text from users, devices or the network into the page: prevents code injection (XSS).
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
