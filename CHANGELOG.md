@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3d — 2026-10-26
+
+**NAS Monitor y Resumen**
+- El Resumen ya no muestra el «Storage Pool» como volumen más lleno (salía al 100 %); ahora muestra el volumen real más lleno. El promedio de uso de la página de NAS también ignora los pools.
+
 ## 1.3c — 2026-10-26
 
 **NAS Monitor**

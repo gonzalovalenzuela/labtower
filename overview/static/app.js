@@ -171,7 +171,7 @@ function renderNAS(d){
     if(sn.error){s='crit';issues.push({lv:'crit',m:'nas',t:`${n.name}: ${T('issue_nasdown')}`,href:'/nas/'})}
     (data.alerts||[]).forEach(a=>{if(a.lv==='info')return;s=worst(s,a.lv);issues.push({lv:a.lv,m:'nas',t:`${n.name}: ${nasAl(a)}`,href:'/nas/'})});
     sev=worst(sev,s);
-    const disks=data.disks||[],dOk=disks.filter(x=>x.lv==='ok').length,vols=(data.raids||[]).filter(x=>x.pct!=null),vmax=vols.reduce((m,x)=>x.pct>m.pct?x:m,{pct:-1});
+    const disks=data.disks||[],dOk=disks.filter(x=>x.lv==='ok').length,vols=(data.raids||[]).filter(x=>x.pct!=null&&!x.pool),vmax=vols.reduce((m,x)=>x.pct>m.pct?x:m,{pct:-1});
     const cpu=data.cpu&&data.cpu.pct,mem=data.mem&&data.mem.pct;
     body+=`<div class="unit"><div class="uh">${esc(n.name)} <span class="sub">${esc(sy.model||'')}</span>${pill(s,sn.error&&!data.system?T('unreach'):s==='ok'?'OK':s==='warn'?T('attn'):T('fail'))}</div>
      <div class="kpis"><div class="kpi"><b>${disks.length?dOk+'/'+disks.length:'—'}</b><span>${T('nasdisks')}</span></div><div class="kpi"><b>${sy.temp!=null?sy.temp+'°':'—'}</b><span>${T('temp')}</span></div><div class="kpi"><b>${sy.uptime?dur(sy.uptime):'—'}</b><span>${T('uptime')}</span></div></div>

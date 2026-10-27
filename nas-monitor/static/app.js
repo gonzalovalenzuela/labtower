@@ -199,7 +199,7 @@ function updateGlobalStats(){
     if(d.cpu&&d.cpu.pct!=null){cpuS+=d.cpu.pct;cpuN++;}
     if(d.mem){memS+=d.mem.pct;memN++;}
     (d.disks||[]).forEach(x=>{dAll++;if(x.lv==='ok')dOk++;});
-    (d.raids||[]).forEach(x=>{if(x.pct!=null){vS+=x.pct;vN++;}});
+    (d.raids||[]).forEach(x=>{if(x.pct!=null&&!x.pool){vS+=x.pct;vN++;}});
   });
   const pc=v=>v==null?'—':Math.round(v)+'<span style="font-size:13px;color:var(--text-dim)">%</span>';
   document.getElementById('st-nas').textContent=items.length?`${on}/${items.length}`:'—';
