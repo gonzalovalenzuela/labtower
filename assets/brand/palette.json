@@ -41,9 +41,9 @@
     },
     "dns": {
       "name": "DNS Monitor",
-      "accent": "#d946ef",
-      "accent-light": "#eeacf8",
-      "accent-dim": "#3c2554"
+      "accent": "#10b981",
+      "accent-light": "#93e0c6",
+      "accent-dim": "#173a40"
     },
     "wan": {
       "name": "WAN Monitor",

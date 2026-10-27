@@ -2,6 +2,7 @@
 
 ## 2.1h — 2026-10-27
 
+- DNS Monitor: el color pasa de rosa a verde esmeralda (página, icono y paleta de marca).
 - WAN Monitor: nueva opción «Motor de la prueba» en Ajustes. Además del integrado (Cloudflare), se puede usar Ookla Speedtest CLI o LibreSpeed CLI si están instalados, para contrastar la velocidad. Ookla es solo para uso personal no comercial. El paquete sugiere `librespeed-cli`.
 
 ## 2.1g — 2026-10-27

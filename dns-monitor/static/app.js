@@ -413,7 +413,7 @@ function spark(hist){
   const W=90,H=24,t0=pts[0].ts,t1=pts[pts.length-1].ts||t0+1;let d='',pen=false;
   const mx=Math.max(1,...pts.map(p=>Number(p.pct)||0));
   pts.forEach(p=>{const v=Number(p.pct);if(p.pct==null||!isFinite(v)){pen=false;return;}d+=(pen?'L':'M')+(((p.ts-t0)/Math.max(1,t1-t0))*W).toFixed(1)+' '+(H-1-v/mx*(H-2)).toFixed(1)+' ';pen=true;});
-  return `<svg class="spark" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><path d="${d}" fill="none" stroke="#d946ef" stroke-width="1.5"/></svg>`;
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><path d="${d}" fill="none" stroke="#10b981" stroke-width="1.5"/></svg>`;
 }
 // Tabla con todos los servidores: cada fila se abre y muestra el detalle justo debajo. Por defecto, el primero.
 // EN: Table with every server: each row opens and shows its detail right below. The first one by default.
@@ -499,7 +499,7 @@ function buildDetail(n){
 // Gráficos de historial: % bloqueado y tiempo de respuesta.
 // EN: History charts: % blocked and response time.
 const CHARTS={
-  pct:{title:'histPct',max:100,series:[{k:'pct',c:'#d946ef',l:'sPct',f:v=>v.toFixed(1)+'%'}],axis:v=>Math.round(v)+'%',h:130,pl:40},
+  pct:{title:'histPct',max:100,series:[{k:'pct',c:'#10b981',l:'sPct',f:v=>v.toFixed(1)+'%'}],axis:v=>Math.round(v)+'%',h:130,pl:40},
   ms:{title:'histMs',series:[{k:'ms',c:'#f97316',l:'sMs',f:v=>v.toFixed(1)+' ms'}],axis:v=>Math.round(v)+' ms',h:120,pl:52},
 };
 const chartRange={pct:'1d',ms:'1d'};

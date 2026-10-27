@@ -19,7 +19,7 @@ MODULES = [
     ("net",      "Net Monitor",             "#14b8a6"),
     ("proxmox",  "Proxmox Monitor",         "#e15c00"),
     ("nas",      "NAS Monitor",             "#0e9aa7"),
-    ("dns",      "DNS Monitor",             "#d946ef"),
+    ("dns",      "DNS Monitor",             "#10b981"),
     ("wan",      "WAN Monitor",             "#0ea5e9"),
     ("wol",      "WOL Console",             "#4361ee"),
     ("admin",    "Admin Panel",             "#f0527a"),
