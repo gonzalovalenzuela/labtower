@@ -60,9 +60,14 @@ DEFAULTS = {
     "interval": 30,                       # seconds between rounds
     "ip_url": "https://api.ipify.org",    # returns the public IP as plain text ("" = off)
     "speed": {"enabled": True, "every_hours": 12, "down_url": "https://speed.cloudflare.com/__down", "up_url": "https://speed.cloudflare.com/__up",
-              "seconds": 8, "streams": 4, "upload": True},
+              "seconds": 8, "streams": 4, "upload": True, "engine": "builtin"},
 }
 _cfg_lock = threading.RLock()
+# Motores de la prueba de velocidad: el integrado (Cloudflare) y, si están instalados, los programas Ookla y LibreSpeed para contrastar.
+# EN: Speed test engines: the built-in one (Cloudflare) and, when installed, the Ookla and LibreSpeed programs to cross-check.
+ENGINES = {"builtin": None, "ookla": "speedtest", "librespeed": "librespeed-cli"}
+def engines_available():
+    return {k: (b is None or bool(shutil.which(b))) for k, b in ENGINES.items()}
 
 def _https_url(u, what):
     u = str(u or "").strip()
@@ -112,6 +117,8 @@ def validate(body: dict, current=None) -> dict:
     cfg["ip_url"] = _https_url(iu, "IP address service") if iu else ""
     sp = cfg["speed"]
     sp["enabled"], sp["upload"] = bool(sp.get("enabled")), bool(sp.get("upload"))
+    if sp.get("engine", "builtin") not in ENGINES: raise ValueError("Unknown speed test engine")
+    sp["engine"] = sp.get("engine", "builtin")
     sp["every_hours"] = _int(sp.get("every_hours", 12), 0, 720, "Speed test period")
     sp["seconds"] = _int(sp.get("seconds", 8), 3, 20, "Speed test duration")
     sp["streams"] = _int(sp.get("streams", 4), 1, 8, "Streams")
@@ -299,7 +306,59 @@ def speed_up(cfg):
     if not total[0] and why: raise RuntimeError(why[0])
     return round(total[0] * 8 / el / 1e6, 1) if total[0] else None
 
+def _run_tool(cmd, timeout):
+    env = dict(os.environ, HOME=str(DATA_DIR))                 # Ookla keeps its licence acceptance in $HOME/.config
+    try: r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
+    except subprocess.TimeoutExpired: raise RuntimeError(f"{cmd[0]} timed out")
+    if r.returncode != 0: raise RuntimeError((r.stderr or r.stdout or f"{cmd[0]} exited with {r.returncode}").strip().splitlines()[-1][:160])
+    try: return json.loads(r.stdout)
+    except ValueError: raise RuntimeError(f"{cmd[0]} did not return JSON")
+
+def _g(d, *keys):
+    for k in keys:
+        d = d.get(k) if isinstance(d, dict) else None
+    return d
+
+def _mbps(v, scale):
+    try: return round(float(v) * scale, 1)
+    except (TypeError, ValueError): return None
+
+# Ookla Speedtest CLI oficial: «bandwidth» viene en bytes por segundo.
+# EN: Official Ookla Speedtest CLI: "bandwidth" is in bytes per second.
+def speed_ookla(cfg, res):
+    j = _run_tool([shutil.which("speedtest") or "speedtest", "--accept-license", "--accept-gdpr", "-f", "json"], 150)
+    res["down"], res["up"] = _mbps(_g(j, "download", "bandwidth"), 8 / 1e6), _mbps(_g(j, "upload", "bandwidth"), 8 / 1e6)
+    res["ping"] = _mbps(_g(j, "ping", "latency"), 1)
+    sv = j.get("server") if isinstance(j.get("server"), dict) else {}
+    res["server"] = str(sv.get("host") or sv.get("name") or "Ookla")[:80]
+    if res["down"] is None: res["error"] = "Ookla returned no download result"
+
+# LibreSpeed CLI: devuelve una lista; «download» y «upload» ya vienen en Mb/s.
+# EN: LibreSpeed CLI: returns a list; "download" and "upload" are already in Mb/s.
+def speed_librespeed(cfg, res):
+    sp = cfg["speed"]
+    cmd = [shutil.which("librespeed-cli") or "librespeed-cli", "--json", "--duration", str(sp["seconds"])] + ([] if sp["upload"] else ["--no-upload"])
+    j = _run_tool(cmd, 40 + 3 * sp["seconds"])
+    j = j[0] if isinstance(j, list) and j else j
+    if not isinstance(j, dict): raise RuntimeError("librespeed-cli returned no result")
+    res["down"], res["up"] = _mbps(j.get("download"), 1), (_mbps(j.get("upload"), 1) if sp["upload"] else None)
+    res["ping"] = _mbps(j.get("ping"), 1)
+    sv = j.get("server") if isinstance(j.get("server"), dict) else {}
+    res["server"] = (urlparse(str(sv.get("url") or "")).hostname or str(sv.get("name") or "LibreSpeed"))[:80]
+    if not res["down"]: res["error"] = "LibreSpeed returned no download result"
+
 def run_speedtest(cfg) -> dict:
+    eng = cfg["speed"].get("engine", "builtin")
+    if eng != "builtin":
+        res = {"ts": int(time.time()), "down": None, "up": None, "ping": None, "server": eng, "error": None}
+        try:
+            if not shutil.which(ENGINES[eng]): raise RuntimeError(f"{ENGINES[eng]} is not installed")
+            (speed_ookla if eng == "ookla" else speed_librespeed)(cfg, res)
+        except Exception as e: res["error"] = f"{e}"[:200]
+        return res
+    return _builtin_speedtest(cfg)
+
+def _builtin_speedtest(cfg) -> dict:
     res = {"ts": int(time.time()), "down": None, "up": None, "ping": None, "server": urlparse(cfg["speed"]["down_url"]).hostname, "error": None}
     try:
         res["ping"] = speed_ping(cfg)
@@ -582,7 +641,7 @@ class H(BaseHTTPRequestHandler):
             with_hist = parse_qs(urlparse(self.path).query).get("hist", ["1"])[0] != "0"
             with S.lock: hist = list(S.history) if with_hist else []
             return self._json(200, {"config": cfg, "snap": snapshot(cfg), "history": hist, "uptime": uptime(), "outages": recent_outages(), "speed": recent_speed(),
-                                    "speed_running": S.speed_running, "next_speed": next_speedtest(cfg), "ping_available": bool(shutil.which("ping"))})
+                                    "speed_running": S.speed_running, "next_speed": next_speedtest(cfg), "ping_available": bool(shutil.which("ping")), "engines": engines_available()})
         if path == "/api/wan/history":
             rng = parse_qs(urlparse(self.path).query).get("range", ["1d"])[0]
             if rng not in RANGE_SECS and rng != "all": return self._json(400, {"error": "Invalid range"})

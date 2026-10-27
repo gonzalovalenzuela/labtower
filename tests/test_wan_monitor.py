@@ -1,5 +1,5 @@
 """WAN Monitor: validación, sondas (ping simulado y TCP real), cortes, IP pública, test de velocidad contra un servidor local, permisos y alertas."""
-import http.client, json, os, socket, stat, sys, tempfile, textwrap, threading, time, unittest
+import http.client, json, os, pathlib, shutil, socket, stat, sys, tempfile, textwrap, threading, time, unittest
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
@@ -212,6 +212,36 @@ class Speed(unittest.TestCase):
             time.sleep(0.2)
         self.assertFalse(m.S.speed_running)
 
+
+class Engines(unittest.TestCase):
+    """Motores externos (Ookla y LibreSpeed) con programas falsos que imitan su salida JSON."""
+    def setUp(self):
+        import tempfile
+        self.dir = tempfile.mkdtemp(); self.old_path = os.environ["PATH"]; os.environ["PATH"] = self.dir + ":" + self.old_path
+    def tearDown(self):
+        os.environ["PATH"] = self.old_path; shutil.rmtree(self.dir, ignore_errors=True)
+    def tool(self, name, body, code=0):
+        f = pathlib.Path(self.dir, name); f.write_text("#!/bin/sh\n" + body + f"\nexit {code}\n"); f.chmod(0o755)
+    def cfg(self, eng, **sp): return m.validate({"speed": {"engine": eng, **sp}})
+
+    def test_engine_is_validated_and_listed(self):
+        self.assertEqual(m.validate({})["speed"]["engine"], "builtin")
+        with self.assertRaises(ValueError): self.cfg("nperf")
+        av = m.engines_available(); self.assertTrue(av["builtin"]); self.assertFalse(av["ookla"])
+        self.tool("speedtest", "true"); self.assertTrue(m.engines_available()["ookla"])
+    def test_ookla(self):
+        self.tool("speedtest", """echo '{"ping":{"latency":11.5},"download":{"bandwidth":12500000},"upload":{"bandwidth":2500000},"server":{"host":"sp.example.net","name":"X"}}'""")
+        r = m.run_speedtest(self.cfg("ookla")); self.assertIsNone(r["error"], r)
+        self.assertEqual((r["down"], r["up"], r["ping"], r["server"]), (100.0, 20.0, 11.5, "sp.example.net"))
+    def test_librespeed(self):
+        self.tool("librespeed-cli", """echo '[{"ping":9.2,"download":93.4,"upload":18.1,"server":{"name":"S","url":"https://ls.example.org/"}}]'""")
+        r = m.run_speedtest(self.cfg("librespeed")); self.assertIsNone(r["error"], r)
+        self.assertEqual((r["down"], r["up"], r["ping"], r["server"]), (93.4, 18.1, 9.2, "ls.example.org"))
+        self.assertIsNone(m.run_speedtest(self.cfg("librespeed", upload=False))["up"])
+    def test_missing_failing_and_bad_output(self):
+        r = m.run_speedtest(self.cfg("ookla")); self.assertIn("not installed", r["error"]); self.assertIsNone(r["down"])
+        self.tool("speedtest", "echo 'Server error' >&2", 3); self.assertIn("Server error", m.run_speedtest(self.cfg("ookla"))["error"])
+        self.tool("speedtest", "echo not-json"); self.assertIn("JSON", m.run_speedtest(self.cfg("ookla"))["error"])
 
 class Http(WithFakePing):
     @classmethod

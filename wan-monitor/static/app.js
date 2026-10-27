@@ -115,6 +115,12 @@ const LANG={
  "setUpload": "Also measure upload",
  "setDownUrl": "Download address (https)",
  "setUpUrl": "Upload address (https)",
+ "setEngine": "Test engine",
+ "engBuiltin": "Built-in (Cloudflare)",
+ "engOokla": "Ookla Speedtest CLI",
+ "engLibre": "LibreSpeed CLI",
+ "engMissing": "not installed",
+ "engHint": "Ookla and LibreSpeed need their program installed on this server; use them to cross-check the built-in result. Ookla is for personal, non-commercial use.",
  "setSpeedHint": "Default: Cloudflare. Any server that answers /__down?bytes=N and /__up works.",
  "al": {
   "down_internet": "No internet access since {0}",
@@ -240,6 +246,12 @@ const LANG={
  "setUpload": "Medir también la subida",
  "setDownUrl": "Dirección de bajada (https)",
  "setUpUrl": "Dirección de subida (https)",
+ "setEngine": "Motor de la prueba",
+ "engBuiltin": "Integrado (Cloudflare)",
+ "engOokla": "Ookla Speedtest CLI",
+ "engLibre": "LibreSpeed CLI",
+ "engMissing": "no instalado",
+ "engHint": "Ookla y LibreSpeed requieren su programa instalado en este servidor; sirven para contrastar el resultado integrado. Ookla es solo para uso personal no comercial.",
  "setSpeedHint": "Por defecto: Cloudflare. Sirve cualquier servidor que responda /__down?bytes=N y /__up.",
  "al": {
   "down_internet": "Sin acceso a internet desde {0}",
@@ -419,7 +431,7 @@ function speedCard(){
   if(!last)body=`<div class="wan-empty">${esc(t('speedNone'))}</div>`;
   else if(last.error)body=`<div class="wan-empty" style="color:var(--red)">${esc(t('speedErr'))}: ${esc(last.error)}</div>`;
   else body=`<div class="wan-gauges" style="grid-template-columns:repeat(3,1fr);padding:12px 14px">${bigNum(t('speedDown'),last.down==null?'—':fmtNum(Math.round(last.down*10)/10),'Mb/s','var(--green)')}${bigNum(t('speedUp'),last.up==null?'—':fmtNum(Math.round(last.up*10)/10),last.up==null?'':'Mb/s','var(--blue)')}${bigNum(t('speedPing'),last.ping==null?'—':last.ping,last.ping==null?'':'ms')}</div>
-    ${kv(t('speedServer'),esc(last.server||'—'))}${kv(t('lastCheck'),esc(fmtDate(last.ts)))}`;
+    ${kv(t('speedServer'),esc(last.server||'—')+(cfg.engine&&cfg.engine!=='builtin'?' <span class="sum-sub">'+esc(cfg.engine==='ookla'?'Ookla':'LibreSpeed')+'</span>':''))}${kv(t('lastCheck'),esc(fmtDate(last.ts)))}`;
   const next=!cfg.enabled||!cfg.every_hours?t('speedOff'):(W.next_speed?t('speedNext',fmtDate(W.next_speed)):'');
   return `<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('speed'))}</div>${btn}</div>${body}<div class="wan-note">${esc(next)}<br>${esc(t('speedHint'))}</div></div>`;
 }
@@ -482,6 +494,9 @@ function openSettings(){
   const c=W.config,sp=c.speed;
   $('s-targets').value=targetsToText(c.targets);$('s-gw').value=c.gateway;$('s-dns').value=c.dns_name;$('s-interval').value=c.interval;$('s-ipurl').value=c.ip_url;
   $('s-sp-on').checked=!!sp.enabled;$('s-sp-every').value=sp.every_hours;$('s-sp-secs').value=sp.seconds;$('s-sp-streams').value=sp.streams;$('s-sp-up').checked=!!sp.upload;
+  const av=W.engines||{builtin:true},nm={builtin:t('engBuiltin'),ookla:t('engOokla'),librespeed:t('engLibre')};
+  ['builtin','ookla','librespeed'].forEach(k=>{const o=$('o-eng-'+k);o.textContent=nm[k]+(av[k]?'':' ('+t('engMissing')+')');o.disabled=!av[k]&&sp.engine!==k;});
+  $('s-sp-engine').value=sp.engine||'builtin';
   $('s-sp-down').value=sp.down_url;$('s-sp-upurl').value=sp.up_url;
   $('set-overlay').classList.add('show');
 }
@@ -489,7 +504,7 @@ async function saveSettings(){
   const btn=$('btn-save');
   const num=(id,d)=>{const v=parseInt($(id).value);return isNaN(v)?d:v;};
   const body={targets:textToTargets($('s-targets').value),gateway:$('s-gw').value.trim(),dns_name:$('s-dns').value.trim(),interval:num('s-interval',30),ip_url:$('s-ipurl').value.trim(),
-    speed:{enabled:$('s-sp-on').checked,every_hours:num('s-sp-every',12),seconds:num('s-sp-secs',8),streams:num('s-sp-streams',4),upload:$('s-sp-up').checked,down_url:$('s-sp-down').value.trim(),up_url:$('s-sp-upurl').value.trim()}};
+    speed:{engine:$('s-sp-engine').value,enabled:$('s-sp-on').checked,every_hours:num('s-sp-every',12),seconds:num('s-sp-secs',8),streams:num('s-sp-streams',4),upload:$('s-sp-up').checked,down_url:$('s-sp-down').value.trim(),up_url:$('s-sp-upurl').value.trim()}};
   btn.disabled=true;btn.innerHTML='<span class="spin">⟳</span>';
   try{
     const {ok,d}=await post('api/wan/config',body);

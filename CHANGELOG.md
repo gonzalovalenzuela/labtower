@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1h — 2026-10-27
+
+- WAN Monitor: nueva opción «Motor de la prueba» en Ajustes. Además del integrado (Cloudflare), se puede usar Ookla Speedtest CLI o LibreSpeed CLI si están instalados, para contrastar la velocidad. Ookla es solo para uso personal no comercial. El paquete sugiere `librespeed-cli`.
+
 ## 2.1g — 2026-10-27
 
 - WAN Monitor, prueba de velocidad: pide bloques de 25 MB y envía cabeceras de navegador; si el servidor la rechaza, el error dice por qué (por ejemplo «HTTP 403») en vez de «No data received». Si falla solo la subida, se conserva el resultado de la bajada.
