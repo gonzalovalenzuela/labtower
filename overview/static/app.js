@@ -86,7 +86,7 @@ function donut(parts){ // parts: [{label,n,color}]
 const PAL=['#4361ee','#16a34a','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#0ea5e9','#d946ef','#14b8a6','#94a3b8'];
 
 // ───────── Estado / state ─────────
-let me=null,issues=[],hist={},histTs=0,timer=null,piH=null,piHTs=0,pveH={},pveHTs=0,nasH={},nasHTs=0,dnsH={},dnsHTs=0;
+let me=null,issues=[],hist={},histTs=0,timer=null,piH=null,piHTs=0,pveH={},pveHTs=0,nasH={},nasHTs=0,dnsH={},dnsHTs=0,wanH=[],wanHTs=0;
 const lvl=(m)=>({readonly:1,execute:2,admin:3})[(me.permissions||{})[m]]||0;
 
 // ───────── UPS ─────────
@@ -224,6 +224,18 @@ const WAN_AL={
  es:{loss:'pérdida de paquetes',latency:'latencia alta',dns_slow:'resolución DNS lenta',dns_fail:'falló la resolución DNS'}
 };
 function wanAl(a){const w=(WAN_AL[lang]||WAN_AL.en)[a.type]||a.type;const u={loss:'%',latency:' ms',dns_slow:' ms'}[a.type];return w+(u!==undefined&&a.value!=null?` (${Math.round(a.value*10)/10}${u})`:'')}
+// Latencia de WAN de las últimas 24 h: línea azul con huecos donde no hubo respuesta y franjas rojas donde se cayó el enlace
+// EN: WAN latency over the last 24 h: blue line with gaps where there was no reply and red bands where the link was down
+function wanChart(){
+  const a=wanH;if(a.length<3)return '';
+  const v=a.map(r=>r.rtt).filter(x=>x!=null&&isFinite(x));if(v.length<2)return '';
+  const W=300,H=40,mx=Math.max.apply(null,v)*1.15||1,n=a.length,segs=[];let cur=[];
+  a.forEach((r,i)=>{if(r.rtt!=null&&isFinite(r.rtt))cur.push([(i/(n-1)*W).toFixed(1),(H-2-r.rtt/mx*(H-4)).toFixed(1)]);else if(cur.length){segs.push(cur);cur=[]}});if(cur.length)segs.push(cur);
+  const down=a.map((r,i)=>r.up===0?`<rect x="${(i/(n-1)*W-1).toFixed(1)}" y="0" width="2.5" height="${H}" fill="var(--red)" opacity=".35"/>`:'').join('');
+  const pl=segs.map(g=>g.length>1?`<polygon points="${g[0][0]},${H} ${g.map(q=>q.join(',')).join(' ')} ${g[g.length-1][0]},${H}" fill="var(--blue-dim)"/><polyline points="${g.map(q=>q.join(',')).join(' ')}" fill="none" stroke="var(--blue)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>`:'').join('');
+  const lo=Math.min.apply(null,v),hi=Math.max.apply(null,v),f=x=>Math.round(x*10)/10;
+  return `<div class="kp"><svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${down}${pl}</svg><div class="hc"><i style="background:var(--blue)"></i>${T('wanrtt')} ${f(lo)}–${f(hi)} ms · ${dur(a[n-1].ts-a[0].ts)}</div></div>`;
+}
 function renderWAN(d){
   const el=$('c-wan'),s0=d.snap;let sev='ok',body='';
   if(!s0){body=`<div class="empty">${T('wanwait')}</div>`}
@@ -233,6 +245,7 @@ function renderWAN(d){
     const sp=(d.speed||[]).filter(x=>!x.error&&x.down!=null),ls=sp.length?sp[sp.length-1]:null,up=(d.uptime||{})['24h'];
     body=`<div class="unit"><div class="uh">${T('wanstate')} ${pill(sev,!s0.up?T(s0.scope==='lan'?'wanlan':'wannet'):sev==='ok'?T('wanon'):T('attn'))}</div>
      <div class="kpis"><div class="kpi"><b>${s0.rtt!=null?Math.round(s0.rtt*10)/10+' ms':'—'}</b><span>${T('wanrtt')}</span></div><div class="kpi"><b>${s0.loss!=null?Math.round(s0.loss*10)/10+'%':'—'}</b><span>${T('wanloss')}</span></div><div class="kpi"><b>${ls?Math.round(ls.down)+' Mb/s':'—'}</b><span>${T('wandown')}</span></div></div>
+     ${wanChart()}
      ${up!=null?`<div class="row"><span class="l">${T('wanup')}</span><span class="v">${up}%</span></div>`:''}
      <div class="row"><span class="l">${T('wanip')}</span><span class="v">${esc(s0.public_ip||'—')}</span></div></div>`;
   }
@@ -313,7 +326,8 @@ async function refresh(){
   if(lvl('nas')){jobs.nas=jget('/nas/api/nas'+(wantNH?'':'?hist=0'))}
   const wantDH=Date.now()-dnsHTs>60000;
   if(lvl('dns')){jobs.dns=jget('/dns/api/dns'+(wantDH?'':'?hist=0'))}
-  if(lvl('wan')){jobs.wan=jget('/wan/api/wan?hist=0')}
+  const wantWH=Date.now()-wanHTs>60000;
+  if(lvl('wan')){jobs.wan=jget('/wan/api/wan?hist=0');if(wantWH)jobs.wanh=jget('/wan/api/wan/history?range=1d')}
   if(lvl('net')){jobs.net=jget('/net/api/hosts')}
   jobs.sys=jget('api/system');jobs.ev=jget('api/events?limit=40');
   const keys=Object.keys(jobs),res=await Promise.allSettled(Object.values(jobs));
@@ -328,6 +342,7 @@ async function refresh(){
   if(wantPH&&R.pve&&R.pve.status==='fulfilled'){pveHTs=Date.now();pveH={};(R.pve.value.clusters||[]).forEach(c=>{pveH[c.id]=aggHist(c)})}
   if(wantNH&&R.nas&&R.nas.status==='fulfilled'){nasHTs=Date.now();nasH={};(R.nas.value.nas||[]).forEach(n=>{nasH[n.id]=aggNas(n)})}
   if(wantDH&&R.dns&&R.dns.status==='fulfilled'){dnsHTs=Date.now();dnsH={};(R.dns.value.servers||[]).forEach(n=>{dnsH[n.id]=aggDns(n)})}
+  if(wantWH&&R.wanh&&R.wanh.status==='fulfilled'){wanHTs=Date.now();wanH=R.wanh.value.history||[]}
   // Historial de temperatura y subtensión de la Pi (solo existe en una Raspberry Pi) / Pi history (Raspberry Pi only)
   if(R.sys.status==='fulfilled'&&Date.now()-piHTs>60000){
     piHTs=Date.now();

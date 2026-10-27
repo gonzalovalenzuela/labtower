@@ -3,6 +3,7 @@
 ## 2.1m — 2026-10-27
 
 - Tema: el botón ◐ del Resumen y de la página de inicio ahora rota entre oscuro, claro y «Auto» (sigue el modo del sistema, con una «A» en el botón); antes solo alternaba claro y oscuro. En «Auto» el tema cambia solo cuando cambia el del sistema.
+- Resumen, tarjeta de WAN Monitor: nuevo gráfico de latencia de las últimas 24 h (línea azul con huecos donde no hubo respuesta y franjas rojas donde el enlace estuvo caído), con el mínimo y máximo; se actualiza cada minuto.
 
 ## 2.1l — 2026-10-27
 
