@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1d — 2026-10-27
+
+- Resumen: la ventana de detalle también dice «LabTower Server» (antes «Raspberry Pi — detalle»).
+
 ## 2.1c — 2026-10-27
 
 - Resumen: la tarjeta que decía «Raspberry Pi» ahora se llama «LabTower Server». Muestra la misma información.

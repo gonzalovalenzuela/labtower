@@ -1,10 +1,10 @@
-// Vista detallada de la Raspberry Pi: se abre con «Abrir» en la tarjeta Raspberry Pi del Resumen.
+// Vista detallada del servidor LabTower: se abre con «Abrir» en la tarjeta «LabTower Server» del Resumen.
 // Pide /api/pidetail cada 5 s mientras está abierta. Usuarios conectados, procesos y servicios fallidos solo llegan para administradores.
-// EN: Detailed Raspberry Pi view: opened with "Open" on the Overview's Raspberry Pi card.
+// EN: Detailed LabTower Server view: opened with "Open" on the Overview's LabTower Server card.
 //     It requests /api/pidetail every 5 s while open. Logged-in users, processes and failed services only arrive for administrators.
 (function(){
 const D={
- en:{title:'Raspberry Pi — details',close:'Close',sys:'System',host:'Host',os:'OS',kernel:'Kernel',arch:'Architecture',model:'Model',boot:'Booted',time:'Local time',
+ en:{title:'LabTower Server — details',close:'Close',sys:'System',host:'Host',os:'OS',kernel:'Kernel',arch:'Architecture',model:'Model',boot:'Booted',time:'Local time',
   uptime:'Uptime',temp:'Temperature',load:'Load (1/5/15 min)',cpu:'CPU',cores:'CPU per core',freq:'Frequency',gov:'Governor',mem:'Memory',ram:'RAM',swap:'Swap',
   avail:'Available',cached:'Cache',buffers:'Buffers',disks:'Storage',mount:'Mount',fs:'Type',size:'Size',used:'Used',net:'Network',iface:'Interface',state:'State',ip:'Addresses',
   rx:'Received',tx:'Sent',power:'Power and throttling',pwok:'Power supply OK, no throttling',uvNow:'Under-voltage now',fcNow:'Frequency capped now',thNow:'Throttled now',stNow:'Temperature limit now',
@@ -12,7 +12,7 @@ const D={
   users:'Logged-in users',nousers:'Nobody logged in',user:'User',tty:'Terminal',from:'From',since:'Since',topcpu:'Top processes by CPU',topmem:'Top processes by memory',proc:'Process',pid:'PID',
   failed:'Failed services',nofail:'No failed services',failN:'failed',admin:'Users, processes and services are shown to administrators only.',err:'Could not load the details',loading:'Loading…',
   procs:'Processes',upd:'Updated'},
- es:{title:'Raspberry Pi — detalle',close:'Cerrar',sys:'Sistema',host:'Equipo',os:'Sistema operativo',kernel:'Kernel',arch:'Arquitectura',model:'Modelo',boot:'Encendido',time:'Hora local',
+ es:{title:'LabTower Server — detalle',close:'Cerrar',sys:'Sistema',host:'Equipo',os:'Sistema operativo',kernel:'Kernel',arch:'Arquitectura',model:'Modelo',boot:'Encendido',time:'Hora local',
   uptime:'Tiempo encendido',temp:'Temperatura',load:'Carga (1/5/15 min)',cpu:'CPU',cores:'CPU por núcleo',freq:'Frecuencia',gov:'Gobernador',mem:'Memoria',ram:'RAM',swap:'Swap',
   avail:'Disponible',cached:'Caché',buffers:'Búferes',disks:'Almacenamiento',mount:'Montaje',fs:'Tipo',size:'Tamaño',used:'Usado',net:'Red',iface:'Interfaz',state:'Estado',ip:'Direcciones',
   rx:'Recibido',tx:'Enviado',power:'Energía y limitación',pwok:'Fuente de poder OK, sin limitación',uvNow:'Bajo voltaje ahora',fcNow:'Frecuencia limitada ahora',thNow:'Limitada ahora',stNow:'Límite de temperatura ahora',
