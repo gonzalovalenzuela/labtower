@@ -340,5 +340,11 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
 .wan-form textarea{width:100%;box-sizing:border-box;font-family:var(--mono);font-size:12.5px;padding:8px 10px;border:1px solid var(--input-border);border-radius:var(--r-sm);background:var(--input-bg);color:var(--text);resize:vertical}
 .wan-form input[type=checkbox]{width:auto}
 .stat-ico.red{background:var(--red-dim);color:var(--red)}
+/* iPad y pantallas medianas: los valores no se parten ni se salen de su tarjeta */
+.stat-card{min-width:0}.stat-val{white-space:nowrap}.stat-card>div:last-child{min-width:0}
+#st-ip{font-size:15px;letter-spacing:-.3px}
+.node-hd .node-name{white-space:nowrap}
+.node-hd .btn-secondary{width:auto;flex:0 0 auto;white-space:nowrap;padding:6px 12px}
+@media(max-width:1100px){.stats-row{grid-template-columns:repeat(4,minmax(0,1fr)) minmax(0,1.6fr)}.stats-row .stat-ico{display:none}.stats-row .stat-card{padding-left:16px;padding-right:16px}#st-ip{font-size:13px}}
 @media(max-width:1180px){.wan-gauges{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:760px){.wan-gauges{grid-template-columns:1fr 1fr}}
