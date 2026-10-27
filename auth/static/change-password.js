@@ -1,9 +1,9 @@
 // Textos en inglés y español; el idioma es el elegido en los módulos (pi-lang) y, si no hay, el del navegador.
 // EN: English and Spanish texts; the language is the one chosen in the modules (pi-lang) and, if none, the browser's.
 const TXT = {
-  en:{title:'Set a new password',sub:'For security, you must choose a new password before using Pi Console.',notice:'This account still has its initial or temporary password.',cur:'Current password',nw:'New password (min. 8 characters)',rep:'Repeat new password',btn:'Save and continue',out:'Sign out',
+  en:{title:'Set a new password',sub:'For security, you must choose a new password before using LabTower.',notice:'This account still has its initial or temporary password.',cur:'Current password',nw:'New password (min. 8 characters)',rep:'Repeat new password',btn:'Save and continue',out:'Sign out',
       mismatch:'The passwords do not match',short:'The password must be at least 8 characters',same:'The new password must be different from the current one',fill:'Fill in all the fields',saving:'Saving…',conn:'Connection error: '},
-  es:{title:'Define una contraseña nueva',sub:'Por seguridad, debes elegir una contraseña nueva antes de usar Pi Console.',notice:'Esta cuenta aún tiene su contraseña inicial o temporal.',cur:'Contraseña actual',nw:'Contraseña nueva (mín. 8 caracteres)',rep:'Repite la contraseña nueva',btn:'Guardar y continuar',out:'Cerrar sesión',
+  es:{title:'Define una contraseña nueva',sub:'Por seguridad, debes elegir una contraseña nueva antes de usar LabTower.',notice:'Esta cuenta aún tiene su contraseña inicial o temporal.',cur:'Contraseña actual',nw:'Contraseña nueva (mín. 8 caracteres)',rep:'Repite la contraseña nueva',btn:'Guardar y continuar',out:'Cerrar sesión',
       mismatch:'Las contraseñas no coinciden',short:'La contraseña debe tener al menos 8 caracteres',same:'La contraseña nueva debe ser distinta de la actual',fill:'Completa todos los campos',saving:'Guardando…',conn:'Error de conexión: '}
 };
 let lang = 'en';
@@ -11,7 +11,7 @@ try { lang = localStorage.getItem('pi-lang') || ''; } catch(e) {}
 if (!TXT[lang]) lang = (navigator.language || '').toLowerCase().startsWith('es') ? 'es' : 'en';
 const T = TXT[lang];
 document.documentElement.lang = lang;
-document.title = 'Pi Console — ' + T.title;
+document.title = 'LabTower — ' + T.title;
 document.getElementById('t-title').textContent = T.title;
 document.getElementById('t-sub').textContent = T.sub;
 document.getElementById('t-notice').textContent = T.notice;

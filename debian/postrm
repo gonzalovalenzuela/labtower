@@ -5,44 +5,44 @@ set -e
 # La regla de sudo se quita en cuanto el paquete se desinstala: autorizaba un script que ya no existe.
 # EN: The sudo rule is removed as soon as the package is uninstalled: it authorised a script that no longer exists.
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
-    rm -f /etc/sudoers.d/pi-console-teleporter
+    rm -f /etc/sudoers.d/labtower-teleporter
 fi
 
 # «purge» (apt purge) borra además la instalación, los servicios y el usuario del sistema. Los respaldos de /var/backups se conservan.
 # EN: "purge" (apt purge) also deletes the installation, the services and the system user. Backups in /var/backups are kept.
 if [ "$1" = "purge" ]; then
-    echo "pi-console: purging..."
-    rm -rf /opt/pi-console /opt/pi-console-auth
-    rm -f /etc/nginx/sites-enabled/pi-console.conf
+    echo "labtower: purging..."
+    rm -rf /opt/labtower /opt/labtower-auth
+    rm -f /etc/nginx/sites-enabled/labtower.conf
     rm -f /etc/systemd/system/wol-console.service
-    rm -f /etc/systemd/system/pi-console-ups.service
-    # servicio con el nombre antiguo (solo si es el de Pi Console; nut-monitor tambien es el upsmon de NUT)
-    # El nombre antiguo nut-monitor.service también lo usa el upsmon de NUT: solo se borra si el archivo es de Pi Console.
-    # EN: The old name nut-monitor.service is also used by NUT's upsmon: it is deleted only if the file belongs to Pi Console.
-    if grep -q "Pi Console" /etc/systemd/system/nut-monitor.service 2>/dev/null; then
+    rm -f /etc/systemd/system/labtower-ups.service
+    # servicio con el nombre antiguo (solo si es el de LabTower; nut-monitor tambien es el upsmon de NUT)
+    # El nombre antiguo nut-monitor.service también lo usa el upsmon de NUT: solo se borra si el archivo es de LabTower.
+    # EN: The old name nut-monitor.service is also used by NUT's upsmon: it is deleted only if the file belongs to LabTower.
+    if grep -qE "Pi Console|LabTower" /etc/systemd/system/nut-monitor.service 2>/dev/null; then
         rm -f /etc/systemd/system/nut-monitor.service
     fi
     rm -f /etc/systemd/system/admin-panel.service
     rm -f /etc/systemd/system/net-monitor.service
     rm -f /etc/systemd/system/proxmox-monitor.service
     rm -f /etc/systemd/system/nas-monitor.service
-    rm -f /etc/systemd/system/pi-console-overview.service
+    rm -f /etc/systemd/system/labtower-overview.service
     systemctl daemon-reload 2>/dev/null || true
     # Llave SSH y huella del respaldo automático por SFTP (el .conf y el cron los borra dpkg por ser conffiles)
     # EN: SSH key and host key of the automatic SFTP backup (dpkg removes the .conf and the cron file, as they are conffiles)
-    rm -f /etc/pi-console/backup_key /etc/pi-console/backup_key.pub /etc/pi-console/backup_known_hosts
+    rm -f /etc/labtower/backup_key /etc/labtower/backup_key.pub /etc/labtower/backup_known_hosts
     # HTTPS opcional: certificado, configuración generada y registro de restauraciones.
     # EN: Optional HTTPS: certificate, generated configuration and restore log.
-    rm -rf /etc/pi-console/tls /etc/pi-console/https.d /etc/pi-console/http-extra.d /var/log/pi-console
-    rm -f /etc/pi-console/backup_passphrase
-    rmdir /etc/pi-console 2>/dev/null || true
+    rm -rf /etc/labtower/tls /etc/labtower/https.d /etc/labtower/http-extra.d /var/log/labtower
+    rm -f /etc/labtower/backup_passphrase
+    rmdir /etc/labtower 2>/dev/null || true
     # Eliminar usuario del sistema
     # ES: Los datos se conservan, pero pasan a root (700) antes de borrar el usuario: así no quedan a nombre de un uid huérfano que otro usuario podría heredar.
     # EN: The data is kept, but it becomes root-owned (700) before the user is deleted, so it is not left under an orphan uid that another user could inherit.
-    if [ -d /var/lib/pi-console ] && [ ! -L /var/lib/pi-console ]; then
-        chown -R -h root:root /var/lib/pi-console 2>/dev/null || true
-        chmod 700 /var/lib/pi-console 2>/dev/null || true
+    if [ -d /var/lib/labtower ] && [ ! -L /var/lib/labtower ]; then
+        chown -R -h root:root /var/lib/labtower 2>/dev/null || true
+        chmod 700 /var/lib/labtower 2>/dev/null || true
     fi
-    userdel pi-console 2>/dev/null || true
-    echo "pi-console: purged (backups in /var/backups/pi-console)"
+    userdel labtower 2>/dev/null || true
+    echo "labtower: purged (backups in /var/backups/labtower)"
 fi

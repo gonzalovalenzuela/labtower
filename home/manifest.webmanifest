@@ -1,6 +1,6 @@
 {
-  "name": "Pi Console",
-  "short_name": "Pi Console",
+  "name": "LabTower",
+  "short_name": "LabTower",
   "description": "Homelab dashboard / Panel de homelab",
   "id": "/",
   "start_url": "/",

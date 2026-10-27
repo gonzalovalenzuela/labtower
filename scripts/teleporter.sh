@@ -1,5 +1,5 @@
 #!/bin/bash
-# teleporter.sh — backup, verify and restore Pi Console (data + NUT + nginx)
+# teleporter.sh — backup, verify and restore LabTower (data + NUT + nginx)
 #
 #   teleporter backup  [file.tar.gz]        create a backup (needs root)
 #   teleporter check   <file.tar.gz>        verify a backup (no changes made)
@@ -8,7 +8,7 @@
 # Installed as /usr/local/bin/teleporter.sh, with a `teleporter` symlink.
 #
 # Design notes (lessons learned):
-#  * All data lives in /var/lib/pi-console (users.json, <module>/…, metrics.db); /opt/pi-console-auth
+#  * All data lives in /var/lib/labtower (users.json, <module>/…, metrics.db); /opt/labtower-auth
 #    (root-owned) holds SYMLINKS to the shared files — restore writes the real file and re-creates them.
 #  * Root NEVER follows a symlink inside the folders the services control: every read/write/delete there
 #    goes through the `sfs` helper (openat + O_NOFOLLOW from a trusted base) and SQLite snapshots are taken
@@ -22,7 +22,7 @@
 #  * Services are always restarted, even if the restore fails half way.
 #  * Archive members are whitelisted: absolute paths, "..", links are rejected.
 #  * Files with secrets (tokens, SNMP/NUT passwords) are stored/restored 0600.
-# ES: Teleporter = respaldo y restauración de Pi Console (datos + NUT + nginx). Lo usa el administrador por consola
+# ES: Teleporter = respaldo y restauración de LabTower (datos + NUT + nginx). Lo usa el administrador por consola
 #     (backup / check / restore) y el panel web a través de sudo (gui-backup / gui-restore). Los comentarios de este
 #     archivo están en inglés y, donde aporta, con su versión en español («ES:»).
 #     Ideas clave: se verifica el respaldo ANTES de tocar nada; se toma una foto de seguridad del estado actual;
@@ -35,22 +35,22 @@ TELEPORTER_VERSION="2.2.0"
 # Under sudo (the admin panel) every override is dropped: only the defaults apply.
 # ES: Cuando corre por sudo (desde el panel) se ignoran todas las variables de entorno de prueba: solo valen las rutas reales, así nadie puede redirigir el script como root.
 if [ -n "${SUDO_USER:-}" ]; then
-  unset PICONSOLE_HOME PICONSOLE_DATA PICONSOLE_AUTH_LINK PICONSOLE_NUT_DIR PICONSOLE_NGINX_CONF \
-        PICONSOLE_NGINX_ENABLED PICONSOLE_SAFETY_DIR PICONSOLE_LOCK TELEPORTER_SKIP_SYSTEM \
-        TELEPORTER_DROP PICONSOLE_RESTORE_LOG PICONSOLE_SERVICE_USER
+  unset LABTOWER_HOME LABTOWER_DATA LABTOWER_AUTH_LINK LABTOWER_NUT_DIR LABTOWER_NGINX_CONF \
+        LABTOWER_NGINX_ENABLED LABTOWER_SAFETY_DIR LABTOWER_LOCK TELEPORTER_SKIP_SYSTEM \
+        TELEPORTER_DROP LABTOWER_RESTORE_LOG LABTOWER_SERVICE_USER
 fi
-PI_HOME="${PICONSOLE_HOME:-/opt/pi-console}"
-DATA_DIR="${PICONSOLE_DATA:-/var/lib/pi-console}"
-AUTH_DIR="${PICONSOLE_AUTH_LINK:-/opt/pi-console-auth}"
-NUT_DIR="${PICONSOLE_NUT_DIR:-/etc/nut}"
-NGINX_CONF="${PICONSOLE_NGINX_CONF:-/etc/nginx/sites-available/pi-console.conf}"
-NGINX_ENABLED="${PICONSOLE_NGINX_ENABLED:-/etc/nginx/sites-enabled/pi-console.conf}"
-SAFETY_DIR="${PICONSOLE_SAFETY_DIR:-/var/backups/pi-console}"
+PI_HOME="${LABTOWER_HOME:-/opt/labtower}"
+DATA_DIR="${LABTOWER_DATA:-/var/lib/labtower}"
+AUTH_DIR="${LABTOWER_AUTH_LINK:-/opt/labtower-auth}"
+NUT_DIR="${LABTOWER_NUT_DIR:-/etc/nut}"
+NGINX_CONF="${LABTOWER_NGINX_CONF:-/etc/nginx/sites-available/labtower.conf}"
+NGINX_ENABLED="${LABTOWER_NGINX_ENABLED:-/etc/nginx/sites-enabled/labtower.conf}"
+SAFETY_DIR="${LABTOWER_SAFETY_DIR:-/var/backups/labtower}"
 SPOOL_DIR="$DATA_DIR/teleporter"      # backups/uploads handled by the admin panel
-LOCK_FILE="${PICONSOLE_LOCK:-/run/lock/pi-console-teleporter.lock}"
-RESTORE_LOG="${PICONSOLE_RESTORE_LOG:-/var/log/pi-console/restore.log}"   # root-owned: the panel only reads it
-SERVICE_USER="${PICONSOLE_SERVICE_USER:-pi-console}"
-SERVICES="wol-console pi-console-ups admin-panel net-monitor proxmox-monitor nas-monitor pi-console-overview"
+LOCK_FILE="${LABTOWER_LOCK:-/run/lock/labtower-teleporter.lock}"
+RESTORE_LOG="${LABTOWER_RESTORE_LOG:-/var/log/labtower/restore.log}"   # root-owned: the panel only reads it
+SERVICE_USER="${LABTOWER_SERVICE_USER:-labtower}"
+SERVICES="wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor labtower-overview"
 SKIP_SYSTEM="${TELEPORTER_SKIP_SYSTEM:-0}"   # 1 = no systemctl/nginx/chown (tests)
 DROP_FORCE="${TELEPORTER_DROP:-0}"           # 1 = drop to the service user even with SKIP_SYSTEM (tests)
 # Trusted base for the `sfs` helper: the (root-owned) parent of the data folder, resolved once.
@@ -79,7 +79,7 @@ LEGACY_FILES=(
 )
 # ES: Igual para la configuración del sistema (nginx y NUT). Estos archivos solo se restauran por consola con --nut / --nginx.
 CONF_FILES=(
-  "conf/nginx/pi-console.conf|$NGINX_CONF"
+  "conf/nginx/labtower.conf|$NGINX_CONF"
   "conf/nut/nut.conf|$NUT_DIR/nut.conf"
   "conf/nut/ups.conf|$NUT_DIR/ups.conf"
   "conf/nut/upsd.conf|$NUT_DIR/upsd.conf"
@@ -199,7 +199,7 @@ def main():
         keep = int(a[0])
         try: d = opendir(base, parts)
         except FileNotFoundError: return
-        bk = re.compile(r"^pi-console-[A-Za-z0-9._-]{1,80}\.tar\.gz$"); up = re.compile(r"^(upload-\d{8}_\d{6}\.tar\.gz|\.upload-[0-9]+-[0-9a-f]{8}\.tmp)$")
+        bk = re.compile(r"^(labtower|pi-console)-[A-Za-z0-9._-]{1,80}\.tar\.gz$"); up = re.compile(r"^(upload-\d{8}_\d{6}\.tar\.gz|\.upload-[0-9]+-[0-9a-f]{8}\.tmp)$")
         files = []
         for n in os.listdir(d):
             try: st = os.stat(n, dir_fd=d, follow_symlinks=False)
@@ -312,7 +312,7 @@ cmd_backup() {
   local dest="${1:-}"
   if [ -z "$dest" ]; then
     mkdir -p "$SAFETY_DIR" 2>/dev/null || true
-    dest="$SAFETY_DIR/pi-console-$(hostname -s)-$(date +%Y%m%d_%H%M%S).tar.gz"
+    dest="$SAFETY_DIR/labtower-$(hostname -s)-$(date +%Y%m%d_%H%M%S).tar.gz"
   fi
   case "$dest" in *.tar.gz|*.tgz) ;; *) dest="$dest.tar.gz";; esac
   [ -e "$dest" ] && die "destination already exists: $dest"
@@ -323,7 +323,7 @@ cmd_backup() {
   umask 077
   mkdir -p "$TMP/data" "$TMP/conf"
 
-  echo "${B}Pi Console Teleporter — backup${N}"
+  echo "${B}LabTower Teleporter — backup${N}"
   echo "  Host: $(hostname)   Date: $(date -Iseconds)"
 
   hdr "Module data"
@@ -362,11 +362,11 @@ s.backup(d); d.close(); s.close()' "$src" "$SPOOL_DIR/$snap_n" 2>/dev/null \
     else warn "$src — not present or unreadable, skipped"; fi
   done
 
-  [ "$n_data" -gt 0 ] || die "no Pi Console data found — is the package installed?"
+  [ "$n_data" -gt 0 ] || die "no LabTower data found — is the package installed?"
 
   hdr "Packing"
   local pkg_ver
-  pkg_ver=$(dpkg-query -W -f='${Version}' pi-console 2>/dev/null || echo unknown)
+  pkg_ver=$(dpkg-query -W -f='${Version}' labtower 2>/dev/null || echo unknown)
   python3 -I - "$TMP" "$TELEPORTER_VERSION" "$pkg_ver" "$SERVICES" <<'PY'
 import json, os, socket, subprocess, sys, time
 tmp, tver, pver, services = sys.argv[1:5]
@@ -399,7 +399,7 @@ check_archive() {
   archive_is_safe "$archive" || return 1
   extract_archive "$archive" "$dir" || return 1
 
-  [ -f "$dir/backup.json" ] || { err "backup.json missing — not a Pi Console backup"; return 1; }
+  [ -f "$dir/backup.json" ] || { err "backup.json missing — not a LabTower backup"; return 1; }
   validate_json "$dir/backup.json" || { err "backup.json is not valid JSON"; return 1; }
 
   if [ -f "$dir/SHA256SUMS" ]; then
@@ -439,7 +439,7 @@ cmd_check() {
   need_tools
   [ $# -ge 1 ] || die "usage: teleporter check <file.tar.gz>"
   TMP=$(mktemp -d) || die "cannot create a temporary directory"
-  echo "${B}Pi Console Teleporter — check${N}"
+  echo "${B}LabTower Teleporter — check${N}"
   echo "  Backup: $1"
   hdr "Archive"
   check_archive "$1" "$TMP"; local rc=$?
@@ -513,20 +513,20 @@ cmd_restore() {
   [ -n "$archive" ] || die "usage: sudo teleporter restore <file.tar.gz> [-y] [--nut] [--nginx]"
   RM_SOURCE=""; [ "$rm_source" -eq 1 ] && RM_SOURCE="$archive"
   take_lock
-  [ -d "$PI_HOME" ] || die "$PI_HOME not found — install the package first: sudo dpkg -i pi-console_*.deb"
+  [ -d "$PI_HOME" ] || die "$PI_HOME not found — install the package first: sudo dpkg -i labtower_*.deb"
   if [ "$SKIP_SYSTEM" != "1" ]; then svc_user_exists || die "system user '$SERVICE_USER' not found — install the package first"; fi
 
   TMP=$(mktemp -d) || die "cannot create a temporary directory"
   trap on_exit_restore EXIT
   umask 077
-  echo "${B}Pi Console Teleporter — restore${N}"
+  echo "${B}LabTower Teleporter — restore${N}"
   echo "  Backup: $archive"
 
   hdr "Verifying backup (nothing is changed yet)"
   check_archive "$archive" "$TMP" || die "the backup failed verification — aborting, no changes were made"
 
   echo
-  echo "${Y}  This will OVERWRITE the current Pi Console data and NUT/nginx configuration.${N}"
+  echo "${Y}  This will OVERWRITE the current LabTower data and NUT/nginx configuration.${N}"
   if [ "$assume_yes" -ne 1 ]; then
     read -r -p "  Continue? [y/N] " ans || ans=""
     [[ "$ans" =~ ^[yYsS]$ ]] || { echo "Cancelled."; exit 0; }
@@ -563,7 +563,7 @@ cmd_restore() {
 
   hdr "Auth links"
   mkdir -p "$AUTH_DIR"
-  # ES: /opt/pi-console-auth es de root: los servicios no pueden cambiar estos enlaces. sessions.json ya no se enlaza (el servicio lo crea en su carpeta de datos).
+  # ES: /opt/labtower-auth es de root: los servicios no pueden cambiar estos enlaces. sessions.json ya no se enlaza (el servicio lo crea en su carpeta de datos).
   ln -sfn "$PI_HOME/auth/auth.py" "$AUTH_DIR/auth.py"
   ln -sfn "$DATA_DIR/users.json" "$AUTH_DIR/users.json"
   rm -f "$AUTH_DIR/sessions.json"
@@ -599,7 +599,7 @@ cmd_restore() {
     fi
   fi
 
-  # ES: El código en /opt/pi-console es de root y de solo lectura para los servicios; solo los datos (/var/lib/pi-console) son suyos.
+  # ES: El código en /opt/labtower es de root y de solo lectura para los servicios; solo los datos (/var/lib/labtower) son suyos.
   hdr "Permissions"
   ok "code in $PI_HOME stays root-owned; data in $DATA_DIR is owned by $SERVICE_USER"
 
@@ -631,8 +631,8 @@ release_lock() { exec 9>&-; LOCK_HELD=0; }
 
 # ── admin-panel entry points (run through sudo as root; strict argument checks) ─
 # ES: PUNTOS DE ENTRADA DEL PANEL (corren como root vía sudo, con validación estricta). El nombre del respaldo debe cumplir este patrón: evita rutas con «../».
-NAME_RE='^(pi-console-[A-Za-z0-9._-]{1,80}|upload-[0-9]{8}_[0-9]{6})\.tar\.gz$'
-# ES: Prepara la carpeta de intercambio con el panel (modo 700, dueño pi-console).
+NAME_RE='^((labtower|pi-console)-[A-Za-z0-9._-]{1,80}|upload-[0-9]{8}_[0-9]{6})\.tar\.gz$'
+# ES: Prepara la carpeta de intercambio con el panel (modo 700, dueño labtower).
 spool_init() {
   local o="$SERVICE_USER"; [ "$SKIP_SYSTEM" = "1" ] && [ "$DROP_FORCE" != "1" ] && o="-"
   sfs mkdir "$SPOOL_DIR" "$o" 700 || die "the exchange folder $SPOOL_DIR is not safe"
@@ -646,7 +646,7 @@ spool_prune() {  # keep the newest 5 backups, drop uploads older than a day (nev
 cmd_gui_backup() {
   need_root gui-backup "$@"; need_tools; take_lock
   spool_init
-  local name="pi-console-$(hostname -s | tr -c 'A-Za-z0-9.\n-' '_')-$(date +%Y%m%d_%H%M%S).tar.gz"
+  local name="labtower-$(hostname -s | tr -c 'A-Za-z0-9.\n-' '_')-$(date +%Y%m%d_%H%M%S).tar.gz"
   [[ "$name" =~ $NAME_RE ]] || die "could not build a valid backup name"
   # ES: Se arma en una carpeta de root y luego se entrega al panel sin seguir enlaces (la carpeta del panel la controla un servicio).
   local o="$SERVICE_USER"; [ "$SKIP_SYSTEM" = "1" ] && [ "$DROP_FORCE" != "1" ] && o="-"
@@ -680,8 +680,8 @@ cmd_gui_restore() {  # <name> <nut:0|1> <nginx:0|1>
   spool_init; mkdir -p "$(dirname "$log")" && chmod 755 "$(dirname "$log")"; rm -f -- "$log"
   # Detached from the admin-panel cgroup: the restore stops and restarts that very service.
   if [ "$SKIP_SYSTEM" != "1" ] && command -v systemd-run >/dev/null 2>&1; then
-    systemctl reset-failed pi-console-restore.service 2>/dev/null || true
-    systemd-run --quiet --collect --unit=pi-console-restore \
+    systemctl reset-failed labtower-restore.service 2>/dev/null || true
+    systemd-run --quiet --collect --unit=labtower-restore \
       -p StandardOutput="file:$log" -p StandardError="file:$log" \
       "$0" restore "$copy/restore.tar.gz" "${flags[@]}" \
       || { rm -rf "$copy"; die "could not start the restore job"; }
@@ -695,7 +695,7 @@ cmd_gui_restore() {  # <name> <nut:0|1> <nginx:0|1>
 # ES: Ayuda de uso del comando.
 usage() {
   cat <<EOF
-Pi Console Teleporter v$TELEPORTER_VERSION
+LabTower Teleporter v$TELEPORTER_VERSION
 
   teleporter backup  [file.tar.gz]        create a backup (default: $SAFETY_DIR/)
   teleporter check   <file.tar.gz>        verify a backup, changes nothing

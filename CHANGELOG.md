@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.0 — 2026-10-27
+
+**El proyecto se llama LabTower** (antes Pi Console). Ya no es solo para la Raspberry Pi y había muchos proyectos con el nombre anterior. Hay logo nuevo (una torre de tres niveles con los nodos arriba) en el menú, la página de inicio, los iconos de la app y las capturas.
+
+**Qué cambió por dentro**
+- El paquete ahora es `labtower` (reemplaza a `pi-console`). Cambian las rutas: `/opt/labtower`, `/var/lib/labtower`, `/etc/labtower`, `/var/log/labtower` y `/var/backups/labtower`.
+- El usuario del sistema es `labtower` y los servicios `pi-console-ups` y `pi-console-overview` pasan a `labtower-ups` y `labtower-overview`. Los demás servicios (`wol-console`, `admin-panel`, `net-monitor`, `proxmox-monitor`, `nas-monitor`) conservan el nombre.
+- Los comandos son `labtower-https`, `labtower-health`, `labtower-resources` y `labtower-sftp-backup` (`teleporter` no cambia).
+- Las variables de entorno `PICONSOLE_*` pasan a `LABTOWER_*` y la zona de nginx a `labtower_*`.
+
+**Al actualizar:** se hace sola. Al instalar el paquete nuevo, dpkg retira `pi-console` y el instalador mueve los datos, usuarios, certificados HTTPS, configuración del respaldo SFTP y respaldos anteriores, y renombra el usuario y las variables de `/etc/default`. Las contraseñas y los datos no cambian; hay que iniciar sesión otra vez. Los respaldos hechos con la 1.x (`pi-console-*.tar.gz`) se pueden seguir restaurando desde Teleporter. Si usabas los comandos `pi-console-*` en scripts propios, hay que cambiarles el nombre.
+
 ## 1.4 — 2026-10-27
 
 Reúne los cambios de los builds 1.3a a 1.3g.

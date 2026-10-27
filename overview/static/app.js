@@ -320,7 +320,7 @@ $('bo').onclick=async()=>{await fetch('api/logout',{method:'POST',headers:{'Cont
 
 // ───────── Idioma / language ─────────
 function applyLang(){
-  document.documentElement.lang=lang;document.title='Pi Console — '+T('title');
+  document.documentElement.lang=lang;document.title='LabTower — '+T('title');
   document.querySelectorAll('[data-i]').forEach(e=>e.textContent=T(e.dataset.i));
   $('bl').textContent=lang==='es'?'EN':'ES';riFill();
   paintSort();

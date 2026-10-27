@@ -1,48 +1,48 @@
 #!/bin/bash
-# pi-console-sftp-backup — automatic Pi Console backup, uploaded over SFTP to a storage server.
+# labtower-sftp-backup — automatic LabTower backup, uploaded over SFTP to a storage server.
 #
-#   pi-console-sftp-backup [run]    make a backup now and upload it (this is what cron runs)
-#   pi-console-sftp-backup setup    create the SSH key and show the public key to authorize on the storage
-#   pi-console-sftp-backup test     check the SFTP connection, the remote folder and write access
-#   pi-console-sftp-backup status   show the result of the last run
-#   pi-console-sftp-backup decrypt <file.tar.gz.gpg> [out.tar.gz]   decrypt a copy downloaded from the storage
+#   labtower-sftp-backup [run]    make a backup now and upload it (this is what cron runs)
+#   labtower-sftp-backup setup    create the SSH key and show the public key to authorize on the storage
+#   labtower-sftp-backup test     check the SFTP connection, the remote folder and write access
+#   labtower-sftp-backup status   show the result of the last run
+#   labtower-sftp-backup decrypt <file.tar.gz.gpg> [out.tar.gz]   decrypt a copy downloaded from the storage
 #
-# Installed as /usr/local/bin/pi-console-sftp-backup. Settings: /etc/pi-console/backup.conf.
-# Scheduled by /etc/cron.d/pi-console-sftp-backup (every day at 03:17). It does nothing until SFTP_USER is set.
+# Installed as /usr/local/bin/labtower-sftp-backup. Settings: /etc/labtower/backup.conf.
+# Scheduled by /etc/cron.d/labtower-sftp-backup (every day at 03:17). It does nothing until SFTP_USER is set.
 #
 # How it works:
 #  1. `teleporter backup` creates the archive (module data, NUT and nginx configuration) in LOCAL_DIR.
 #  2. `teleporter check` verifies it BEFORE uploading (a bad archive is never sent).
-#  3. The archive is ENCRYPTED (gpg, AES-256, passphrase in /etc/pi-console/backup_passphrase) before leaving the Pi, because it holds
+#  3. The archive is ENCRYPTED (gpg, AES-256, passphrase in /etc/labtower/backup_passphrase) before leaving the Pi, because it holds
 #     password hashes and API tokens. It is uploaded as <name>.gpg.part and renamed when complete, and the remote size is compared.
 #  4. Old copies are pruned (KEEP_LOCAL here, KEEP_REMOTE on the storage). Only files named
-#     pi-console-auto-<this host>-<date>_<time>.tar.gz are ever deleted, nothing else.
-#  5. The result is written to /var/log/pi-console/backup.status and to the system log
-#     (journalctl -t pi-console-sftp-backup).
-# ES: Respaldo automático de Pi Console por SFTP. `teleporter backup` crea el archivo, `teleporter check` lo verifica antes de
+#     labtower-auto-<this host>-<date>_<time>.tar.gz are ever deleted, nothing else.
+#  5. The result is written to /var/log/labtower/backup.status and to the system log
+#     (journalctl -t labtower-sftp-backup).
+# ES: Respaldo automático de LabTower por SFTP. `teleporter backup` crea el archivo, `teleporter check` lo verifica antes de
 #     subirlo, se sube con nombre temporal (.part) y se renombra al terminar, se compara el tamaño remoto con el local y se borran
-#     las copias viejas (solo las que se llaman pi-console-auto-<este equipo>-<fecha>_<hora>.tar.gz). Solo usa llave SSH, nunca
-#     contraseña, para poder correr desde cron. El resultado queda en /var/log/pi-console/backup.status y en el log del sistema.
+#     las copias viejas (solo las que se llaman labtower-auto-<este equipo>-<fecha>_<hora>.tar.gz). Solo usa llave SSH, nunca
+#     contraseña, para poder correr desde cron. El resultado queda en /var/log/labtower/backup.status y en el log del sistema.
 set -uo pipefail
 
-CONF="${PICONSOLE_BACKUP_CONF:-/etc/pi-console/backup.conf}"
+CONF="${LABTOWER_BACKUP_CONF:-/etc/labtower/backup.conf}"
 
 # Defaults (override them in the configuration file).
 # ES: Valores por defecto; se cambian en el archivo de configuración.
 SFTP_HOST="storage.example.lan"
 SFTP_PORT="22"
 SFTP_USER=""                                   # empty = backups disabled / vacío = respaldo desactivado
-SFTP_DIR="pi-console-sftp-backups"                  # relative to the SFTP user's home, or absolute
-SFTP_KEY="/etc/pi-console/backup_key"
-KNOWN_HOSTS="/etc/pi-console/backup_known_hosts"
+SFTP_DIR="labtower-sftp-backups"                  # relative to the SFTP user's home, or absolute
+SFTP_KEY="/etc/labtower/backup_key"
+KNOWN_HOSTS="/etc/labtower/backup_known_hosts"
 KEEP_LOCAL=7
 KEEP_REMOTE=30
-LOCAL_DIR="/var/backups/pi-console"
-STATUS_FILE="/var/log/pi-console/backup.status"   # root-owned dir: never write as root inside a folder the service user controls
+LOCAL_DIR="/var/backups/labtower"
+STATUS_FILE="/var/log/labtower/backup.status"   # root-owned dir: never write as root inside a folder the service user controls
 TELEPORTER="/usr/local/bin/teleporter.sh"
-LOCK_FILE="/run/lock/pi-console-sftp-backup.lock"
+LOCK_FILE="/run/lock/labtower-sftp-backup.lock"
 ENCRYPT="yes"                                  # yes | no — encrypt the copy that is uploaded / cifrar la copia que se sube
-PASSPHRASE_FILE="/etc/pi-console/backup_passphrase"
+PASSPHRASE_FILE="/etc/labtower/backup_passphrase"
 
 # The configuration file is READ, never executed: only KEY=value lines with known keys are accepted.
 # ES: El archivo de configuración se LEE, nunca se ejecuta: solo se aceptan líneas CLAVE=valor con claves conocidas.
@@ -66,10 +66,10 @@ load_conf() {
 load_conf
 
 HOST_SHORT="$(hostname -s | tr -c 'A-Za-z0-9.\n-' '_')"
-PREFIX="pi-console-auto-${HOST_SHORT}-"
+PREFIX="labtower-auto-${HOST_SHORT}-"
 NAME_RE="^${PREFIX//./\\.}[0-9]{8}_[0-9]{6}\\.tar\\.gz(\\.gpg)?$"
 
-log()  { echo "$*"; logger -t pi-console-sftp-backup -- "$*" 2>/dev/null || true; }
+log()  { echo "$*"; logger -t labtower-sftp-backup -- "$*" 2>/dev/null || true; }
 die()  { log "ERROR: $*"; write_status 0 "" 0 "$*"; exit 1; }
 # ES: Valida la configuración antes de usarla (el archivo se «source»a como root, y los valores terminan en comandos sftp).
 valid_conf() {
@@ -125,7 +125,7 @@ need_conf() {
   [ -n "$SFTP_USER" ] || return 2
   local why; why="$(valid_conf)" || die "configuration: $why (edit $CONF)"
   command -v sftp >/dev/null 2>&1 || die "sftp is not installed (apt install openssh-client)"
-  [ -r "$SFTP_KEY" ] || die "SSH key not found: $SFTP_KEY — run: sudo pi-console-sftp-backup setup"
+  [ -r "$SFTP_KEY" ] || die "SSH key not found: $SFTP_KEY — run: sudo labtower-sftp-backup setup"
   if [ "$ENCRYPT" = yes ]; then
     command -v gpg >/dev/null 2>&1 || die "gpg is not installed (apt install gnupg), or set ENCRYPT=no in $CONF (not recommended)"
     ensure_passphrase || die "cannot create $PASSPHRASE_FILE"
@@ -137,7 +137,7 @@ need_conf() {
 
 # ── run ────────────────────────────────────────────────────────────────────────
 cmd_run() {
-  [ "$(id -u)" -eq 0 ] || { echo "this command needs root: sudo pi-console-sftp-backup" >&2; exit 1; }
+  [ "$(id -u)" -eq 0 ] || { echo "this command needs root: sudo labtower-sftp-backup" >&2; exit 1; }
   need_conf; local rc=$?
   if [ $rc -eq 2 ]; then log "backup is not configured (SFTP_USER is empty in $CONF): nothing to do"; exit 0; fi
   # Only one run at a time.
@@ -210,11 +210,11 @@ prune_local() {
 
 # ── setup ──────────────────────────────────────────────────────────────────────
 cmd_setup() {
-  [ "$(id -u)" -eq 0 ] || { echo "this command needs root: sudo pi-console-sftp-backup setup" >&2; exit 1; }
+  [ "$(id -u)" -eq 0 ] || { echo "this command needs root: sudo labtower-sftp-backup setup" >&2; exit 1; }
   command -v ssh-keygen >/dev/null 2>&1 || { echo "ssh-keygen is not installed (apt install openssh-client)"; exit 1; }
   mkdir -p "$(dirname "$SFTP_KEY")"
   if [ ! -f "$SFTP_KEY" ]; then
-    ssh-keygen -q -t ed25519 -N "" -C "pi-console-sftp-backup@$(hostname -s)" -f "$SFTP_KEY" || exit 1
+    ssh-keygen -q -t ed25519 -N "" -C "labtower-sftp-backup@$(hostname -s)" -f "$SFTP_KEY" || exit 1
     chmod 600 "$SFTP_KEY"; echo "SSH key created: $SFTP_KEY"
   else
     echo "SSH key already exists: $SFTP_KEY"
@@ -232,22 +232,22 @@ $(cat "$SFTP_KEY.pub")
 
 2) Edit $CONF and set SFTP_USER (and SFTP_DIR if you want another folder).
 
-3) Check it:   sudo pi-console-sftp-backup test
-   Then run one now:   sudo pi-console-sftp-backup run
+3) Check it:   sudo labtower-sftp-backup test
+   Then run one now:   sudo labtower-sftp-backup run
 EOF
 }
 
 # ── test ───────────────────────────────────────────────────────────────────────
 cmd_test() {
-  [ "$(id -u)" -eq 0 ] || { echo "this command needs root: sudo pi-console-sftp-backup test" >&2; exit 1; }
+  [ "$(id -u)" -eq 0 ] || { echo "this command needs root: sudo labtower-sftp-backup test" >&2; exit 1; }
   [ -n "$SFTP_USER" ] || { echo "SFTP_USER is empty: set it in $CONF"; exit 1; }
   local why; why="$(valid_conf)" || { echo "configuration: $why"; exit 1; }
   command -v sftp >/dev/null 2>&1 || { echo "sftp is not installed (apt install openssh-client)"; exit 1; }
-  [ -r "$SFTP_KEY" ] || { echo "SSH key not found: $SFTP_KEY — run: sudo pi-console-sftp-backup setup"; exit 1; }
+  [ -r "$SFTP_KEY" ] || { echo "SSH key not found: $SFTP_KEY — run: sudo labtower-sftp-backup setup"; exit 1; }
   mkdir -p "$(dirname "$KNOWN_HOSTS")" 2>/dev/null || true
   build_opts
-  local tmp out probe=".pi-console-sftp-backup-test-$$"
-  tmp="$(mktemp)"; echo "pi-console backup test $(date -Iseconds)" > "$tmp"
+  local tmp out probe=".labtower-sftp-backup-test-$$"
+  tmp="$(mktemp)"; echo "labtower backup test $(date -Iseconds)" > "$tmp"
   echo "Connecting to $SFTP_USER@$SFTP_HOST:$SFTP_PORT ..."
   out="$(printf '%s\n' "-mkdir $SFTP_DIR" "ls -l $SFTP_DIR" "put $tmp $SFTP_DIR/$probe" "rm $SFTP_DIR/$probe" | sftp_batch)"; local rc=$?
   rm -f "$tmp"
@@ -256,7 +256,7 @@ cmd_test() {
   else
     echo "FAILED:"; echo "$out" | grep -v '^sftp>' | tail -6
     case "$out" in
-      *"Permission denied"*) echo "→ The storage rejected the key. Authorize the public key (sudo pi-console-sftp-backup setup shows it) for user $SFTP_USER.";;
+      *"Permission denied"*) echo "→ The storage rejected the key. Authorize the public key (sudo labtower-sftp-backup setup shows it) for user $SFTP_USER.";;
       *"REMOTE HOST IDENTIFICATION HAS CHANGED"*|*"Host key verification failed"*) echo "→ The storage's host key changed. If that is expected, remove its line from $KNOWN_HOSTS and try again.";;
       *"timed out"*|*"No route"*|*"refused"*) echo "→ Cannot reach $SFTP_HOST:$SFTP_PORT (is SFTP/SSH enabled on the storage?).";;
     esac
@@ -269,7 +269,7 @@ cmd_test() {
 # EN: Decrypt a copy downloaded from the storage; then restore it with "sudo teleporter restore <out.tar.gz>". gpg checks its integrity.
 cmd_decrypt() {
   local in="${1:-}" out="${2:-}"
-  [ -n "$in" ] && [ -f "$in" ] || { echo "usage: pi-console-sftp-backup decrypt <file.tar.gz.gpg> [out.tar.gz]"; exit 1; }
+  [ -n "$in" ] && [ -f "$in" ] || { echo "usage: labtower-sftp-backup decrypt <file.tar.gz.gpg> [out.tar.gz]"; exit 1; }
   command -v gpg >/dev/null 2>&1 || { echo "gpg is not installed (apt install gnupg)"; exit 1; }
   [ -n "$out" ] || out="${in%.gpg}"
   [ "$out" != "$in" ] && [ ! -e "$out" ] || { echo "destination exists or equals the source: $out"; exit 1; }

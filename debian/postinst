@@ -1,41 +1,132 @@
 #!/bin/sh
 set -e
 
-# Rutas de la instalación: código en /opt/pi-console, datos en /var/lib/pi-console (que sobrevive a las actualizaciones) y un enlace de compatibilidad para el módulo auth.
-# EN: Installation paths: code in /opt/pi-console, data in /var/lib/pi-console (which survives upgrades) and a compatibility link for the auth module.
-PI_HOME="/opt/pi-console"
-DATA_DIR="/var/lib/pi-console"
-AUTH_LINK="/opt/pi-console-auth"
+# Rutas de la instalación: código en /opt/labtower, datos en /var/lib/labtower (que sobrevive a las actualizaciones) y un enlace de compatibilidad para el módulo auth.
+# EN: Installation paths: code in /opt/labtower, data in /var/lib/labtower (which survives upgrades) and a compatibility link for the auth module.
+PI_HOME="/opt/labtower"
+DATA_DIR="/var/lib/labtower"
+AUTH_LINK="/opt/labtower-auth"
 
-echo "pi-console: configuring installation..."
+echo "labtower: configuring installation..."
+
+# ── 0. Migración desde el paquete anterior «pi-console» (1.x) ─────────────────
+# El proyecto se llamaba Pi Console hasta la 1.4. Aquí se mueve todo a los nombres nuevos conservando usuarios, datos, certificados y respaldos.
+# El paquete viejo ya fue retirado por dpkg (Conflicts/Replaces); sus servicios están detenidos y no queda nada corriendo como el usuario antiguo.
+# EN: Step 0, migration from the old package "pi-console" (1.x). The project was called Pi Console up to 1.4. Everything is moved to the new names keeping users, data,
+#     certificates and backups. dpkg already removed the old package (Conflicts/Replaces); its services are stopped and nothing runs as the old user any more.
+migrate_from_pi_console() {
+    OLD="pi-console"
+    if ! id -u "$OLD" >/dev/null 2>&1 && [ ! -e "/var/lib/$OLD" ] && [ ! -e "/etc/$OLD" ] && [ ! -e "/opt/$OLD" ]; then
+        return 0
+    fi
+    echo "  migrating from pi-console to labtower..."
+    # Servicios con nombre antiguo: parar, deshabilitar y borrar sus archivos (los demás conservan nombre y se reescriben en el paso 5).
+    # EN: Services with an old name: stop, disable and delete their files (the others keep their name and are rewritten in step 5).
+    systemctl stop wol-console pi-console-ups admin-panel net-monitor proxmox-monitor nas-monitor pi-console-overview 2>/dev/null || true
+    for u in pi-console-ups pi-console-overview; do
+        systemctl disable "$u" 2>/dev/null || true
+        rm -f "/etc/systemd/system/$u.service" "/etc/systemd/system/multi-user.target.wants/$u.service"
+    done
+    rm -f /etc/systemd/system/pi-console-restore.service
+    systemctl daemon-reload 2>/dev/null || true
+
+    # Usuario y grupo: se renombran (mismo uid, así los archivos de datos siguen siendo suyos).
+    # EN: User and group: renamed (same uid, so the data files stay owned by it).
+    if id -u "$OLD" >/dev/null 2>&1 && ! id -u labtower >/dev/null 2>&1; then
+        usermod -l labtower "$OLD" 2>/dev/null && echo "  system user $OLD renamed to labtower"
+        getent group "$OLD" >/dev/null 2>&1 && ! getent group labtower >/dev/null 2>&1 && groupmod -n labtower "$OLD" 2>/dev/null || true
+    fi
+
+    # Carpetas: datos, configuración, registros y respaldos. Si la nueva ya existe (instalación a medias) no se pisa nada.
+    # EN: Folders: data, configuration, logs and backups. If the new one already exists (half-done install) nothing is overwritten.
+    for pair in "/var/lib/$OLD:/var/lib/labtower" "/var/log/$OLD:/var/log/labtower" "/var/backups/$OLD:/var/backups/labtower"; do
+        o="${pair%%:*}"; n="${pair#*:}"
+        [ -d "$o" ] && [ ! -L "$o" ] || continue
+        if [ ! -e "$n" ]; then
+            mv -- "$o" "$n" && echo "  moved $o -> $n"
+        else
+            cp -an -- "$o"/. "$n"/ 2>/dev/null && rm -rf -- "$o" && echo "  merged $o into $n"
+        fi
+    done
+
+    # /etc: el .conf del respaldo SFTP es un archivo de configuración del paquete (ya trae uno nuevo); se conserva el del usuario con las rutas actualizadas.
+    # EN: /etc: the SFTP backup .conf is a package conffile (a new one was just installed); the user's one is kept with the paths updated.
+    if [ -d "/etc/$OLD" ] && [ ! -L "/etc/$OLD" ]; then
+        mkdir -p /etc/labtower
+        for f in "/etc/$OLD"/* "/etc/$OLD"/.[!.]*; do
+            [ -e "$f" ] || continue
+            b=$(basename "$f")
+            if [ "$b" = "backup.conf" ]; then
+                sed 's/pi-console/labtower/g; s/Pi Console/LabTower/g; s/PICONSOLE/LABTOWER/g' "$f" > /etc/labtower/backup.conf && chmod --reference="$f" /etc/labtower/backup.conf 2>/dev/null || true
+                rm -f "$f"
+            elif [ ! -e "/etc/labtower/$b" ]; then
+                mv -- "$f" "/etc/labtower/$b"
+            fi
+        done
+        rm -rf -- "/etc/$OLD" 2>/dev/null || true
+    fi
+    # HTTPS generado y configuración extra: apuntaban a las rutas viejas.
+    # EN: Generated HTTPS and extra configuration: they pointed to the old paths.
+    for d in /etc/labtower/https.d /etc/labtower/http-extra.d; do
+        [ -d "$d" ] || continue
+        find "$d" -maxdepth 1 -type f -exec sed -i 's/pi-console/labtower/g; s/piconsole/labtower/g' {} +
+    done
+    # Variables de entorno de los servicios (PICONSOLE_* pasa a LABTOWER_*).
+    # EN: Service environment variables (PICONSOLE_* becomes LABTOWER_*).
+    if [ -f "/etc/default/$OLD" ] && [ ! -e /etc/default/labtower ]; then
+        sed 's/PICONSOLE_/LABTOWER_/g; s/pi-console/labtower/g' "/etc/default/$OLD" > /etc/default/labtower
+        chmod --reference="/etc/default/$OLD" /etc/default/labtower 2>/dev/null || true
+        rm -f "/etc/default/$OLD"
+        echo "  /etc/default/$OLD -> /etc/default/labtower (variables renamed)"
+    fi
+    # Nginx, cron y sudo del paquete viejo.
+    # EN: Nginx, cron and sudo of the old package.
+    rm -f /etc/nginx/sites-enabled/pi-console.conf /etc/nginx/sites-available/pi-console.conf /etc/nginx/snippets/pi-console-site.conf
+    rm -f /etc/cron.d/pi-console-sftp-backup /etc/sudoers.d/pi-console-teleporter /etc/logrotate.d/pi-console
+    # Código viejo (de root) y enlace de compatibilidad.
+    # EN: Old code (root-owned) and the compatibility link.
+    rm -rf /opt/pi-console /opt/pi-console-auth
+    # El módulo UPS ya no se llama pi-console-ups.
+    # EN: The UPS module is no longer called pi-console-ups.
+    rm -f /usr/local/bin/pi-console-health /usr/local/bin/pi-console-https /usr/local/bin/pi-console-resources /usr/local/bin/pi-console-sftp-backup
+    # El paquete viejo queda «removido» (con su configuración). Si alguien lo purgara, su postrm borraría los archivos de servicio que ahora son de LabTower
+    # (wol-console, admin-panel…): se deja sin efecto. Después se puede ejecutar «dpkg -P pi-console» sin riesgo.
+    # EN: The old package stays "removed" (config kept). If someone purged it, its postrm would delete the service files that now belong to LabTower
+    #     (wol-console, admin-panel…): it is neutralised. Afterwards "dpkg -P pi-console" is safe to run.
+    if [ -f /var/lib/dpkg/info/pi-console.postrm ]; then
+        printf '#!/bin/sh\nexit 0\n' > /var/lib/dpkg/info/pi-console.postrm && chmod 755 /var/lib/dpkg/info/pi-console.postrm
+    fi
+    echo "  migration finished (old backups kept in /var/backups/labtower)"
+}
+migrate_from_pi_console
 
 # ── 1. Crear usuario del sistema ──────────────────────────────────────────────
 # EN: Step 1: create the unprivileged system user that runs every service (no home, no login shell).
-if ! id -u pi-console >/dev/null 2>&1; then
-    useradd --system --no-create-home --shell /usr/sbin/nologin pi-console
-    echo "  system user pi-console created"
+if ! id -u labtower >/dev/null 2>&1; then
+    useradd --system --no-create-home --shell /usr/sbin/nologin labtower
+    echo "  system user labtower created"
 fi
 
 # ── 2. Directorio de datos persistentes (nunca tocado por dpkg) ───────────────
-# EN: Step 2: persistent data folder (/var/lib/pi-console). dpkg never touches it, so users and settings survive upgrades.
+# EN: Step 2: persistent data folder (/var/lib/labtower). dpkg never touches it, so users and settings survive upgrades.
 # ES: La carpeta raíz la crea root; todo lo de adentro lo crea el usuario del servicio (así root nunca hace chown/chmod sobre un enlace plantado dentro).
 # EN: The top folder is created by root; everything inside is created by the service user (so root never chowns/chmods through a planted link).
 # ES: Tras un purge los datos quedan en root (700): se devuelven al usuario del servicio. Solo en ese estado (carpeta de root, sin enlaces), cuando ningún servicio corre ni puede haber plantado nada.
 # EN: After a purge the data is root-owned (700): hand it back to the service user. Only in that state (root-owned folder, not a link), when no service is running or could have planted anything.
 if [ -d "$DATA_DIR" ] && [ ! -L "$DATA_DIR" ] && [ "$(stat -c %u "$DATA_DIR")" = "0" ]; then
-    find "$DATA_DIR" -xdev -exec chown -h pi-console:pi-console {} +
-    echo "  data of a previous installation handed back to pi-console"
+    find "$DATA_DIR" -xdev -exec chown -h labtower:labtower {} +
+    echo "  data of a previous installation handed back to labtower"
 fi
-install -d -m 750 -o pi-console -g pi-console "$DATA_DIR"
-as_svc() { runuser -u pi-console -- "$@"; }
+install -d -m 750 -o labtower -g labtower "$DATA_DIR"
+as_svc() { runuser -u labtower -- "$@"; }
 for d in wol-console nut-monitor net-monitor proxmox-monitor nas-monitor; do
     as_svc mkdir -p "$DATA_DIR/$d"
     as_svc chmod 750 "$DATA_DIR/$d"
 done
 
 # ── 2b. Teleporter: directorio de trabajo + regla sudo para el panel de admin ─
-# El panel (usuario pi-console) solo puede ejecutar estas dos acciones como root.
-# EN: Step 2b: Teleporter work folder + sudo rule. The panel (user pi-console) may run only these two actions as root.
+# El panel (usuario labtower) solo puede ejecutar estas dos acciones como root.
+# EN: Step 2b: Teleporter work folder + sudo rule. The panel (user labtower) may run only these two actions as root.
 as_svc mkdir -p "$DATA_DIR/teleporter"
 as_svc chmod 700 "$DATA_DIR/teleporter"
 if [ -d /etc/sudoers.d ] && command -v visudo >/dev/null 2>&1; then
@@ -43,11 +134,11 @@ if [ -d /etc/sudoers.d ] && command -v visudo >/dev/null 2>&1; then
     # EN: The rule is written to a temp file first and validated with visudo: an invalid rule would break sudo on the whole system.
     SUDOERS_TMP=$(mktemp)
     cat > "$SUDOERS_TMP" <<'SUDOEOF'
-# Pi Console: the admin panel runs backup/restore as root
-pi-console ALL=(root) NOPASSWD: /usr/local/bin/teleporter.sh gui-backup, /usr/local/bin/teleporter.sh gui-restore *
+# LabTower: the admin panel runs backup/restore as root
+labtower ALL=(root) NOPASSWD: /usr/local/bin/teleporter.sh gui-backup, /usr/local/bin/teleporter.sh gui-restore *
 SUDOEOF
     if visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
-        install -m 0440 -o root -g root "$SUDOERS_TMP" /etc/sudoers.d/pi-console-teleporter
+        install -m 0440 -o root -g root "$SUDOERS_TMP" /etc/sudoers.d/labtower-teleporter
         echo "  sudo rule for teleporter installed"
     else
         echo "  WARNING: invalid sudo rule, backup from the panel is disabled"
@@ -58,20 +149,20 @@ else
 fi
 
 # ── 3. Symlink auth compartido → datos persistentes ───────────────────────────
-# EN: Step 3: shared auth links, so the old path /opt/pi-console-auth keeps pointing at the module and the persistent data.
-# ES: /opt/pi-console-auth es de root: los servicios no pueden redirigir estos enlaces. sessions.json ya no se enlaza.
-# EN: /opt/pi-console-auth is root-owned: the services cannot redirect these links. sessions.json is no longer linked.
+# EN: Step 3: shared auth links, so the old path /opt/labtower-auth keeps pointing at the module and the persistent data.
+# ES: /opt/labtower-auth es de root: los servicios no pueden redirigir estos enlaces. sessions.json ya no se enlaza.
+# EN: /opt/labtower-auth is root-owned: the services cannot redirect these links. sessions.json is no longer linked.
 mkdir -p "$AUTH_LINK"
 chown root:root "$AUTH_LINK"; chmod 755 "$AUTH_LINK"
 ln -sfn "$PI_HOME/auth/auth.py"        "$AUTH_LINK/auth.py"
 ln -sfn "$DATA_DIR/users.json"         "$AUTH_LINK/users.json"
 rm -f "$AUTH_LINK/sessions.json"
 
-# ── 3b. Mover los datos de los módulos desde /opt/pi-console (versiones < 1.2.0u) a /var/lib/pi-console/<módulo>/ ──
-# EN: Step 3b: move the module data from /opt/pi-console (versions < 1.2.0u) to /var/lib/pi-console/<module>/.
+# ── 3b. Mover los datos de los módulos desde /opt/labtower (versiones < 1.2.0u) a /var/lib/labtower/<módulo>/ ──
+# EN: Step 3b: move the module data from /opt/labtower (versions < 1.2.0u) to /var/lib/labtower/<module>/.
 # ES: Se hace con el usuario del servicio y ANTES de pasar el código a root. Las bases SQLite se copian con su API de respaldo.
 # EN: Done as the service user and BEFORE the code becomes root-owned. SQLite databases are copied with their backup API.
-systemctl stop wol-console pi-console-ups admin-panel net-monitor proxmox-monitor nas-monitor pi-console-overview 2>/dev/null || true
+systemctl stop wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor labtower-overview 2>/dev/null || true
 MIGRATED=""
 for pair in wol-console/devices.json wol-console/wake_log.json nut-monitor/servers.json nut-monitor/history.db \
             net-monitor/hosts.json net-monitor/config.json proxmox-monitor/clusters.json proxmox-monitor/history.json; do
@@ -89,22 +180,22 @@ os.chmod(dst, 0o600)' "$old" "$new" 2>/dev/null; then
             MIGRATED="$MIGRATED $old"
         else
             as_svc rm -f "$new"
-            echo "  WARNING: could not move $old (kept in place, copy in /var/backups/pi-console)"
+            echo "  WARNING: could not move $old (kept in place, copy in /var/backups/labtower)"
         fi
     fi
 done
 # ES: Las sesiones antiguas guardaban el token en claro: se descartan (todos deben iniciar sesión otra vez) y se borran de los respaldos.
 # EN: Old sessions stored the token in clear: they are discarded (everyone logs in again) and removed from the backups.
 as_svc rm -f "$DATA_DIR/sessions.json"
-as_svc rm -f "$DATA_DIR/backup.status"   # old location (the status file now lives in root-owned /var/log/pi-console)
-rm -f /var/backups/pi-console/sessions.json.*.bak
+as_svc rm -f "$DATA_DIR/backup.status"   # old location (the status file now lives in root-owned /var/log/labtower)
+rm -f /var/backups/labtower/sessions.json.*.bak
 
 # ── 4. Permisos de directorios de código ─────────────────────────────────────
 # EN: Step 4: the code is root-owned and not writable by the services (a compromised service cannot rewrite its own code).
 chown -R -h root:root "$PI_HOME"
 chmod -R go-w,a+rX "$PI_HOME"
-# ES: Se quitan los archivos viejos (incluso si eran enlaces simbólicos) de /opt/pi-console cuando ya existe el nuevo en /var/lib/pi-console; el código es de root, así que nadie los puede volver a plantar.
-# EN: The old files (even if they were symlinks) are removed from /opt/pi-console once the new one exists in /var/lib/pi-console; the code is root-owned, so nobody can plant them again.
+# ES: Se quitan los archivos viejos (incluso si eran enlaces simbólicos) de /opt/labtower cuando ya existe el nuevo en /var/lib/labtower; el código es de root, así que nadie los puede volver a plantar.
+# EN: The old files (even if they were symlinks) are removed from /opt/labtower once the new one exists in /var/lib/labtower; the code is root-owned, so nobody can plant them again.
 for pair in wol-console/devices.json wol-console/wake_log.json nut-monitor/servers.json nut-monitor/history.db \
             net-monitor/hosts.json net-monitor/config.json proxmox-monitor/clusters.json proxmox-monitor/history.json; do
     case " $MIGRATED " in *" $PI_HOME/$pair "*) rm -f "$PI_HOME/$pair"; continue;; esac
@@ -116,13 +207,13 @@ python3 -m compileall -q "$PI_HOME" >/dev/null 2>&1 || true
 # ttyUSB0 para NUT (UPS por serial)
 # EN: ttyUSB0 for NUT (serial UPS): the service user needs the dialout group to open the port.
 if getent group dialout >/dev/null 2>&1; then
-    usermod -aG dialout pi-console 2>/dev/null || true
+    usermod -aG dialout labtower 2>/dev/null || true
 fi
 
 # Raspberry Pi: leer el estado de la fuente (vcgencmd get_throttled) para el aviso de subtensión
 # EN: Raspberry Pi only: read the power supply state (vcgencmd get_throttled) for the under-voltage warning; needs the video group.
 if grep -qa "Raspberry Pi" /proc/device-tree/model 2>/dev/null && getent group video >/dev/null 2>&1; then
-    usermod -aG video pi-console 2>/dev/null || true
+    usermod -aG video labtower 2>/dev/null || true
 fi
 
 # ── 4b. Migracion: el servicio del dashboard se llamaba "nut-monitor", igual que el
@@ -132,8 +223,8 @@ fi
 migrate_legacy_nut_unit() {
     legacy="/etc/systemd/system/nut-monitor.service"
     [ -f "$legacy" ] || return 0
-    grep -q "Pi Console" "$legacy" 2>/dev/null || return 0    # no es el nuestro: no tocar
-    echo "  migrating old nut-monitor service -> pi-console-ups"
+    grep -qE "Pi Console|LabTower" "$legacy" 2>/dev/null || return 0    # no es el nuestro: no tocar
+    echo "  migrating old nut-monitor service -> labtower-ups"
     systemctl stop nut-monitor 2>/dev/null || true
     systemctl disable nut-monitor 2>/dev/null || true
     rm -f "$legacy" /etc/systemd/system/multi-user.target.wants/nut-monitor.service
@@ -153,11 +244,11 @@ migrate_legacy_nut_unit
 # ── 5. Instalar archivos de servicio systemd ──────────────────────────────────
 # EN: Step 5: install the systemd unit files. One template for the 6 services; they restart on failure after 5 s and log to the journal.
 # ES: Endurecimiento de systemd. Todos: sin /home, /tmp propio, kernel y cgroups de solo lectura, sin tiempo real, UMask 077, solo sockets IP/UNIX/netlink.
-#     Los que no ejecutan sudo ni ping (UPS, Proxmox, NAS, Overview) además: sin nuevos privilegios, sistema de archivos de solo lectura salvo /var/lib/pi-console.
+#     Los que no ejecutan sudo ni ping (UPS, Proxmox, NAS, Overview) además: sin nuevos privilegios, sistema de archivos de solo lectura salvo /var/lib/labtower.
 #     wol-console y net-monitor usan «ping» (capacidad de archivo) y admin-panel usa «sudo» (setuid): no llevan NoNewPrivileges ni capacidades vacías.
 #     admin-panel tampoco lleva ProtectSystem: el teleporter (vía sudo) debe escribir en /var/backups, /etc y /var/lib.
 # EN: systemd hardening. All: no /home, private /tmp, read-only kernel and cgroups, no realtime, UMask 077, only IP/UNIX/netlink sockets.
-#     Those that run neither sudo nor ping (UPS, Proxmox, NAS, Overview) also get: no new privileges, read-only filesystem except /var/lib/pi-console.
+#     Those that run neither sudo nor ping (UPS, Proxmox, NAS, Overview) also get: no new privileges, read-only filesystem except /var/lib/labtower.
 #     wol-console and net-monitor use "ping" (file capability) and admin-panel uses "sudo" (setuid): no NoNewPrivileges / empty capabilities.
 #     admin-panel has no ProtectSystem either: the teleporter (through sudo) must write to /var/backups, /etc and /var/lib.
 install_service() {
@@ -174,18 +265,18 @@ ReadWritePaths=${DATA_DIR}";;
     esac
     cat > "/etc/systemd/system/${name}.service" <<EOF
 [Unit]
-Description=Pi Console — ${desc}
+Description=LabTower — ${desc}
 After=network.target
 Wants=network.target
 
 [Service]
 Type=simple
-User=pi-console
-Group=pi-console
+User=labtower
+Group=labtower
 WorkingDirectory=${PI_HOME}/${module}
-# Variables opcionales para todos los servicios (p. ej. PICONSOLE_SECURE_COOKIE=1); el archivo puede no existir.
-# EN: Optional variables for all the services (e.g. PICONSOLE_SECURE_COOKIE=1); the file may not exist.
-EnvironmentFile=-/etc/default/pi-console
+# Variables opcionales para todos los servicios (p. ej. LABTOWER_SECURE_COOKIE=1); el archivo puede no existir.
+# EN: Optional variables for all the services (e.g. LABTOWER_SECURE_COOKIE=1); the file may not exist.
+EnvironmentFile=-/etc/default/labtower
 ExecStart=/usr/bin/python3 ${PI_HOME}/${module}/${script}
 Restart=on-failure
 RestartSec=5
@@ -216,30 +307,30 @@ EOF
 }
 
 install_service "wol-console"     "WOL Console"     "wol-console"     "server.py" fs
-install_service "pi-console-ups" "UPS Monitor"      "nut-monitor"     "server.py" strict
+install_service "labtower-ups" "UPS Monitor"      "nut-monitor"     "server.py" strict
 install_service "admin-panel"     "Admin Panel"      "auth"            "admin_panel.py" none
 install_service "net-monitor"     "Net Monitor"      "net-monitor"     "server.py" fs
 install_service "proxmox-monitor" "Proxmox Monitor"  "proxmox-monitor" "server.py" strict
 install_service "nas-monitor"     "NAS Monitor"      "nas-monitor"     "server.py" strict
-install_service "pi-console-overview" "Overview" "overview" "server.py" strict
+install_service "labtower-overview" "Overview" "overview" "server.py" strict
 
 # ── 6. Nginx ──────────────────────────────────────────────────────────────────
-# EN: Step 6: nginx. The default site is removed (it would take port 80) and the Pi Console one is enabled.
+# EN: Step 6: nginx. The default site is removed (it would take port 80) and the LabTower one is enabled.
 if [ -f /etc/nginx/sites-enabled/default ]; then
     rm -f /etc/nginx/sites-enabled/default
 fi
-ln -sf /etc/nginx/sites-available/pi-console.conf \
-       /etc/nginx/sites-enabled/pi-console.conf 2>/dev/null || true
-# ES: Carpetas para el HTTPS opcional (pi-console-https) y la del registro de restauraciones (root: el panel solo la lee).
-# EN: Folders for the optional HTTPS (pi-console-https) and the restore log (root-owned: the panel only reads it).
-mkdir -p /etc/pi-console/https.d /etc/pi-console/http-extra.d
-mkdir -p /var/log/pi-console; chmod 755 /var/log/pi-console
+ln -sf /etc/nginx/sites-available/labtower.conf \
+       /etc/nginx/sites-enabled/labtower.conf 2>/dev/null || true
+# ES: Carpetas para el HTTPS opcional (labtower-https) y la del registro de restauraciones (root: el panel solo la lee).
+# EN: Folders for the optional HTTPS (labtower-https) and the restore log (root-owned: the panel only reads it).
+mkdir -p /etc/labtower/https.d /etc/labtower/http-extra.d
+mkdir -p /var/log/labtower; chmod 755 /var/log/labtower
 
 # ── 7. Usuarios: restaurar desde respaldo o dejar que el servicio cree el administrador inicial ──
 # EN: Step 7: users: restore from a backup, or let the service create the initial administrator.
 # ES: Instalación nueva: NO hay admin/admin. El servicio crea «admin» con una contraseña aleatoria (cambio obligatorio al primer ingreso) y este script la muestra al final.
 # EN: Fresh install: there is NO admin/admin. The service creates "admin" with a random password (change forced at first login) and this script prints it at the end.
-BACKUP_DIR="/var/backups/pi-console"
+BACKUP_DIR="/var/backups/labtower"
 # Escribe stdin en un archivo NUEVO de la carpeta de datos, con el usuario del servicio (nunca sobrescribe ni sigue enlaces).
 # EN: Write stdin to a NEW file in the data folder as the service user (never overwrites, never follows links).
 svc_put() { as_svc sh -c 'umask 077; [ ! -e "$1" ] && [ ! -L "$1" ] && cat > "$1"' sh "$1"; }
@@ -283,8 +374,8 @@ nas-monitor/nas.json:nas.json
     done
 fi
 
-# Sobrantes en /opt/pi-console (enlaces simbólicos o archivos que no se migraron): ya no se usan.
-# EN: Leftovers in /opt/pi-console (symlinks or files that were not migrated): no longer used.
+# Sobrantes en /opt/labtower (enlaces simbólicos o archivos que no se migraron): ya no se usan.
+# EN: Leftovers in /opt/labtower (symlinks or files that were not migrated): no longer used.
 for pair in wol-console/devices.json wol-console/wake_log.json nut-monitor/servers.json nut-monitor/history.db \
             net-monitor/hosts.json net-monitor/config.json proxmox-monitor/clusters.json proxmox-monitor/history.json; do
     if [ -L "$PI_HOME/$pair" ]; then rm -f "$PI_HOME/$pair"; fi
@@ -294,7 +385,7 @@ done
 # EN: Step 8: reload systemd, then enable and (re)start the services and reload nginx if its configuration is valid.
 systemctl daemon-reload
 
-for svc in wol-console pi-console-ups admin-panel net-monitor proxmox-monitor nas-monitor pi-console-overview; do
+for svc in wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor labtower-overview; do
     systemctl enable "$svc" 2>/dev/null || true
     systemctl restart "$svc" 2>/dev/null || true
     echo "  $svc enabled"
@@ -321,11 +412,11 @@ for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
 done
 
 echo ""
-echo "Pi Console installed successfully"
+echo "LabTower installed successfully"
 echo "  URL: http://$(hostname -I | awk '{print $1}')"
 if [ -n "$INIT_PW" ]; then
     echo "  Initial user:     admin"
     echo "  Initial password: $INIT_PW"
     echo "  (random; you must change it at the first login; also in $DATA_DIR/initial-admin-password until then)"
 fi
-echo "  HTTPS (recommended, encrypts password and session): sudo pi-console-https enable --redirect"
+echo "  HTTPS (recommended, encrypts password and session): sudo labtower-https enable --redirect"

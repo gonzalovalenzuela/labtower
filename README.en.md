@@ -1,6 +1,8 @@
-# Pi Console
+<p align="center"><img src="assets/icons/icon.svg" alt="LabTower" width="110"></p>
 
-**Homelab dashboard** for Raspberry Pi: UPS, network, Proxmox, Synology NAS, Wake-on-LAN and administration in one place. No external dependencies: standard-library Python + nginx.
+# LabTower
+
+**Homelab dashboard** (Raspberry Pi, VM or x86 machine): UPS, network, Proxmox, Synology NAS, Wake-on-LAN and administration in one place. No external dependencies: standard-library Python + nginx.
 
 [Español → README.md](README.md)
 
@@ -41,26 +43,27 @@ All screens (light and dark, 4 sizes) are in [`docs/screenshots/`](docs/screensh
 ## Install
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.3/pi-console_1.3_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.0/labtower_2.0_all.deb
 sudo apt-get update
-sudo apt-get install -y ./pi-console_1.3_all.deb
+sudo apt-get install -y ./labtower_2.0_all.deb
 ```
 
 Use `apt-get install ./file.deb`, not `dpkg -i`, so `apt` installs the dependencies. Then open `http://<pi-ip>/`.
 
-The installer creates the `pi-console` system user, the systemd services, the nginx config and the `admin` user with a **random password**, shown when it finishes. If you lost it: `sudo cat /var/lib/pi-console/initial-admin-password`.
+The installer creates the `labtower` system user, the systemd services, the nginx config and the `admin` user with a **random password**, shown when it finishes. If you lost it: `sudo cat /var/lib/labtower/initial-admin-password`.
 
-**From source** (development): copy the modules to `/opt/pi-console`, install the config from `etc/nginx/` and create the services using `debian/postinst` as a guide.
+**From source** (development): copy the modules to `/opt/labtower`, install the config from `etc/nginx/` and create the services using `debian/postinst` as a guide.
 
 ## Update
 
 ```bash
-wget https://github.com/gonzalovalenzuela/pi-console/releases/download/1.3/pi-console_1.3_all.deb
-sudo apt-get install -y ./pi-console_1.3_all.deb
-pi-console-health
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.0/labtower_2.0_all.deb
+sudo apt-get install -y ./labtower_2.0_all.deb
+labtower-health
 ```
 
-- Works from any 1.1.x or 1.2.x. Data in `/var/lib/pi-console` is kept and also copied to `/var/backups/pi-console`.
+- Works from any 1.1.x, 1.2.x, 1.3, 1.4 and also from **Pi Console** (the previous name, see below). Data in `/var/lib/labtower` is kept and also copied to `/var/backups/labtower`.
+- **From Pi Console (1.x):** LabTower is the same project under a new name. The 2.0 `.deb` replaces `pi-console` and migrates by itself the user, data, HTTPS certificates, SFTP backup and earlier backups to the new paths (`/var/lib/labtower`, `/etc/labtower`…). You have to log in again. The `pi-console-*` commands are now `labtower-*`. Afterwards you can run `sudo dpkg -P pi-console` to clean up the old package record.
 - Installing a **lower** version number than the current one needs `--allow-downgrades`.
 - After updating, reload the page (Ctrl+Shift+R). On iPad, close and reopen the page.
 - Changes for each version are in [CHANGELOG.md](CHANGELOG.md).
@@ -119,7 +122,7 @@ pi-console-health
 - **Alerts** (also on the Overview timeline): failed disk, degraded or nearly full volume (90 %), high temperature and an available DSM update. A full *Storage Pool* does not alert, because it is normal for it to be full when its volumes use all the space.
 - SNMP keys are stored with 600 permissions and the API never returns them. While polling they live in a private temporary file, never on the command line. When editing, leaving a key blank keeps the stored one.
 - **Enable SNMP on Synology:** *Control Panel → Terminal & SNMP → SNMP → Enable SNMPv3*, set user and passwords (8+ characters) and use `SHA`/`AES`. Other NAS using the standard MIBs (UCD/IF-MIB) show CPU, memory and network, but not disks or volumes.
-- Needs the `snmpget` and `snmpbulkwalk` commands (package `snmp`, already installed by the Pi Console package).
+- Needs the `snmpget` and `snmpbulkwalk` commands (package `snmp`, already installed by the LabTower package).
 
 ### WOL Console
 - Sends magic packets (at most 10 per minute per IP).
@@ -143,10 +146,10 @@ pi-console-health
 By default it is served over HTTP on port 80, meant for a trusted local network. To encrypt:
 
 ```bash
-sudo pi-console-https enable --redirect                                  # self-signed certificate
-sudo pi-console-https enable --redirect --cert fullchain.pem --key privkey.pem   # your own certificate (for example Let's Encrypt)
-sudo pi-console-https status
-sudo pi-console-https disable
+sudo labtower-https enable --redirect                                  # self-signed certificate
+sudo labtower-https enable --redirect --cert fullchain.pem --key privkey.pem   # your own certificate (for example Let's Encrypt)
+sudo labtower-https status
+sudo labtower-https disable
 ```
 
 `--redirect` sends port 80 to HTTPS, marks the cookie `Secure` and sends HSTS. With the self-signed certificate the browser warns once. On iPad/iPhone you must install it and trust it (Settings → General → About → Certificate Trust Settings). With your own certificate, use the name in the certificate, not the IP.
@@ -157,14 +160,14 @@ sudo pi-console-https disable
 
 ### Teleporter (manual)
 ```bash
-sudo teleporter backup ~/pi-console-$(date +%Y%m%d).tar.gz   # create
-teleporter check ~/pi-console-20261009.tar.gz                # verify, changes nothing
-sudo teleporter restore ~/pi-console-20261009.tar.gz         # restore (-y to skip the question)
+sudo teleporter backup ~/labtower-$(date +%Y%m%d).tar.gz   # create
+teleporter check ~/labtower-20261009.tar.gz                # verify, changes nothing
+sudo teleporter restore ~/labtower-20261009.tar.gz         # restore (-y to skip the question)
 ```
 
 - **Includes:** users, WOL, UPS (servers and history), Net Monitor (hosts and SNMP), Proxmox, NAS Monitor (NAS list and history), Overview histories, and the NUT and nginx config. **Does not include** sessions, HTTPS certificates or the SFTP backup key.
 - **Restoring NUT and nginx** is only done from the console with `--nut` and `--nginx`; the panel does not allow it.
-- **Before restoring**, a copy of the current state is saved in `/var/backups/pi-console/`.
+- **Before restoring**, a copy of the current state is saved in `/var/backups/labtower/`.
 - **Limits:** an archive that expands to more than 2 GiB is rejected; uploads from the panel are capped at 200 MB.
 - **From the panel** (`/admin/` → *Backup & restore*): create and download, upload, verify and restore. Only admins of every module can use it.
 - **Moving to another Pi:** install the `.deb`, sign in as `admin`, upload the backup and press *Restore*.
@@ -174,18 +177,18 @@ sudo teleporter restore ~/pi-console-20261009.tar.gz         # restore (-y to sk
 A daily cron job (03:17) makes a backup, verifies it and uploads it over SFTP. It ships installed and **disabled** until `SFTP_USER` is set. It only uses an SSH key.
 
 ```bash
-sudo pi-console-sftp-backup setup       # creates the SSH key and shows the public one
-sudo nano /etc/pi-console/backup.conf   # set SFTP_USER (and SFTP_HOST, SFTP_DIR)
-sudo pi-console-sftp-backup test        # checks connection, folder and write access
-sudo pi-console-sftp-backup run         # back up now
-sudo pi-console-sftp-backup status      # result of the last run
+sudo labtower-sftp-backup setup       # creates the SSH key and shows the public one
+sudo nano /etc/labtower/backup.conf   # set SFTP_USER (and SFTP_HOST, SFTP_DIR)
+sudo labtower-sftp-backup test        # checks connection, folder and write access
+sudo labtower-sftp-backup run         # back up now
+sudo labtower-sftp-backup status      # result of the last run
 ```
 
-- **Encryption:** the file is uploaded encrypted with gpg (AES-256). The passphrase is created automatically in `/etc/pi-console/backup_passphrase`: **keep a copy off the Pi** (`sudo cat /etc/pi-console/backup_passphrase`); without it no backup can be opened.
-- **Restore:** download the `.tar.gz.gpg`, run `sudo pi-console-sftp-backup decrypt file.tar.gz.gpg`, then `sudo teleporter restore file.tar.gz`.
+- **Encryption:** the file is uploaded encrypted with gpg (AES-256). The passphrase is created automatically in `/etc/labtower/backup_passphrase`: **keep a copy off the Pi** (`sudo cat /etc/labtower/backup_passphrase`); without it no backup can be opened.
+- **Restore:** download the `.tar.gz.gpg`, run `sudo labtower-sftp-backup decrypt file.tar.gz.gpg`, then `sudo teleporter restore file.tar.gz`.
 - **Safe:** uploaded as `.part` and renamed; the remote size is compared; the server's host key is pinned on first connection.
-- **Retention:** 30 copies on the storage (`KEEP_REMOTE`) and 7 on the Pi (`KEEP_LOCAL`). Only files named `pi-console-auto-<host>-<date>_<time>.tar.gz` are deleted.
-- Result in `/var/log/pi-console/backup.status`; errors with `journalctl -t pi-console-sftp-backup`. Change the schedule in `/etc/cron.d/pi-console-sftp-backup`.
+- **Retention:** 30 copies on the storage (`KEEP_REMOTE`) and 7 on the Pi (`KEEP_LOCAL`). Only files named `labtower-auto-<host>-<date>_<time>.tar.gz` are deleted.
+- Result in `/var/log/labtower/backup.status`; errors with `journalctl -t labtower-sftp-backup`. Change the schedule in `/etc/cron.d/labtower-sftp-backup`.
 - Use a dedicated SFTP user with access to that folder only.
 
 ---
@@ -193,9 +196,9 @@ sudo pi-console-sftp-backup status      # result of the last run
 ## Health and operations
 
 ```bash
-pi-console-health         # summary: exit 0 = ok, 1 = degraded, 2 = failed (-j for JSON)
-pi-console-resources      # memory and CPU per service (-w refreshes every 2 s)
-systemctl status wol-console pi-console-ups admin-panel net-monitor proxmox-monitor nas-monitor pi-console-overview
+labtower-health         # summary: exit 0 = ok, 1 = degraded, 2 = failed (-j for JSON)
+labtower-resources      # memory and CPU per service (-w refreshes every 2 s)
+systemctl status wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor labtower-overview
 journalctl -u net-monitor -f        # logs of one service
 sudo systemctl restart net-monitor  # restart one
 ```
@@ -205,24 +208,24 @@ Each module answers `GET /api/health` (200 = ok or degraded, 503 = failed). With
 | Service | Module |
 |---|---|
 | `wol-console` | WOL Console |
-| `pi-console-ups` | UPS Monitor (formerly `nut-monitor`, which clashed with NUT's `upsmon`) |
+| `labtower-ups` | UPS Monitor (formerly `nut-monitor`, which clashed with NUT's `upsmon`) |
 | `admin-panel` | Admin Panel |
 | `net-monitor` | Net Monitor |
 | `proxmox-monitor` | Proxmox Monitor |
 | `nas-monitor` | NAS Monitor |
-| `pi-console-overview` | Overview |
+| `labtower-overview` | Overview |
 
-**Uninstall:** `sudo apt remove pi-console` stops the services and saves a copy of the data in `/var/backups/pi-console`. `sudo apt purge pi-console` also removes the code, services, nginx site and the `pi-console` user. In both cases `/var/lib/pi-console` and `/var/backups/pi-console` are **not deleted**; remove them by hand for a clean machine.
+**Uninstall:** `sudo apt remove labtower` stops the services and saves a copy of the data in `/var/backups/labtower`. `sudo apt purge labtower` also removes the code, services, nginx site and the `labtower` user. In both cases `/var/lib/labtower` and `/var/backups/labtower` are **not deleted**; remove them by hand for a clean machine.
 
 ---
 
 ## Settings
 
-The defaults suit most setups. To change them, write `NAME=value` in `/etc/default/pi-console` and restart the services:
+The defaults suit most setups. To change them, write `NAME=value` in `/etc/default/labtower` and restart the services:
 
 ```bash
-echo 'NUT_POLL=5' | sudo tee -a /etc/default/pi-console
-sudo systemctl restart wol-console pi-console-ups admin-panel net-monitor proxmox-monitor nas-monitor pi-console-overview
+echo 'NUT_POLL=5' | sudo tee -a /etc/default/labtower
+sudo systemctl restart wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor labtower-overview
 ```
 
 | Variable | Module | Default | Purpose |
@@ -239,9 +242,9 @@ sudo systemctl restart wol-console pi-console-ups admin-panel net-monitor proxmo
 | `PVE_KEEP_DAYS` | Proxmox | `7` | Days of CPU and memory history |
 | `NAS_POLL_ACTIVE`, `NAS_POLL_IDLE` | NAS | `15`, `60` | Seconds between polls with the page open / idle |
 | `NAS_KEEP_DAYS` | NAS | `7` | Days of history per NAS |
-| `PICONSOLE_PI_KEEP_DAYS` | Overview | `7` | Days of Pi history |
+| `LABTOWER_PI_KEEP_DAYS` | Overview | `7` | Days of Pi history |
 | `WOL_BROADCAST` | WOL | automatic | Comma-separated broadcast addresses |
-| `PICONSOLE_SECURE_COOKIE` | all | off | `1` marks the cookie `Secure` (only behind HTTPS) |
+| `LABTOWER_SECURE_COOKIE` | all | off | `1` marks the cookie `Secure` (only behind HTTPS) |
 
 ---
 
@@ -256,7 +259,7 @@ Designed for a **trusted local network**. Do not expose port 80 to the internet.
 - **CSRF:** every request that changes data is rejected (403) unless it comes from the app's own page.
 - **Strict CSP:** no inline scripts or handlers (`script-src 'self'`). Browsers: Chrome 75+, Firefox 105+, Safari 15.4+.
 - **Per-module permissions:** an admin can only grant or remove permissions on modules where they hold that level, and cannot delete or change the password of a user with more permissions.
-- **Least privilege:** the code in `/opt/pi-console` is root-owned and read-only for the services; their data lives in `/var/lib/pi-console/`. The systemd units are hardened. Scripts that run as root (installer, Teleporter, SFTP backup) never follow symlinks inside the services' folders.
+- **Least privilege:** the code in `/opt/labtower` is root-owned and read-only for the services; their data lives in `/var/lib/labtower/`. The systemd units are hardened. Scripts that run as root (installer, Teleporter, SFTP backup) never follow symlinks inside the services' folders.
 - **Validated input:** NUT, Proxmox, NAS and Pi-hole hosts and names; the Pi-hole certificate is pinned on first connection; each Proxmox cluster's fingerprint is pinned. An old cluster without a fingerprint shows a permanent warning (use *Pin certificate*).
 - **Backup from the panel:** runs as root through a `sudo` rule limited to `teleporter.sh gui-backup` and `gui-restore`. Restoring the NUT config can bring in commands that `upsd` runs as root: restore trusted backups only.
 
@@ -265,7 +268,7 @@ Designed for a **trusted local network**. Do not expose port 80 to the internet.
 ## Layout
 
 ```
-pi-console/
+labtower/
 ├── auth/              # shared authentication, Admin Panel and panel backups
 ├── wol-console/       # each module: server.py + static/
 ├── nut-monitor/       # (UPS Monitor)
@@ -275,12 +278,12 @@ pi-console/
 ├── overview/          # Overview
 ├── home/              # home page and icons
 ├── etc/               # nginx, backup.conf, cron
-├── scripts/           # teleporter.sh, pi-console-sftp-backup, -https, -health, -resources, apt-repo.py
+├── scripts/           # teleporter.sh, labtower-sftp-backup, -https, -health, -resources, apt-repo.py
 ├── debian/            # .deb packaging
 ├── assets/icons/      # source icons and the script that regenerates the PNGs
 ├── tests/             # automated tests (unittest)
 ├── docs/              # APT.md and screenshots
-├── CHANGELOG.md, RELEASE_NOTES_1.4.md, VERSION, LICENSE
+├── CHANGELOG.md, RELEASE_NOTES_2.0.md, VERSION, LICENSE
 └── README.md, README.en.md
 ```
 
@@ -288,12 +291,12 @@ On the Pi:
 
 | Path | Content |
 |---|---|
-| `/opt/pi-console/` | Code (replaced on every update) |
-| `/var/lib/pi-console/` | Data: `users.json`, `<module>/`, `metrics.db`, `events.json` |
-| `/etc/pi-console/` | `backup.conf`, backup key and passphrase, `tls/` |
-| `/var/backups/pi-console/` | Copies made before updating, uninstalling or restoring |
-| `/var/log/pi-console/` | SFTP backup status and restore log |
-| `/usr/local/bin/` | `teleporter`, `pi-console-sftp-backup`, `pi-console-https`, `pi-console-health`, `pi-console-resources` |
+| `/opt/labtower/` | Code (replaced on every update) |
+| `/var/lib/labtower/` | Data: `users.json`, `<module>/`, `metrics.db`, `events.json` |
+| `/etc/labtower/` | `backup.conf`, backup key and passphrase, `tls/` |
+| `/var/backups/labtower/` | Copies made before updating, uninstalling or restoring |
+| `/var/log/labtower/` | SFTP backup status and restore log |
+| `/usr/local/bin/` | `teleporter`, `labtower-sftp-backup`, `labtower-https`, `labtower-health`, `labtower-resources` |
 
 Each module is an independent Python HTTP server. All of them use `auth/auth.py` for users and sessions.
 

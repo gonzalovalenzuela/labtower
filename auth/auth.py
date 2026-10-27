@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pi Console — Auth Module
+LabTower — Auth Module
 Gestión de usuarios, sesiones y permisos compartido por todos los módulos.
 
 Los módulos son procesos distintos que comparten users.json y sessions.json, así que
@@ -15,7 +15,7 @@ file, fsync and rename) so no data is lost or corrupted by power cuts.
 """
 # ─── Mapa del archivo ────────────────────────────────────────────────────────────────
 # Este módulo lo importan los servicios (WOL, UPS, Net, Proxmox, NAS, Resumen y Admin). Cada servicio es
-# un proceso distinto, pero todos comparten dos archivos en /var/lib/pi-console:
+# un proceso distinto, pero todos comparten dos archivos en /var/lib/labtower:
 #   users.json     usuarios, hash de contraseña y nivel de permiso por módulo
 #   sessions.json  sesiones abiertas (un solo inicio de sesión sirve para todos los módulos)
 #
@@ -31,7 +31,7 @@ file, fsync and rename) so no data is lost or corrupted by power cuts.
 # Los docstrings en inglés describen qué hace cada función; los comentarios explican el porqué.
 # EN: ─── File map ───────────────────────────────────────────────────────────────────────
 #     Imported by the services (WOL, UPS, Net, Proxmox, NAS, Overview and Admin). Each service is a separate
-#     process, but they all share two files in /var/lib/pi-console:
+#     process, but they all share two files in /var/lib/labtower:
 #       users.json     users, password hashes and the permission level for each module
 #       sessions.json  open sessions (a single login works for every module)
 #
@@ -57,14 +57,14 @@ except ImportError:          # pragma: no cover - solo Linux/macOS
 # EN: Message log; each service decides the format and destination (journalctl).
 log = logging.getLogger("auth")
 
-# Rutas de los archivos compartidos. Las variables PICONSOLE_* permiten cambiarlas en las pruebas
-# sin tocar /var/lib/pi-console.
-# EN: Paths of the shared files. The PICONSOLE_* variables let tests move them
-#     without touching /var/lib/pi-console.
-USERS_FILE    = Path(os.environ.get("PICONSOLE_USERS",    "/var/lib/pi-console/users.json"))
-# Carpeta de datos de la instalación y subcarpeta de cada módulo (/var/lib/pi-console/<módulo>). El código en /opt/pi-console es de solo
+# Rutas de los archivos compartidos. Las variables LABTOWER_* permiten cambiarlas en las pruebas
+# sin tocar /var/lib/labtower.
+# EN: Paths of the shared files. The LABTOWER_* variables let tests move them
+#     without touching /var/lib/labtower.
+USERS_FILE    = Path(os.environ.get("LABTOWER_USERS",    "/var/lib/labtower/users.json"))
+# Carpeta de datos de la instalación y subcarpeta de cada módulo (/var/lib/labtower/<módulo>). El código en /opt/labtower es de solo
 # lectura para los servicios: todo lo que escriben vive aquí.
-# EN: Data folder of the installation and the sub-folder of each module (/var/lib/pi-console/<module>). The code in /opt/pi-console is
+# EN: Data folder of the installation and the sub-folder of each module (/var/lib/labtower/<module>). The code in /opt/labtower is
 #     read-only for the services: everything they write lives here.
 DATA_ROOT = USERS_FILE.parent
 def module_dir(name: str) -> Path:
@@ -116,16 +116,16 @@ SESSION_TTL = 24 * 3600   # 24 horas
 REMEMBER = {"day": 24 * 3600, "week": 7 * 24 * 3600, "month": 30 * 24 * 3600, "forever": 400 * 24 * 3600}
 def remember_ttl(value) -> int:
     return REMEMBER.get(value, SESSION_TTL) if isinstance(value, str) else SESSION_TTL
-# Cookie de sesión. Por defecto sin «Secure» (Pi Console se usa por HTTP en la LAN: con «Secure» el navegador no la enviaría). Si se publica detrás de HTTPS, PICONSOLE_SECURE_COOKIE=1 agrega «Secure». No se deduce de encabezados del cliente.
-# EN: Session cookie. Without "Secure" by default (Pi Console is used over HTTP on the LAN: with "Secure" the browser would not send it). If published behind HTTPS, PICONSOLE_SECURE_COOKIE=1 adds "Secure". It is never inferred from client-supplied headers.
-SECURE_COOKIE = os.environ.get("PICONSOLE_SECURE_COOKIE", "").strip().lower() in ("1", "true", "yes", "on")
+# Cookie de sesión. Por defecto sin «Secure» (LabTower se usa por HTTP en la LAN: con «Secure» el navegador no la enviaría). Si se publica detrás de HTTPS, LABTOWER_SECURE_COOKIE=1 agrega «Secure». No se deduce de encabezados del cliente.
+# EN: Session cookie. Without "Secure" by default (LabTower is used over HTTP on the LAN: with "Secure" the browser would not send it). If published behind HTTPS, LABTOWER_SECURE_COOKIE=1 adds "Secure". It is never inferred from client-supplied headers.
+SECURE_COOKIE = os.environ.get("LABTOWER_SECURE_COOKIE", "").strip().lower() in ("1", "true", "yes", "on")
 def session_cookie(token: str, ttl: int = SESSION_TTL) -> str:
     return (f"session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={ttl if ttl == SESSION_TTL or ttl in REMEMBER.values() else SESSION_TTL}"
             + ("; Secure" if SECURE_COOKIE else ""))
 # La ventana deslizante se renueva como máximo cada RENEW_EVERY segundos: renovar en
 # cada request reescribiría sessions.json (y la SD) varias veces por segundo.
 RENEW_EVERY = 600
-SESSIONS_FILE = Path(os.environ.get("PICONSOLE_SESSIONS", "/var/lib/pi-console/sessions.json"))
+SESSIONS_FILE = Path(os.environ.get("LABTOWER_SESSIONS", "/var/lib/labtower/sessions.json"))
 
 
 # ─── Escritura atómica y bloqueo entre procesos ───────────────────────────────
@@ -139,7 +139,7 @@ def atomic_write(path, data, mode=0o600):
     """Write `data` (str or bytes) to `path` atomically: private temp file, fsync, rename.
 
     Each writer uses its own temp name, so concurrent writers (other threads or the other
-    Pi Console services) can never interleave their bytes. Files are created with `mode`
+    LabTower services) can never interleave their bytes. Files are created with `mode`
     (0600 by default: they hold password hashes, API tokens and SNMP/Pi-hole credentials).
     """
     path = Path(path)
@@ -313,7 +313,7 @@ def _verify(stored, password: str) -> bool:
 #     passwords. Returns the error text (in English) or None when acceptable.
 PASSWORD_MIN = 8
 _COMMON_PW = {"password", "password1", "12345678", "123456789", "1234567890", "qwerty123", "admin123", "administrator", "letmein1",
-              "pi-console", "piconsole", "raspberry", "raspberrypi", "11111111", "00000000", "abcd1234", "iloveyou"}
+              "labtower", "pi-console", "piconsole", "raspberry", "raspberrypi", "11111111", "00000000", "abcd1234", "iloveyou"}
 def password_error(pw, username=None):
     if not isinstance(pw, str): return "Invalid password"
     pw = pw.strip()
@@ -706,9 +706,9 @@ def authenticate(username: str, password: str) -> dict | None:
 #     (ACCOUNT_FAILS failures, from any IP, lock it for LOCKOUT s). The same mechanism protects password changes. If the file cannot be used it
 #     falls back to in-memory counters.
 MAX_FAILS, WINDOW, LOCKOUT = 5, 600, 300
-try: ACCOUNT_FAILS = max(5, int(os.environ.get("PICONSOLE_LOGIN_MAX_ACCOUNT", "20")))
+try: ACCOUNT_FAILS = max(5, int(os.environ.get("LABTOWER_LOGIN_MAX_ACCOUNT", "20")))
 except ValueError: ACCOUNT_FAILS = 20
-THROTTLE_FILE = Path(os.environ.get("PICONSOLE_THROTTLE", str(USERS_FILE.with_name("login-throttle.json"))))
+THROTTLE_FILE = Path(os.environ.get("LABTOWER_THROTTLE", str(USERS_FILE.with_name("login-throttle.json"))))
 _throttle_lock = FileLock(THROTTLE_FILE.with_name(THROTTLE_FILE.name + ".lock"))
 _mem_fails: dict = {}
 _mem_lock = threading.Lock()
@@ -779,8 +779,8 @@ def client_ip(handler) -> str:
         if real and len(real) <= 45: return real
     return ip
 
-# ¿La petición viene directamente de esta máquina (sin pasar por nginx)? Es el caso de pi-console-health y de los demás servicios.
-# EN: Does the request come straight from this machine (not through nginx)? That is the case of pi-console-health and of the other services.
+# ¿La petición viene directamente de esta máquina (sin pasar por nginx)? Es el caso de labtower-health y de los demás servicios.
+# EN: Does the request come straight from this machine (not through nginx)? That is the case of labtower-health and of the other services.
 def is_local_request(handler) -> bool:
     return handler.client_address[0] in ("127.0.0.1", "::1") and not (handler.headers.get("X-Real-IP") or "").strip()
 
@@ -931,11 +931,11 @@ def serve_asset(handler, static_dir, path) -> bool:
     return True
 
 # ─── Version ──────────────────────────────────────────────────────────────────
-# Versión instalada: la variable PICONSOLE_VERSION si existe; si no, el archivo VERSION de la raíz de la instalación.
-# EN: Installed version: the PICONSOLE_VERSION variable if set; otherwise the VERSION file at the install root.
+# Versión instalada: la variable LABTOWER_VERSION si existe; si no, el archivo VERSION de la raíz de la instalación.
+# EN: Installed version: the LABTOWER_VERSION variable if set; otherwise the VERSION file at the install root.
 def version() -> str:
-    """Installed Pi Console version: $PICONSOLE_VERSION, else the VERSION file at the install root."""
-    v = os.environ.get("PICONSOLE_VERSION", "").strip()
+    """Installed LabTower version: $LABTOWER_VERSION, else the VERSION file at the install root."""
+    v = os.environ.get("LABTOWER_VERSION", "").strip()
     if v: return v
     try:
         return (Path(__file__).resolve().parent.parent / "VERSION").read_text().strip() or "dev"
@@ -950,7 +950,7 @@ def version() -> str:
 # EN: ─── Events (Overview timeline) ─────────────────────────────────────────────────────────
 #     Modules record important state changes here (UPS on battery, new host, node down…) and the Overview
 #     page shows them as a timeline. Few are kept and the same cross-process lock as other shared files is used.
-EVENTS_FILE  = Path(os.environ.get("PICONSOLE_EVENTS", str(USERS_FILE.with_name("events.json"))))
+EVENTS_FILE  = Path(os.environ.get("LABTOWER_EVENTS", str(USERS_FILE.with_name("events.json"))))
 EVENTS_MAX   = 300                      # entries kept
 EVENTS_DAYS  = 30                       # entries older than this are dropped
 _events_lock = FileLock(EVENTS_FILE.with_name(EVENTS_FILE.name + ".lock"))
@@ -1020,7 +1020,7 @@ def system_stats():
            "mem": None, "disk": None, "uptime": None, "power": None}
     try: out["load"] = [round(x, 2) for x in os.getloadavg()]
     except OSError: pass
-    for f in (os.environ.get("PICONSOLE_PI_MODEL"), "/proc/device-tree/model", "/sys/firmware/devicetree/base/model"):
+    for f in (os.environ.get("LABTOWER_PI_MODEL"), "/proc/device-tree/model", "/sys/firmware/devicetree/base/model"):
         if not f: continue
         try: out["model"] = Path(f).read_bytes().decode("utf-8", "ignore").strip("\x00 \n"); break
         except OSError: continue
@@ -1277,7 +1277,7 @@ def system_detail(full=False):
 #     One shared SQLite database (metrics.db, next to users.json) holding the Pi temperature and under-voltage
 #     history (written by the Overview service) and the CPU and memory history of the Proxmox nodes (written by
 #     Proxmox Monitor). Each sample is committed at once (WAL), so a power cut loses nothing; Teleporter backs it up.
-METRICS_DB = Path(os.environ.get("PICONSOLE_METRICS", str(USERS_FILE.with_name("metrics.db"))))
+METRICS_DB = Path(os.environ.get("LABTOWER_METRICS", str(USERS_FILE.with_name("metrics.db"))))
 _METRICS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS pi_samples  (ts INTEGER PRIMARY KEY, temp REAL, flags INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS pve_samples (cid TEXT NOT NULL, node TEXT NOT NULL, ts INTEGER NOT NULL, cpu REAL, mem REAL,
@@ -1357,7 +1357,7 @@ def check_common():
 # Detecta si el equipo es una Raspberry Pi leyendo el modelo del device-tree (no existe en VM ni en otros PC).
 # EN: Detect whether the machine is a Raspberry Pi by reading the device-tree model (it does not exist on VMs or other PCs).
 def _is_raspberry_pi() -> bool:
-    for f in (os.environ.get("PICONSOLE_PI_MODEL"), "/proc/device-tree/model", "/sys/firmware/devicetree/base/model"):
+    for f in (os.environ.get("LABTOWER_PI_MODEL"), "/proc/device-tree/model", "/sys/firmware/devicetree/base/model"):
         if not f: continue
         try:
             return "raspberry pi" in Path(f).read_bytes().decode("utf-8", "ignore").lower()
@@ -1376,7 +1376,7 @@ _THROTTLE_BITS = ((0, "under-voltage now"), (2, "throttled now"), (3, "temperatu
 # EN: Read the bit mask with vcgencmd or, if the service cannot use it, through the kernel interface.
 def _read_throttled():
     """Raspberry Pi firmware 'throttled' bit mask, or None when it cannot be read."""
-    cmd = os.environ.get("PICONSOLE_VCGENCMD") or shutil.which("vcgencmd") or "/usr/bin/vcgencmd"
+    cmd = os.environ.get("LABTOWER_VCGENCMD") or shutil.which("vcgencmd") or "/usr/bin/vcgencmd"
     try:
         out = subprocess.run([cmd, "get_throttled"], capture_output=True, text=True, timeout=3).stdout
         return int(out.split("=")[1].strip(), 16)
@@ -1401,7 +1401,7 @@ def check_power():
         return None
     bits = _read_throttled()
     now, have_hwmon = False, False
-    for d in glob.glob(os.environ.get("PICONSOLE_HWMON", "/sys/class/hwmon") + "/hwmon*"):
+    for d in glob.glob(os.environ.get("LABTOWER_HWMON", "/sys/class/hwmon") + "/hwmon*"):
         try:
             if Path(d, "name").read_text().strip() == "rpi_volt":
                 now = Path(d, "in0_lcrit_alarm").read_text().strip() == "1"
@@ -1422,10 +1422,10 @@ def check_power():
 # entregan los niveles, sin el texto de detalle. Un fallo grave responde 503.
 # EN: Build the /api/health response: the overall status is the worst of the checks. Without an admin session only
 #     the levels are returned, without the detail text. A serious failure answers 503.
-# Quién consulta /api/health: True = con sesión (detalle completo), False = desde esta máquina sin sesión (solo niveles: lo usa pi-console-health),
+# Quién consulta /api/health: True = con sesión (detalle completo), False = desde esta máquina sin sesión (solo niveles: lo usa labtower-health),
 # None = anónimo por la red (solo el estado global, sin versión ni nombres de chequeos).
 # EN: Who is querying /api/health: True = with a session (full detail), False = from this machine without a session (levels only: used by
-#     pi-console-health), None = anonymous over the network (only the overall status, no version and no check names).
+#     labtower-health), None = anonymous over the network (only the overall status, no version and no check names).
 def health_mode(handler, tok):
     if get_session(tok) is not None: return True
     return False if is_local_request(handler) else None

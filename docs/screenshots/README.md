@@ -1,6 +1,6 @@
 # Capturas de pantalla
 
-Capturas de Pi Console con datos de demostración ficticios (direcciones del rango de documentación 192.0.2.0/24), en tema claro y oscuro y en cuatro resoluciones.
+Capturas de LabTower con datos de demostración ficticios (direcciones del rango de documentación 192.0.2.0/24), en tema claro y oscuro y en cuatro resoluciones.
 
 Carpetas: `<resolución>/<tema>/<pantalla>.png`. En tablet y móvil la captura es de página completa; en escritorio, del área visible.
 

@@ -17,7 +17,7 @@ class ImportSideEffects(unittest.TestCase):
     def test_import_is_quiet(self):
         for rel in MODULES:
             with self.subTest(module=rel), tempfile.TemporaryDirectory() as tmp:
-                env = dict(os.environ, PICONSOLE_USERS=os.path.join(tmp, "users.json"), PICONSOLE_SESSIONS=os.path.join(tmp, "sessions.json"))
+                env = dict(os.environ, LABTOWER_USERS=os.path.join(tmp, "users.json"), LABTOWER_SESSIONS=os.path.join(tmp, "sessions.json"))
                 r = subprocess.run([sys.executable, "-I", "-c", PROBE, str(ROOT / rel), str(ROOT / "auth")], env=env, capture_output=True, text=True, timeout=60)
                 self.assertEqual(r.returncode, 0, r.stderr[-400:])
                 self.assertEqual(sorted(os.listdir(tmp)), [], f"{rel} creó archivos al importarse")

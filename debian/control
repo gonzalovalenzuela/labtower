@@ -1,14 +1,17 @@
-Package: pi-console
-Version: 1.4
+Package: labtower
+Version: 2.0
 Section: admin
 Priority: optional
 Architecture: all
 Depends: python3 (>= 3.9), nginx, nut, nut-client, snmp, sudo
 Recommends: openssh-client, gnupg, openssl, cron | cron-daemon
 Suggests: ieee-data
+Conflicts: pi-console
+Replaces: pi-console
 Maintainer: Gonzalo Valenzuela <gonzalo@rave.cl>
-Description: Pi Console — Homelab dashboard
+Description: LabTower — Homelab dashboard
  Self-hosted homelab dashboard for Raspberry Pi with modules:
- WOL Console, NUT Monitor, Net Monitor, Proxmox Monitor, Admin Panel.
+ WOL Console, UPS Monitor, Net Monitor, Proxmox Monitor, NAS Monitor,
+ Overview and Admin Panel.
  Served via nginx reverse proxy with shared SSO authentication.
  Author: Gonzalo Valenzuela <gonzalo@rave.cl>

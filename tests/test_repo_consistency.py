@@ -108,3 +108,35 @@ class ShellSyntax(unittest.TestCase):
             with self.subTest(file=str(f.relative_to(ROOT))):
                 self.assertEqual(subprocess.run(["bash", "-n", str(f)], capture_output=True, text=True).returncode, 0)
 if __name__ == "__main__": unittest.main()
+
+
+class Rename(unittest.TestCase):
+    """El proyecto se llamaba Pi Console hasta la 1.4. El nombre viejo solo puede quedar donde sirve para migrar o para leer cosas antiguas."""
+    ALLOWED = {"CHANGELOG.md", "README.md", "README.en.md", "RELEASE_NOTES_2.0.md", "debian/postinst", "debian/postrm", "debian/control", "auth/auth.py",
+               "auth/teleporter_api.py", "scripts/teleporter.sh", "tests/test_repo_consistency.py"}
+    def test_old_name_only_where_it_is_needed(self):
+        out = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
+        bad = []
+        for rel in out:
+            p = ROOT / rel
+            if rel in self.ALLOWED or not p.is_file() or p.suffix in (".png", ".jpg", ".ico"):
+                continue
+            if re.search(r"pi-console|Pi Console|PICONSOLE|piconsole", p.read_text(errors="ignore"), re.I):
+                bad.append(rel)
+        self.assertEqual(bad, [], "nombre antiguo fuera de los archivos de migración")
+
+    def test_old_backup_names_are_still_accepted(self):
+        api = (ROOT / "auth/teleporter_api.py").read_text()
+        sh = (ROOT / "scripts/teleporter.sh").read_text()
+        for name, text in (("teleporter_api.py", api), ("teleporter.sh", sh)):
+            self.assertIn("(labtower|pi-console)-", text, name)
+        pat = re.compile(re.search(r'NAME_RE\s*=\s*re\.compile\(r"([^"]+)"\)', api).group(1))
+        for ok in ("labtower-host-20261027_101500.tar.gz", "pi-console-host-20260901_020000.tar.gz", "upload-20261027_101500.tar.gz"):
+            self.assertRegex(ok, pat)
+        self.assertNotRegex("../pi-console-x.tar.gz", pat)
+
+    def test_package_replaces_old_package(self):
+        ctrl = (ROOT / "debian/control").read_text()
+        self.assertRegex(ctrl, r"(?m)^Package: labtower$")
+        self.assertRegex(ctrl, r"(?m)^Conflicts: pi-console$")
+        self.assertRegex(ctrl, r"(?m)^Replaces: pi-console$")

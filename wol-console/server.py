@@ -35,8 +35,8 @@ import auth
 # EN: Configuration and data paths. HOST is loopback only: network access goes through nginx.
 PORT       = 8080
 HOST       = "127.0.0.1"
-# Los datos viven en /var/lib/pi-console/wol-console (el código de /opt es de solo lectura para el servicio).
-# EN: The data lives in /var/lib/pi-console/wol-console (the code in /opt is read-only for the service).
+# Los datos viven en /var/lib/labtower/wol-console (el código de /opt es de solo lectura para el servicio).
+# EN: The data lives in /var/lib/labtower/wol-console (the code in /opt is read-only for the service).
 DATA_DIR   = auth.module_dir("wol-console")      # solo la ruta; la carpeta se crea al arrancar (auth.prepare_module en main)
 LEGACY_FILES = ("devices.json", "wake_log.json")
 DATA_FILE  = DATA_DIR / "devices.json"

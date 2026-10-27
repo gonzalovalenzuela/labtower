@@ -1,7 +1,7 @@
 #!/bin/bash
-# pi-console-resources — memory and CPU used by Pi Console (no login needed).
-#   pi-console-resources        one-off summary
-#   pi-console-resources -w     refresh every 2 s (Ctrl-C to quit)
+# labtower-resources — memory and CPU used by LabTower (no login needed).
+#   labtower-resources        one-off summary
+#   labtower-resources -w     refresh every 2 s (Ctrl-C to quit)
 # RSS is the resident memory of each Python service; "free" is what the system still has available.
 # Imprime la tabla de recursos. El Python va en un heredoc y lee /proc directamente: no hace falta ps ni psutil.
 # EN: Print the resources table. The Python is in a heredoc and reads /proc directly: neither ps nor psutil is needed.
@@ -28,7 +28,7 @@ for pid in filter(str.isdigit, os.listdir("/proc")):
 print(f"{'Service':<17}{'RSS MB':>8}{'Threads':>9}{'CPU time':>11}{'Uptime':>10}")
 for n, rss, thr, cpu, up in sorted(rows, key=lambda r: -r[1]):
     print(f"{n:<17}{rss:>8.1f}{thr:>9}{cpu:>10.0f}s{up/3600:>9.1f}h")
-if not rows: print("  (no Pi Console service is running)")
+if not rows: print("  (no LabTower service is running)")
 ng = 0.0
 for pid in filter(str.isdigit, os.listdir("/proc")):
     try:
@@ -40,7 +40,7 @@ print(f"{'nginx':<17}{ng:>8.1f}")
 mem = dict(l.split(":") for l in open("/proc/meminfo"))
 mb = lambda k: int(mem[k].split()[0]) / 1024
 print(f"\nSystem: {mb('MemTotal'):.0f} MB total, {mb('MemAvailable'):.0f} MB free, swap used {mb('SwapTotal')-mb('SwapFree'):.0f} MB, load {' '.join(open('/proc/loadavg').read().split()[:3])}")
-dirs = [d for d in ("/opt/pi-console",) if os.path.isdir(d)]
+dirs = [d for d in ("/opt/labtower",) if os.path.isdir(d)]
 if dirs:
     out = subprocess.run(["du", "-sh"] + dirs, capture_output=True, text=True).stdout.split("\n")
     print("Disk:  " + ", ".join(l.replace("\t", " ") for l in out if l))

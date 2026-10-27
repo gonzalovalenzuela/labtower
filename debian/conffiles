@@ -1,3 +1,3 @@
-/etc/nginx/sites-available/pi-console.conf
-/etc/pi-console/backup.conf
-/etc/cron.d/pi-console-sftp-backup
+/etc/nginx/sites-available/labtower.conf
+/etc/labtower/backup.conf
+/etc/cron.d/labtower-sftp-backup

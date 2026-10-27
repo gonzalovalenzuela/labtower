@@ -52,8 +52,8 @@ POLL_SEC    = int(os.environ.get("NUT_POLL", 10))
 STATIC_DIR  = Path(__file__).parent / "static"
 # servers.json: lista de servidores NUT configurados. history.db: historial en SQLite.
 # EN: servers.json: list of configured NUT servers. history.db: history in SQLite.
-# Los datos viven en /var/lib/pi-console/nut-monitor (el código de /opt es de solo lectura para el servicio).
-# EN: The data lives in /var/lib/pi-console/nut-monitor (the code in /opt is read-only for the service).
+# Los datos viven en /var/lib/labtower/nut-monitor (el código de /opt es de solo lectura para el servicio).
+# EN: The data lives in /var/lib/labtower/nut-monitor (the code in /opt is read-only for the service).
 DATA_DIR    = auth.module_dir("nut-monitor")      # solo la ruta; la carpeta se crea al arrancar (auth.prepare_module en main)
 LEGACY_FILES = ("servers.json", "history.db")
 DATA_FILE   = DATA_DIR / "servers.json"

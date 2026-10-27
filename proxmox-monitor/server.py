@@ -50,8 +50,8 @@ PORT       = 8084
 STATIC_DIR = Path(__file__).parent / "static"
 # clusters.json: clusters configurados, con su token de API (por eso el archivo es privado, modo 0600).
 # EN: clusters.json: configured clusters, with their API token (so the file is private, mode 0600).
-# Los datos viven en /var/lib/pi-console/proxmox-monitor (el código de /opt es de solo lectura para el servicio).
-# EN: The data lives in /var/lib/pi-console/proxmox-monitor (the code in /opt is read-only for the service).
+# Los datos viven en /var/lib/labtower/proxmox-monitor (el código de /opt es de solo lectura para el servicio).
+# EN: The data lives in /var/lib/labtower/proxmox-monitor (the code in /opt is read-only for the service).
 DATA_DIR   = auth.module_dir("proxmox-monitor")      # solo la ruta; la carpeta se crea al arrancar (auth.prepare_module en main)
 LEGACY_FILES = ("clusters.json", "history.json")
 DATA_FILE  = DATA_DIR / "clusters.json"

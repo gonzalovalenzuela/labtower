@@ -52,8 +52,8 @@ import auth
 HOST          = "127.0.0.1"
 PORT          = 8083
 STATIC_DIR    = Path(__file__).parent / "static"
-# Los datos viven en /var/lib/pi-console/net-monitor (el código de /opt es de solo lectura para el servicio).
-# EN: The data lives in /var/lib/pi-console/net-monitor (the code in /opt is read-only for the service).
+# Los datos viven en /var/lib/labtower/net-monitor (el código de /opt es de solo lectura para el servicio).
+# EN: The data lives in /var/lib/labtower/net-monitor (the code in /opt is read-only for the service).
 DATA_DIR      = auth.module_dir("net-monitor")      # solo la ruta; la carpeta se crea al arrancar (auth.prepare_module en main)
 LEGACY_FILES = ("hosts.json", "config.json")
 DATA_FILE     = DATA_DIR / "hosts.json"
@@ -485,7 +485,7 @@ DEVICE_TYPES = ["computer", "phone", "router", "switch", "ap", "storage", "tv", 
 _OUI_PATHS = ["/usr/share/ieee-data/oui.txt", "/var/lib/ieee-data/oui.txt",
               "/usr/share/misc/oui.txt"]
 OUI_URL   = os.environ.get("OUI_URL", "https://www.wireshark.org/download/automated/data/manuf.gz")
-OUI_FILE  = Path(os.environ.get("PICONSOLE_OUI", "/var/lib/pi-console/manuf"))
+OUI_FILE  = Path(os.environ.get("LABTOWER_OUI", "/var/lib/labtower/manuf"))
 OUI_MAX_AGE = 7 * 24 * 3600
 _oui_db: dict | None = None            # { 24-bit prefix hex: vendor }
 _oui_ext: dict = {28: {}, 36: {}}      # longer prefixes (MA-M / MA-S blocks)
@@ -570,7 +570,7 @@ def oui_vendor(mac: str) -> str:
 def oui_update() -> dict:
     """Download the Wireshark manuf file, validate it, replace the cache atomically, backfill hosts."""
     global _oui_db
-    req = Request(OUI_URL, headers={"User-Agent": "pi-console-net-monitor"})
+    req = Request(OUI_URL, headers={"User-Agent": "labtower-net-monitor"})
     with urlopen(req, timeout=60) as r:  # constant https URL  # nosec B310
         data = r.read(10 * 1024 * 1024 + 1)
     if len(data) > 10 * 1024 * 1024:

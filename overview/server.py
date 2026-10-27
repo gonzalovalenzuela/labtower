@@ -44,18 +44,18 @@ EVENT_MODULES = ("nut", "net", "pve", "nas")
 # ─── Historial de la Pi (temperatura y bajo voltaje) ─────────────────────────────────────
 # Solo en una Raspberry Pi: cada PI_EVERY segundos se guarda en metrics.db (tabla pi_samples) la temperatura y los
 # bits de «get_throttled». Banderas: 1 = subtensión ahora, 2 = limitada ahora, 4 = límite de temperatura ahora,
-# 8 = hubo subtensión desde la muestra anterior (aunque ya no esté). Se conservan PICONSOLE_PI_KEEP_DAYS días (7 por
+# 8 = hubo subtensión desde la muestra anterior (aunque ya no esté). Se conservan LABTOWER_PI_KEEP_DAYS días (7 por
 # defecto). En otros equipos no se crea hilo ni se escribe nada. Si queda un pi-history.json de la versión 1.2.0m/o,
 # se importa una vez y se renombra a .migrated.
 # EN: ─── Pi history (temperature and under-voltage) ─────────────────────────────────────
 #     Raspberry Pi only: every PI_EVERY seconds the temperature and the "get_throttled" bits are stored in
 #     metrics.db (table pi_samples). Flags: 1 = under-voltage now, 2 = throttled now, 4 = temperature limit now,
-#     8 = there was under-voltage since the previous sample (even if gone now). PICONSOLE_PI_KEEP_DAYS days are kept
+#     8 = there was under-voltage since the previous sample (even if gone now). LABTOWER_PI_KEEP_DAYS days are kept
 #     (7 by default). On other machines no thread is created and nothing is written. A leftover pi-history.json from
 #     version 1.2.0m/o is imported once and renamed to .migrated.
-PI_EVERY    = int(os.environ.get("PICONSOLE_PI_EVERY", "60"))
-PI_KEEP     = auth.keep_days("PICONSOLE_PI_KEEP_DAYS", 7) * 86400
-PI_LEGACY   = Path(os.environ.get("PICONSOLE_PI_HISTORY", str(auth.EVENTS_FILE.with_name("pi-history.json"))))
+PI_EVERY    = int(os.environ.get("LABTOWER_PI_EVERY", "60"))
+PI_KEEP     = auth.keep_days("LABTOWER_PI_KEEP_DAYS", 7) * 86400
+PI_LEGACY   = Path(os.environ.get("LABTOWER_PI_HISTORY", str(auth.EVENTS_FILE.with_name("pi-history.json"))))
 
 def pi_enabled():
     return auth._is_raspberry_pi()

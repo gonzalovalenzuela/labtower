@@ -1,10 +1,10 @@
 """Teleporter helpers for the admin panel: list, create, upload, verify and restore
 backups. Privileged work is done by /usr/local/bin/teleporter.sh through sudo; this
 module only validates names/sizes and talks to that script."""
-# Flujo: el panel (usuario sin privilegios «pi-console») NO toca los respaldos directamente. Todo lo que
+# Flujo: el panel (usuario sin privilegios «labtower») NO toca los respaldos directamente. Todo lo que
 # requiere root (crear, restaurar) lo hace /usr/local/bin/teleporter.sh vía sudo con una regla muy
 # acotada en sudoers; aquí solo se validan nombres y tamaños y se habla con ese script.
-# EN: Flow: the panel (unprivileged user "pi-console") does NOT touch backups directly. Everything that
+# EN: Flow: the panel (unprivileged user "labtower") does NOT touch backups directly. Everything that
 #     needs root (create, restore) is done by /usr/local/bin/teleporter.sh through sudo with a very narrow
 #     sudoers rule; here only names and sizes are validated and the script is called.
 import os, re, subprocess, time
@@ -14,16 +14,16 @@ from pathlib import Path
 # EN: Paths and limits; the TELEPORTER_* variables let tests change them.
 BIN        = os.environ.get("TELEPORTER_BIN", "/usr/local/bin/teleporter.sh")
 SUDO       = os.environ.get("TELEPORTER_SUDO", "sudo -n").split()
-SPOOL      = Path(os.environ.get("TELEPORTER_SPOOL", "/var/lib/pi-console/teleporter"))
+SPOOL      = Path(os.environ.get("TELEPORTER_SPOOL", "/var/lib/labtower/teleporter"))
 # El registro de restauración lo escribe root (el panel solo lo lee): así el panel no puede redirigir un archivo que root abre.
 # EN: The restore log is written by root (the panel only reads it): the panel cannot redirect a file that root opens.
-RESTORE_LOG = Path(os.environ.get("TELEPORTER_LOG", "/var/log/pi-console/restore.log"))
+RESTORE_LOG = Path(os.environ.get("TELEPORTER_LOG", "/var/log/labtower/restore.log"))
 MAX_UPLOAD = int(os.environ.get("TELEPORTER_MAX_UPLOAD", 200 * 1024 * 1024))
-# Nombres de respaldo permitidos: «pi-console-<texto seguro>.tar.gz» (creados por el sistema) o
+# Nombres de respaldo permitidos: «labtower-<texto seguro>.tar.gz» (creados por el sistema) o
 # «upload-AAAAMMDD_HHMMSS.tar.gz» (subidos). Cualquier otro nombre se rechaza: evita rutas con «../».
-# EN: Allowed backup names: "pi-console-<safe text>.tar.gz" (created by the system) or
+# EN: Allowed backup names: "labtower-<safe text>.tar.gz" (created by the system) or
 #     "upload-YYYYMMDD_HHMMSS.tar.gz" (uploaded). Any other name is rejected: this prevents "../" paths.
-NAME_RE    = re.compile(r"^(pi-console-[A-Za-z0-9._-]{1,80}|upload-\d{8}_\d{6})\.tar\.gz$")
+NAME_RE    = re.compile(r"^((labtower|pi-console)-[A-Za-z0-9._-]{1,80}|upload-\d{8}_\d{6})\.tar\.gz$")
 # El script de restauración termina su registro con «RESULT: ok|errors|failed»; así se sabe cómo terminó.
 # EN: The restore script ends its log with "RESULT: ok|errors|failed"; that is how we know how it ended.
 RESULT_RE  = re.compile(r"^RESULT: (\w+)\s*$", re.M)

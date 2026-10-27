@@ -43,7 +43,7 @@ class CsrfFallback(unittest.TestCase):
         self.assertFalse(co(Origin="http://pi.lan:8080", Host="pi.lan"))
 
     def test_nginx_sends_forwarded_headers_in_every_location(self):
-        conf = (ROOT / "etc/nginx/snippets/pi-console-site.conf").read_text()
+        conf = (ROOT / "etc/nginx/snippets/labtower-site.conf").read_text()
         hosts = conf.count("proxy_set_header   Host")
         self.assertGreater(hosts, 0)
         self.assertEqual(conf.count("X-Forwarded-Proto $scheme"), hosts)

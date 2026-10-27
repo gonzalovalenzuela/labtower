@@ -1,4 +1,4 @@
-/* Pi Console — enlaza los atributos data-on-<evento> a funciones, sin JavaScript en línea (CSP sin 'unsafe-inline').
+/* LabTower — enlaza los atributos data-on-<evento> a funciones, sin JavaScript en línea (CSP sin 'unsafe-inline').
    Formato: data-on-click="funcion" data-on-click-args='[…JSON…]' data-on-click-stop="1".
    Argumentos especiales: {"@":"this"} (elemento), {"@":"event"} (evento), {"@":"value"} (this.value).
    EN: Binds data-on-<event> attributes to functions, with no inline JavaScript (CSP without 'unsafe-inline'). */

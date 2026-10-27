@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""apt-repo.py — build and sign a minimal APT repository for Pi Console (stdlib only).
+"""apt-repo.py — build and sign a minimal APT repository for LabTower (stdlib only).
 
 Developer tool: it is NOT part of the .deb. Run it on the machine that holds the GPG key (the Mac).
 Herramienta de desarrollo: NO va dentro del .deb. Se ejecuta donde está la clave GPG (el Mac).
 
-  apt-repo.py --repo DIR --key KEYID add pi-console_1.2.0_all.deb [...]
+  apt-repo.py --repo DIR --key KEYID add labtower_1.2.0_all.deb [...]
 
 What it does / Qué hace:
-  1. copies each .deb into DIR/pool/main/p/pi-console/
+  1. copies each .deb into DIR/pool/main/p/labtower/
   2. regenerates DIR/dists/stable/main/binary-<arch>/Packages(.gz) for amd64, arm64 and armhf
      (the package is Architecture: all, so the same list is published for each architecture)
   3. writes DIR/dists/stable/Release and signs it: InRelease (clear-signed) + Release.gpg (detached)
-  4. exports the public key to DIR/pi-console.asc and writes DIR/index.html with install instructions
+  4. exports the public key to DIR/labtower.asc and writes DIR/index.html with install instructions
 
 Package fields come from `dpkg-deb -f` when available; otherwise from debian/control of this repo
 (the Version must match the file name). / Los campos salen de `dpkg-deb -f` o, si no existe
@@ -92,9 +92,9 @@ def build(repo: Path, key: str):
         write(base / "Packages", stanzas)
         write(base / "Packages.gz", gzip.compress(stanzas, mtime=0))
         files += [base / "Packages", base / "Packages.gz"]
-    lines = [f"Origin: Pi Console", f"Label: Pi Console", f"Suite: {SUITE}", f"Codename: {SUITE}",
+    lines = [f"Origin: LabTower", f"Label: LabTower", f"Suite: {SUITE}", f"Codename: {SUITE}",
              f"Date: {formatdate(time.time(), usegmt=True)}", f"Architectures: {' '.join(ARCHS)}",
-             f"Components: {COMP}", "Description: Pi Console APT repository"]
+             f"Components: {COMP}", "Description: LabTower APT repository"]
     for name, idx in (("MD5Sum", 0), ("SHA1", 1), ("SHA256", 2)):
         lines.append(f"{name}:")
         for f in files:
@@ -103,15 +103,15 @@ def build(repo: Path, key: str):
     write(dist / "Release", release)
     write(dist / "InRelease", gpg(key, "--clearsign", data=release).stdout)
     write(dist / "Release.gpg", gpg(key, "--armor", "--detach-sign", data=release).stdout)
-    write(repo / "pi-console.asc", subprocess.run(["gpg", "--armor", "--export", key], check=True,
+    write(repo / "labtower.asc", subprocess.run(["gpg", "--armor", "--export", key], check=True,
                                                   capture_output=True).stdout)
-    url = "https://gonzalovalenzuela.github.io/pi-console"
-    (repo / "index.html").write_text(f"""<!doctype html><meta charset="utf-8"><title>Pi Console APT</title>
-<h1>Pi Console — APT repository</h1>
+    url = "https://gonzalovalenzuela.github.io/labtower"
+    (repo / "index.html").write_text(f"""<!doctype html><meta charset="utf-8"><title>LabTower APT</title>
+<h1>LabTower — APT repository</h1>
 <pre>sudo install -d -m 0755 /etc/apt/keyrings
-sudo wget -O /etc/apt/keyrings/pi-console.asc {url}/pi-console.asc
-echo "deb [signed-by=/etc/apt/keyrings/pi-console.asc] {url} {SUITE} {COMP}" | sudo tee /etc/apt/sources.list.d/pi-console.list
-sudo apt update &amp;&amp; sudo apt install pi-console</pre>
+sudo wget -O /etc/apt/keyrings/labtower.asc {url}/labtower.asc
+echo "deb [signed-by=/etc/apt/keyrings/labtower.asc] {url} {SUITE} {COMP}" | sudo tee /etc/apt/sources.list.d/labtower.list
+sudo apt update &amp;&amp; sudo apt install labtower</pre>
 """, encoding="utf-8")
     (repo / ".nojekyll").touch()
     print(f"OK: {len(debs)} package file(s), architectures {', '.join(ARCHS)}")
@@ -128,7 +128,7 @@ def main():
     if a.action == "add":
         if not a.debs:
             sys.exit("add needs at least one .deb")
-        dest = repo / "pool" / COMP / "p" / "pi-console"
+        dest = repo / "pool" / COMP / "p" / "labtower"
         dest.mkdir(parents=True, exist_ok=True)
         for d in a.debs:
             shutil.copy2(d, dest / Path(d).name)
