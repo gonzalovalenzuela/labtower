@@ -3,6 +3,7 @@
 ## 2.1n — 2026-10-27
 
 - WAN Monitor en el teléfono: las 5 tarjetas de arriba (estado, latencia, pérdida, descarga e IP pública) quedaban en una sola fila y el texto se cortaba. Ahora van en 2 columnas y la IP pública ocupa el ancho completo.
+- NAS Monitor y DNS Monitor en el teléfono: la tabla resumen se cortaba por la derecha (columna Volúmenes / Protección). Ahora es más compacta y cabe completa; en DNS se oculta la flecha de expandir (tocar la fila sigue expandiendo).
 
 ## 2.1m — 2026-10-27
 
