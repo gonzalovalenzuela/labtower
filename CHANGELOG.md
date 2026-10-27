@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1n — 2026-10-27
+
+- WAN Monitor en el teléfono: las 5 tarjetas de arriba (estado, latencia, pérdida, descarga e IP pública) quedaban en una sola fila y el texto se cortaba. Ahora van en 2 columnas y la IP pública ocupa el ancho completo.
+
 ## 2.1m — 2026-10-27
 
 - Tema: el botón ◐ del Resumen y de la página de inicio ahora rota entre oscuro, claro y «Auto» (sigue el modo del sistema, con una «A» en el botón); antes solo alternaba claro y oscuro. En «Auto» el tema cambia solo cuando cambia el del sistema.

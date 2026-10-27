@@ -348,3 +348,6 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
 @media(max-width:1100px){.stats-row{grid-template-columns:repeat(4,minmax(0,1fr)) minmax(0,1.6fr)}.stats-row .stat-ico{display:none}.stats-row .stat-card{padding-left:16px;padding-right:16px}#st-ip{font-size:13px}}
 @media(max-width:1180px){.wan-gauges{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:760px){.wan-gauges{grid-template-columns:1fr 1fr}}
+/* Teléfono: las 5 tarjetas de arriba en 2 columnas (la regla de 1100 px de arriba las dejaba en 5 y se cortaba el texto); la IP pública ocupa el ancho completo.
+   EN: Phone: the 5 top cards in 2 columns (the 1100 px rule above kept 5 and clipped the text); the public IP spans the full width. */
+@media(max-width:700px){.stats-row{grid-template-columns:repeat(2,minmax(0,1fr))}.stats-row .stat-ico{display:flex}.stats-row .stat-card{padding:12px}.stats-row .stat-card:last-child{grid-column:1/-1}#st-ip{font-size:15px;overflow-wrap:anywhere}.stat-val{font-size:18px}}
