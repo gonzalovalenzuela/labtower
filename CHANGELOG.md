@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1f — 2026-10-27
+
+- Desarrollo: los commits ya no llevan referencias a sesiones de Claude. `scripts/git-hooks/commit-msg` las quita (activar con `git config core.hooksPath scripts/git-hooks`; para permitirlas a propósito, `LABTOWER_ALLOW_CLAUDE_SESSION=1`) y una prueba revisa que ningún archivo las tenga.
+
 ## 2.1e — 2026-10-27
 
 - Resumen, detalle del servidor: «Logged-in users» ahora también muestra a quien entró por SSH o por consola en equipos sin utmp ni logind (DietPi, Debian 13 mínimo). Antes aparecía vacío.

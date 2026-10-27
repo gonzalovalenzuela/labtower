@@ -1,0 +1,14 @@
+#!/bin/sh
+# Quita de cada mensaje de commit las referencias a sesiones de Claude (línea «Claude-Session:» o un enlace de sesión).
+# Para permitirlas a propósito: LABTOWER_ALLOW_CLAUDE_SESSION=1 git commit …
+# Activar en un clon: git config core.hooksPath scripts/git-hooks
+# EN: Strips Claude session references (a "Claude-Session:" trailer or a session link) from every commit message.
+#     To allow them on purpose: LABTOWER_ALLOW_CLAUDE_SESSION=1 git commit …   Enable in a clone: git config core.hooksPath scripts/git-hooks
+[ "${LABTOWER_ALLOW_CLAUDE_SESSION:-0}" = "1" ] && exit 0
+f="$1"
+tmp="$(mktemp)" || exit 0
+grep -v -i -E '^(claude-session:|https?://claude\.ai/code/session)' "$f" > "$tmp" || true
+# quita líneas en blanco sobrantes al final / drop trailing blank lines
+sed -e :a -e '/^[[:space:]]*$/{$d;N;ba' -e '}' "$tmp" > "$f"
+rm -f "$tmp"
+exit 0
