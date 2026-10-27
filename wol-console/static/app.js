@@ -573,10 +573,10 @@ function applyTheme(t){
   document.documentElement.setAttribute('data-theme',pref==='dark'?'dark':'light');
 }
 (()=>{
-  const t=localStorage.getItem('pi-theme')||'system';
+  const t=localStorage.getItem('pi-theme')||'dark';
   applyTheme(t);
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{
-    if((localStorage.getItem('pi-theme')||'system')==='system') applyTheme('system');
+    if((localStorage.getItem('pi-theme')||'dark')==='system') applyTheme('system');
   });
   setTimeout(()=>{
     ['light','dark','system'].forEach(x=>{

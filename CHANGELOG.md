@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1k — 2026-10-27
+
+- Nuevo aspecto, una mezcla de NOC y estilo Apple: tema oscuro por defecto (claro y «sistema» siguen disponibles; botón ◐ en el Resumen y en la página de inicio), tarjetas más redondeadas con un leve brillo, títulos de bloque pequeños en mayúsculas, cifras grandes, tablas densas, menú lateral con marca de acento y barra superior translúcida. Todo sale de una hoja común (`theme.css`/`theme.js`) que cargan todos los módulos, el panel Admin y la página de inicio. Ya no se cargan tipografías de Google: se usa la del sistema (San Francisco en Apple).
+- Resumen: nueva franja de indicadores arriba (autonomía de la UPS, nodos de Proxmox, discos del NAS, % bloqueado con anillo, velocidad de WAN y equipos en línea), con el borde de cada tile en el color del estado.
+
 ## 2.1j — 2026-10-27
 
 - NAS Monitor, actividad de disco: marcaba 0 % en todos los discos porque la columna de carga instantánea del NAS casi siempre vale 0. Ahora usa el mayor entre ella y el promedio de 1 minuto, y muestra además la lectura y escritura reales (R/W por segundo) calculadas con los contadores del disco.

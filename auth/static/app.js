@@ -244,7 +244,7 @@ function setTheme(th){
   document.documentElement.setAttribute('data-theme',dark?'dark':'light');
   ['light','dark','system'].forEach(x=>document.getElementById('theme-'+x)?.classList.toggle('active',x===th));
 }
-(()=>{setTheme(localStorage.getItem('pi-theme')||'system');})();
+(()=>{setTheme(localStorage.getItem('pi-theme')||'dark');})();
 
 // ── Login ──────────────────────────────────────────────
 document.getElementById('l-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });

@@ -1,0 +1,62 @@
+/* LabTower theme — mezcla de un NOC (densidad, tablas, estados) y un estilo Apple (esquinas, cristal, números grandes).
+   EN: LabTower theme — a NOC (density, tables, status) blended with an Apple look (corners, glass, big numbers).
+   Se carga DESPUÉS de app.css de cada módulo y solo cambia variables y detalles de forma. EN: loaded AFTER each module's app.css; it only changes variables and shape details. */
+:root[data-theme="dark"]{
+  --bg:#0b1519;--surface:#12222a;--surface2:#182d37;--border:#223a45;--border-b:#31505e;
+  --blue:#49afd9;--blue-dim:rgba(73,175,217,.15);
+  --green:#3ccf65;--green-dim:rgba(60,207,101,.14);
+  --red:#ff6150;--red-dim:rgba(255,97,80,.15);
+  --orange:#ff9f0a;--orange-dim:rgba(255,159,10,.15);
+  --yellow:#f5c400;--yellow-dim:rgba(245,196,0,.14);
+  --amber:#ffb224;--amber-dim:rgba(255,178,36,.15);
+  --purple:#a78bfa;--purple-dim:rgba(167,139,250,.15);
+  --text:#e8f0f3;--text-mid:#a9bdc7;--text-dim:#7391a0;--track:#22404c;
+  --input-bg:#0b1519;--input-border:#31505e;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 8px 24px rgba(0,0,0,.22);--shadow-md:0 12px 36px rgba(0,0,0,.5);
+  --sidebar-bg:#0f1d24;--glass:rgba(18,34,42,.72);color-scheme:dark}
+:root[data-theme="light"]{
+  --bg:#eef1f4;--surface:#fff;--surface2:#f4f7fa;--border:#dbe2e9;--border-b:#c4ced9;
+  --blue:#1b6db8;--blue-dim:rgba(27,109,184,.1);
+  --green:#1f9d4c;--green-dim:rgba(31,157,76,.11);
+  --red:#d93025;--red-dim:rgba(217,48,37,.1);
+  --orange:#d97706;--orange-dim:rgba(217,119,6,.11);
+  --yellow:#b88a00;--yellow-dim:rgba(184,138,0,.12);
+  --amber:#b45309;--amber-dim:rgba(245,158,11,.14);
+  --purple:#7c3aed;--purple-dim:rgba(124,58,237,.1);
+  --text:#14232a;--text-mid:#4d6573;--text-dim:#7f95a2;--track:#e1e8ee;
+  --input-bg:#e9eef3;--input-border:#c4ced9;
+  --shadow:0 1px 2px rgba(20,35,42,.08),0 4px 14px rgba(20,35,42,.05);--shadow-md:0 10px 30px rgba(20,35,42,.14);
+  --sidebar-bg:#fff;--glass:rgba(255,255,255,.78);color-scheme:light}
+:root{--r:14px;--r-sm:8px;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","Segoe UI",Roboto,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+body{font-family:var(--sans);font-variant-numeric:tabular-nums}
+/* Tarjetas: esquinas redondas, borde fino y un brillo muy leve arriba (cristal). EN: Cards: round corners, thin border and a faint top sheen (glass). */
+:root[data-theme="dark"] .card,:root[data-theme="dark"] .node-card,:root[data-theme="dark"] .stat-card,:root[data-theme="dark"] .vchart-section{background-image:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,0) 46%)}
+.card,.node-card,.stat-card,.vchart-section{border-color:var(--border);box-shadow:var(--shadow)}
+/* Títulos de bloque estilo NOC: pequeños, en mayúsculas y espaciados. EN: NOC-style block titles: small, uppercase, spaced. */
+.ch h2,.card-title,.section-title,.vchart-title{font-size:.74rem!important;font-weight:650;text-transform:uppercase;letter-spacing:.09em;color:var(--text-mid)}
+/* Cifras grandes y seguras, estilo Apple. EN: Big, confident figures, Apple style. */
+.kpi b,.stat-val,.gauge-num,.runtime-num,.circle-val{font-weight:700;letter-spacing:-.03em}
+.kpi,.stat-card .stat-val{font-feature-settings:"tnum"}
+.kpi{border-radius:12px}
+/* Barra superior translúcida y lateral más oscuro, con marca de acento en el elemento activo (estilo vSphere). EN: translucent top bar and darker sidebar with an accent mark on the active item (vSphere style). */
+.topbar{background:var(--glass)!important;-webkit-backdrop-filter:saturate(1.6) blur(18px);backdrop-filter:saturate(1.6) blur(18px);border-bottom-color:var(--border)}
+.sidebar{background:var(--sidebar-bg)!important;border-right-color:var(--border)}
+.nav-item{border-radius:6px}
+.nav-item.active{box-shadow:inset 3px 0 0 currentColor;border-radius:0 8px 8px 0}
+/* Tablas densas con cabecera pequeña. EN: dense tables with a small header. */
+table th{font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text-dim);font-weight:650}
+table td{font-variant-numeric:tabular-nums}
+tbody tr:hover td{background:var(--surface2)}
+/* Barras y píldoras redondeadas. EN: rounded bars and pills. */
+.bar,.res-bar-wrap,.res-bar{border-radius:99px}
+.pill,.badge-online,.badge-offline,.node-badge{border-radius:99px}
+/* Controles y desplazamiento discretos. EN: discreet controls and scrollbars. */
+input,select,textarea{background:var(--input-bg);border-color:var(--input-border);color:var(--text)}
+*{scrollbar-width:thin;scrollbar-color:var(--border-b) transparent}
+::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:var(--border-b);border-radius:9px}
+.theme-toggle{background:var(--surface);border:1px solid var(--border-b);color:var(--text-mid);border-radius:99px;width:34px;height:34px;display:inline-grid;place-items:center;cursor:pointer;font-size:15px;line-height:1;padding:0}
+.theme-toggle:hover{color:var(--text);border-color:var(--text-dim)}
+body.kiosk .theme-toggle{display:none!important}

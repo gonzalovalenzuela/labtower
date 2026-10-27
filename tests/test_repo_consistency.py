@@ -32,11 +32,13 @@ class License(unittest.TestCase):
 
 class SharedAssets(unittest.TestCase):
     """Estos archivos se copian a mano a varias carpetas: si una copia cambia sola, la página se comporta distinto según el módulo."""
-    SHARED = ["timefmt.js", "csp-bind.js", "footer.js", "ipcard.js", "ipcard.css"]
+    SHARED = ["timefmt.js", "csp-bind.js", "footer.js", "ipcard.js", "ipcard.css", "theme.js", "theme.css"]
     def test_copies_are_identical(self):
         for name in self.SHARED:
             with self.subTest(file=name):
                 digests = {m: hashlib.sha256(p.read_bytes()).hexdigest() for m in MODULES if (p := ROOT / m / "static" / name).is_file()}
+                if name.startswith("theme"):      # además de la copia maestra y la página de inicio / plus the master copy and the home page
+                    for extra in (ROOT / "assets/theme" / name, ROOT / "home" / name): digests[str(extra.relative_to(ROOT))] = hashlib.sha256(extra.read_bytes()).hexdigest()
                 self.assertGreaterEqual(len(digests), 2, f"{name} no se encontró en varios módulos")
                 self.assertEqual(len(set(digests.values())), 1, f"{name} difiere entre módulos: {digests}")
 

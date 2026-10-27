@@ -202,3 +202,15 @@ body.pd-open{overflow:hidden}
 .pd-pill{padding:5px 9px;border-radius:var(--r-sm);font-size:.78rem}
 .pd-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--text-dim);margin-right:6px}.pd-dot.on{background:var(--green)}
 @media (max-width:640px){.pd-modal{padding:0}.pd-card{max-height:100vh;height:100vh;border-radius:0}.pd-grid{grid-template-columns:1fr}}
+
+/* Franja de indicadores (mezcla NOC + Apple): tiles con borde de estado y anillo para porcentajes. EN: KPI strip (NOC + Apple blend): tiles with a status top border and a ring for percentages. */
+.kstrip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px}
+.kt{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--green);border-radius:var(--r);padding:10px 14px;box-shadow:var(--shadow);min-width:0}
+.kt.warn{border-top-color:var(--amber)}.kt.crit{border-top-color:var(--red)}
+.kt b{display:block;font-size:1.5rem;font-weight:700;letter-spacing:-.03em;line-height:1.1;white-space:nowrap}
+.kt span{display:block;font-size:.66rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);margin-top:2px}
+.kt em{display:block;font-style:normal;font-size:.72rem;color:var(--text-mid);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kring{flex:none;width:40px;height:40px;border-radius:50%;background:conic-gradient(var(--blue) calc(var(--p)*1%),var(--track) 0);-webkit-mask:radial-gradient(circle,transparent 58%,#000 60%);mask:radial-gradient(circle,transparent 58%,#000 60%)}
+body.kiosk .kstrip{gap:8px;margin-bottom:8px;grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
+body.kiosk .kt{padding:6px 10px;gap:8px}body.kiosk .kt b{font-size:1.2rem}body.kiosk .kring{width:30px;height:30px}
+@media (max-width:640px){.kstrip{grid-template-columns:repeat(2,1fr)}}
