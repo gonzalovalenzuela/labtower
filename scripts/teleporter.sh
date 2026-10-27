@@ -482,7 +482,7 @@ on_exit_restore() {
   if [ "$SERVICES_STOPPED" -eq 1 ]; then SERVICES_STOPPED=0; echo; echo "Restarting services after abort…"; start_services; fi
   [ "$RESTORE_FINISHED" -eq 1 ] || echo "RESULT: failed"
   if [ -n "$RM_SOURCE" ]; then
-    case "$(dirname "$RM_SOURCE")" in /var/tmp/teleporter.*) rm -rf -- "$(dirname "$RM_SOURCE")";; *) rm -f -- "$RM_SOURCE";; esac
+    case "$(dirname "$RM_SOURCE")" in /var/tmp/teleporter.*|"$SAFETY_DIR"/.restore.*) rm -rf -- "$(dirname "$RM_SOURCE")";; *) rm -f -- "$RM_SOURCE";; esac
   fi
   cleanup
   return $rc
@@ -674,7 +674,10 @@ cmd_gui_restore() {  # <name> <nut:0|1> <nginx:0|1>
   src="$SPOOL_DIR/$name"
   # Work on a root-owned private copy so the unprivileged user cannot swap the
   # file between verification and extraction (and a link in the exchange folder is never followed).
-  copy=$(mktemp -d /var/tmp/teleporter.XXXXXX) || die "cannot create a temporary directory"
+  # ES: La copia va en el directorio de respaldos (root, 700) y NO en /var/tmp: el panel corre con PrivateTmp y el trabajo de restauración (systemd-run) no vería ese /var/tmp privado.
+  # EN: The copy goes in the backups directory (root, 700), NOT in /var/tmp: the panel runs with PrivateTmp and the restore job (systemd-run) would not see that private /var/tmp.
+  mkdir -p "$SAFETY_DIR" && chmod 700 "$SAFETY_DIR"
+  copy=$(mktemp -d "$SAFETY_DIR/.restore.XXXXXX") || die "cannot create a temporary directory"
   sfs get "$src" "$copy/restore.tar.gz" || { rm -rf "$copy"; die "backup not found: $name"; }
   chmod 600 "$copy/restore.tar.gz"
   local flags=(-y --rm-source); [ "$nut" = 1 ] && flags+=(--nut); [ "$ngx" = 1 ] && flags+=(--nginx)

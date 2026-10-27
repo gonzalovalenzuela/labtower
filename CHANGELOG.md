@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1a — 2026-10-27
+
+- Corrige la restauración de respaldos desde el panel Admin: fallaba con «file not found» porque la copia temporal quedaba en un /var/tmp privado del servicio. Ahora se guarda en `/var/backups/labtower`.
+
 ## 2.1 — 2026-10-27
 
 Dos módulos nuevos.
