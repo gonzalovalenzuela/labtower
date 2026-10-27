@@ -202,6 +202,7 @@ def _ph5(cfg, params):
     p = dict(params)
     if cfg.get("password"): p["auth"] = cfg["password"]
     code, j = _req(cfg, "GET", "/admin/api.php", p)
+    if code == 404: raise DnsError("No Pi-hole API at this address (tried /api/auth and /admin/api.php). Check the port; if Pi-hole only listens on 443, use https:// and turn off the certificate check")
     if code != 200: raise DnsError(f"Pi-hole answered HTTP {code}")
     return j
 

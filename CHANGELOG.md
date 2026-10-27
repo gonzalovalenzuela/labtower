@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1b — 2026-10-27
+
+- DNS Monitor: si no encuentra la API de Pi-hole, el mensaje dice qué probar (revisar el puerto, o usar https:// si Pi-hole solo escucha en el 443).
+
 ## 2.1a — 2026-10-27
 
 - Corrige la restauración de respaldos desde el panel Admin: fallaba con «file not found» porque la copia temporal quedaba en un /var/tmp privado del servicio. Ahora se guarda en `/var/backups/labtower`.
