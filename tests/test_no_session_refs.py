@@ -29,6 +29,9 @@ class NoSessionRefs(unittest.TestCase):
         out = run_hook(msg)
         self.assertNotIn("Claude-Session", out); self.assertNotIn(NEEDLE, out)
         self.assertIn("Co-Authored-By: X", out); self.assertTrue(out.startswith("Titulo\n\ncuerpo"))
+    def test_hook_strips_claude_coauthor(self):
+        out = run_hook("T\n\ncuerpo\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>\n")
+        self.assertNotIn("Co-Authored-By", out); self.assertEqual(out, "T\n\ncuerpo\n")
     def test_env_var_allows_them(self):
         msg = "T\n\nClaude-Session: https://" + NEEDLE + "_01\n"
         self.assertEqual(run_hook(msg, {"LABTOWER_ALLOW_CLAUDE_SESSION": "1"}), msg)
