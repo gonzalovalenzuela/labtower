@@ -400,11 +400,24 @@ $('bl').onclick=()=>{lang=lang==='es'?'en':'es';try{localStorage.setItem('pi-lan
 function fitGrid(){
   const g=$('grid');if(!g)return;
   g.style.gridTemplateColumns='';
+  if(document.body.classList.contains('kiosk')){masonry(g);return}
+  [...g.children].forEach(c=>{c.style.gridRowEnd=''});
   const n=[...g.children].filter(c=>!c.classList.contains('hide')).length;
   const t=getComputedStyle(g).gridTemplateColumns.split(' ').length;
   if(n>t&&t>0){const rows=Math.ceil(n/t);g.style.gridTemplateColumns='repeat('+Math.ceil(n/rows)+',minmax(0,1fr))'}
 }
 window.addEventListener('resize',fitGrid);
+// ES: Modo kiosko: las tarjetas se apilan por columnas (tipo mosaico) en vez de en filas de igual altura, así una tarjeta corta no deja un hueco bajo ella. Cada tarjeta ocupa tantas filas de 4 px como mide; el orden elegido se respeta (la siguiente va a la columna más baja). Funciona con CSS grid (iOS 10.3+), sin ResizeObserver.
+// EN: Kiosk mode: cards stack by column (masonry) instead of equal-height rows, so a short card leaves no gap under it. Each card spans as many 4 px rows as it is tall; the chosen order is kept (the next one goes to the shortest column). Uses CSS grid (iOS 10.3+), no ResizeObserver needed.
+function masonry(g){
+  const cs=getComputedStyle(g),gap=parseFloat(cs.columnGap||cs.gridColumnGap)||0,cards=[...g.children].filter(c=>!c.classList.contains('hide'));
+  cards.forEach(c=>{c.style.gridRowEnd=''});
+  const hs=cards.map(c=>c.getBoundingClientRect().height);
+  cards.forEach((c,i)=>{c.style.gridRowEnd='span '+Math.max(1,Math.ceil((hs[i]+gap)/4))});
+}
+// ES: Los datos cambian de tamaño al refrescar (gráficos, listas); se recalcula cada 2 s solo en kiosko.
+// EN: Content changes size on refresh (charts, lists); recomputed every 2 s in kiosk only.
+setInterval(()=>{if(document.body.classList.contains('kiosk'))fitGrid()},2000);
 
 
 // ───────── Orden de las tarjetas / card order ─────────

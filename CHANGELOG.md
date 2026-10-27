@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1i — 2026-10-27
+
+- Resumen, modo kiosko: las tarjetas se acomodan en mosaico por columnas (la siguiente va a la columna más baja, respetando tu orden) en vez de filas de igual altura. Así una tarjeta corta ya no deja un hueco blanco debajo y caben más datos en el iPad. Se recalcula al refrescar y al girar la pantalla.
+
 ## 2.1h — 2026-10-27
 
 - Resumen: la tarjeta de DNS Monitor muestra un gráfico del % bloqueado de las últimas horas, ajustado al rango real para que se vea la variación.

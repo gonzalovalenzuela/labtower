@@ -78,6 +78,9 @@ html.kiosk{font-size:19px;font-size:calc(19px*var(--kz,1))}
 body.kiosk .wrap{max-width:none;padding:18px 24px}
 body.kiosk .nokiosk{display:none!important}
 body.kiosk .grid{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+/* Mosaico: filas de 4 px, cada tarjeta ocupa las que necesita (ver masonry() en app.js). EN: masonry: 4 px rows, each card spans what it needs (see masonry() in app.js). */
+body.kiosk .grid{grid-auto-rows:4px;-webkit-grid-auto-flow:row dense;grid-auto-flow:row dense;row-gap:0;align-items:start}
+body.kiosk .card{align-self:start}
 body.kiosk .tl{max-height:none}
 /* deja sitio al botón fijo "Salir de kiosko" para que no tape la hora de actualización */
 /* EN: leave room for the fixed "Exit kiosk" button so it doesn't cover the update time */
@@ -92,7 +95,7 @@ body.kiosk .top{padding-right:17rem}
 @media (max-width:1399px){
 body.kiosk .wrap{padding:8px 10px}
 body.kiosk .top{margin-bottom:8px}
-body.kiosk .grid{gap:8px;grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+body.kiosk .grid{column-gap:8px;grid-column-gap:8px;grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
 body.kiosk .card.wide{margin-top:8px}
 body.kiosk .card{padding:9px 11px;gap:7px}
 html.nfg.kiosk .card>*+*{margin-top:7px}
