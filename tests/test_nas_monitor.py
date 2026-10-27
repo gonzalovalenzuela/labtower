@@ -209,6 +209,12 @@ class AlertRules(unittest.TestCase):
             self.assertIn(want, a)
         self.assertEqual([x["lv"] for x in m.compute_alerts(self.snap(raids=[{"name": "V", "lv": "info", "status": 8, "pct": 92.0}]))], ["warn"])   # verificando paridad: solo el aviso de espacio
 
+    def test_full_storage_pool_is_not_an_alert(self):
+        pool = {"name": "Storage Pool 1", "lv": "ok", "status": 1, "pct": 99.0, "pool": True}
+        self.assertEqual(m.compute_alerts(self.snap(raids=[pool])), [])
+        self.assertEqual([x["type"] for x in m.compute_alerts(self.snap(raids=[{**pool, "lv": "crit", "status": 11}]))], ["raid"])   # su estado sí avisa
+        self.assertTrue(m._POOL_RE.search("Storage Pool 2") and m._POOL_RE.search("Grupo de almacenamiento 1") and not m._POOL_RE.search("Volume 1"))
+
 class Http(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

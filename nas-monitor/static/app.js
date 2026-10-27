@@ -262,7 +262,7 @@ function renderDashboard(){
   (d.raids||[]).forEach(r=>{
     const st=(LANG[_lang].raid||{})[r.status]||('#'+r.status);
     h+=`<div class="vol-row"><div class="vol-top"><span class="vol-name">${esc(r.name)}</span>${pill(r.lv,st)}</div>
-      ${r.pct!=null?bar(r.pct,VOL_W,VOL_C):''}
+      ${r.pct!=null?(r.pool?bar(r.pct,101,101):bar(r.pct,VOL_W,VOL_C)):''}
       <div class="vol-size">${r.pct!=null?esc(r.pct)+'% '+esc(t('used'))+' · '+esc(fmtBytes(r.total-r.free))+' / '+esc(fmtBytes(r.total))+' · '+esc(fmtBytes(r.free))+' '+esc(t('free')):'—'}</div></div>`;
   });
   h+='</div>';

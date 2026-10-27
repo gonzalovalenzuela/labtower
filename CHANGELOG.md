@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3c — 2026-10-26
+
+**NAS Monitor**
+- Un «Storage Pool» lleno ya no genera aviso de espacio (es normal que esté lleno si sus volúmenes usan todo el pool) y su barra no se pinta de rojo. El estado del pool (degradado, con falla) sí sigue avisando.
+
 ## 1.3b — 2026-10-26
 
 **Nuevo: NAS Monitor** (`/nas/`, puerto 8086)

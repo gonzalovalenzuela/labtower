@@ -224,6 +224,10 @@ def _idx_key(i): return [int(t) if t.isdigit() else 0 for t in str(i).split(".")
 # prev: contadores de red de la lectura anterior, para calcular la velocidad.
 # EN: Read a whole NAS. It fails (SnmpError) only when it does not answer; if parts of the Synology MIB are missing, it returns what exists.
 #     prev: network counters of the previous reading, to compute the rate.
+# Un «Storage Pool» (o «Grupo de almacenamiento») queda lleno por diseño cuando sus volúmenes usan todo el espacio: no genera aviso de espacio.
+# EN: A "Storage Pool" is full by design when its volumes take all the space: it raises no "nearly full" alert.
+_POOL_RE = re.compile(r"storage\s*pool|pool de almacenamiento|grupo de almacenamiento|reserva de almacenamiento", re.I)
+
 def collect(cfg: dict, prev: dict) -> dict:
     now = time.time()
     sc = snmp_get(cfg, SCALARS.values())
@@ -264,8 +268,9 @@ def collect(cfg: dict, prev: dict) -> dict:
     for i in sorted(set(r_name) | set(r_st), key=_idx_key):
         tot, free = r_tot.get(i), r_free.get(i)
         pct = round((tot - free) / tot * 100, 1) if _num(tot) and _num(free) and tot > 0 else None
-        raids.append({"idx": i, "name": r_name.get(i) or f"Volume {i}", "status": r_st.get(i), "lv": RAID_LV.get(r_st.get(i), "info"),
-                      "total": tot, "free": free, "pct": pct})
+        name = r_name.get(i) or f"Volume {i}"
+        raids.append({"idx": i, "name": name, "status": r_st.get(i), "lv": RAID_LV.get(r_st.get(i), "info"),
+                      "total": tot, "free": free, "pct": pct, "pool": bool(_POOL_RE.search(name))})
 
     ups = None
     u = {"model": S("4.1.1.0"), "status": S("4.2.1.0"), "load": S("4.2.12.1.0"), "charge": S("4.3.1.1.0")}
@@ -310,7 +315,7 @@ def compute_alerts(s: dict) -> list:
         if _num(d.get("temp")) and d["temp"] >= T_DISK_WARN: a.append({"lv": "warn", "type": "disk_temp", "item": d["name"], "value": d["temp"]})
     for r in s["raids"]:
         if r["lv"] in ("warn", "crit"): a.append({"lv": r["lv"], "type": "raid", "item": r["name"], "value": r["status"]})
-        if r["pct"] is not None and r["pct"] >= VOL_WARN:
+        if r["pct"] is not None and r["pct"] >= VOL_WARN and not r.get("pool"):
             a.append({"lv": "crit" if r["pct"] >= VOL_CRIT else "warn", "type": "vol_full", "item": r["name"], "value": r["pct"]})
     if s["system"].get("upgrade") == 1: a.append({"lv": "info", "type": "upgrade"})
     return a
