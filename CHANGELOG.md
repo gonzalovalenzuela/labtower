@@ -1,51 +1,28 @@
 # Changelog
 
-## 1.3g — 2026-10-27
+## 1.4 — 2026-10-27
 
-**NAS Monitor**
-- Arreglado en iPad y pantallas angostas: el detalle del NAS se cortaba por la derecha (botones Editar/Eliminar y tarjetas). Ahora siempre ocupa el ancho visible, y en pantallas medianas se ocultan las columnas «Modelo» y «CPU / RAM» de la tabla.
-
-## 1.3f — 2026-10-27
-
-**NAS Monitor**
-- La página principal ahora es igual a la de UPS Monitor: una tabla **Resumen de NAS** con todos los NAS (estado, modelo, CPU, RAM, temperatura, discos, volumen más lleno y un mini-gráfico). Cada fila se abre y muestra el detalle justo debajo; por defecto se abre el primer NAS. También se puede elegir desde el menú lateral.
-- El detalle trae medidores (CPU, RAM, volumen, temperatura, discos, tiempo encendido) y tres gráficos grandes (CPU/RAM, temperatura y red) con rangos **1h / 1d / 1mo / Todo** y un cursor que muestra los valores de cada momento.
-- Nueva ruta `GET /api/nas/<id>/history?range=…` para pedir el historial por rango (se guarda hasta `NAS_KEEP_DAYS`, 7 días por defecto).
-
-## 1.3e — 2026-10-26
-
-**NAS Monitor y Resumen**
-- Nuevo gráfico de la **temperatura del NAS** (12 h) en la página de NAS, y una línea de temperatura en el gráfico de cada NAS del Resumen.
-
-## 1.3d — 2026-10-26
-
-**NAS Monitor y Resumen**
-- El Resumen ya no muestra el «Storage Pool» como volumen más lleno (salía al 100 %); ahora muestra el volumen real más lleno. El promedio de uso de la página de NAS también ignora los pools.
-
-## 1.3c — 2026-10-26
-
-**NAS Monitor**
-- Un «Storage Pool» lleno ya no genera aviso de espacio (es normal que esté lleno si sus volúmenes usan todo el pool) y su barra no se pinta de rojo. El estado del pool (degradado, con falla) sí sigue avisando.
-
-## 1.3b — 2026-10-26
+Reúne los cambios de los builds 1.3a a 1.3g.
 
 **Nuevo: NAS Monitor** (`/nas/`, puerto 8086)
-- Nuevo módulo para ver uno o varios NAS Synology, igual que se agregan clusters de Proxmox o servidores de UPS.
-- Lee por SNMP v3 (usuario, nivel, clave de autenticación y de cifrado, como en Net Monitor) o por v2c. Botón *Probar conexión* antes de guardar.
-- Muestra modelo, versión de DSM, temperatura, ventiladores, CPU, memoria, discos, volúmenes, red y UPS, con gráficos de 12 horas.
-- Avisa disco con falla, volumen degradado o casi lleno, temperatura alta y actualización de DSM. Los avisos aparecen también en el Resumen.
-- Nuevo permiso «NAS» en el Admin Panel, tarjeta en la página de inicio y en el Resumen, y entrada en el menú de todos los módulos.
+- Módulo nuevo para ver uno o varios NAS Synology, igual que se agregan clusters de Proxmox o servidores de UPS.
+- Lee por **SNMP v3** (usuario, nivel, clave de autenticación y de cifrado, como en Net Monitor) o por v2c. Tiene botón *Probar conexión* antes de guardar.
+- Página principal como la de UPS Monitor: tabla **Resumen de NAS** con todos los NAS; cada fila se abre y muestra el detalle. Por defecto se abre el primero.
+- El detalle trae medidores (CPU, RAM, volumen, temperatura, discos, tiempo encendido), volúmenes, discos, red, UPS conectado y tres gráficos (CPU/RAM, temperatura y red) con rangos 1h / 1d / 1mo / Todo y los valores al pasar el cursor.
+- Avisa disco con falla, volumen degradado o casi lleno, temperatura alta y actualización de DSM. Un Storage Pool lleno no avisa. Los avisos también salen en el Resumen.
+- Nuevo permiso «NAS» en el Admin Panel, tarjeta en la página de inicio y en el Resumen (con la temperatura en su gráfico), y entrada en el menú de todos los módulos.
 - Las claves SNMP se guardan con permisos 600, la API nunca las devuelve y no se pasan por la línea de comandos.
 - Los respaldos (Teleporter) incluyen la lista de NAS. Pruebas nuevas en `tests/test_nas_monitor.py`.
-
-## 1.3a — 2026-10-26
-
-Cambios a partir de una auditoría de seguridad externa. Se revisó cada punto contra el código.
 
 **Seguridad**
 - **Proxmox Monitor:** el estado de Ceph y la cantidad de núcleos del nodo se mostraban sin escapar. Un Proxmox comprometido podía meter HTML en la página. Ahora el estado de Ceph solo acepta `HEALTH_OK`, `HEALTH_WARN` o `HEALTH_ERR` (si no, muestra `UNKNOWN`), y los demás valores remotos se escapan o se convierten a número.
 - **Protección CSRF:** en navegadores que no envían `Sec-Fetch-Site` (Safari antiguo) ahora también se comparan el esquema y el puerto del origen, no solo el nombre del host. nginx pasa `X-Forwarded-Proto` y `X-Forwarded-Port` a los servicios.
 - Pruebas nuevas (`tests/test_security_hardening.py`) para ambos casos.
+
+**Interno**
+- Los workflows de GitHub Actions se actualizaron a mano (dependabot). Se quitaron las notas de release antiguas. 69 pruebas automáticas (eran 43).
+
+**Al actualizar:** no hay cambios de configuración. El permiso «NAS» se agrega solo a los usuarios existentes: administrador para quien administra WOL y solo lectura para el resto. Se puede cambiar en el Admin Panel.
 
 ## 1.3 — 2026-10-23
 

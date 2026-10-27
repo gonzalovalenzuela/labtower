@@ -1,6 +1,6 @@
 # Pi Console
 
-**Homelab dashboard** for Raspberry Pi: UPS, network, Proxmox, Wake-on-LAN and administration in one place. No external dependencies: standard-library Python + nginx.
+**Homelab dashboard** for Raspberry Pi: UPS, network, Proxmox, Synology NAS, Wake-on-LAN and administration in one place. No external dependencies: standard-library Python + nginx.
 
 [Español → README.md](README.md)
 
@@ -26,7 +26,7 @@ Each user can reorder the menu. The home page (`/`) has one card per module.
 
 ## Screenshots
 
-<img src="docs/screenshots/1920x1080/light/ups.png" width="290"> <img src="docs/screenshots/1920x1080/light/net.png" width="290"> <img src="docs/screenshots/1920x1080/dark/proxmox.png" width="290">
+<img src="docs/screenshots/1920x1080/light/ups.png" width="290"> <img src="docs/screenshots/1920x1080/light/net.png" width="290"> <img src="docs/screenshots/1920x1080/dark/proxmox.png" width="290"> <img src="docs/screenshots/1920x1080/light/nas.png" width="290">
 
 All screens (light and dark, 4 sizes) are in [`docs/screenshots/`](docs/screenshots/). The data is demo data.
 
@@ -79,6 +79,7 @@ pi-console-health
 - **Global status** (All good / Attention / Failure) and a list of what needs attention, linked to the module.
 - **UPS:** state, battery, load, runtime, power and 24 h charts.
 - **Proxmox:** nodes online, running VMs and CTs, CPU and memory (12 h chart), Ceph health.
+- **NAS:** per NAS, status, CPU and memory (12 h chart with temperature), healthy disks, temperature and the fullest volume.
 - **Network:** hosts online, known and offline, last scan, device types and new hosts from the last 48 h.
 - **Raspberry Pi:** temperature, CPU, memory, disk, uptime and power supply status. On a Raspberry Pi only, it adds a 24 h temperature chart with under-voltage and throttling marks (kept 7 days in `metrics.db`).
 - **Event timeline:** important changes with their time (UPS on battery, node down, Ceph change, new or vanished hosts). The modules record them even when nobody has the page open: last 300 events or 30 days.
@@ -111,10 +112,12 @@ pi-console-health
 - When adding a cluster you must confirm its certificate SHA-256 fingerprint, which is then pinned. If the certificate changes, the token is not sent.
 
 ### NAS Monitor
-- Add as many NAS as you like (like Proxmox clusters or UPS servers). Each one is polled over **SNMP v3** (user, level `authPriv`/`authNoPriv`/`noAuthNoPriv`, auth and privacy keys) or v2c.
-- Per NAS: model and DSM version, system status, temperature, fans, CPU, memory, disks (status and temperature), volumes (status and space), network and attached UPS. 12 h charts.
-- Alerts (and logs to the Overview timeline) for a failed disk, a degraded volume, a nearly full volume, high temperature and a pending DSM update.
-- Keys are stored with 600 permissions and the API never returns them; while polling they live in a private temporary file, never on the command line. In *Test connection* and *Save*, leaving a key blank keeps the stored one.
+- Works like UPS Monitor: a **NAS Summary** table with every NAS (status, model, CPU, RAM, temperature, disks and fullest volume). Each row opens and shows its detail right below; the first one opens by default. You can also pick one from the side menu.
+- Add as many NAS as you like (like Proxmox clusters or UPS servers). Each one is polled over **SNMP v3** (user, level `authPriv`/`authNoPriv`/`noAuthNoPriv`, auth and privacy keys) or v2c. *Test connection* checks the data before saving.
+- **Detail of each NAS:** gauges (CPU, RAM, volume, temperature, disks and uptime), system, volumes with their space, disks with status and temperature, network, attached UPS and disk activity.
+- **Charts** for CPU/RAM, temperature and network with **1h / 1d / 1mo / All** ranges; hovering shows the value at each moment. History is stored in `metrics.db` (`NAS_KEEP_DAYS`, 7 days by default).
+- **Alerts** (also on the Overview timeline): failed disk, degraded or nearly full volume (90 %), high temperature and an available DSM update. A full *Storage Pool* does not alert, because it is normal for it to be full when its volumes use all the space.
+- SNMP keys are stored with 600 permissions and the API never returns them. While polling they live in a private temporary file, never on the command line. When editing, leaving a key blank keeps the stored one.
 - **Enable SNMP on Synology:** *Control Panel → Terminal & SNMP → SNMP → Enable SNMPv3*, set user and passwords (8+ characters) and use `SHA`/`AES`. Other NAS using the standard MIBs (UCD/IF-MIB) show CPU, memory and network, but not disks or volumes.
 - Needs the `snmpget` and `snmpbulkwalk` commands (package `snmp`, already installed by the Pi Console package).
 
@@ -159,7 +162,7 @@ teleporter check ~/pi-console-20261009.tar.gz                # verify, changes n
 sudo teleporter restore ~/pi-console-20261009.tar.gz         # restore (-y to skip the question)
 ```
 
-- **Includes:** users, WOL, UPS (servers and history), Net Monitor (hosts and SNMP), Proxmox, Overview histories, and the NUT and nginx config. **Does not include** sessions, HTTPS certificates or the SFTP backup key.
+- **Includes:** users, WOL, UPS (servers and history), Net Monitor (hosts and SNMP), Proxmox, NAS Monitor (NAS list and history), Overview histories, and the NUT and nginx config. **Does not include** sessions, HTTPS certificates or the SFTP backup key.
 - **Restoring NUT and nginx** is only done from the console with `--nut` and `--nginx`; the panel does not allow it.
 - **Before restoring**, a copy of the current state is saved in `/var/backups/pi-console/`.
 - **Limits:** an archive that expands to more than 2 GiB is rejected; uploads from the panel are capped at 200 MB.
@@ -197,7 +200,7 @@ journalctl -u net-monitor -f        # logs of one service
 sudo systemctl restart net-monitor  # restart one
 ```
 
-Each module answers `GET /api/health` (200 = ok or degraded, 503 = failed). Without a session it only shows levels. It detects a stopped service, a corrupt data file, a nearly full disk, a locked history database, a stuck scan and `upsd` or Proxmox not answering. On a Raspberry Pi it also warns about under-voltage or throttling; that warning comes from the firmware and only clears on reboot.
+Each module answers `GET /api/health` (200 = ok or degraded, 503 = failed). Without a session it only shows levels. It detects a stopped service, a corrupt data file, a nearly full disk, a locked history database, a stuck scan, and `upsd`, Proxmox or a NAS not answering. On a Raspberry Pi it also warns about under-voltage or throttling; that warning comes from the firmware and only clears on reboot.
 
 | Service | Module |
 |---|---|
@@ -254,7 +257,7 @@ Designed for a **trusted local network**. Do not expose port 80 to the internet.
 - **Strict CSP:** no inline scripts or handlers (`script-src 'self'`). Browsers: Chrome 75+, Firefox 105+, Safari 15.4+.
 - **Per-module permissions:** an admin can only grant or remove permissions on modules where they hold that level, and cannot delete or change the password of a user with more permissions.
 - **Least privilege:** the code in `/opt/pi-console` is root-owned and read-only for the services; their data lives in `/var/lib/pi-console/`. The systemd units are hardened. Scripts that run as root (installer, Teleporter, SFTP backup) never follow symlinks inside the services' folders.
-- **Validated input:** NUT, Proxmox and Pi-hole hosts and names; the Pi-hole certificate is pinned on first connection; each Proxmox cluster's fingerprint is pinned. An old cluster without a fingerprint shows a permanent warning (use *Pin certificate*).
+- **Validated input:** NUT, Proxmox, NAS and Pi-hole hosts and names; the Pi-hole certificate is pinned on first connection; each Proxmox cluster's fingerprint is pinned. An old cluster without a fingerprint shows a permanent warning (use *Pin certificate*).
 - **Backup from the panel:** runs as root through a `sudo` rule limited to `teleporter.sh gui-backup` and `gui-restore`. Restoring the NUT config can bring in commands that `upsd` runs as root: restore trusted backups only.
 
 ---
@@ -277,7 +280,7 @@ pi-console/
 ├── assets/icons/      # source icons and the script that regenerates the PNGs
 ├── tests/             # automated tests (unittest)
 ├── docs/              # APT.md and screenshots
-├── CHANGELOG.md, RELEASE_NOTES_1.3.md, VERSION, LICENSE
+├── CHANGELOG.md, RELEASE_NOTES_1.4.md, VERSION, LICENSE
 └── README.md, README.en.md
 ```
 

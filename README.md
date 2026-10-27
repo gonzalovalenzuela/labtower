@@ -1,6 +1,6 @@
 # Pi Console
 
-**Panel para homelab** en Raspberry Pi: UPS, red, Proxmox, Wake-on-LAN y administración en un solo lugar. Sin dependencias externas: Python estándar + nginx.
+**Panel para homelab** en Raspberry Pi: UPS, red, Proxmox, NAS Synology, Wake-on-LAN y administración en un solo lugar. Sin dependencias externas: Python estándar + nginx.
 
 [English → README.en.md](README.en.md)
 
@@ -26,7 +26,7 @@ El menú se puede reordenar por usuario. La página de inicio (`/`) tiene una ta
 
 ## Capturas
 
-<img src="docs/screenshots/1920x1080/light/ups.png" width="290"> <img src="docs/screenshots/1920x1080/light/net.png" width="290"> <img src="docs/screenshots/1920x1080/dark/proxmox.png" width="290">
+<img src="docs/screenshots/1920x1080/light/ups.png" width="290"> <img src="docs/screenshots/1920x1080/light/net.png" width="290"> <img src="docs/screenshots/1920x1080/dark/proxmox.png" width="290"> <img src="docs/screenshots/1920x1080/light/nas.png" width="290">
 
 Todas las pantallas (tema claro y oscuro, 4 tamaños) están en [`docs/screenshots/`](docs/screenshots/). Los datos son de demostración.
 
@@ -79,6 +79,7 @@ pi-console-health
 - **Estado global** (Todo en orden / Atención / Falla) y lista de lo que requiere atención, con enlace al módulo.
 - **UPS:** estado, batería, carga, autonomía, consumo y gráficos de las últimas 24 h.
 - **Proxmox:** nodos en línea, VMs y CTs corriendo, CPU y memoria (gráfico de 12 h), salud de Ceph.
+- **NAS:** por cada NAS, estado, CPU y memoria (gráfico de 12 h con temperatura), discos sanos, temperatura y el volumen más lleno.
 - **Red:** equipos en línea, conocidos y apagados, último escaneo, reparto por tipo y equipos nuevos de las últimas 48 h.
 - **Raspberry Pi:** temperatura, CPU, memoria, disco, tiempo encendida y estado de la fuente de poder. Solo en una Raspberry Pi agrega el gráfico de 24 h de temperatura con marcas de bajo voltaje y limitación (se guarda 7 días en `metrics.db`).
 - **Línea de tiempo:** cambios importantes con hora (UPS a batería, nodo caído, cambio de Ceph, equipos nuevos o que dejaron de responder). Los guardan los módulos, aunque nadie tenga la página abierta: últimos 300 eventos o 30 días.
@@ -111,12 +112,14 @@ pi-console-health
 - Al agregar un cluster hay que confirmar la huella SHA-256 de su certificado, que queda fijada. Si el certificado cambia, no se envía el token.
 
 ### NAS Monitor
-- Agrega todos los NAS que quieras (como los clusters de Proxmox o los servidores de UPS). Cada uno se consulta por **SNMP v3** (usuario, nivel `authPriv`/`authNoPriv`/`noAuthNoPriv`, clave de autenticación y de cifrado) o por v2c.
-- Muestra por NAS: modelo y versión de DSM, estado del sistema, temperatura, ventiladores, CPU, memoria, discos (estado y temperatura), volúmenes (estado y espacio), red y UPS conectado. Gráficos de 12 h.
-- Avisa (y registra en la línea de tiempo del Resumen) un disco con falla, un volumen degradado, un volumen casi lleno, temperatura alta y una actualización de DSM disponible.
-- Las claves se guardan con permisos 600 y la API nunca las devuelve; al leer, van en un archivo temporal privado, nunca en la línea de comandos. Los botones *Probar conexión* y *Guardar* permiten dejar una clave en blanco para conservar la guardada.
-- **Activar SNMP en el Synology:** *Panel de control → Terminal y SNMP → SNMP → Habilitar SNMPv3*, define usuario y contraseñas (mínimo 8 caracteres) y usa `SHA`/`AES`. Con otros NAS que usen la MIB estándar (UCD/IF-MIB) se ve CPU, memoria y red, pero no discos ni volúmenes.
-- Requiere los comandos `snmpget` y `snmpbulkwalk` (paquete `snmp`, que ya instala el paquete de Pi Console).
+- Funciona como UPS Monitor: una tabla **Resumen de NAS** con todos los NAS (estado, modelo, CPU, RAM, temperatura, discos y volumen más lleno). Cada fila se abre y muestra su detalle debajo; por defecto se abre el primero. También se elige desde el menú lateral.
+- Agrega todos los NAS que quieras (como los clusters de Proxmox o los servidores de UPS). Cada uno se consulta por **SNMP v3** (usuario, nivel `authPriv`/`authNoPriv`/`noAuthNoPriv`, clave de autenticación y de cifrado) o por v2c. El botón *Probar conexión* revisa los datos antes de guardar.
+- **Detalle de cada NAS:** medidores (CPU, RAM, volumen, temperatura, discos y tiempo encendido), sistema, volúmenes con su espacio, discos con estado y temperatura, red, UPS conectado y actividad de disco.
+- **Gráficos** de CPU/RAM, temperatura y red con rangos **1h / 1d / 1mo / Todo**; al pasar el cursor muestran el valor de cada momento. El historial se guarda en `metrics.db` (`NAS_KEEP_DAYS`, 7 días por defecto).
+- **Avisos** (también en la línea de tiempo del Resumen): disco con falla, volumen degradado o casi lleno (90 %), temperatura alta y actualización de DSM disponible. Un *Storage Pool* lleno no avisa, porque es normal que lo esté si sus volúmenes usan todo el espacio.
+- Las claves SNMP se guardan con permisos 600 y la API nunca las devuelve. Al leer, van en un archivo temporal privado, nunca en la línea de comandos. Al editar, dejar una clave en blanco conserva la guardada.
+- **Activar SNMP en el Synology:** *Panel de control → Terminal y SNMP → SNMP → Habilitar SNMPv3*, define usuario y contraseñas (mínimo 8 caracteres) y usa `SHA`/`AES`. Otros NAS que usen las MIB estándar (UCD/IF-MIB) muestran CPU, memoria y red, pero no discos ni volúmenes.
+- Necesita los comandos `snmpget` y `snmpbulkwalk` (paquete `snmp`, que ya instala el paquete de Pi Console).
 
 ### WOL Console
 - Envía paquetes mágicos (máximo 10 por minuto por IP).
@@ -159,7 +162,7 @@ teleporter check ~/pi-console-20261009.tar.gz                # verificar, no cam
 sudo teleporter restore ~/pi-console-20261009.tar.gz         # restaurar (-y para no preguntar)
 ```
 
-- **Incluye:** usuarios, WOL, UPS (servidores e historial), Net Monitor (hosts y SNMP), Proxmox, históricos del Resumen, y la configuración de NUT y nginx. **No incluye** sesiones, certificados HTTPS ni la llave del respaldo SFTP.
+- **Incluye:** usuarios, WOL, UPS (servidores e historial), Net Monitor (hosts y SNMP), Proxmox, NAS Monitor (lista de NAS e historial), históricos del Resumen, y la configuración de NUT y nginx. **No incluye** sesiones, certificados HTTPS ni la llave del respaldo SFTP.
 - **Restaurar NUT y nginx** solo se hace desde la consola con `--nut` y `--nginx`; el panel no lo permite.
 - **Antes de restaurar** se guarda una copia del estado actual en `/var/backups/pi-console/`.
 - **Límites:** se rechaza un archivo que descomprima a más de 2 GiB; las subidas desde el panel tienen tope de 200 MB.
@@ -197,7 +200,7 @@ journalctl -u net-monitor -f        # logs de un servicio
 sudo systemctl restart net-monitor  # reiniciar uno
 ```
 
-Cada módulo responde `GET /api/health` (200 = ok o degradado, 503 = falla). Sin sesión solo muestra niveles. Detecta servicio caído, archivo de datos corrupto, disco casi lleno, base de historial bloqueada, escaneo trabado y `upsd` o Proxmox sin respuesta. En una Raspberry Pi avisa además de bajo voltaje o limitación; ese aviso viene del firmware y solo se borra al reiniciar.
+Cada módulo responde `GET /api/health` (200 = ok o degradado, 503 = falla). Sin sesión solo muestra niveles. Detecta servicio caído, archivo de datos corrupto, disco casi lleno, base de historial bloqueada, escaneo trabado, y `upsd`, Proxmox o un NAS sin respuesta. En una Raspberry Pi avisa además de bajo voltaje o limitación; ese aviso viene del firmware y solo se borra al reiniciar.
 
 | Servicio | Módulo |
 |---|---|
@@ -254,7 +257,7 @@ Pensado para una **red local de confianza**. No expongas el puerto 80 a internet
 - **CSP estricta:** sin scripts ni manejadores en línea (`script-src 'self'`). Navegadores: Chrome 75+, Firefox 105+, Safari 15.4+.
 - **Permisos por módulo:** un administrador solo da o quita permisos en los módulos donde él mismo tiene ese nivel, y no puede borrar ni cambiar la clave de un usuario con más permisos.
 - **Privilegios mínimos:** el código de `/opt/pi-console` es de root y de solo lectura para los servicios; sus datos viven en `/var/lib/pi-console/`. Los servicios systemd van endurecidos. Los scripts que corren como root (instalador, Teleporter, respaldo SFTP) no siguen enlaces simbólicos dentro de carpetas de los servicios.
-- **Entradas validadas:** hosts y nombres de NUT, Proxmox y Pi-hole; el certificado de Pi-hole se fija en la primera conexión; la huella de cada cluster Proxmox queda fijada. Un cluster antiguo sin huella muestra un aviso permanente (usa *Fijar certificado*).
+- **Entradas validadas:** hosts y nombres de NUT, Proxmox, NAS y Pi-hole; el certificado de Pi-hole se fija en la primera conexión; la huella de cada cluster Proxmox queda fijada. Un cluster antiguo sin huella muestra un aviso permanente (usa *Fijar certificado*).
 - **Respaldo desde el panel:** corre como root mediante una regla `sudo` limitada a `teleporter.sh gui-backup` y `gui-restore`. Restaurar la configuración de NUT puede introducir comandos que `upsd` ejecuta como root: restaura solo respaldos de confianza.
 
 ---
@@ -277,7 +280,7 @@ pi-console/
 ├── assets/icons/      # iconos fuente y script que regenera los PNG
 ├── tests/             # pruebas automáticas (unittest)
 ├── docs/              # APT.md y capturas
-├── CHANGELOG.md, RELEASE_NOTES_1.3.md, VERSION, LICENSE
+├── CHANGELOG.md, RELEASE_NOTES_1.4.md, VERSION, LICENSE
 └── README.md, README.en.md
 ```
 
