@@ -28,7 +28,7 @@ if [ -d "$DATA_DIR" ] && [ ! -L "$DATA_DIR" ] && [ "$(stat -c %u "$DATA_DIR")" =
 fi
 install -d -m 750 -o pi-console -g pi-console "$DATA_DIR"
 as_svc() { runuser -u pi-console -- "$@"; }
-for d in wol-console nut-monitor net-monitor proxmox-monitor; do
+for d in wol-console nut-monitor net-monitor proxmox-monitor nas-monitor; do
     as_svc mkdir -p "$DATA_DIR/$d"
     as_svc chmod 750 "$DATA_DIR/$d"
 done
@@ -71,7 +71,7 @@ rm -f "$AUTH_LINK/sessions.json"
 # EN: Step 3b: move the module data from /opt/pi-console (versions < 1.2.0u) to /var/lib/pi-console/<module>/.
 # ES: Se hace con el usuario del servicio y ANTES de pasar el código a root. Las bases SQLite se copian con su API de respaldo.
 # EN: Done as the service user and BEFORE the code becomes root-owned. SQLite databases are copied with their backup API.
-systemctl stop wol-console pi-console-ups admin-panel net-monitor proxmox-monitor pi-console-overview 2>/dev/null || true
+systemctl stop wol-console pi-console-ups admin-panel net-monitor proxmox-monitor nas-monitor pi-console-overview 2>/dev/null || true
 MIGRATED=""
 for pair in wol-console/devices.json wol-console/wake_log.json nut-monitor/servers.json nut-monitor/history.db \
             net-monitor/hosts.json net-monitor/config.json proxmox-monitor/clusters.json proxmox-monitor/history.json; do
@@ -153,11 +153,11 @@ migrate_legacy_nut_unit
 # ── 5. Instalar archivos de servicio systemd ──────────────────────────────────
 # EN: Step 5: install the systemd unit files. One template for the 6 services; they restart on failure after 5 s and log to the journal.
 # ES: Endurecimiento de systemd. Todos: sin /home, /tmp propio, kernel y cgroups de solo lectura, sin tiempo real, UMask 077, solo sockets IP/UNIX/netlink.
-#     Los que no ejecutan sudo ni ping (UPS, Proxmox, Overview) además: sin nuevos privilegios, sistema de archivos de solo lectura salvo /var/lib/pi-console.
+#     Los que no ejecutan sudo ni ping (UPS, Proxmox, NAS, Overview) además: sin nuevos privilegios, sistema de archivos de solo lectura salvo /var/lib/pi-console.
 #     wol-console y net-monitor usan «ping» (capacidad de archivo) y admin-panel usa «sudo» (setuid): no llevan NoNewPrivileges ni capacidades vacías.
 #     admin-panel tampoco lleva ProtectSystem: el teleporter (vía sudo) debe escribir en /var/backups, /etc y /var/lib.
 # EN: systemd hardening. All: no /home, private /tmp, read-only kernel and cgroups, no realtime, UMask 077, only IP/UNIX/netlink sockets.
-#     Those that run neither sudo nor ping (UPS, Proxmox, Overview) also get: no new privileges, read-only filesystem except /var/lib/pi-console.
+#     Those that run neither sudo nor ping (UPS, Proxmox, NAS, Overview) also get: no new privileges, read-only filesystem except /var/lib/pi-console.
 #     wol-console and net-monitor use "ping" (file capability) and admin-panel uses "sudo" (setuid): no NoNewPrivileges / empty capabilities.
 #     admin-panel has no ProtectSystem either: the teleporter (through sudo) must write to /var/backups, /etc and /var/lib.
 install_service() {
@@ -220,6 +220,7 @@ install_service "pi-console-ups" "UPS Monitor"      "nut-monitor"     "server.py
 install_service "admin-panel"     "Admin Panel"      "auth"            "admin_panel.py" none
 install_service "net-monitor"     "Net Monitor"      "net-monitor"     "server.py" fs
 install_service "proxmox-monitor" "Proxmox Monitor"  "proxmox-monitor" "server.py" strict
+install_service "nas-monitor"     "NAS Monitor"      "nas-monitor"     "server.py" strict
 install_service "pi-console-overview" "Overview" "overview" "server.py" strict
 
 # ── 6. Nginx ──────────────────────────────────────────────────────────────────
@@ -266,6 +267,7 @@ nut-monitor/history.db:history.db
 net-monitor/hosts.json:hosts.json
 net-monitor/config.json:config.json
 proxmox-monitor/clusters.json:clusters.json
+nas-monitor/nas.json:nas.json
 "
     printf '%s\n' "$MODULE_FILES" | grep -v '^$' | while IFS=: read -r rel_path base; do
         dest="$DATA_DIR/$rel_path"
@@ -292,7 +294,7 @@ done
 # EN: Step 8: reload systemd, then enable and (re)start the services and reload nginx if its configuration is valid.
 systemctl daemon-reload
 
-for svc in wol-console pi-console-ups admin-panel net-monitor proxmox-monitor pi-console-overview; do
+for svc in wol-console pi-console-ups admin-panel net-monitor proxmox-monitor nas-monitor pi-console-overview; do
     systemctl enable "$svc" 2>/dev/null || true
     systemctl restart "$svc" 2>/dev/null || true
     echo "  $svc enabled"

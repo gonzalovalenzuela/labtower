@@ -106,6 +106,7 @@
           <th data-i18n="colUPS">UPS Monitor</th>
           <th data-i18n="colNET">Net Monitor</th>
           <th data-i18n="colPVE">Proxmox</th>
+          <th data-i18n="colNAS">NAS Monitor</th>
           <th data-i18n="colStatus">Status</th>
           <th data-i18n="colCreated">Created</th>
           <th style="text-align:right" data-i18n="colActions">Actions</th>
@@ -225,6 +226,15 @@
           <div class="field">
             <label>Proxmox</label>
             <select id="d-pve">
+              <option value="none" selected>No access</option>
+              <option value="readonly">Read only</option>
+              <option value="execute">Execute</option>
+              <option value="admin">Administrator</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>NAS Monitor</label>
+            <select id="d-nas">
               <option value="none" selected>No access</option>
               <option value="readonly">Read only</option>
               <option value="execute">Execute</option>

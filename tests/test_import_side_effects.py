@@ -3,7 +3,7 @@ import os, subprocess, sys, tempfile, unittest
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = ["auth/auth.py", "auth/admin_panel.py", "auth/teleporter_api.py", "wol-console/server.py", "nut-monitor/server.py",
-           "net-monitor/server.py", "proxmox-monitor/server.py", "overview/server.py"]
+           "net-monitor/server.py", "proxmox-monitor/server.py", "nas-monitor/server.py", "overview/server.py"]
 PROBE = r"""
 import importlib.util, sys, threading
 sys.path.insert(0, sys.argv[2])

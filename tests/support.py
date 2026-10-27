@@ -25,9 +25,9 @@ def make_user(name, perms, password="Test-pass-12345"):
         auth.save_users(users)
     return auth.create_session(name, dict(perms), auth.SESSION_TTL)
 
-ADMIN = {"wol": "admin", "nut": "admin", "net": "admin", "pve": "admin"}
-READONLY = {"wol": "readonly", "nut": "readonly", "net": "readonly", "pve": "readonly"}
-NONE = {"wol": "none", "nut": "none", "net": "none", "pve": "none"}
+ADMIN = {"wol": "admin", "nut": "admin", "net": "admin", "pve": "admin", "nas": "admin"}
+READONLY = {"wol": "readonly", "nut": "readonly", "net": "readonly", "pve": "readonly", "nas": "readonly"}
+NONE = {"wol": "none", "nut": "none", "net": "none", "pve": "none", "nas": "none"}
 
 class Server:
     """Levanta el manejador `H` de un módulo en un puerto libre, dentro de un hilo."""

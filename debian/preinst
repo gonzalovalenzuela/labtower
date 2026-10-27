@@ -24,6 +24,7 @@ if id -u pi-console >/dev/null 2>&1 && command -v runuser >/dev/null 2>&1; then
         /var/lib/pi-console/net-monitor/hosts.json \
         /var/lib/pi-console/net-monitor/config.json \
         /var/lib/pi-console/proxmox-monitor/clusters.json \
+        /var/lib/pi-console/nas-monitor/nas.json \
         /opt/pi-console/auth/users.json \
         /opt/pi-console/wol-console/devices.json \
         /opt/pi-console/nut-monitor/servers.json \

@@ -1,7 +1,7 @@
 // ───────── Textos / texts ─────────
 const TXT={
  en:{title:'Overview',sortBtn:'Reorder',sortDone:'Done',sortReset:'Reset order',mvEarlier:'Move earlier',mvLater:'Move later',mvDrag:'Drag to move',home:'Home',kiosk:'Kiosk',logout:'Sign out',login:'Sign in',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',exitk:'Exit kiosk',rint:'Refresh every',rman:'Manual',rnow:'Refresh now',ascroll:'Auto-scroll',updated:'Updated',allok:'All good',attn:'Attention',fail:'Failure',
-  ups:'UPS Monitor',pve:'Proxmox',net:'Net Monitor',pi:'Raspberry Pi',ev:'Timeline',open:'Open →',noups:'No UPS servers configured',nopve:'No clusters configured',nonet:'No scan yet',noev:'No events yet',
+  ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',net:'Net Monitor',pi:'Raspberry Pi',ev:'Timeline',open:'Open →',noups:'No UPS servers configured',nopve:'No clusters configured',nonas:'No NAS configured',nasdisks:'Disks OK',nasvol:'Volume',issue_nasdown:'NAS unreachable',nonet:'No scan yet',noev:'No events yet',
   uptimeOnl:'Online',avail:'Availability',lastOut:'Last outage',noOut:'no outages recorded',onbattNow:'on battery now',
   mains:'On mains',batt:'On battery',lowb:'Low battery',unreach:'Unreachable',battery:'Battery',load:'Load',runtime:'Runtime',power:'Power',nodes:'Nodes',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memory',disk:'Disk',temp:'Temp',uptime:'Uptime',
   online:'Online',known:'Known',offline:'Offline',newdev:'New devices',lastscan:'Last scan',scanning:'Scanning…',ceph:'Ceph',types:'By device type',nonew:'No new devices',
@@ -9,7 +9,7 @@ const TXT={
   issue_batt:'is running on battery',issue_lowb:'has low battery',issue_srv:'unreachable',issue_node:'node offline',issue_cl:'cluster unreachable',issue_cpu:'high CPU',issue_ram:'high memory',issue_ceph:'Ceph',
   issue_temp:'Pi temperature high',issue_disk:'Pi disk almost full',issue_mem:'Pi memory high',issue_pwr:'Pi power supply problem',issue_scan:'scan error',h_temp:'Temp',h_min:'min',h_max:'max',h_uv:'Under-voltage',h_nouv:'no under-voltage',h_utemp:'UPS temperature 24 h'},
  es:{title:'Resumen',sortBtn:'Ordenar',sortDone:'Listo',sortReset:'Restablecer orden',mvEarlier:'Mover antes',mvLater:'Mover después',mvDrag:'Arrastra para mover',home:'Inicio',kiosk:'Kiosko',logout:'Cerrar sesión',login:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',exitk:'Salir de kiosko',rint:'Actualizar cada',rman:'Manual',rnow:'Actualizar ahora',ascroll:'Auto-desplazar',updated:'Actualizado',allok:'Todo en orden',attn:'Atención',fail:'Falla',
-  ups:'UPS Monitor',pve:'Proxmox',net:'Net Monitor',pi:'Raspberry Pi',ev:'Línea de tiempo',open:'Abrir →',noups:'Sin servidores UPS configurados',nopve:'Sin clusters configurados',nonet:'Aún sin escaneo',noev:'Sin eventos todavía',
+  ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',net:'Net Monitor',pi:'Raspberry Pi',ev:'Línea de tiempo',open:'Abrir →',noups:'Sin servidores UPS configurados',nopve:'Sin clusters configurados',nonas:'Sin NAS configurados',nasdisks:'Discos OK',nasvol:'Volumen',issue_nasdown:'NAS sin conexión',nonet:'Aún sin escaneo',noev:'Sin eventos todavía',
   uptimeOnl:'En línea',avail:'Disponibilidad',lastOut:'Último corte',noOut:'sin cortes registrados',onbattNow:'en batería ahora',
   mains:'En red eléctrica',batt:'Con batería',lowb:'Batería baja',unreach:'Sin conexión',battery:'Batería',load:'Carga',runtime:'Autonomía',power:'Consumo',nodes:'Nodos',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memoria',disk:'Disco',temp:'Temp',uptime:'Encendida',
   online:'En línea',known:'Conocidos',offline:'Apagados',newdev:'Equipos nuevos',lastscan:'Último escaneo',scanning:'Escaneando…',ceph:'Ceph',types:'Por tipo de equipo',nonew:'Sin equipos nuevos',
@@ -86,7 +86,7 @@ function donut(parts){ // parts: [{label,n,color}]
 const PAL=['#4361ee','#16a34a','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#0ea5e9','#d946ef','#14b8a6','#94a3b8'];
 
 // ───────── Estado / state ─────────
-let me=null,issues=[],hist={},histTs=0,timer=null,piH=null,piHTs=0,pveH={},pveHTs=0;
+let me=null,issues=[],hist={},histTs=0,timer=null,piH=null,piHTs=0,pveH={},pveHTs=0,nasH={},nasHTs=0;
 const lvl=(m)=>({readonly:1,execute:2,admin:3})[(me.permissions||{})[m]]||0;
 
 // ───────── UPS ─────────
@@ -142,6 +142,46 @@ function renderPVE(d){
   el.innerHTML=`<div class="ch"><h2>${T('pve')}</h2>${cl.length?pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail')):''}<a class="go" href="/pve/">${T('open')}</a></div>`+(cl.length?body:`<div class="empty">${T('nopve')}</div>`);
   return sev;
 }
+// ───────── NAS ─────────
+// Resumen de cada NAS Synology: estado, CPU, memoria, volumen más lleno y discos. Las alertas las calcula nas-monitor; aquí solo se traducen.
+// EN: Summary of every Synology NAS: status, CPU, memory, fullest volume and disks. The alerts are computed by nas-monitor; here they are only translated.
+const NAS_AL={
+ en:{system:'system partition failure',power:'power supply failure',fan:'fan failure',temp:'high temperature',cpu:'high CPU',mem:'high memory',disk:'disk problem',disk_temp:'disk too hot',raid:'volume problem',vol_full:'volume almost full',upgrade:'DSM update available'},
+ es:{system:'falla en la partición del sistema',power:'falla en la fuente de poder',fan:'falla en un ventilador',temp:'temperatura alta',cpu:'CPU alta',mem:'memoria alta',disk:'problema en un disco',disk_temp:'disco muy caliente',raid:'problema en un volumen',vol_full:'volumen casi lleno',upgrade:'hay una actualización de DSM'}
+};
+function nasAl(a){
+  const w=(NAS_AL[lang]||NAS_AL.en)[a.type]||a.type;
+  const unit={temp:' °C',disk_temp:' °C',cpu:'%',mem:'%',vol_full:'%'}[a.type];
+  return (a.item?a.item+': ':'')+w+(unit!==undefined&&a.value!=null?` (${a.value}${unit})`:'');
+}
+// Une el historial de un NAS en tramos de 5 min / merge a NAS history into 5-min buckets
+function aggNas(n){
+  const b={};(n.history||[]).forEach(p=>{if(p.cpu==null&&p.mem==null)return;const k=Math.floor(p.ts/300),o=b[k]||(b[k]={c:0,m:0,n:0});o.c+=p.cpu||0;o.m+=p.mem||0;o.n++});
+  return Object.keys(b).map(Number).sort((x,y)=>x-y).map(k=>({cpu:b[k].c/b[k].n,mem:b[k].m/b[k].n}));
+}
+function nasChart(id){
+  const a=nasH[id]||[];if(a.length<3)return '';
+  return '<div class="kp">'+lchart([{vals:a.map(p=>p.cpu),color:'var(--blue)'},{vals:a.map(p=>p.mem),color:'#8b5cf6'}])+
+    `<div class="hc"><i style="background:var(--blue)"></i>${T('cpu')}<i style="background:#8b5cf6"></i>${T('mem')} · ${dur(a.length*300)}</div></div>`;
+}
+function renderNAS(d){
+  const el=$('c-nas');let sev='ok',body='';const L=d.nas||[];
+  L.forEach(n=>{
+    const sn=n.snap||{},data=sn.data||{},sy=data.system||{};let s='ok';
+    if(sn.error){s='crit';issues.push({lv:'crit',m:'nas',t:`${n.name}: ${T('issue_nasdown')}`,href:'/nas/'})}
+    (data.alerts||[]).forEach(a=>{if(a.lv==='info')return;s=worst(s,a.lv);issues.push({lv:a.lv,m:'nas',t:`${n.name}: ${nasAl(a)}`,href:'/nas/'})});
+    sev=worst(sev,s);
+    const disks=data.disks||[],dOk=disks.filter(x=>x.lv==='ok').length,vols=(data.raids||[]).filter(x=>x.pct!=null),vmax=vols.reduce((m,x)=>x.pct>m.pct?x:m,{pct:-1});
+    const cpu=data.cpu&&data.cpu.pct,mem=data.mem&&data.mem.pct;
+    body+=`<div class="unit"><div class="uh">${esc(n.name)} <span class="sub">${esc(sy.model||'')}</span>${pill(s,sn.error&&!data.system?T('unreach'):s==='ok'?'OK':s==='warn'?T('attn'):T('fail'))}</div>
+     <div class="kpis"><div class="kpi"><b>${disks.length?dOk+'/'+disks.length:'—'}</b><span>${T('nasdisks')}</span></div><div class="kpi"><b>${sy.temp!=null?sy.temp+'°':'—'}</b><span>${T('temp')}</span></div><div class="kpi"><b>${sy.uptime?dur(sy.uptime):'—'}</b><span>${T('uptime')}</span></div></div>
+     ${cpu!=null?`<div class="row"><span class="l">${T('cpu')}</span>${bar(cpu,70,90)}<span class="v">${cpu.toFixed(0)}%</span></div>`:''}
+     ${mem!=null?`<div class="row"><span class="l">${T('mem')}</span>${bar(mem,80,92)}<span class="v">${mem.toFixed(0)}%</span></div>`:''}
+     ${vmax.pct>=0?`<div class="row"><span class="l">${T('nasvol')}</span>${bar(vmax.pct,80,90)}<span class="v">${vmax.pct.toFixed(0)}%</span></div>`:''}${nasChart(n.id)}</div>`;
+  });
+  el.innerHTML=`<div class="ch"><h2>${T('nas')}</h2>${L.length?pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail')):''}<a class="go" href="/nas/">${T('open')}</a></div>`+(L.length?body:`<div class="empty">${T('nonas')}</div>`);
+  return sev;
+}
 // ───────── Net ─────────
 const TYPE_SH_EN={computer:'PC',phone:'Phone',router:'Router',switch:'Switch',ap:'Wi-Fi',storage:'NAS',tv:'TV',camera:'Cam',appliance:'Appl.',printer:'Print.',tablet:'Tablet',console:'Console',server:'Server',voip:'VoIP',ups:'UPS',speaker:'Speaker',other:'Other'};
 const TYPE_SH_ES={computer:'PC',phone:'Teléf.',router:'Router',switch:'Switch',ap:'Wi-Fi',storage:'NAS',tv:'TV',camera:'Cám.',appliance:'Electro.',printer:'Impres.',tablet:'Tablet',console:'Consola',server:'Servidor',voip:'Tel. IP',ups:'UPS',speaker:'Altavoz',other:'Otro'};
@@ -184,9 +224,11 @@ function renderPi(s){
 const EVT={
  en:{ups_lowb:'{n}: low battery ({pct})',ups_batt:'{n}: on battery ({pct})',ups_mains:'{n}: mains power restored ({pct})',ups_other:'{n}: status {st}',ups_srv_down:'UPS server {n} unreachable: {e}',ups_srv_up:'UPS server {n} reachable again',
   pve_cl_down:'{c}: cluster unreachable',pve_cl_up:'{c}: cluster reachable again',pve_node_on:'{c}/{n}: node online',pve_node_off:'{c}/{n}: node {st}',pve_ceph:'{c}: Ceph {a} → {b}',
+  nas_down:'{n}: NAS unreachable',nas_up:'{n}: NAS reachable again',nas_sys:'{n}: system or power failure',nas_raid:'{n}/{v}: volume status {st}',nas_disk:'{n}/{d}: disk status {st}',
   net_first:'First scan: {n} hosts found',net_new:'New device: {ip} {n} {v}',net_up:'Back online: {ip} {n}',net_down:'Went offline: {ip} {n}',net_new_n:'{n} new devices',net_up_n:'{n} hosts back online',net_down_n:'{n} hosts went offline'},
  es:{ups_lowb:'{n}: batería baja ({pct})',ups_batt:'{n}: funcionando con batería ({pct})',ups_mains:'{n}: volvió la red eléctrica ({pct})',ups_other:'{n}: estado {st}',ups_srv_down:'Servidor UPS {n} sin conexión: {e}',ups_srv_up:'Servidor UPS {n} otra vez disponible',
   pve_cl_down:'{c}: cluster sin conexión',pve_cl_up:'{c}: cluster otra vez disponible',pve_node_on:'{c}/{n}: nodo en línea',pve_node_off:'{c}/{n}: nodo {st}',pve_ceph:'{c}: Ceph {a} → {b}',
+  nas_down:'{n}: NAS sin conexión',nas_up:'{n}: NAS otra vez disponible',nas_sys:'{n}: falla del sistema o de la fuente de poder',nas_raid:'{n}/{v}: estado del volumen {st}',nas_disk:'{n}/{d}: estado del disco {st}',
   net_first:'Primer escaneo: {n} equipos encontrados',net_new:'Equipo nuevo: {ip} {n} {v}',net_up:'Volvió a estar en línea: {ip} {n}',net_down:'Dejó de responder: {ip} {n}',net_new_n:'{n} equipos nuevos',net_up_n:'{n} equipos volvieron a estar en línea',net_down_n:'{n} equipos dejaron de responder'}
 };
 // Texto de un evento en el idioma actual; si la clave no se conoce, el texto en inglés guardado / Event text in the current language; unknown key → stored English text
@@ -195,7 +237,7 @@ function evText(e){const t=e.k&&EVT[lang][e.k];return t?t.replace(/\{(\w+)\}/g,(
 // EN: Event text with the IP (if any) marked for the Net Monitor card. Everything is escaped; the span is created by this code.
 function evHtml(e){const s=esc(evText(e)),ip=e.m==='net'&&e.p&&/^\d{1,3}(\.\d{1,3}){3}$/.test(String(e.p.ip||''))?String(e.p.ip):'';return ip&&s.includes(ip)?s.replace(ip,`<span data-nethost="${ip}" data-nethost-click="1">${ip}</span>`):s}
 function renderEvents(list){
-  $('c-ev').innerHTML=`<div class="ch"><h2>${T('ev')}</h2></div>`+(list.length?`<div class="tl">${list.map(e=>`<div class="ev"><i class="d ${esc(e.lv)}"></i><span class="m">${esc({nut:'UPS',pve:'PVE',net:'NET'}[e.m]||e.m)}</span><span>${evHtml(e)}</span><span class="t" title="${PCT.ls(new Date(e.t*1000))}">${esc(ago(e.t))}</span></div>`).join('')}</div>`:`<div class="empty">${T('noev')}</div>`);
+  $('c-ev').innerHTML=`<div class="ch"><h2>${T('ev')}</h2></div>`+(list.length?`<div class="tl">${list.map(e=>`<div class="ev"><i class="d ${esc(e.lv)}"></i><span class="m">${esc({nut:'UPS',pve:'PVE',nas:'NAS',net:'NET'}[e.m]||e.m)}</span><span>${evHtml(e)}</span><span class="t" title="${PCT.ls(new Date(e.t*1000))}">${esc(ago(e.t))}</span></div>`).join('')}</div>`:`<div class="empty">${T('noev')}</div>`);
 }
 
 // ───────── Ciclo de actualización / refresh loop ─────────
@@ -206,6 +248,8 @@ async function refresh(){
   // El historial de Proxmox pesa más: se pide una vez por minuto / Proxmox history is heavier: requested once a minute
   const wantPH=Date.now()-pveHTs>60000;
   if(lvl('pve')){jobs.pve=jget('/pve/api/clusters'+(wantPH?'':'?hist=0'))}
+  const wantNH=Date.now()-nasHTs>60000;
+  if(lvl('nas')){jobs.nas=jget('/nas/api/nas'+(wantNH?'':'?hist=0'))}
   if(lvl('net')){jobs.net=jget('/net/api/hosts')}
   jobs.sys=jget('api/system');jobs.ev=jget('api/events?limit=40');
   const keys=Object.keys(jobs),res=await Promise.allSettled(Object.values(jobs));
@@ -218,16 +262,18 @@ async function refresh(){
     await Promise.all(q);
   }
   if(wantPH&&R.pve&&R.pve.status==='fulfilled'){pveHTs=Date.now();pveH={};(R.pve.value.clusters||[]).forEach(c=>{pveH[c.id]=aggHist(c)})}
+  if(wantNH&&R.nas&&R.nas.status==='fulfilled'){nasHTs=Date.now();nasH={};(R.nas.value.nas||[]).forEach(n=>{nasH[n.id]=aggNas(n)})}
   // Historial de temperatura y subtensión de la Pi (solo existe en una Raspberry Pi) / Pi history (Raspberry Pi only)
   if(R.sys.status==='fulfilled'&&Date.now()-piHTs>60000){
     piHTs=Date.now();
     try{const h=await jget('api/pihistory');piH=h&&h.pi?h:null}catch(e){}
   }
   const card=(id,show)=>$(id).classList.toggle('hide',!show);
-  card('c-nut',!!R.nut);card('c-pve',!!R.pve);card('c-net',!!R.net);fitGrid();
+  card('c-nut',!!R.nut);card('c-pve',!!R.pve);card('c-nas',!!R.nas);card('c-net',!!R.net);fitGrid();
   const fail=(id,name)=>{$(id).innerHTML=`<div class="ch"><h2>${name}</h2>${pill('crit',T('unreach'))}</div>`;issues.push({lv:'crit',m:name,t:`${name}: ${T('unreach')}`});return 'crit'};
   if(R.nut)sevs.push(R.nut.status==='fulfilled'?renderUPS(R.nut.value):fail('c-nut',T('ups')));
   if(R.pve)sevs.push(R.pve.status==='fulfilled'?renderPVE(R.pve.value):fail('c-pve',T('pve')));
+  if(R.nas)sevs.push(R.nas.status==='fulfilled'?renderNAS(R.nas.value):fail('c-nas',T('nas')));
   if(R.net)sevs.push(R.net.status==='fulfilled'?renderNet(R.net.value):fail('c-net',T('net')));
   if(R.sys.status==='fulfilled')sevs.push(renderPi(R.sys.value));
   if(R.ev.status==='fulfilled')renderEvents(R.ev.value.events||[]);
@@ -299,7 +345,7 @@ window.addEventListener('resize',fitGrid);
 // ───────── Orden de las tarjetas / card order ─────────
 // ES: Las tarjetas se pueden reordenar con el botón «Ordenar» (flechas o arrastrando). El orden se guarda en este navegador (clave pi-card-order); por defecto es el de siempre: UPS, Proxmox, Red, Pi. La línea de tiempo siempre va debajo.
 // EN: Cards can be reordered with the "Reorder" button (arrows or drag). The order is stored in this browser (key pi-card-order); the default is the usual one: UPS, Proxmox, Network, Pi. The timeline always stays below.
-const CARDS=['c-nut','c-pve','c-net','c-pi'];
+const CARDS=['c-nut','c-pve','c-nas','c-net','c-pi'];
 let ord=CARDS.slice(),sortMode=false,dragId=null;
 try{const v=JSON.parse(localStorage.getItem('pi-card-order')||'[]');if(Array.isArray(v)){const k=v.filter((x,i)=>CARDS.includes(x)&&v.indexOf(x)===i);ord=k.concat(CARDS.filter(x=>!k.includes(x)))}}catch(e){}
 function saveOrd(){try{if(ord.join()===CARDS.join())localStorage.removeItem('pi-card-order');else localStorage.setItem('pi-card-order',JSON.stringify(ord))}catch(e){}}

@@ -4,7 +4,7 @@ set -e
 echo "pi-console: stopping services..."
 # Detiene y deshabilita los servicios antes de quitar los archivos (|| true: si alguno no existe, no se aborta).
 # EN: Stop and disable the services before removing the files (|| true: if one does not exist, it does not abort).
-for svc in wol-console pi-console-ups admin-panel net-monitor proxmox-monitor pi-console-overview; do
+for svc in wol-console pi-console-ups admin-panel net-monitor proxmox-monitor nas-monitor pi-console-overview; do
     systemctl stop "$svc" 2>/dev/null || true
     systemctl disable "$svc" 2>/dev/null || true
 done
@@ -25,7 +25,8 @@ if id -u pi-console >/dev/null 2>&1 && command -v runuser >/dev/null 2>&1; then
         /var/lib/pi-console/nut-monitor/history.db \
         /var/lib/pi-console/net-monitor/hosts.json \
         /var/lib/pi-console/net-monitor/config.json \
-        /var/lib/pi-console/proxmox-monitor/clusters.json
+        /var/lib/pi-console/proxmox-monitor/clusters.json \
+        /var/lib/pi-console/nas-monitor/nas.json
     do
         if runuser -u pi-console -- test -f "$f" 2>/dev/null && ! runuser -u pi-console -- test -L "$f" 2>/dev/null; then
             out="$BACKUP_DIR/$(basename "$f").${STAMP}.bak"

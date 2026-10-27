@@ -16,7 +16,7 @@ const LANG = {
     topbarTitle:'User management',
     statTotal:'Total users', statAdmins:'Administrators', statReadonly:'Read-only',
     cardTitle:'System users', btnNewUser:'New user',
-    colUser:'User', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colStatus:'Status', colCreated:'Created', colActions:'Actions',
+    colUser:'User', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colNAS:'NAS Monitor', colStatus:'Status', colCreated:'Created', colActions:'Actions',
     drawerNew:'New user', drawerEdit:'Edit — ',
     fieldUsername:'Username', fieldUsernameHint:'2-32 alphanumeric chars, dash or underscore',
     fieldPassword:'Password', fieldPasswordHint:'Minimum 8 characters',
@@ -73,7 +73,7 @@ const LANG = {
     topbarTitle:'Gestión de usuarios',
     statTotal:'Usuarios totales', statAdmins:'Administradores', statReadonly:'Solo lectura',
     cardTitle:'Usuarios del sistema', btnNewUser:'Nuevo usuario',
-    colUser:'Usuario', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colStatus:'Estado', colCreated:'Creado', colActions:'Acciones',
+    colUser:'Usuario', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colNAS:'NAS Monitor', colStatus:'Estado', colCreated:'Creado', colActions:'Acciones',
     drawerNew:'Nuevo usuario', drawerEdit:'Editar — ',
     fieldUsername:'Nombre de usuario', fieldUsernameHint:'2-32 caracteres alfanuméricos, guion o guion bajo',
     fieldPassword:'Contraseña', fieldPasswordHint:'Mínimo 8 caracteres',
@@ -144,7 +144,7 @@ function setLang(l){
   const dpw = document.getElementById('d-password');
   if(dpw) dpw.placeholder = t('fieldPasswordHint');
   // Update permission selects
-  ['d-wol','d-nut','d-net','d-pve'].forEach(id=>{
+  ['d-wol','d-nut','d-net','d-pve','d-nas'].forEach(id=>{
     const sel = document.getElementById(id); if(!sel) return;
     const val = sel.value;
     sel.innerHTML = ['none','readonly','execute','admin'].map(v=>`<option value="${v}"${val===v?' selected':''}>${t('perm'+v.charAt(0).toUpperCase()+v.slice(1))}</option>`).join('');
@@ -185,6 +185,7 @@ const _NAV_ITEMS=[
   {id:'nut',   href:'/nut/',   label:'UPS Monitor', svg:'<path d="M5 9V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><rect x="3" y="9" width="18" height="11" rx="2"/><line x1="12" y1="13" x2="12" y2="16"/>'},
   {id:'net',   href:'/net/',   label:'Net Monitor', svg:'<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>'},
   {id:'pve',   href:'/pve/',   label:'Proxmox',     svg:'<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>'},
+  {id:'nas',   href:'/nas/',   label:'NAS Monitor',svg:'<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="9" x2="17" y2="9"/><line x1="7" y1="14" x2="17" y2="14"/><line x1="16" y1="18" x2="16.01" y2="18"/>'},
   {id:'wol',   href:'/wol/',   label:'WOL Console', svg:'<polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/>'},
   {id:'admin', href:'/admin/', label:'Admin Panel', svg:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'},
 ];
@@ -311,7 +312,7 @@ async function loadUsers() {
 // ── System health ───────────────────────────────────────
 // SALUD DEL SISTEMA: tarjetas con el estado de cada módulo (datos de /api/health). HL_DESC explica en palabras simples qué comprueba cada chequeo.
 // EN: SYSTEM HEALTH: cards with the state of each module (data from /api/health). HL_DESC explains in plain words what each check verifies.
-const HL_NAMES = {wol:'WOL Console', nut:'UPS Monitor', net:'Net Monitor', pve:'Proxmox', overview:'Overview'};
+const HL_NAMES = {wol:'WOL Console', nut:'UPS Monitor', net:'Net Monitor', pve:'Proxmox', nas:'NAS Monitor', overview:'Overview'};
 const HL_DESC = {
   en:{users:'User database (users.json) is readable and has accounts', sessions:'Session file is readable and its folder writable', disk:'Free disk space (warns below 100 MB, fails below 5 MB)',
       teleporter:'Backup tool (teleporter.sh) is installed', power:'Raspberry Pi power supply: no under-voltage or throttling (shown only on a Raspberry Pi)', devices:'Device list file is readable and writable', wake_log:'Wake log file is readable and writable',
@@ -319,16 +320,16 @@ const HL_DESC = {
       servers_file:'UPS server list file is readable and writable', database:'History database opens and is not locked', history_write:'Buffered history rows are being written to disk',
       pollers:'Background threads that read the data are alive', upsd:'Every NUT server answers', history_fresh:'Recent readings are really stored in the history',
       hosts_file:'Host table file is readable and writable', config_file:'Configuration file is readable and writable', scanner:'The scan is not stuck', auto_scan:'Automatic scan timer is armed and scans are recent',
-      clusters_file:'Cluster list file is readable and writable', clusters:'Every Proxmox cluster answers with fresh data', events:'Event timeline file is readable and its folder writable',
-      wol:'WOL Console service', nut:'UPS Monitor service', net:'Net Monitor service', pve:'Proxmox service', overview:'Overview service'},
+      clusters_file:'Cluster list file is readable and writable', clusters:'Every Proxmox cluster answers with fresh data', nas_file:'NAS list file is readable and writable', snmp_tools:'The net-snmp tools (snmpget, snmpbulkwalk) are installed', nas_snmp:'Every NAS answers over SNMP with fresh data', events:'Event timeline file is readable and its folder writable',
+      wol:'WOL Console service', nut:'UPS Monitor service', net:'Net Monitor service', pve:'Proxmox service', nas:'NAS Monitor service', overview:'Overview service'},
   es:{users:'Base de usuarios (users.json) legible y con cuentas', sessions:'Archivo de sesiones legible y carpeta escribible', disk:'Espacio libre en disco (avisa bajo 100 MB, falla bajo 5 MB)',
       teleporter:'Herramienta de respaldo (teleporter.sh) instalada', power:'Fuente de la Raspberry Pi: sin subtensión ni limitación (solo se muestra en una Raspberry Pi)', devices:'Archivo de dispositivos legible y escribible', wake_log:'Archivo del registro de encendidos legible y escribible',
       net_monitor:'Se puede leer la lista de hosts de Net Monitor (opcional)', network:'Este equipo tiene dirección LAN para los magic packets',
       servers_file:'Archivo de servidores UPS legible y escribible', database:'La base de historial abre y no está bloqueada', history_write:'Las filas de historial en memoria se escriben a disco',
       pollers:'Los hilos que leen los datos están vivos', upsd:'Todos los servidores NUT responden', history_fresh:'Las lecturas recientes realmente quedan guardadas en el historial',
       hosts_file:'Archivo de hosts legible y escribible', config_file:'Archivo de configuración legible y escribible', scanner:'El escaneo no está trabado', auto_scan:'El temporizador de auto-escaneo está armado y los escaneos son recientes',
-      clusters_file:'Archivo de clusters legible y escribible', clusters:'Todos los clusters Proxmox responden con datos frescos', events:'Archivo de la línea de tiempo legible y carpeta escribible',
-      wol:'Servicio WOL Console', nut:'Servicio UPS Monitor', net:'Servicio Net Monitor', pve:'Servicio Proxmox', overview:'Servicio Resumen'}
+      clusters_file:'Archivo de clusters legible y escribible', clusters:'Todos los clusters Proxmox responden con datos frescos', nas_file:'Archivo de la lista de NAS legible y escribible', snmp_tools:'Las herramientas net-snmp (snmpget, snmpbulkwalk) están instaladas', nas_snmp:'Todos los NAS responden por SNMP con datos frescos', events:'Archivo de la línea de tiempo legible y carpeta escribible',
+      wol:'Servicio WOL Console', nut:'Servicio UPS Monitor', net:'Servicio Net Monitor', pve:'Servicio Proxmox', nas:'Servicio NAS Monitor', overview:'Servicio Resumen'}
 };
 const _hlOpen = new Set();
 // Consulta /api/health y arma una tarjeta por módulo más la del propio panel (usuarios, sesiones, disco, respaldo y fuente de la Pi). Cada tarjeta se despliega para ver cada chequeo y recuerda si estaba abierta entre refrescos.
@@ -396,6 +397,7 @@ function renderUsers(users) {
       <td data-label="${esc(t('colUPS'))}">${permBadge(u.permissions.nut)}</td>
       <td data-label="${esc(t('colNET'))}">${permBadge(u.permissions.net)}</td>
       <td data-label="${esc(t('colPVE'))}">${permBadge(u.permissions.pve)}</td>
+      <td data-label="${esc(t('colNAS'))}">${permBadge(u.permissions.nas)}</td>
       <td data-label="${esc(t('colStatus'))}">${u.must_change_password ? `<span class="must-change">${t('mustChangeBadge')}</span>` : '<span style="font-size:11px;color:var(--text-dim)">—</span>'}</td>
       <td data-label="${esc(t('colCreated'))}"><span class="ucreated">${u.created ? new Date(u.created*1000).toLocaleDateString(locale) : '—'}</span></td>
       <td class="col-actions">
@@ -427,9 +429,9 @@ function openDrawer(user) {
   document.getElementById('d-must-change').checked = isEdit ? user.must_change_password : false;
 
   // Rebuild selects with translated options at current perm values
-  ['d-wol','d-nut','d-net','d-pve'].forEach(id=>{
+  ['d-wol','d-nut','d-net','d-pve','d-nas'].forEach(id=>{
     const sel = document.getElementById(id); if(!sel) return;
-    const key = id.slice(2), defs = {wol:'execute', nut:'readonly', net:'none', pve:'none'};
+    const key = id.slice(2), defs = {wol:'execute', nut:'readonly', net:'none', pve:'none', nas:'none'};
     const val = isEdit ? (user.permissions[key]||'none') : defs[key];
     sel.innerHTML = ['none','readonly','execute','admin'].map(v=>`<option value="${v}"${val===v?' selected':''}>${t('perm'+v.charAt(0).toUpperCase()+v.slice(1))}</option>`).join('');
   });
@@ -473,11 +475,12 @@ async function saveUser() {
       const nut   = document.getElementById('d-nut').value;
       const net   = document.getElementById('d-net').value;
       const pve   = document.getElementById('d-pve').value;
+      const nas   = document.getElementById('d-nas').value;
       const must  = document.getElementById('d-must-change').checked;
       if (!uname || !pwd) { toast(t('loginFill'), true); return; }
       const r = await fetch('api/users', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({username:uname, password:pwd, wol_permission:wol, nut_permission:nut, net_permission:net, pve_permission:pve, must_change_password:must})
+        body: JSON.stringify({username:uname, password:pwd, wol_permission:wol, nut_permission:nut, net_permission:net, pve_permission:pve, nas_permission:nas, must_change_password:must})
       });
       const d = await r.json();
       if (!r.ok) { toast(d.error||'Error', true); return; }
@@ -488,11 +491,12 @@ async function saveUser() {
       const nut   = document.getElementById('d-nut').value;
       const net   = document.getElementById('d-net').value;
       const pve   = document.getElementById('d-pve').value;
+      const nas   = document.getElementById('d-nas').value;
       const newPw = document.getElementById('d-new-pw').value;
       // Actualizar permisos
       const r = await fetch('api/users/'+uorig, {
         method: 'PUT', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({wol_permission:wol, nut_permission:nut, net_permission:net, pve_permission:pve})
+        body: JSON.stringify({wol_permission:wol, nut_permission:nut, net_permission:net, pve_permission:pve, nas_permission:nas})
       });
       const d = await r.json();
       if (!r.ok) { toast(d.error||'Error', true); return; }
@@ -542,7 +546,7 @@ function tpFmtSize(b){ return b>=1048576 ? (b/1048576).toFixed(1)+' MB' : Math.m
 async function tpLoad() {
   // Los respaldos solo los maneja quien es admin de todos los módulos: para el resto se oculta la tarjeta.
   // EN: Backups are handled only by an admin of every module: for everyone else the card is hidden.
-  const full = ['wol','nut','net','pve'].every(k => (me?.permissions||{})[k] === 'admin');
+  const full = ['wol','nut','net','pve','nas'].every(k => (me?.permissions||{})[k] === 'admin');
   document.getElementById('tp-card').style.display = full ? '' : 'none';
   if (!full) return;
   try {

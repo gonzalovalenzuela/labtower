@@ -59,12 +59,12 @@ def _grant_denied(actor_perms, current, wanted):
 # EN: Does the target have a higher level than the actor on any module? Then the actor cannot delete them or change their password.
 def _outranks(actor_perms, target_perms):
     return any(_lvl(target_perms, k) > _lvl(actor_perms, k) for k in PERM_KEYS)
-PERM_KEYS = ("wol", "nut", "net", "pve")          # one explicit level per module
+PERM_KEYS = ("wol", "nut", "net", "pve", "nas")          # one explicit level per module
 
 # ─── Health (aggregate of every module) ───────────────────────────────────────
 # Puertos de los otros servicios, usados para consultar su /api/health.
 # EN: Ports of the other services, used to query their /api/health.
-MODULES = {"wol": 8080, "nut": 8081, "net": 8083, "pve": 8084, "overview": 8085}
+MODULES = {"wol": 8080, "nut": 8081, "net": 8083, "pve": 8084, "nas": 8086, "overview": 8085}
 
 # Pregunta a un módulo cómo está. Devuelve su informe JSON o None si no responde. Un 503 también trae
 # informe (significa «hay un fallo grave»), por eso se lee igual.
@@ -569,7 +569,7 @@ class H(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     try:
-        if auth.ensure_permissions(): log.info("'net'/'pve' permissions filled in")
+        if auth.ensure_permissions(): log.info("'net'/'pve'/'nas' permissions filled in")
     except Exception as e:
         log.warning(f"Permissions: {e}")
     log.info(f"Admin Panel en http://{HOST}:{PORT}")

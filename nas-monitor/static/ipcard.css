@@ -1,0 +1,25 @@
+[data-nethost]{text-decoration:underline dotted;text-decoration-color:currentColor;text-underline-offset:3px;text-decoration-thickness:1px}
+[data-nethost][data-nethost-click]{cursor:pointer}
+.pi-ipcard{position:fixed;left:0;top:0;z-index:100000;width:290px;max-width:calc(100vw - 16px);box-sizing:border-box;padding:12px 14px;border-radius:12px;
+  background:var(--surface,#fff);color:var(--text,#1a2233);border:1px solid var(--border,#e3e8ef);box-shadow:0 10px 32px rgba(0,0,0,.22);
+  font:12px/1.45 var(--sans,system-ui,-apple-system,sans-serif);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .12s}
+.pi-ipcard.show{opacity:1;visibility:visible;pointer-events:auto}
+.pi-ipc-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.pi-ipc-dot{width:9px;height:9px;border-radius:50%;flex:none;background:#94a3b8}
+.pi-ipc-dot.on{background:#16a34a}
+.pi-ipc-name{flex:1;min-width:0;display:flex;flex-direction:column}
+.pi-ipc-name b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pi-ipc-ip{font:11px var(--mono,ui-monospace,monospace);color:var(--text-dim,#6b7a94)}
+.pi-ipc-st{font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:rgba(148,163,184,.18);color:var(--text-dim,#6b7a94)}
+.pi-ipc-st.on{background:rgba(22,163,74,.15);color:#16a34a}
+.pi-ipc-row,.pi-ipc-ports{display:flex;gap:10px;padding:3px 0;border-top:1px solid var(--border,#e3e8ef)}
+.pi-ipc-k{flex:none;width:86px;color:var(--text-dim,#6b7a94)}
+.pi-ipc-v{flex:1;min-width:0;overflow-wrap:anywhere}
+.pi-ipc-v.mono{font-family:var(--mono,ui-monospace,monospace);font-size:11px}
+.pi-ipc-chips{flex:1;display:flex;flex-wrap:wrap;gap:3px;align-items:flex-start;align-content:flex-start}
+.pi-ipc-chip{font:10px var(--mono,ui-monospace,monospace);padding:1px 6px;border-radius:6px;background:var(--bg,#f0f2f5);border:1px solid var(--border,#e3e8ef)}
+.pi-ipc-title{font:600 13px var(--mono,ui-monospace,monospace);margin-bottom:4px}
+.pi-ipc-msg{color:var(--text-mid,#4b5870);padding:2px 0}
+.pi-ipc-go{display:block;margin-top:9px;padding:7px 10px;border-radius:8px;text-align:center;font-weight:600;font-size:12px;text-decoration:none;background:var(--blue,var(--teal,#4361ee));color:#fff}
+.pi-ipc-go:hover{filter:brightness(1.08)}
+@media (hover:none){[data-nethost]{display:inline-block;padding:4px 5px;margin:-4px -5px;cursor:pointer}}

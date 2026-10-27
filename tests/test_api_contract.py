@@ -10,6 +10,7 @@ PROTECTED_GET = [
     ("wol-console/server.py", ["/api/devices", "/api/wake_log", "/api/config"]),
     ("net-monitor/server.py", ["/api/hosts", "/api/scan/status", "/api/config"]),
     ("proxmox-monitor/server.py", ["/api/clusters"]),
+    ("nas-monitor/server.py", ["/api/nas"]),
 ]
 # (módulo, ruta POST de escritura, cuerpo)
 WRITE_POST = [
@@ -17,6 +18,7 @@ WRITE_POST = [
     ("wol-console/server.py", "/api/wake", {"mac": "aa:bb:cc:dd:ee:ff"}),
     ("net-monitor/server.py", "/api/scan/start", {}),
     ("proxmox-monitor/server.py", "/api/clusters", {"name": "x", "host": "pve.example"}),
+    ("nas-monitor/server.py", "/api/nas", {"name": "x", "host": "nas.example", "user": "u"}),
 ]
 
 class ApiContract(unittest.TestCase):

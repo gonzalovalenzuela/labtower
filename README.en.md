@@ -18,6 +18,7 @@
 | **UPS Monitor** | `/nut/` | 8081 | Reads UPS units through NUT: battery, load, runtime, power, voltages, temperature, history and CSV |
 | **Net Monitor** | `/net/` | 8083 | Scans the network: hosts, type, OS, ports, MAC and vendor |
 | **Proxmox Monitor** | `/pve/` | 8084 | Proxmox VE clusters: nodes, VMs, CTs and Ceph |
+| **NAS Monitor** | `/nas/` | 8086 | One or more Synology NAS over SNMP: disks, volumes, temperature, CPU, memory and network |
 | **WOL Console** | `/wol/` | 8080 | Powers on machines with Wake-on-LAN |
 | **Admin Panel** | `/admin/` | 8082 | Users, permissions, sessions, backups and system health |
 
@@ -109,6 +110,14 @@ pi-console-health
 - Node order and pinned nodes are saved per cluster (admin only).
 - When adding a cluster you must confirm its certificate SHA-256 fingerprint, which is then pinned. If the certificate changes, the token is not sent.
 
+### NAS Monitor
+- Add as many NAS as you like (like Proxmox clusters or UPS servers). Each one is polled over **SNMP v3** (user, level `authPriv`/`authNoPriv`/`noAuthNoPriv`, auth and privacy keys) or v2c.
+- Per NAS: model and DSM version, system status, temperature, fans, CPU, memory, disks (status and temperature), volumes (status and space), network and attached UPS. 12 h charts.
+- Alerts (and logs to the Overview timeline) for a failed disk, a degraded volume, a nearly full volume, high temperature and a pending DSM update.
+- Keys are stored with 600 permissions and the API never returns them; while polling they live in a private temporary file, never on the command line. In *Test connection* and *Save*, leaving a key blank keeps the stored one.
+- **Enable SNMP on Synology:** *Control Panel → Terminal & SNMP → SNMP → Enable SNMPv3*, set user and passwords (8+ characters) and use `SHA`/`AES`. Other NAS using the standard MIBs (UCD/IF-MIB) show CPU, memory and network, but not disks or volumes.
+- Needs the `snmpget` and `snmpbulkwalk` commands (package `snmp`, already installed by the Pi Console package).
+
 ### WOL Console
 - Sends magic packets (at most 10 per minute per IP).
 - Picks hosts found by Net Monitor (name, MAC, IP and category) and uses the latest IP if DHCP changed it.
@@ -183,7 +192,7 @@ sudo pi-console-sftp-backup status      # result of the last run
 ```bash
 pi-console-health         # summary: exit 0 = ok, 1 = degraded, 2 = failed (-j for JSON)
 pi-console-resources      # memory and CPU per service (-w refreshes every 2 s)
-systemctl status wol-console pi-console-ups admin-panel net-monitor proxmox-monitor pi-console-overview
+systemctl status wol-console pi-console-ups admin-panel net-monitor proxmox-monitor nas-monitor pi-console-overview
 journalctl -u net-monitor -f        # logs of one service
 sudo systemctl restart net-monitor  # restart one
 ```
@@ -197,6 +206,7 @@ Each module answers `GET /api/health` (200 = ok or degraded, 503 = failed). With
 | `admin-panel` | Admin Panel |
 | `net-monitor` | Net Monitor |
 | `proxmox-monitor` | Proxmox Monitor |
+| `nas-monitor` | NAS Monitor |
 | `pi-console-overview` | Overview |
 
 **Uninstall:** `sudo apt remove pi-console` stops the services and saves a copy of the data in `/var/backups/pi-console`. `sudo apt purge pi-console` also removes the code, services, nginx site and the `pi-console` user. In both cases `/var/lib/pi-console` and `/var/backups/pi-console` are **not deleted**; remove them by hand for a clean machine.
@@ -209,7 +219,7 @@ The defaults suit most setups. To change them, write `NAME=value` in `/etc/defau
 
 ```bash
 echo 'NUT_POLL=5' | sudo tee -a /etc/default/pi-console
-sudo systemctl restart wol-console pi-console-ups admin-panel net-monitor proxmox-monitor pi-console-overview
+sudo systemctl restart wol-console pi-console-ups admin-panel net-monitor proxmox-monitor nas-monitor pi-console-overview
 ```
 
 | Variable | Module | Default | Purpose |
@@ -224,6 +234,8 @@ sudo systemctl restart wol-console pi-console-ups admin-panel net-monitor proxmo
 | `NUT_DB_FLUSH` | UPS | `60` | Seconds between history writes |
 | `PVE_POLL_ACTIVE`, `PVE_POLL_IDLE` | Proxmox | `5`, `60` | Seconds between polls with the page open / idle |
 | `PVE_KEEP_DAYS` | Proxmox | `7` | Days of CPU and memory history |
+| `NAS_POLL_ACTIVE`, `NAS_POLL_IDLE` | NAS | `15`, `60` | Seconds between polls with the page open / idle |
+| `NAS_KEEP_DAYS` | NAS | `7` | Days of history per NAS |
 | `PICONSOLE_PI_KEEP_DAYS` | Overview | `7` | Days of Pi history |
 | `WOL_BROADCAST` | WOL | automatic | Comma-separated broadcast addresses |
 | `PICONSOLE_SECURE_COOKIE` | all | off | `1` marks the cookie `Secure` (only behind HTTPS) |
@@ -256,6 +268,7 @@ pi-console/
 ├── nut-monitor/       # (UPS Monitor)
 ├── net-monitor/
 ├── proxmox-monitor/
+├── nas-monitor/       # NAS Monitor (Synology over SNMP)
 ├── overview/          # Overview
 ├── home/              # home page and icons
 ├── etc/               # nginx, backup.conf, cron

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3b — 2026-10-26
+
+**Nuevo: NAS Monitor** (`/nas/`, puerto 8086)
+- Nuevo módulo para ver uno o varios NAS Synology, igual que se agregan clusters de Proxmox o servidores de UPS.
+- Lee por SNMP v3 (usuario, nivel, clave de autenticación y de cifrado, como en Net Monitor) o por v2c. Botón *Probar conexión* antes de guardar.
+- Muestra modelo, versión de DSM, temperatura, ventiladores, CPU, memoria, discos, volúmenes, red y UPS, con gráficos de 12 horas.
+- Avisa disco con falla, volumen degradado o casi lleno, temperatura alta y actualización de DSM. Los avisos aparecen también en el Resumen.
+- Nuevo permiso «NAS» en el Admin Panel, tarjeta en la página de inicio y en el Resumen, y entrada en el menú de todos los módulos.
+- Las claves SNMP se guardan con permisos 600, la API nunca las devuelve y no se pasan por la línea de comandos.
+- Los respaldos (Teleporter) incluyen la lista de NAS. Pruebas nuevas en `tests/test_nas_monitor.py`.
+
 ## 1.3a — 2026-10-26
 
 Cambios a partir de una auditoría de seguridad externa. Se revisó cada punto contra el código.

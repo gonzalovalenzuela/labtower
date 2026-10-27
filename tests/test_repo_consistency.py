@@ -2,7 +2,7 @@
 import hashlib, re, shutil, subprocess, unittest
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
-MODULES = ["wol-console", "nut-monitor", "net-monitor", "proxmox-monitor", "overview", "auth"]
+MODULES = ["wol-console", "nut-monitor", "net-monitor", "proxmox-monitor", "nas-monitor", "overview", "auth"]
 
 class Versions(unittest.TestCase):
     def test_version_file_control_and_changelog_agree(self):

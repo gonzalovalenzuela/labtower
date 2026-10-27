@@ -12,14 +12,14 @@
 </head>
 <body>
 <!-- Portada de Pi Console: una tarjeta por módulo (WOL, Proxmox, Net, UPS, Admin). Es una página estática; nginx la sirve en «/». -->
-<!-- EN: Pi Console home page: one card per module (WOL, Proxmox, Net, UPS, Admin). It is a static page; nginx serves it at "/". -->
+<!-- EN: Pi Console home page: one card per module (WOL, Proxmox, NAS, Net, UPS, Admin). It is a static page; nginx serves it at "/". -->
 <div class="container">
   <div class="hero">
     <div class="hero-icon">
       <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
     </div>
     <h1>Pi Console</h1>
-    <p>Panel de administración para tu homelab usando Raspberry Pi.<br>UPS, red, Proxmox, Wake-on-LAN y administración</p>
+    <p>Panel de administración para tu homelab usando Raspberry Pi.<br>UPS, red, Proxmox, NAS, Wake-on-LAN y administración</p>
   </div>
 
   <div class="apps">
@@ -60,6 +60,16 @@
       <div class="app-body">
         <div class="app-name">Proxmox Monitor</div>
         <div class="app-desc">Dashboard de nodos, VMs , contenedores PVE y CEPH</div>
+      </div>
+      <span class="app-arrow">→</span>
+    </a>
+    <a class="app-card" href="/nas/">
+      <div class="app-ico" style="background:rgba(14,154,167,.1);color:#0e9aa7">
+        <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="9" x2="17" y2="9"/><line x1="7" y1="14" x2="17" y2="14"/><line x1="16" y1="18" x2="16.01" y2="18"/></svg>
+      </div>
+      <div class="app-body">
+        <div class="app-name">NAS Monitor</div>
+        <div class="app-desc">NAS Synology por SNMP — discos, volúmenes, temperatura y red</div>
       </div>
       <span class="app-arrow">→</span>
     </a>

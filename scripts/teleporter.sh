@@ -50,7 +50,7 @@ SPOOL_DIR="$DATA_DIR/teleporter"      # backups/uploads handled by the admin pan
 LOCK_FILE="${PICONSOLE_LOCK:-/run/lock/pi-console-teleporter.lock}"
 RESTORE_LOG="${PICONSOLE_RESTORE_LOG:-/var/log/pi-console/restore.log}"   # root-owned: the panel only reads it
 SERVICE_USER="${PICONSOLE_SERVICE_USER:-pi-console}"
-SERVICES="wol-console pi-console-ups admin-panel net-monitor proxmox-monitor pi-console-overview"
+SERVICES="wol-console pi-console-ups admin-panel net-monitor proxmox-monitor nas-monitor pi-console-overview"
 SKIP_SYSTEM="${TELEPORTER_SKIP_SYSTEM:-0}"   # 1 = no systemctl/nginx/chown (tests)
 DROP_FORCE="${TELEPORTER_DROP:-0}"           # 1 = drop to the service user even with SKIP_SYSTEM (tests)
 # Trusted base for the `sfs` helper: the (root-owned) parent of the data folder, resolved once.
@@ -68,6 +68,7 @@ DATA_FILES=(
   "data/net-monitor/hosts.json|$DATA_DIR/net-monitor/hosts.json"
   "data/net-monitor/config.json|$DATA_DIR/net-monitor/config.json"
   "data/proxmox-monitor/clusters.json|$DATA_DIR/proxmox-monitor/clusters.json"
+  "data/nas-monitor/nas.json|$DATA_DIR/nas-monitor/nas.json"
   "data/metrics.db|$DATA_DIR/metrics.db"
 )
 # ES: Archivos de la versión 1.2.0o (historiales en JSON). Ya no se respaldan, pero un respaldo antiguo puede traerlos: al restaurar se dejan en su sitio y los servicios los importan a metrics.db una sola vez.
@@ -224,7 +225,7 @@ as_service() {
 }
 is_secret() {
   case "$1" in
-    *users.json|*sessions.json|*config.json|*clusters.json|*servers.json|*upsd.users|*upsmon.conf) return 0;;
+    *users.json|*sessions.json|*config.json|*clusters.json|*nas.json|*servers.json|*upsd.users|*upsmon.conf) return 0;;
   esac
   return 1
 }
@@ -705,7 +706,7 @@ Pi Console Teleporter v$TELEPORTER_VERSION
                                           pass --nut / --nginx.
 
 Backup contents: users, WOL devices, UPS servers + history.db (includes UPS temperature),
-Net Monitor hosts + config (SNMP), Proxmox clusters, metrics.db (Proxmox CPU/memory and Pi
+Net Monitor hosts + config (SNMP), Proxmox clusters, NAS list (SNMP), metrics.db (Proxmox and NAS CPU/memory and Pi
 temperature/under-voltage histories), NUT config, nginx site.
 The archive holds passwords and tokens (mode 600) — keep it private.
 EOF

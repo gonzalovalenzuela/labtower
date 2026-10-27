@@ -17,7 +17,7 @@ TLS_DIR="$CONF_DIR/tls"
 HTTPS_D="$CONF_DIR/https.d"
 HTTP_EXTRA_D="$CONF_DIR/http-extra.d"
 DEFAULTS="${PICONSOLE_DEFAULTS:-/etc/default/pi-console}"
-SERVICES="wol-console pi-console-ups admin-panel net-monitor proxmox-monitor pi-console-overview"
+SERVICES="wol-console pi-console-ups admin-panel net-monitor proxmox-monitor nas-monitor pi-console-overview"
 SKIP_SYSTEM="${PICONSOLE_HTTPS_SKIP_SYSTEM:-0}"   # 1 = no nginx/systemctl (tests)
 
 die() { echo "Error: $*" >&2; exit 1; }

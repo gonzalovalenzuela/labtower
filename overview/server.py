@@ -38,7 +38,7 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 # Qué permiso hace falta para ver los eventos de cada módulo.
 # EN: Which permission is needed to see each module's events.
-EVENT_MODULES = ("nut", "net", "pve")
+EVENT_MODULES = ("nut", "net", "pve", "nas")
 
 
 # ─── Historial de la Pi (temperatura y bajo voltaje) ─────────────────────────────────────
