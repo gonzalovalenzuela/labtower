@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1g — 2026-10-27
+
+- WAN Monitor, prueba de velocidad: pide bloques de 25 MB y envía cabeceras de navegador; si el servidor la rechaza, el error dice por qué (por ejemplo «HTTP 403») en vez de «No data received». Si falla solo la subida, se conserva el resultado de la bajada.
+
 ## 2.1f — 2026-10-27
 
 - Desarrollo: los commits ya no llevan referencias a sesiones de Claude. `scripts/git-hooks/commit-msg` las quita (activar con `git config core.hooksPath scripts/git-hooks`; para permitirlas a propósito, `LABTOWER_ALLOW_CLAUDE_SESSION=1`) y una prueba revisa que ningún archivo las tenga.

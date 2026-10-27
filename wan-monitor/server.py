@@ -245,26 +245,31 @@ def speed_ping(cfg):
 # EN: Download: several streams read from the server until the time is up; Mb/s = bits received / seconds.
 def speed_down(cfg):
     sp = cfg["speed"]; total, lock, end = [0], threading.Lock(), time.time() + sp["seconds"]
+    why = []                                                  # first reason a stream gave up (shown instead of a generic error)
+    base = "https://" + (urlparse(sp["down_url"]).hostname or "")
+    hdr = {"User-Agent": "Mozilla/5.0 (LabTower-WAN)", "Accept": "*/*", "Referer": base + "/", "Origin": base}
     def work():
         got = 0
         try:
             while time.time() < end:
                 c, path = _conn(sp["down_url"], 15)
                 try:
-                    c.request("GET", path + "?bytes=100000000", headers={"User-Agent": "LabTower-WAN"}); r = c.getresponse()
-                    if r.status != 200: break
+                    c.request("GET", path + "?bytes=25000000", headers=hdr); r = c.getresponse()
+                    if r.status != 200:
+                        why.append(f"HTTP {r.status} from the download address"); break
                     buf = bytearray(262144)
                     while time.time() < end:
                         n = r.readinto(buf)
                         if not n: break
                         got += n
                 finally: c.close()
-        except (OSError, http.client.HTTPException): pass
+        except (OSError, http.client.HTTPException) as e: why.append(f"{type(e).__name__}: {e}"[:120])
         with lock: total[0] += got
     t0 = time.perf_counter(); th = [threading.Thread(target=work, daemon=True) for _ in range(sp["streams"])]
     for x in th: x.start()
     for x in th: x.join(sp["seconds"] + 20)
     el = max(0.001, time.perf_counter() - t0)
+    if not total[0] and why: raise RuntimeError(why[0])
     return round(total[0] * 8 / el / 1e6, 1) if total[0] else None
 
 # Subida: varios flujos envían bloques de 2 MB al servidor hasta que se cumple el tiempo.
@@ -272,6 +277,7 @@ def speed_down(cfg):
 def speed_up(cfg):
     sp = cfg["speed"]; total, lock, end = [0], threading.Lock(), time.time() + sp["seconds"]
     block = bytes(2 * 1024 * 1024)
+    why = []
     def work():
         got = 0
         try:
@@ -280,15 +286,17 @@ def speed_up(cfg):
                 while time.time() < end:
                     c.request("POST", path, body=block, headers={"User-Agent": "LabTower-WAN", "Content-Type": "application/octet-stream"})
                     r = c.getresponse(); r.read()
-                    if r.status >= 400: break
+                    if r.status >= 400:
+                        why.append(f"HTTP {r.status} from the upload address"); break
                     got += len(block)
             finally: c.close()
-        except (OSError, http.client.HTTPException): pass
+        except (OSError, http.client.HTTPException) as e: why.append(f"{type(e).__name__}: {e}"[:120])
         with lock: total[0] += got
     t0 = time.perf_counter(); th = [threading.Thread(target=work, daemon=True) for _ in range(sp["streams"])]
     for x in th: x.start()
     for x in th: x.join(sp["seconds"] + 20)
     el = max(0.001, time.perf_counter() - t0)
+    if not total[0] and why: raise RuntimeError(why[0])
     return round(total[0] * 8 / el / 1e6, 1) if total[0] else None
 
 def run_speedtest(cfg) -> dict:
@@ -297,7 +305,9 @@ def run_speedtest(cfg) -> dict:
         res["ping"] = speed_ping(cfg)
         res["down"] = speed_down(cfg)
         if res["down"] is None: res["error"] = "No data received from the test server"
-        elif cfg["speed"]["upload"]: res["up"] = speed_up(cfg)
+        elif cfg["speed"]["upload"]:
+            try: res["up"] = speed_up(cfg)
+            except Exception as e: log.warning(f"upload test failed: {e}")      # the download result is still worth keeping
     except Exception as e:
         res["error"] = f"{type(e).__name__}: {e}"[:200]
     return res
