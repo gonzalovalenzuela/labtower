@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1l — 2026-10-27
+
+- Resumen: se quita la franja de indicadores de arriba (autonomía, nodos, discos, bloqueado, velocidad, equipos), porque ensuciaba y no se entendía. Los datos siguen en cada tarjeta.
+
 ## 2.1k — 2026-10-27
 
 - Nuevo aspecto, una mezcla de NOC y estilo Apple: tema oscuro por defecto (claro y «sistema» siguen disponibles; botón ◐ en el Resumen y en la página de inicio), tarjetas más redondeadas con un leve brillo, títulos de bloque pequeños en mayúsculas, cifras grandes, tablas densas, menú lateral con marca de acento y barra superior translúcida. Todo sale de una hoja común (`theme.css`/`theme.js`) que cargan todos los módulos, el panel Admin y la página de inicio. Ya no se cargan tipografías de Google: se usa la del sistema (San Francisco en Apple).

@@ -98,8 +98,7 @@ function renderUPS(d){
     for(const [name,v] of Object.entries(srv.ups||{})){
       n++;const st=(v['ups.status']||'').split(/\s+/);const lb=st.includes('LB'),ob=st.includes('OB');
       const charge=parseFloat(v['battery.charge'])||0,load=parseFloat(v['ups.load'])||0,run=parseInt(v['battery.runtime'])||0;
-      KS.upsN=(KS.upsN||0)+1;if(ob||lb)KS.upsOb=(KS.upsOb||0)+1;if(run&&(KS.upsRun==null||run<KS.upsRun))KS.upsRun=run;
-      const m=lb?['crit',T('lowb')]:ob?['warn',T('batt')]:['ok',T('mains')];
+            const m=lb?['crit',T('lowb')]:ob?['warn',T('batt')]:['ok',T('mains')];
       if(lb){issues.push({lv:'crit',m:'ups',t:`${name} ${T('issue_lowb')} (${charge.toFixed(0)}%)`,href:'/nut/'})}
       else if(ob){issues.push({lv:'warn',m:'ups',t:`${name} ${T('issue_batt')} (${charge.toFixed(0)}%, ${dur(run)})`,href:'/nut/'})}
       sev=worst(sev,m[0]);
@@ -117,21 +116,6 @@ function renderUPS(d){
 }
 
 // ───────── Franja de indicadores / KPI strip ─────────
-// ES: Resumen de una mirada arriba de las tarjetas: solo aparecen los módulos que tienen datos. El borde de cada tile toma el color del estado.
-// EN: At-a-glance summary above the cards: only modules with data appear. Each tile's top border takes the status colour.
-let KS={};
-function renderKpis(){
-  const t=[],nf=n=>Number(n).toLocaleString(lang==='es'?'es-CL':'en-GB');
-  if(KS.upsN)t.push({c:KS.upsOb?'warn':'ok',v:KS.upsRun?dur(KS.upsRun):'—',l:T('runtime'),s:'UPS'+(KS.upsN>1?' ×'+KS.upsN:'')});
-  if(KS.nT)t.push({c:KS.nOn<KS.nT?'crit':'ok',v:KS.nOn+'/'+KS.nT,l:T('nodes'),s:'Proxmox'});
-  if(KS.dT)t.push({c:KS.dOk<KS.dT?'crit':'ok',v:KS.dOk+'/'+KS.dT,l:T('nasdisks'),s:'NAS'});
-  if(KS.dq){const p=KS.db/KS.dq*100;t.push({c:'ok',v:p.toFixed(1)+'%',l:T('dnsblk'),s:'DNS · '+nf(KS.dq),ring:p})}
-  if(KS.wanUp!==undefined)t.push({c:KS.wanUp?'ok':'crit',v:KS.down!=null?Math.round(KS.down)+' Mb/s':(KS.rtt!=null?Math.round(KS.rtt*10)/10+' ms':'—'),l:T('wandown'),s:'WAN'+(KS.rtt!=null&&KS.down!=null?' · '+Math.round(KS.rtt*10)/10+' ms':'')});
-  if(KS.hT)t.push({c:'ok',v:String(KS.hOn),l:T('online'),s:'Net · '+KS.hT});
-  const el=$('kstrip');if(!el)return;
-  el.innerHTML=t.map(k=>`<div class="kt ${k.c}">${k.ring!=null?`<span class="kring" style="--p:${Math.max(0,Math.min(100,k.ring)).toFixed(1)}"></span>`:''}<div><b>${esc(k.v)}</b><span>${esc(k.l)}</span><em>${esc(k.s)}</em></div></div>`).join('');
-  el.classList.toggle('hide',!t.length);
-}
 // ───────── Proxmox ─────────
 function pveChart(id){
   const a=pveH[id]||[];if(a.length<3)return '';
@@ -142,7 +126,7 @@ function renderPVE(d){
   const el=$('c-pve');let sev='ok',body='';const cl=d.clusters||[];
   cl.forEach(c=>{
     const sn=c.snap||{},data=sn.data||{},nodes=data.nodes||[];let s='ok';
-    const on=nodes.filter(x=>x.status==='online'),off=nodes.filter(x=>x.status!=='online');KS.nOn=(KS.nOn||0)+on.length;KS.nT=(KS.nT||0)+nodes.length;
+    const on=nodes.filter(x=>x.status==='online'),off=nodes.filter(x=>x.status!=='online');
     let vm=0,vmT=0,ct=0,ctT=0,cpuN=0,cpuD=0,mem=0,memD=0;
     on.forEach(x=>{(x.vms||[]).filter(v=>!v.template).forEach(v=>{vmT++;if(v.status==='running')vm++});(x.cts||[]).filter(v=>!v.template).forEach(v=>{ctT++;if(v.status==='running')ct++});cpuN+=(x.cpu||0)*(x.maxcpu||0);cpuD+=x.maxcpu||0;mem+=x.mem||0;memD+=x.maxmem||0});
     const cpu=cpuD?cpuN/cpuD*100:0,mp=memD?mem/memD*100:0;
@@ -189,7 +173,7 @@ function renderNAS(d){
     if(sn.error){s='crit';issues.push({lv:'crit',m:'nas',t:`${n.name}: ${T('issue_nasdown')}`,href:'/nas/'})}
     (data.alerts||[]).forEach(a=>{if(a.lv==='info')return;s=worst(s,a.lv);issues.push({lv:a.lv,m:'nas',t:`${n.name}: ${nasAl(a)}`,href:'/nas/'})});
     sev=worst(sev,s);
-    const disks=data.disks||[],dOk=disks.filter(x=>x.lv==='ok').length,_ks=(KS.dOk=(KS.dOk||0)+dOk,KS.dT=(KS.dT||0)+disks.length),vols=(data.raids||[]).filter(x=>x.pct!=null&&!x.pool),vmax=vols.reduce((m,x)=>x.pct>m.pct?x:m,{pct:-1});
+    const disks=data.disks||[],dOk=disks.filter(x=>x.lv==='ok').length,vols=(data.raids||[]).filter(x=>x.pct!=null&&!x.pool),vmax=vols.reduce((m,x)=>x.pct>m.pct?x:m,{pct:-1});
     const cpu=data.cpu&&data.cpu.pct,mem=data.mem&&data.mem.pct;
     body+=`<div class="unit"><div class="uh">${esc(n.name)} <span class="sub">${esc(sy.model||'')}</span>${pill(s,sn.error&&!data.system?T('unreach'):s==='ok'?'OK':s==='warn'?T('attn'):T('fail'))}</div>
      <div class="kpis"><div class="kpi"><b>${disks.length?dOk+'/'+disks.length:'—'}</b><span>${T('nasdisks')}</span></div><div class="kpi"><b>${sy.temp!=null?sy.temp+'°':'—'}</b><span>${T('temp')}</span></div><div class="kpi"><b>${sy.uptime?dur(sy.uptime):'—'}</b><span>${T('uptime')}</span></div></div>
@@ -226,7 +210,6 @@ function renderDNS(d){
     if(off){s='crit';issues.push({lv:'crit',m:'dns',t:`${n.name}: ${T('issue_dnsdown')}`,href:'/dns/'})}
     ((data&&data.alerts)||[]).forEach(a=>{if(a.lv==='info')return;s=worst(s,a.lv);issues.push({lv:a.lv,m:'dns',t:`${n.name}: ${dnsAl(a)}`,href:'/dns/'})});
     sev=worst(sev,s);
-    if(data){KS.dq=(KS.dq||0)+(+data.queries||0);KS.db=(KS.db||0)+(+data.blocked||0)}
     const pr=data?({enabled:T('proton'),disabled:T('protoff'),failed:T('protfail')}[data.blocking]||'—'):'—';
     body+=`<div class="unit"><div class="uh">${esc(n.name)} <span class="sub">${esc(n.type==='adguard'?'AdGuard':'Pi-hole')}</span>${pill(s,off&&!data?T('unreach'):s==='ok'?'OK':s==='warn'?T('attn'):T('fail'))}</div>
      <div class="kpis"><div class="kpi"><b>${data?esc(Number(data.queries||0).toLocaleString(lang==='es'?'es-CL':'en-GB')):'—'}</b><span>${T('dnsq')}</span></div><div class="kpi"><b>${data&&data.pct!=null?esc(data.pct)+'%':'—'}</b><span>${T('dnsblk')}</span></div><div class="kpi"><b>${data&&data.ms!=null?esc(data.ms)+' ms':'—'}</b><span>${T('dnsms')}</span></div></div>
@@ -248,7 +231,6 @@ function renderWAN(d){
     if(!s0.up){sev='crit';issues.push({lv:'crit',m:'wan',t:T(s0.scope==='lan'?'issue_wanlan':'issue_wandown'),href:'/wan/'})}
     (s0.alerts||[]).forEach(a=>{if(a.lv==='info'||a.type.indexOf('down_')===0)return;sev=worst(sev,a.lv);issues.push({lv:a.lv,m:'wan',t:wanAl(a),href:'/wan/'})});
     const sp=(d.speed||[]).filter(x=>!x.error&&x.down!=null),ls=sp.length?sp[sp.length-1]:null,up=(d.uptime||{})['24h'];
-    KS.down=ls?ls.down:null;KS.rtt=s0.rtt;KS.wanUp=!!s0.up;
     body=`<div class="unit"><div class="uh">${T('wanstate')} ${pill(sev,!s0.up?T(s0.scope==='lan'?'wanlan':'wannet'):sev==='ok'?T('wanon'):T('attn'))}</div>
      <div class="kpis"><div class="kpi"><b>${s0.rtt!=null?Math.round(s0.rtt*10)/10+' ms':'—'}</b><span>${T('wanrtt')}</span></div><div class="kpi"><b>${s0.loss!=null?Math.round(s0.loss*10)/10+'%':'—'}</b><span>${T('wanloss')}</span></div><div class="kpi"><b>${ls?Math.round(ls.down)+' Mb/s':'—'}</b><span>${T('wandown')}</span></div></div>
      ${up!=null?`<div class="row"><span class="l">${T('wanup')}</span><span class="v">${up}%</span></div>`:''}
@@ -264,7 +246,7 @@ const TYPE_ES={computer:'Computador',phone:'Teléfono',router:'Router',switch:'S
 const TYPE_EN={computer:'Computer',phone:'Phone',router:'Router',switch:'Switch',ap:'Wi-Fi AP',storage:'Storage',tv:'TV',camera:'Camera',appliance:'Appliance',printer:'Printer',tablet:'Tablet',console:'Game Console',server:'Server',voip:'IP Phone',ups:'UPS',speaker:'Smart Speaker',other:'Other'};
 function renderNet(d){
   const el=$('c-net'),hosts=d.hosts||[],sc=d.scan||{};let sev='ok';
-  const on=hosts.filter(h=>h.online),off=hosts.length-on.length;KS.hOn=on.length;KS.hT=hosts.length;
+  const on=hosts.filter(h=>h.online),off=hosts.length-on.length;
   const now=Date.now()/1000;
   const fresh=hosts.filter(h=>h.new_device&&now-(h.first_seen||0)<48*3600).sort((a,b)=>b.first_seen-a.first_seen);
   if(sc.error){sev='warn';issues.push({lv:'warn',m:'net',t:`${T('issue_scan')}: ${sc.error}`,href:'/net/'})}
@@ -351,7 +333,6 @@ async function refresh(){
     piHTs=Date.now();
     try{const h=await jget('api/pihistory');piH=h&&h.pi?h:null}catch(e){}
   }
-  KS={};
   const card=(id,show)=>$(id).classList.toggle('hide',!show);
   card('c-nut',!!R.nut);card('c-pve',!!R.pve);card('c-nas',!!R.nas);card('c-dns',!!R.dns);card('c-wan',!!R.wan);card('c-net',!!R.net);fitGrid();
   const fail=(id,name)=>{$(id).innerHTML=`<div class="ch"><h2>${name}</h2>${pill('crit',T('unreach'))}</div>`;issues.push({lv:'crit',m:name,t:`${name}: ${T('unreach')}`});return 'crit'};
@@ -363,7 +344,6 @@ async function refresh(){
   if(R.net)sevs.push(R.net.status==='fulfilled'?renderNet(R.net.value):fail('c-net',T('net')));
   if(R.sys.status==='fulfilled')sevs.push(renderPi(R.sys.value));
   if(R.ev.status==='fulfilled')renderEvents(R.ev.value.events||[]);
-  renderKpis();
   fitGrid();   // ES: con el contenido ya pintado (el mosaico del kiosko mide las tarjetas) / EN: with the content painted (kiosk masonry measures the cards)
   const g=sevs.reduce((m,x)=>worst(m,x),'ok');
   const gp=$('gpill');gp.className='pill '+g;$('gtxt').textContent=g==='ok'?T('allok'):g==='warn'?T('attn'):T('fail');
