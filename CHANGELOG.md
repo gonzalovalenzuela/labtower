@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1e — 2026-10-27
+
+- Resumen, detalle del servidor: «Logged-in users» ahora también muestra a quien entró por SSH o por consola en equipos sin utmp ni logind (DietPi, Debian 13 mínimo). Antes aparecía vacío.
+
 ## 2.1d — 2026-10-27
 
 - Resumen: la ventana de detalle también dice «LabTower Server» (antes «Raspberry Pi — detalle»).

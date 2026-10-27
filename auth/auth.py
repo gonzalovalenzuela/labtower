@@ -1135,10 +1135,42 @@ def _logind_users(path="/run/systemd/sessions"):
                     "host": kv.get("REMOTE_HOST", ""), "since": since})
     return out
 
+def _proc_users(proc="/proc"):
+    """Fallback when neither utmp nor logind know the sessions (minimal images such as DietPi, Debian 13 without utmp).
+    Looks for the processes that exist only while someone is logged in: «sshd-session: user@pts/0» and login shells («-bash») with a terminal.
+    ES: Respaldo cuando ni utmp ni logind conocen las sesiones: busca los procesos de una sesión abierta (sshd y shells de login con terminal)."""
+    import pwd, re
+    out = []
+    try:
+        btime = int(next(l.split()[1] for l in Path(proc, "stat").read_text().splitlines() if l.startswith("btime ")))
+        hz = os.sysconf("SC_CLK_TCK")
+    except Exception: btime, hz = 0, 100
+    try: pids = [n for n in os.listdir(proc) if n.isdigit()]
+    except OSError: return out
+    ssh = re.compile(r"^sshd(?:-session)?: ([^@\s\[]+)@(\S+)$")
+    for pid in pids:
+        try:
+            parts = Path(proc, pid, "cmdline").read_bytes().split(b"\0")
+            cmd = parts[0].decode("utf-8", "ignore")
+            st = Path(proc, pid, "stat").read_text()
+            f = st[st.rindex(")") + 2:].split()
+            tty_nr, since = int(f[4]), btime + int(f[19]) // hz if btime else 0
+            user = tty = ""
+            m = ssh.match(cmd.strip())
+            if m: user, tty = m.group(1), m.group(2)
+            elif cmd.startswith("-") and len(cmd) > 1 and tty_nr:           # login shell attached to a terminal
+                major, minor = (tty_nr >> 8) & 0xfff, (tty_nr & 0xff) | ((tty_nr >> 12) & 0xfff00)
+                tty = f"pts/{minor}" if major in range(136, 144) else f"tty{minor}" if major == 4 else ""
+                try: user = pwd.getpwuid(os.stat(Path(proc, pid)).st_uid).pw_name
+                except Exception: user = ""
+            if user and tty: out.append({"user": user, "tty": tty, "host": "", "since": since})
+        except Exception: continue
+    return out
+
 def _logged_users():
-    """Logged-in sessions from utmp and logind, without duplicates (same user and terminal)."""
+    """Logged-in sessions from utmp, logind and (as a last resort) the process list, without duplicates (same user and terminal)."""
     seen, out = set(), []
-    for u in _utmp_users() + _logind_users():
+    for u in _utmp_users() + _logind_users() + _proc_users():
         k = (u["user"], u["tty"])
         if k in seen: continue
         seen.add(k); out.append(u)
