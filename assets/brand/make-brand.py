@@ -19,6 +19,8 @@ MODULES = [
     ("net",      "Net Monitor",             "#14b8a6"),
     ("proxmox",  "Proxmox Monitor",         "#e15c00"),
     ("nas",      "NAS Monitor",             "#0e9aa7"),
+    ("dns",      "DNS Monitor",             "#d946ef"),
+    ("wan",      "WAN Monitor",             "#0ea5e9"),
     ("wol",      "WOL Console",             "#4361ee"),
     ("admin",    "Admin Panel",             "#f0527a"),
 ]
@@ -53,6 +55,13 @@ def solid(name, dark):
     elif name == "nas":         # storage unit with two bays and an LED
         g = (f'<rect x="3" y="3" width="18" height="18" rx="3" fill="{F}"/><path d="M7 9 H17 M7 14 H17" stroke="{D}" stroke-width="2" stroke-linecap="round" opacity=".5"/>'
              f'<circle cx="16" cy="18" r="1.3" fill="{D}"/>')
+    elif name == "dns":         # globe
+        g = (f'<circle cx="12" cy="12" r="10" fill="{F}"/><path d="M2.4 12 H21.6" stroke="{D}" stroke-width="1.8" opacity=".5"/>'
+             f'<path d="M12 2.4 a14 14 0 0 1 0 19.2 a14 14 0 0 1 0-19.2" fill="none" stroke="{D}" stroke-width="1.8" opacity=".5"/>')
+    elif name == "wan":         # wifi arcs
+        g = (f'<path d="M2 9.2 a14.5 14.5 0 0 1 20 0" fill="none" stroke="{S}" stroke-width="2.6" stroke-linecap="round"/>'
+             f'<path d="M5.6 13 a9.4 9.4 0 0 1 12.8 0" fill="none" stroke="{F}" stroke-width="2.6" stroke-linecap="round"/>'
+             f'<path d="M9 16.6 a4.6 4.6 0 0 1 6 0" fill="none" stroke="{F}" stroke-width="2.6" stroke-linecap="round"/><circle cx="12" cy="20" r="1.8" fill="{F}"/>')
     elif name == "wol":         # lightning bolt
         g = f'<path d="M13 2 L3.6 13.6 H11.6 L10.8 22 L20.6 10.2 H12.4 Z" fill="{F}" stroke="{F}" stroke-width="1.2" stroke-linejoin="round"/>'
     elif name == "admin":       # shield

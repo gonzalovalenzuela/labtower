@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1 — 2026-10-27
+
+Dos módulos nuevos.
+
+- **DNS Monitor** (`/dns/`, puerto 8087): uno o varios Pi-hole (v6 y v5, se detecta solo) o AdGuard Home. Muestra consultas, % bloqueado, clientes, dominios en listas, tiempo de respuesta, los más consultados y bloqueados, clientes más activos, DNS de salida, consultas por hora e historial. Permite pausar y reanudar el bloqueo (permiso «execute»). La contraseña o el token se guardan con permisos 0600 y no vuelven al navegador.
+- **WAN Monitor** (`/wan/`, puerto 8088): latencia, jitter y pérdida (ping o TCP a varios destinos), tiempo de resolución DNS, puerta de enlace, cortes (distingue «sin internet» de «sin red local»), IP pública con aviso de cambio, disponibilidad a 24 h, 7 y 30 días, y prueba de velocidad programada o a pedido (bajada, subida y ping, contra un servidor compatible con Cloudflare). Mientras corre la prueba se pausan las mediciones.
+- Permisos `dns` y `wan` por usuario en el panel Admin; ambos módulos en el menú, la portada, el Resumen (tarjetas y línea de tiempo), la salud del sistema, los respaldos y el teleporter.
+- El paquete depende de `iputils-ping`. Iconos nuevos para los dos módulos.
+
 ## 2.0.1 — 2026-10-27
 
 Reúne los cambios de los builds 2.0a a 2.0c: solo cambia la imagen, no hay cambios de funcionamiento.

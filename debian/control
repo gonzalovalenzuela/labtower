@@ -1,9 +1,9 @@
 Package: labtower
-Version: 2.0.1
+Version: 2.1
 Section: admin
 Priority: optional
 Architecture: all
-Depends: python3 (>= 3.9), nginx, nut, nut-client, snmp, sudo
+Depends: python3 (>= 3.9), nginx, nut, nut-client, snmp, sudo, iputils-ping
 Recommends: openssh-client, gnupg, openssl, cron | cron-daemon
 Suggests: ieee-data
 Conflicts: pi-console

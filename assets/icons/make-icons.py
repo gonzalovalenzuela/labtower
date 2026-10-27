@@ -42,7 +42,7 @@ def data_uri(img, fmt="PNG"):
 # EN: iOS downloads the icon again when adding the app to the home screen, in a separate process that can fail (own certificate, redirect…). That is why the apple-touch-icon is embedded (data:) in every page: there is no second download. The favicon is embedded too.
 touch = data_uri(Image.open(out / "apple-touch-icon.png").convert("RGB"))
 fav = data_uri(rounded(64, 12))
-pages = [out / "index.html"] + [root / m / "static" / "index.html" for m in ("auth", "wol-console", "nut-monitor", "net-monitor", "proxmox-monitor", "nas-monitor", "overview")]
+pages = [out / "index.html"] + [root / m / "static" / "index.html" for m in ("auth", "wol-console", "nut-monitor", "net-monitor", "proxmox-monitor", "nas-monitor", "dns-monitor", "wan-monitor", "overview")]
 for f in pages:
     t = f.read_text()
     n = re.sub(r'<link rel="apple-touch-icon" href="[^"]*">', lambda m: f'<link rel="apple-touch-icon" href="{touch}">', t, count=1)

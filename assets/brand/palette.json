@@ -39,6 +39,18 @@
       "accent-light": "#93d2d7",
       "accent-dim": "#173447"
     },
+    "dns": {
+      "name": "DNS Monitor",
+      "accent": "#d946ef",
+      "accent-light": "#eeacf8",
+      "accent-dim": "#3c2554"
+    },
+    "wan": {
+      "name": "WAN Monitor",
+      "accent": "#0ea5e9",
+      "accent-light": "#93d6f5",
+      "accent-dim": "#173653"
+    },
     "wol": {
       "name": "WOL Console",
       "accent": "#4361ee",

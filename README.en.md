@@ -21,6 +21,8 @@
 | **Net Monitor** | `/net/` | 8083 | Scans the network: hosts, type, OS, ports, MAC and vendor |
 | **Proxmox Monitor** | `/pve/` | 8084 | Proxmox VE clusters: nodes, VMs, CTs and Ceph |
 | **NAS Monitor** | `/nas/` | 8086 | One or more Synology NAS over SNMP: disks, volumes, temperature, CPU, memory and network |
+| **DNS Monitor** | `/dns/` | 8087 | Pi-hole (v5 and v6) and AdGuard Home: queries, % blocked, top lists, upstream DNS and pausing the blocking |
+| **WAN Monitor** | `/wan/` | 8088 | Internet uplink: latency, loss, outages, public IP and a scheduled speed test |
 | **WOL Console** | `/wol/` | 8080 | Powers on machines with Wake-on-LAN |
 | **Admin Panel** | `/admin/` | 8082 | Users, permissions, sessions, backups and system health |
 
@@ -43,9 +45,9 @@ All screens (light and dark, 4 sizes) are in [`docs/screenshots/`](docs/screensh
 ## Install
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.0.1/labtower_2.0.1_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1/labtower_2.1_all.deb
 sudo apt-get update
-sudo apt-get install -y ./labtower_2.0.1_all.deb
+sudo apt-get install -y ./labtower_2.1_all.deb
 ```
 
 Use `apt-get install ./file.deb`, not `dpkg -i`, so `apt` installs the dependencies. Then open `http://<pi-ip>/`.
@@ -57,8 +59,8 @@ The installer creates the `labtower` system user, the systemd services, the ngin
 ## Update
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.0.1/labtower_2.0.1_all.deb
-sudo apt-get install -y ./labtower_2.0.1_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1/labtower_2.1_all.deb
+sudo apt-get install -y ./labtower_2.1_all.deb
 labtower-health
 ```
 
@@ -198,7 +200,7 @@ sudo labtower-sftp-backup status      # result of the last run
 ```bash
 labtower-health         # summary: exit 0 = ok, 1 = degraded, 2 = failed (-j for JSON)
 labtower-resources      # memory and CPU per service (-w refreshes every 2 s)
-systemctl status wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor labtower-overview
+systemctl status wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor labtower-overview
 journalctl -u net-monitor -f        # logs of one service
 sudo systemctl restart net-monitor  # restart one
 ```
@@ -213,6 +215,8 @@ Each module answers `GET /api/health` (200 = ok or degraded, 503 = failed). With
 | `net-monitor` | Net Monitor |
 | `proxmox-monitor` | Proxmox Monitor |
 | `nas-monitor` | NAS Monitor |
+| `dns-monitor` | DNS Monitor |
+| `wan-monitor` | WAN Monitor |
 | `labtower-overview` | Overview |
 
 **Uninstall:** `sudo apt remove labtower` stops the services and saves a copy of the data in `/var/backups/labtower`. `sudo apt purge labtower` also removes the code, services, nginx site and the `labtower` user. In both cases `/var/lib/labtower` and `/var/backups/labtower` are **not deleted**; remove them by hand for a clean machine.
@@ -225,7 +229,7 @@ The defaults suit most setups. To change them, write `NAME=value` in `/etc/defau
 
 ```bash
 echo 'NUT_POLL=5' | sudo tee -a /etc/default/labtower
-sudo systemctl restart wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor labtower-overview
+sudo systemctl restart wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor labtower-overview
 ```
 
 | Variable | Module | Default | Purpose |
@@ -275,6 +279,8 @@ labtower/
 ├── net-monitor/
 ├── proxmox-monitor/
 ├── nas-monitor/       # NAS Monitor (Synology over SNMP)
+├── dns-monitor/       # DNS Monitor (Pi-hole / AdGuard Home)
+├── wan-monitor/       # WAN Monitor (internet)
 ├── overview/          # Overview
 ├── home/              # home page and icons
 ├── etc/               # nginx, backup.conf, cron

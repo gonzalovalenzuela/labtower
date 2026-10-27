@@ -9,7 +9,7 @@ show() {
   python3 - <<'PY'
 import os, subprocess, time
 NAMES = {"wol-console": "WOL Console", "nut-monitor": "UPS Monitor", "net-monitor": "Net Monitor",
-         "proxmox-monitor": "Proxmox Monitor", "nas-monitor": "NAS Monitor", "overview": "Overview", "auth": "Admin panel"}
+         "proxmox-monitor": "Proxmox Monitor", "nas-monitor": "NAS Monitor", "dns-monitor": "DNS Monitor", "wan-monitor": "WAN Monitor", "overview": "Overview", "auth": "Admin panel"}
 rows, total = [], 0.0
 for pid in filter(str.isdigit, os.listdir("/proc")):
     try:

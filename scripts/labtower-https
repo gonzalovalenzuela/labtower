@@ -17,7 +17,7 @@ TLS_DIR="$CONF_DIR/tls"
 HTTPS_D="$CONF_DIR/https.d"
 HTTP_EXTRA_D="$CONF_DIR/http-extra.d"
 DEFAULTS="${LABTOWER_DEFAULTS:-/etc/default/labtower}"
-SERVICES="wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor labtower-overview"
+SERVICES="wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor labtower-overview"
 SKIP_SYSTEM="${LABTOWER_HTTPS_SKIP_SYSTEM:-0}"   # 1 = no nginx/systemctl (tests)
 
 die() { echo "Error: $*" >&2; exit 1; }

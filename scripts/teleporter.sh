@@ -50,7 +50,7 @@ SPOOL_DIR="$DATA_DIR/teleporter"      # backups/uploads handled by the admin pan
 LOCK_FILE="${LABTOWER_LOCK:-/run/lock/labtower-teleporter.lock}"
 RESTORE_LOG="${LABTOWER_RESTORE_LOG:-/var/log/labtower/restore.log}"   # root-owned: the panel only reads it
 SERVICE_USER="${LABTOWER_SERVICE_USER:-labtower}"
-SERVICES="wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor labtower-overview"
+SERVICES="wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor labtower-overview"
 SKIP_SYSTEM="${TELEPORTER_SKIP_SYSTEM:-0}"   # 1 = no systemctl/nginx/chown (tests)
 DROP_FORCE="${TELEPORTER_DROP:-0}"           # 1 = drop to the service user even with SKIP_SYSTEM (tests)
 # Trusted base for the `sfs` helper: the (root-owned) parent of the data folder, resolved once.
@@ -69,6 +69,9 @@ DATA_FILES=(
   "data/net-monitor/config.json|$DATA_DIR/net-monitor/config.json"
   "data/proxmox-monitor/clusters.json|$DATA_DIR/proxmox-monitor/clusters.json"
   "data/nas-monitor/nas.json|$DATA_DIR/nas-monitor/nas.json"
+  "data/dns-monitor/dns.json|$DATA_DIR/dns-monitor/dns.json"
+  "data/wan-monitor/wan.json|$DATA_DIR/wan-monitor/wan.json"
+  "data/wan-monitor/state.json|$DATA_DIR/wan-monitor/state.json"
   "data/metrics.db|$DATA_DIR/metrics.db"
 )
 # ES: Archivos de la versión 1.2.0o (historiales en JSON). Ya no se respaldan, pero un respaldo antiguo puede traerlos: al restaurar se dejan en su sitio y los servicios los importan a metrics.db una sola vez.
@@ -225,7 +228,7 @@ as_service() {
 }
 is_secret() {
   case "$1" in
-    *users.json|*sessions.json|*config.json|*clusters.json|*nas.json|*servers.json|*upsd.users|*upsmon.conf) return 0;;
+    *users.json|*sessions.json|*config.json|*clusters.json|*nas.json|*dns.json|*servers.json|*upsd.users|*upsmon.conf) return 0;;
   esac
   return 1
 }

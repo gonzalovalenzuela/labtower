@@ -25,6 +25,8 @@ if id -u labtower >/dev/null 2>&1 && command -v runuser >/dev/null 2>&1; then
         /var/lib/labtower/net-monitor/config.json \
         /var/lib/labtower/proxmox-monitor/clusters.json \
         /var/lib/labtower/nas-monitor/nas.json \
+        /var/lib/labtower/dns-monitor/dns.json \
+        /var/lib/labtower/wan-monitor/wan.json \
         /opt/labtower/auth/users.json \
         /opt/labtower/wol-console/devices.json \
         /opt/labtower/nut-monitor/servers.json \

@@ -1,7 +1,7 @@
 // ───────── Textos / texts ─────────
 const TXT={
  en:{title:'Overview',sortBtn:'Reorder',sortDone:'Done',sortReset:'Reset order',mvEarlier:'Move earlier',mvLater:'Move later',mvDrag:'Drag to move',home:'Home',kiosk:'Kiosk',logout:'Sign out',login:'Sign in',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',exitk:'Exit kiosk',rint:'Refresh every',rman:'Manual',rnow:'Refresh now',ascroll:'Auto-scroll',updated:'Updated',allok:'All good',attn:'Attention',fail:'Failure',
-  ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',net:'Net Monitor',pi:'Raspberry Pi',ev:'Timeline',open:'Open →',noups:'No UPS servers configured',nopve:'No clusters configured',nonas:'No NAS configured',nasdisks:'Disks OK',nasvol:'Volume',issue_nasdown:'NAS unreachable',nonet:'No scan yet',noev:'No events yet',
+  ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',dns:'DNS Monitor',wan:'WAN Monitor',net:'Net Monitor',pi:'Raspberry Pi',ev:'Timeline',open:'Open →',noups:'No UPS servers configured',nopve:'No clusters configured',nonas:'No NAS configured',nodns:'No DNS servers configured',issue_dnsdown:'DNS server unreachable',dnsq:'Queries',dnsblk:'Blocked',dnsms:'Response',dnsprot:'Blocking',protoff:'Paused',proton:'Active',protfail:'Failed',wanrtt:'Latency',wanloss:'Loss',wanup:'Uptime 24 h',wandown:'Download',wanip:'Public IP',wanstate:'Internet',wanon:'Online',wannet:'Down',wanlan:'No LAN',wanwait:'Measuring…',issue_wandown:'No internet access',issue_wanlan:'Local network unreachable',nasdisks:'Disks OK',nasvol:'Volume',issue_nasdown:'NAS unreachable',nonet:'No scan yet',noev:'No events yet',
   uptimeOnl:'Online',avail:'Availability',lastOut:'Last outage',noOut:'no outages recorded',onbattNow:'on battery now',
   mains:'On mains',batt:'On battery',lowb:'Low battery',unreach:'Unreachable',battery:'Battery',load:'Load',runtime:'Runtime',power:'Power',nodes:'Nodes',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memory',disk:'Disk',temp:'Temp',uptime:'Uptime',
   online:'Online',known:'Known',offline:'Offline',newdev:'New devices',lastscan:'Last scan',scanning:'Scanning…',ceph:'Ceph',types:'By device type',nonew:'No new devices',
@@ -9,7 +9,7 @@ const TXT={
   issue_batt:'is running on battery',issue_lowb:'has low battery',issue_srv:'unreachable',issue_node:'node offline',issue_cl:'cluster unreachable',issue_cpu:'high CPU',issue_ram:'high memory',issue_ceph:'Ceph',
   issue_temp:'Pi temperature high',issue_disk:'Pi disk almost full',issue_mem:'Pi memory high',issue_pwr:'Pi power supply problem',issue_scan:'scan error',h_temp:'Temp',h_min:'min',h_max:'max',h_uv:'Under-voltage',h_nouv:'no under-voltage',h_utemp:'UPS temperature 24 h'},
  es:{title:'Resumen',sortBtn:'Ordenar',sortDone:'Listo',sortReset:'Restablecer orden',mvEarlier:'Mover antes',mvLater:'Mover después',mvDrag:'Arrastra para mover',home:'Inicio',kiosk:'Kiosko',logout:'Cerrar sesión',login:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',exitk:'Salir de kiosko',rint:'Actualizar cada',rman:'Manual',rnow:'Actualizar ahora',ascroll:'Auto-desplazar',updated:'Actualizado',allok:'Todo en orden',attn:'Atención',fail:'Falla',
-  ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',net:'Net Monitor',pi:'Raspberry Pi',ev:'Línea de tiempo',open:'Abrir →',noups:'Sin servidores UPS configurados',nopve:'Sin clusters configurados',nonas:'Sin NAS configurados',nasdisks:'Discos OK',nasvol:'Volumen',issue_nasdown:'NAS sin conexión',nonet:'Aún sin escaneo',noev:'Sin eventos todavía',
+  ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',dns:'DNS Monitor',wan:'WAN Monitor',net:'Net Monitor',pi:'Raspberry Pi',ev:'Línea de tiempo',open:'Abrir →',noups:'Sin servidores UPS configurados',nopve:'Sin clusters configurados',nonas:'Sin NAS configurados',nodns:'Sin servidores DNS configurados',issue_dnsdown:'Servidor DNS sin conexión',dnsq:'Consultas',dnsblk:'Bloqueadas',dnsms:'Respuesta',dnsprot:'Bloqueo',protoff:'Pausado',proton:'Activo',protfail:'Con falla',wanrtt:'Latencia',wanloss:'Pérdida',wanup:'Disponibilidad 24 h',wandown:'Bajada',wanip:'IP pública',wanstate:'Internet',wanon:'En línea',wannet:'Caído',wanlan:'Sin LAN',wanwait:'Midiendo…',issue_wandown:'Sin acceso a internet',issue_wanlan:'Red local sin respuesta',nasdisks:'Discos OK',nasvol:'Volumen',issue_nasdown:'NAS sin conexión',nonet:'Aún sin escaneo',noev:'Sin eventos todavía',
   uptimeOnl:'En línea',avail:'Disponibilidad',lastOut:'Último corte',noOut:'sin cortes registrados',onbattNow:'en batería ahora',
   mains:'En red eléctrica',batt:'Con batería',lowb:'Batería baja',unreach:'Sin conexión',battery:'Batería',load:'Carga',runtime:'Autonomía',power:'Consumo',nodes:'Nodos',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memoria',disk:'Disco',temp:'Temp',uptime:'Encendida',
   online:'En línea',known:'Conocidos',offline:'Apagados',newdev:'Equipos nuevos',lastscan:'Último escaneo',scanning:'Escaneando…',ceph:'Ceph',types:'Por tipo de equipo',nonew:'Sin equipos nuevos',
@@ -182,6 +182,49 @@ function renderNAS(d){
   el.innerHTML=`<div class="ch"><h2>${T('nas')}</h2>${L.length?pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail')):''}<a class="go" href="/nas/">${T('open')}</a></div>`+(L.length?body:`<div class="empty">${T('nonas')}</div>`);
   return sev;
 }
+// ───────── DNS (Pi-hole / AdGuard) ─────────
+// EN: Summary of every DNS server (Pi-hole / AdGuard Home): status, queries, % blocked, response and blocking. Alerts are computed by dns-monitor; here they are only translated.
+const DNS_AL={
+ en:{blocking_off:'blocking is paused',blocking_failed:'blocking failed',no_lists:'no domains in the block lists',slow_upstream:'slow upstream DNS'},
+ es:{blocking_off:'el bloqueo está pausado',blocking_failed:'el bloqueo falló',no_lists:'no hay dominios en las listas de bloqueo',slow_upstream:'DNS de salida lento'}
+};
+function dnsAl(a){const w=(DNS_AL[lang]||DNS_AL.en)[a.type]||a.type;return w+(a.type==='slow_upstream'&&a.value!=null?` (${a.value} ms)`:'')}
+function renderDNS(d){
+  const el=$('c-dns');let sev='ok',body='';const L=d.servers||[];
+  L.forEach(n=>{
+    const sn=n.snap||{},data=sn.data,off=!!sn.error;let s='ok';
+    if(off){s='crit';issues.push({lv:'crit',m:'dns',t:`${n.name}: ${T('issue_dnsdown')}`,href:'/dns/'})}
+    ((data&&data.alerts)||[]).forEach(a=>{if(a.lv==='info')return;s=worst(s,a.lv);issues.push({lv:a.lv,m:'dns',t:`${n.name}: ${dnsAl(a)}`,href:'/dns/'})});
+    sev=worst(sev,s);
+    const pr=data?({enabled:T('proton'),disabled:T('protoff'),failed:T('protfail')}[data.blocking]||'—'):'—';
+    body+=`<div class="unit"><div class="uh">${esc(n.name)} <span class="sub">${esc(n.type==='adguard'?'AdGuard':'Pi-hole')}</span>${pill(s,off&&!data?T('unreach'):s==='ok'?'OK':s==='warn'?T('attn'):T('fail'))}</div>
+     <div class="kpis"><div class="kpi"><b>${data?esc(Number(data.queries||0).toLocaleString(lang==='es'?'es-CL':'en-GB')):'—'}</b><span>${T('dnsq')}</span></div><div class="kpi"><b>${data&&data.pct!=null?esc(data.pct)+'%':'—'}</b><span>${T('dnsblk')}</span></div><div class="kpi"><b>${data&&data.ms!=null?esc(data.ms)+' ms':'—'}</b><span>${T('dnsms')}</span></div></div>
+     <div class="row"><span class="l">${T('dnsprot')}</span><span class="v">${esc(pr)}</span></div></div>`;
+  });
+  el.innerHTML=`<div class="ch"><h2>${T('dns')}</h2>${L.length?pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail')):''}<a class="go" href="/dns/">${T('open')}</a></div>`+(L.length?body:`<div class="empty">${T('nodns')}</div>`);
+  return sev;
+}
+// ───────── WAN (internet) ─────────
+const WAN_AL={
+ en:{loss:'packet loss',latency:'high latency',dns_slow:'slow DNS lookup',dns_fail:'DNS lookup failed'},
+ es:{loss:'pérdida de paquetes',latency:'latencia alta',dns_slow:'resolución DNS lenta',dns_fail:'falló la resolución DNS'}
+};
+function wanAl(a){const w=(WAN_AL[lang]||WAN_AL.en)[a.type]||a.type;const u={loss:'%',latency:' ms',dns_slow:' ms'}[a.type];return w+(u!==undefined&&a.value!=null?` (${Math.round(a.value*10)/10}${u})`:'')}
+function renderWAN(d){
+  const el=$('c-wan'),s0=d.snap;let sev='ok',body='';
+  if(!s0){body=`<div class="empty">${T('wanwait')}</div>`}
+  else{
+    if(!s0.up){sev='crit';issues.push({lv:'crit',m:'wan',t:T(s0.scope==='lan'?'issue_wanlan':'issue_wandown'),href:'/wan/'})}
+    (s0.alerts||[]).forEach(a=>{if(a.lv==='info'||a.type.indexOf('down_')===0)return;sev=worst(sev,a.lv);issues.push({lv:a.lv,m:'wan',t:wanAl(a),href:'/wan/'})});
+    const sp=(d.speed||[]).filter(x=>!x.error&&x.down!=null),ls=sp.length?sp[sp.length-1]:null,up=(d.uptime||{})['24h'];
+    body=`<div class="unit"><div class="uh">${T('wanstate')} ${pill(sev,!s0.up?T(s0.scope==='lan'?'wanlan':'wannet'):sev==='ok'?T('wanon'):T('attn'))}</div>
+     <div class="kpis"><div class="kpi"><b>${s0.rtt!=null?Math.round(s0.rtt*10)/10+' ms':'—'}</b><span>${T('wanrtt')}</span></div><div class="kpi"><b>${s0.loss!=null?Math.round(s0.loss*10)/10+'%':'—'}</b><span>${T('wanloss')}</span></div><div class="kpi"><b>${ls?Math.round(ls.down)+' Mb/s':'—'}</b><span>${T('wandown')}</span></div></div>
+     ${up!=null?`<div class="row"><span class="l">${T('wanup')}</span><span class="v">${up}%</span></div>`:''}
+     <div class="row"><span class="l">${T('wanip')}</span><span class="v">${esc(s0.public_ip||'—')}</span></div></div>`;
+  }
+  el.innerHTML=`<div class="ch"><h2>${T('wan')}</h2>${s0?pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail')):''}<a class="go" href="/wan/">${T('open')}</a></div>`+body;
+  return sev;
+}
 // ───────── Net ─────────
 const TYPE_SH_EN={computer:'PC',phone:'Phone',router:'Router',switch:'Switch',ap:'Wi-Fi',storage:'NAS',tv:'TV',camera:'Cam',appliance:'Appl.',printer:'Print.',tablet:'Tablet',console:'Console',server:'Server',voip:'VoIP',ups:'UPS',speaker:'Speaker',other:'Other'};
 const TYPE_SH_ES={computer:'PC',phone:'Teléf.',router:'Router',switch:'Switch',ap:'Wi-Fi',storage:'NAS',tv:'TV',camera:'Cám.',appliance:'Electro.',printer:'Impres.',tablet:'Tablet',console:'Consola',server:'Servidor',voip:'Tel. IP',ups:'UPS',speaker:'Altavoz',other:'Otro'};
@@ -224,10 +267,14 @@ function renderPi(s){
 const EVT={
  en:{ups_lowb:'{n}: low battery ({pct})',ups_batt:'{n}: on battery ({pct})',ups_mains:'{n}: mains power restored ({pct})',ups_other:'{n}: status {st}',ups_srv_down:'UPS server {n} unreachable: {e}',ups_srv_up:'UPS server {n} reachable again',
   pve_cl_down:'{c}: cluster unreachable',pve_cl_up:'{c}: cluster reachable again',pve_node_on:'{c}/{n}: node online',pve_node_off:'{c}/{n}: node {st}',pve_ceph:'{c}: Ceph {a} → {b}',
+  dns_off:'{n}: blocking paused',dns_on:'{n}: blocking active',dns_fail:'{n}: blocking failed',dns_down:'{n}: DNS server unreachable',dns_up:'{n}: DNS server reachable again',
+  wan_down_internet:'Internet connection down',wan_down_lan:'Internet down (local network too)',wan_up:'Internet connection restored after {d} s',wan_ip:'Public IP changed to {ip}',
   nas_down:'{n}: NAS unreachable',nas_up:'{n}: NAS reachable again',nas_sys:'{n}: system or power failure',nas_raid:'{n}/{v}: volume status {st}',nas_disk:'{n}/{d}: disk status {st}',
   net_first:'First scan: {n} hosts found',net_new:'New device: {ip} {n} {v}',net_up:'Back online: {ip} {n}',net_down:'Went offline: {ip} {n}',net_new_n:'{n} new devices',net_up_n:'{n} hosts back online',net_down_n:'{n} hosts went offline'},
  es:{ups_lowb:'{n}: batería baja ({pct})',ups_batt:'{n}: funcionando con batería ({pct})',ups_mains:'{n}: volvió la red eléctrica ({pct})',ups_other:'{n}: estado {st}',ups_srv_down:'Servidor UPS {n} sin conexión: {e}',ups_srv_up:'Servidor UPS {n} otra vez disponible',
   pve_cl_down:'{c}: cluster sin conexión',pve_cl_up:'{c}: cluster otra vez disponible',pve_node_on:'{c}/{n}: nodo en línea',pve_node_off:'{c}/{n}: nodo {st}',pve_ceph:'{c}: Ceph {a} → {b}',
+  dns_off:'{n}: bloqueo pausado',dns_on:'{n}: bloqueo activo',dns_fail:'{n}: el bloqueo falló',dns_down:'{n}: servidor DNS sin conexión',dns_up:'{n}: servidor DNS otra vez disponible',
+  wan_down_internet:'Se cayó la conexión a internet',wan_down_lan:'Internet caído (la red local también)',wan_up:'Volvió internet tras {d} s',wan_ip:'La IP pública cambió a {ip}',
   nas_down:'{n}: NAS sin conexión',nas_up:'{n}: NAS otra vez disponible',nas_sys:'{n}: falla del sistema o de la fuente de poder',nas_raid:'{n}/{v}: estado del volumen {st}',nas_disk:'{n}/{d}: estado del disco {st}',
   net_first:'Primer escaneo: {n} equipos encontrados',net_new:'Equipo nuevo: {ip} {n} {v}',net_up:'Volvió a estar en línea: {ip} {n}',net_down:'Dejó de responder: {ip} {n}',net_new_n:'{n} equipos nuevos',net_up_n:'{n} equipos volvieron a estar en línea',net_down_n:'{n} equipos dejaron de responder'}
 };
@@ -237,7 +284,7 @@ function evText(e){const t=e.k&&EVT[lang][e.k];return t?t.replace(/\{(\w+)\}/g,(
 // EN: Event text with the IP (if any) marked for the Net Monitor card. Everything is escaped; the span is created by this code.
 function evHtml(e){const s=esc(evText(e)),ip=e.m==='net'&&e.p&&/^\d{1,3}(\.\d{1,3}){3}$/.test(String(e.p.ip||''))?String(e.p.ip):'';return ip&&s.includes(ip)?s.replace(ip,`<span data-nethost="${ip}" data-nethost-click="1">${ip}</span>`):s}
 function renderEvents(list){
-  $('c-ev').innerHTML=`<div class="ch"><h2>${T('ev')}</h2></div>`+(list.length?`<div class="tl">${list.map(e=>`<div class="ev"><i class="d ${esc(e.lv)}"></i><span class="m">${esc({nut:'UPS',pve:'PVE',nas:'NAS',net:'NET'}[e.m]||e.m)}</span><span>${evHtml(e)}</span><span class="t" title="${PCT.ls(new Date(e.t*1000))}">${esc(ago(e.t))}</span></div>`).join('')}</div>`:`<div class="empty">${T('noev')}</div>`);
+  $('c-ev').innerHTML=`<div class="ch"><h2>${T('ev')}</h2></div>`+(list.length?`<div class="tl">${list.map(e=>`<div class="ev"><i class="d ${esc(e.lv)}"></i><span class="m">${esc({nut:'UPS',pve:'PVE',nas:'NAS',dns:'DNS',wan:'WAN',net:'NET'}[e.m]||e.m)}</span><span>${evHtml(e)}</span><span class="t" title="${PCT.ls(new Date(e.t*1000))}">${esc(ago(e.t))}</span></div>`).join('')}</div>`:`<div class="empty">${T('noev')}</div>`);
 }
 
 // ───────── Ciclo de actualización / refresh loop ─────────
@@ -250,6 +297,8 @@ async function refresh(){
   if(lvl('pve')){jobs.pve=jget('/pve/api/clusters'+(wantPH?'':'?hist=0'))}
   const wantNH=Date.now()-nasHTs>60000;
   if(lvl('nas')){jobs.nas=jget('/nas/api/nas'+(wantNH?'':'?hist=0'))}
+  if(lvl('dns')){jobs.dns=jget('/dns/api/dns?hist=0')}
+  if(lvl('wan')){jobs.wan=jget('/wan/api/wan?hist=0')}
   if(lvl('net')){jobs.net=jget('/net/api/hosts')}
   jobs.sys=jget('api/system');jobs.ev=jget('api/events?limit=40');
   const keys=Object.keys(jobs),res=await Promise.allSettled(Object.values(jobs));
@@ -269,11 +318,13 @@ async function refresh(){
     try{const h=await jget('api/pihistory');piH=h&&h.pi?h:null}catch(e){}
   }
   const card=(id,show)=>$(id).classList.toggle('hide',!show);
-  card('c-nut',!!R.nut);card('c-pve',!!R.pve);card('c-nas',!!R.nas);card('c-net',!!R.net);fitGrid();
+  card('c-nut',!!R.nut);card('c-pve',!!R.pve);card('c-nas',!!R.nas);card('c-dns',!!R.dns);card('c-wan',!!R.wan);card('c-net',!!R.net);fitGrid();
   const fail=(id,name)=>{$(id).innerHTML=`<div class="ch"><h2>${name}</h2>${pill('crit',T('unreach'))}</div>`;issues.push({lv:'crit',m:name,t:`${name}: ${T('unreach')}`});return 'crit'};
   if(R.nut)sevs.push(R.nut.status==='fulfilled'?renderUPS(R.nut.value):fail('c-nut',T('ups')));
   if(R.pve)sevs.push(R.pve.status==='fulfilled'?renderPVE(R.pve.value):fail('c-pve',T('pve')));
   if(R.nas)sevs.push(R.nas.status==='fulfilled'?renderNAS(R.nas.value):fail('c-nas',T('nas')));
+  if(R.dns)sevs.push(R.dns.status==='fulfilled'?renderDNS(R.dns.value):fail('c-dns',T('dns')));
+  if(R.wan)sevs.push(R.wan.status==='fulfilled'?renderWAN(R.wan.value):fail('c-wan',T('wan')));
   if(R.net)sevs.push(R.net.status==='fulfilled'?renderNet(R.net.value):fail('c-net',T('net')));
   if(R.sys.status==='fulfilled')sevs.push(renderPi(R.sys.value));
   if(R.ev.status==='fulfilled')renderEvents(R.ev.value.events||[]);
@@ -345,7 +396,7 @@ window.addEventListener('resize',fitGrid);
 // ───────── Orden de las tarjetas / card order ─────────
 // ES: Las tarjetas se pueden reordenar con el botón «Ordenar» (flechas o arrastrando). El orden se guarda en este navegador (clave pi-card-order); por defecto es el de siempre: UPS, Proxmox, Red, Pi. La línea de tiempo siempre va debajo.
 // EN: Cards can be reordered with the "Reorder" button (arrows or drag). The order is stored in this browser (key pi-card-order); the default is the usual one: UPS, Proxmox, Network, Pi. The timeline always stays below.
-const CARDS=['c-nut','c-pve','c-nas','c-net','c-pi'];
+const CARDS=['c-nut','c-pve','c-nas','c-dns','c-wan','c-net','c-pi'];
 let ord=CARDS.slice(),sortMode=false,dragId=null;
 try{const v=JSON.parse(localStorage.getItem('pi-card-order')||'[]');if(Array.isArray(v)){const k=v.filter((x,i)=>CARDS.includes(x)&&v.indexOf(x)===i);ord=k.concat(CARDS.filter(x=>!k.includes(x)))}}catch(e){}
 function saveOrd(){try{if(ord.join()===CARDS.join())localStorage.removeItem('pi-card-order');else localStorage.setItem('pi-card-order',JSON.stringify(ord))}catch(e){}}

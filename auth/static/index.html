@@ -107,6 +107,8 @@
           <th data-i18n="colNET">Net Monitor</th>
           <th data-i18n="colPVE">Proxmox</th>
           <th data-i18n="colNAS">NAS Monitor</th>
+          <th data-i18n="colDNS">DNS Monitor</th>
+          <th data-i18n="colWAN">WAN Monitor</th>
           <th data-i18n="colStatus">Status</th>
           <th data-i18n="colCreated">Created</th>
           <th style="text-align:right" data-i18n="colActions">Actions</th>
@@ -235,6 +237,24 @@
           <div class="field">
             <label>NAS Monitor</label>
             <select id="d-nas">
+              <option value="none" selected>No access</option>
+              <option value="readonly">Read only</option>
+              <option value="execute">Execute</option>
+              <option value="admin">Administrator</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>DNS Monitor</label>
+            <select id="d-dns">
+              <option value="none" selected>No access</option>
+              <option value="readonly">Read only</option>
+              <option value="execute">Execute</option>
+              <option value="admin">Administrator</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>WAN Monitor</label>
+            <select id="d-wan">
               <option value="none" selected>No access</option>
               <option value="readonly">Read only</option>
               <option value="execute">Execute</option>

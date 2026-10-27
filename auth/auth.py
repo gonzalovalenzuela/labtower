@@ -14,7 +14,7 @@ file lock (flock) in addition to the thread lock, and everything is written atom
 file, fsync and rename) so no data is lost or corrupted by power cuts.
 """
 # ─── Mapa del archivo ────────────────────────────────────────────────────────────────
-# Este módulo lo importan los servicios (WOL, UPS, Net, Proxmox, NAS, Resumen y Admin). Cada servicio es
+# Este módulo lo importan los servicios (WOL, UPS, Net, Proxmox, NAS, DNS, WAN, Resumen y Admin). Cada servicio es
 # un proceso distinto, pero todos comparten dos archivos en /var/lib/labtower:
 #   users.json     usuarios, hash de contraseña y nivel de permiso por módulo
 #   sessions.json  sesiones abiertas (un solo inicio de sesión sirve para todos los módulos)
@@ -30,7 +30,7 @@ file, fsync and rename) so no data is lost or corrupted by power cuts.
 # Convención: los comentarios van primero en español y después en inglés (marcados con «EN:»).
 # Los docstrings en inglés describen qué hace cada función; los comentarios explican el porqué.
 # EN: ─── File map ───────────────────────────────────────────────────────────────────────
-#     Imported by the services (WOL, UPS, Net, Proxmox, NAS, Overview and Admin). Each service is a separate
+#     Imported by the services (WOL, UPS, Net, Proxmox, NAS, DNS, WAN, Overview and Admin). Each service is a separate
 #     process, but they all share two files in /var/lib/labtower:
 #       users.json     users, password hashes and the permission level for each module
 #       sessions.json  open sessions (a single login works for every module)
@@ -361,7 +361,7 @@ def ensure_initial_user() -> bool:
         pw = _random_password()
         users = {"admin": {
             "password_hash": _hash(pw),
-            "permissions": {"wol": "admin", "nut": "admin", "net": "admin", "pve": "admin", "nas": "admin"},
+            "permissions": {"wol": "admin", "nut": "admin", "net": "admin", "pve": "admin", "nas": "admin", "dns": "admin", "wan": "admin"},
             "created": int(time.time()),
             "must_change_password": True,
         }}
@@ -462,7 +462,7 @@ def _users_cached() -> dict:
 # creados antes de que existieran esos módulos. Es idempotente (si ya están, no toca nada).
 # EN: Migration that runs when each service starts: gives an explicit "net" and "pve" level to users
 #     created before those modules existed. It is idempotent (if they are already there, nothing changes).
-def ensure_permissions(modules=("net", "pve", "nas")) -> bool:
+def ensure_permissions(modules=("net", "pve", "nas", "dns", "wan")) -> bool:
     """One-time migration at service start: give every user an EXPLICIT level for `modules`.
 
     Users that predate a module get "admin" if they administer WOL, else "readonly" (what the
@@ -841,7 +841,7 @@ def password_guard_ok(username):
     throttle_clear("pw:" + str(username))
 
 # ¿La sesión del token tiene al menos el nivel «required» sobre el recurso (wol, nut, net, pve)?
-# EN: Does the token's session have at least the "required" level on the resource (wol, nut, net, pve, nas)?
+# EN: Does the token's session have at least the "required" level on the resource (wol, nut, net, pve, nas, dns, wan)?
 def check_permission(token: str, resource: str, required: str) -> bool:
     s = get_session(token)
     if not s: return False
@@ -1284,6 +1284,11 @@ CREATE TABLE IF NOT EXISTS pve_samples (cid TEXT NOT NULL, node TEXT NOT NULL, t
                                         PRIMARY KEY (cid, node, ts)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS nas_samples (nid TEXT NOT NULL, ts INTEGER NOT NULL, cpu REAL, mem REAL, temp REAL, rx REAL, tx REAL,
                                         PRIMARY KEY (nid, ts)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS dns_samples (sid TEXT NOT NULL, ts INTEGER NOT NULL, total INTEGER, blocked INTEGER, pct REAL, ms REAL,
+                                        PRIMARY KEY (sid, ts)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS wan_samples (ts INTEGER PRIMARY KEY, up INTEGER NOT NULL, rtt REAL, loss REAL, jitter REAL, gw REAL, dns REAL);
+CREATE TABLE IF NOT EXISTS wan_speed   (ts INTEGER PRIMARY KEY, down REAL, up REAL, ping REAL, server TEXT, error TEXT);
+CREATE TABLE IF NOT EXISTS wan_outages (start INTEGER PRIMARY KEY, end INTEGER, scope TEXT);
 """
 
 def metrics_conn():

@@ -4,7 +4,7 @@ set -e
 echo "labtower: stopping services..."
 # Detiene y deshabilita los servicios antes de quitar los archivos (|| true: si alguno no existe, no se aborta).
 # EN: Stop and disable the services before removing the files (|| true: if one does not exist, it does not abort).
-for svc in wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor labtower-overview; do
+for svc in wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor labtower-overview; do
     systemctl stop "$svc" 2>/dev/null || true
     systemctl disable "$svc" 2>/dev/null || true
 done
@@ -26,7 +26,9 @@ if id -u labtower >/dev/null 2>&1 && command -v runuser >/dev/null 2>&1; then
         /var/lib/labtower/net-monitor/hosts.json \
         /var/lib/labtower/net-monitor/config.json \
         /var/lib/labtower/proxmox-monitor/clusters.json \
-        /var/lib/labtower/nas-monitor/nas.json
+        /var/lib/labtower/nas-monitor/nas.json \
+        /var/lib/labtower/dns-monitor/dns.json \
+        /var/lib/labtower/wan-monitor/wan.json
     do
         if runuser -u labtower -- test -f "$f" 2>/dev/null && ! runuser -u labtower -- test -L "$f" 2>/dev/null; then
             out="$BACKUP_DIR/$(basename "$f").${STAMP}.bak"

@@ -26,6 +26,8 @@ if [ "$1" = "purge" ]; then
     rm -f /etc/systemd/system/net-monitor.service
     rm -f /etc/systemd/system/proxmox-monitor.service
     rm -f /etc/systemd/system/nas-monitor.service
+    rm -f /etc/systemd/system/dns-monitor.service
+    rm -f /etc/systemd/system/wan-monitor.service
     rm -f /etc/systemd/system/labtower-overview.service
     systemctl daemon-reload 2>/dev/null || true
     # Llave SSH y huella del respaldo automático por SFTP (el .conf y el cron los borra dpkg por ser conffiles)
