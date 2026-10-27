@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1m — 2026-10-27
+
+- Tema: el botón ◐ del Resumen y de la página de inicio ahora rota entre oscuro, claro y «Auto» (sigue el modo del sistema, con una «A» en el botón); antes solo alternaba claro y oscuro. En «Auto» el tema cambia solo cuando cambia el del sistema.
+
 ## 2.1l — 2026-10-27
 
 - Resumen: se quita la franja de indicadores de arriba (autonomía, nodos, discos, bloqueado, velocidad, equipos), porque ensuciaba y no se entendía. Los datos siguen en cada tarjeta.
