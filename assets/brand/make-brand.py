@@ -4,8 +4,8 @@ EN: Generates the brand kit: one icon per module (SVG + PNG) and the palette (pa
 
     python3 assets/brand/make-brand.py     (needs playwright + chromium for the PNGs)
 
-Todos los iconos usan la construcción de la marca: baldosa pizarra azulada y tres losas isométricas teñidas con el color del módulo; el símbolo del módulo está dibujado sobre la cara superior.
-EN: Every icon uses the brand's construction: slate-blue tile and three isometric slabs tinted with the module colour; the module symbol is drawn on the top face.
+Todos los iconos usan la construcción de la marca: baldosa pizarra azulada y una plataforma de dos losas isométricas (las de la marca) teñidas con el color del módulo y un símbolo sólido de dos tonos encima.
+EN: Every icon uses the brand's construction: slate-blue tile and a two-slab isometric platform (the brand mark's slabs) tinted with the module colour and a bold two-tone symbol standing on it.
 """
 import json, pathlib
 here = pathlib.Path(__file__).resolve().parent
@@ -27,67 +27,56 @@ def mix(hexc, to, t):
     a = [int(hexc[i:i+2], 16) for i in (1, 3, 5)]; b = [int(to[i:i+2], 16) for i in (1, 3, 5)]
     return "#%02x%02x%02x" % tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
 
-def node(x, y, r=20):
-    return (f'<circle cx="{x}" cy="{y}" r="{r}" fill="none" stroke="url(#g)" stroke-width="11"/>'
-            f'<circle cx="{x}" cy="{y}" r="{round(r*.38)}" fill="{{hi}}"/>')
+def slab(cy, top, left, right, t=28, hw=104, hh=50):
+    """Isometric slab, the brand mark's building block: top rhombus plus two sides."""
+    return (f'<path d="M{256-hw} {cy} L256 {cy+hh} L256 {cy+hh+t} L{256-hw} {cy+t} Z" fill="{left}"/>'
+            f'<path d="M{256+hw} {cy} L256 {cy+hh} L256 {cy+hh+t} L{256+hw} {cy+t} Z" fill="{right}"/>'
+            f'<path d="M256 {cy-hh} L{256+hw} {cy} L256 {cy+hh} L{256-hw} {cy} Z" fill="{top}" stroke="{top}" stroke-width="6" stroke-linejoin="round"/>')
 
-def glyph(name):
-    L = 'fill="none" stroke="url(#g)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"'
+def solid(name, dark):
+    """Bold two-tone symbol standing on the platform. F = glyph fill, D = cut-outs, S = soft secondary tone."""
+    F, S, D = "url(#gf)", "url(#gs)", dark
     if name == "overview":
-        return (f'<rect x="132" y="132" width="106" height="106" rx="24" {L}/><rect x="274" y="132" width="106" height="106" rx="24" {L}/>'
-                f'<rect x="132" y="274" width="106" height="106" rx="24" {L}/>' + node(327, 327, 38))
+        return (f'<rect x="164" y="104" width="86" height="86" rx="24" fill="{F}"/><rect x="262" y="104" width="86" height="86" rx="24" fill="{S}"/>'
+                f'<rect x="164" y="202" width="86" height="86" rx="24" fill="{S}"/><rect x="262" y="202" width="86" height="86" rx="24" fill="{F}"/>')
     if name == "ups":
-        return (f'<rect x="164" y="206" width="184" height="226" rx="34" {L}/>'
-                f'<path d="M222 206 V156 M290 206 V156" {L}/>' + node(222, 134, 22) + node(290, 134, 22) +
-                '<path d="M276 250 L224 338 H258 L242 400 L296 308 H262 Z" fill="url(#g)"/>')
+        return (f'<rect x="226" y="86" width="60" height="30" rx="10" fill="{S}"/><rect x="186" y="106" width="140" height="196" rx="36" fill="{F}"/>'
+                f'<path d="M270 138 L222 224 H252 L240 276 L292 190 H262 Z" fill="{D}"/>')
     if name == "net":
-        pts = [(142, 150), (370, 150), (142, 362), (370, 362)]
-        lines = "".join(f'<path d="M{x} {y} L256 256" {L}/>' for x, y in pts)
-        return lines + "".join(node(x, y, 30) for x, y in pts) + node(256, 256, 34)
+        pts = [(176, 128), (336, 128), (176, 290), (336, 290)]
+        lines = "".join(f'<path d="M{x} {y} L256 209" stroke="{S}" stroke-width="14" stroke-linecap="round"/>' for x, y in pts)
+        return lines + "".join(f'<circle cx="{x}" cy="{y}" r="28" fill="{S}"/>' for x, y in pts) + f'<circle cx="256" cy="209" r="44" fill="{F}"/><circle cx="256" cy="209" r="16" fill="{D}"/>'
     if name == "proxmox":
-        return (f'<path d="M256 214 L168 330 M256 214 L344 330 M232 380 H280" {L}/>'
-                f'<rect x="196" y="118" width="120" height="84" rx="22" {L}/><rect x="108" y="338" width="120" height="84" rx="22" {L}/><rect x="284" y="338" width="120" height="84" rx="22" {L}/>'
-                '<circle cx="288" cy="160" r="9" fill="{hi}"/><circle cx="200" cy="380" r="9" fill="{hi}"/><circle cx="376" cy="380" r="9" fill="{hi}"/>')
+        return (f'<path d="M256 168 L190 252 M256 168 L322 252" stroke="{S}" stroke-width="14" stroke-linecap="round"/>'
+                f'<rect x="196" y="92" width="120" height="82" rx="24" fill="{F}"/><rect x="132" y="236" width="120" height="82" rx="24" fill="{S}"/><rect x="260" y="236" width="120" height="82" rx="24" fill="{S}"/>'
+                f'<circle cx="290" cy="133" r="10" fill="{D}"/><circle cx="226" cy="277" r="10" fill="{D}"/><circle cx="354" cy="277" r="10" fill="{D}"/>')
     if name == "nas":
-        return (f'<rect x="124" y="140" width="264" height="210" rx="34" {L}/>'
-                f'<path d="M190 176 V314 M256 176 V314 M322 176 V314" {L}/>'
-                f'<path d="M256 350 V396" {L}/>' + node(256, 424, 22))
+        return "".join(f'<rect x="156" y="{y}" width="200" height="62" rx="20" fill="{F if i == 0 else S}"/><circle cx="324" cy="{y+31}" r="9" fill="{D}"/><rect x="180" y="{y+25}" width="74" height="12" rx="6" fill="{D}" opacity=".55"/>'
+                       for i, y in enumerate((96, 172, 248)))
     if name == "wol":
-        return (f'<path d="M180 176 A116 116 0 1 0 332 176" {L}/><path d="M256 232 V142" {L}/>' + node(256, 112, 24))
+        return (f'<path d="M184 150 A98 98 0 1 0 328 150" fill="none" stroke="{F}" stroke-width="30" stroke-linecap="round"/>'
+                f'<path d="M256 96 V204" stroke="{F}" stroke-width="30" stroke-linecap="round"/><circle cx="256" cy="244" r="0" fill="{D}"/>')
     if name == "admin":
-        return (f'<path d="M256 112 L378 160 V262 C378 336 326 384 256 408 C186 384 134 336 134 262 V160 Z" {L}/>'
-                f'<path d="M200 262 L242 304 L318 220" {L}/>')
+        return (f'<path d="M256 90 L366 134 V224 C366 276 322 312 256 332 C190 312 146 276 146 224 V134 Z" fill="{F}"/>'
+                f'<path d="M204 216 L242 254 L312 176" fill="none" stroke="{D}" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>')
     raise ValueError(name)
 
-def slab(cy, top, left, right, t=44):
-    """Isometric slab (same construction as the brand mark): top rhombus plus two sides."""
-    return (f'<path d="M146 {cy} L256 {cy+64} L256 {cy+64+t} L146 {cy+t} Z" fill="{left}"/>'
-            f'<path d="M366 {cy} L256 {cy+64} L256 {cy+64+t} L366 {cy+t} Z" fill="{right}"/>'
-            f'<path d="M256 {cy-64} L366 {cy} L256 {cy+64} L146 {cy} Z" fill="{top}" stroke="{top}" stroke-width="6" stroke-linejoin="round"/>')
-
-# centro (en la rejilla de 512) y escala con que cada símbolo cabe en la cara superior
-# EN: centre (on the 512 grid) and scale that fit each symbol inside the top face
-FIT = {"overview": (256, 256, .43), "ups": (256, 272, .36), "net": (256, 256, .40), "proxmox": (256, 270, .38), "nas": (256, 293, .37), "wol": (256, 230, .40), "admin": (256, 260, .39)}
-
 def svg(name, accent):
-    """The brand mark's three isometric slabs tinted with the module accent; the module glyph lies on the top face."""
-    N = BRAND["night"]; W = "#ffffff"
-    ink = mix(accent, "#000000", .18)
-    g = glyph(name).replace("url(#g)", ink).replace("{hi}", ink)
-    uid = "s" + name
-    defs = (f'<defs><linearGradient id="{uid}l1"><stop offset="0" stop-color="{mix(accent, N, .50)}"/><stop offset="1" stop-color="{mix(accent, N, .78)}"/></linearGradient>'
-            f'<linearGradient id="{uid}r1"><stop offset="0" stop-color="{mix(accent, N, .86)}"/><stop offset="1" stop-color="{mix(accent, N, .94)}"/></linearGradient>'
-            f'<linearGradient id="{uid}l2"><stop offset="0" stop-color="{mix(accent, W, .45)}"/><stop offset="1" stop-color="{mix(accent, W, .7)}"/></linearGradient>'
-            f'<linearGradient id="{uid}r2"><stop offset="0" stop-color="{mix(accent, "#000000", .05)}"/><stop offset="1" stop-color="{mix(accent, "#000000", .28)}"/></linearGradient>'
-            f'<linearGradient id="{uid}l3"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#f1f5fb"/></linearGradient>'
-            f'<linearGradient id="{uid}r3"><stop offset="0" stop-color="{mix(accent, W, .3)}"/><stop offset="1" stop-color="{mix(accent, W, .5)}"/></linearGradient>'
-            f'<radialGradient id="{uid}glow" cx=".5" cy=".42" r=".6"><stop offset="0" stop-color="{accent}" stop-opacity=".28"/><stop offset="1" stop-color="{accent}" stop-opacity="0"/></radialGradient></defs>')
-    tower = (slab(352, "#f4f6fb", f"url(#{uid}l3)", f"url(#{uid}r3)") + slab(284, mix(accent, W, .88), f"url(#{uid}l2)", f"url(#{uid}r2)")
-             + slab(216, "#eef0f6", f"url(#{uid}l1)", f"url(#{uid}r1)")
-             + f'<g transform="translate(256 216) matrix({.866*FIT[name][2]:.4f} {.5*FIT[name][2]:.4f} {-.866*FIT[name][2]:.4f} {.5*FIT[name][2]:.4f} 0 0) translate(-{FIT[name][0]} -{FIT[name][1]})">{g}</g>')
+    """Modern family icon: slate tile, a two-slab platform in the module colour (the brand mark's slabs) and a bold symbol standing on it."""
+    N = BRAND["night"]; W = "#ffffff"; uid = "s" + name
+    dark = mix(accent, N, .62)
+    defs = (f'<defs><linearGradient id="gf" gradientUnits="userSpaceOnUse" x1="0" y1="80" x2="0" y2="340"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="{mix(accent, W, .72)}"/></linearGradient>'
+            f'<linearGradient id="gs" gradientUnits="userSpaceOnUse" x1="0" y1="80" x2="0" y2="340"><stop offset="0" stop-color="{mix(accent, W, .55)}"/><stop offset="1" stop-color="{mix(accent, W, .3)}"/></linearGradient>'
+            f'<linearGradient id="pl1"><stop offset="0" stop-color="{mix(accent, W, .35)}"/><stop offset="1" stop-color="{accent}"/></linearGradient>'
+            f'<linearGradient id="pr1"><stop offset="0" stop-color="{accent}"/><stop offset="1" stop-color="{mix(accent, N, .35)}"/></linearGradient>'
+            f'<linearGradient id="pl2"><stop offset="0" stop-color="{mix(accent, N, .35)}"/><stop offset="1" stop-color="{mix(accent, N, .55)}"/></linearGradient>'
+            f'<linearGradient id="pr2"><stop offset="0" stop-color="{mix(accent, N, .6)}"/><stop offset="1" stop-color="{mix(accent, N, .8)}"/></linearGradient>'
+            f'<radialGradient id="glow" cx=".5" cy=".4" r=".62"><stop offset="0" stop-color="{accent}" stop-opacity=".34"/><stop offset="1" stop-color="{accent}" stop-opacity="0"/></radialGradient>'
+            f'<filter id="sh" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#000" flood-opacity=".38"/></filter></defs>')
+    platform = slab(398, mix(accent, N, .45), "url(#pl2)", "url(#pr2)", t=24) + slab(372, mix(accent, W, .82), "url(#pl1)", "url(#pr1)", t=26)
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">{defs}'
-            f'<rect width="512" height="512" rx="112" fill="{N}"/><rect width="512" height="512" rx="112" fill="url(#{uid}glow)"/>'
-            f'<g transform="translate(256 256) scale(1.2) translate(-256 -262)">{tower}</g></svg>\n')
+            f'<rect width="512" height="512" rx="112" fill="{N}"/><rect width="512" height="512" rx="112" fill="url(#glow)"/>'
+            f'{platform}<g filter="url(#sh)">{solid(name, dark)}</g></svg>\n')
 
 for n, _, a in MODULES:
     (icons / f"{n}.svg").write_text(svg(n, a))
