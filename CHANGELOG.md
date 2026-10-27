@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1c — 2026-10-27
+
+- Resumen: la tarjeta que decía «Raspberry Pi» ahora se llama «LabTower Server». Muestra la misma información.
+
 ## 2.1b — 2026-10-27
 
 - DNS Monitor: si no encuentra la API de Pi-hole, el mensaje dice qué probar (revisar el puerto, o usar https:// si Pi-hole solo escucha en el 443).
