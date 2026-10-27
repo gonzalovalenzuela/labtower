@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3f — 2026-10-27
+
+**NAS Monitor**
+- La página principal ahora es igual a la de UPS Monitor: una tabla **Resumen de NAS** con todos los NAS (estado, modelo, CPU, RAM, temperatura, discos, volumen más lleno y un mini-gráfico). Cada fila se abre y muestra el detalle justo debajo; por defecto se abre el primer NAS. También se puede elegir desde el menú lateral.
+- El detalle trae medidores (CPU, RAM, volumen, temperatura, discos, tiempo encendido) y tres gráficos grandes (CPU/RAM, temperatura y red) con rangos **1h / 1d / 1mo / Todo** y un cursor que muestra los valores de cada momento.
+- Nueva ruta `GET /api/nas/<id>/history?range=…` para pedir el historial por rango (se guarda hasta `NAS_KEEP_DAYS`, 7 días por defecto).
+
 ## 1.3e — 2026-10-26
 
 **NAS Monitor y Resumen**

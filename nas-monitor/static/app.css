@@ -273,3 +273,54 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
 @media(max-width:600px){.nas-grid{grid-template-columns:1fr}.disk-row{grid-template-columns:56px 1fr 48px 72px;gap:6px;padding:8px 12px}}
 
 #main-content{display:flex;flex-direction:column;gap:16px}
+
+#nas-summary:not(:empty){margin-bottom:16px}
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+.nas-table{width:100%;border-collapse:collapse}
+.nas-table thead th{padding:7px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);white-space:nowrap}
+.nas-table tbody td{padding:9px 14px;font-size:13px;border-bottom:1px solid var(--border);white-space:nowrap;vertical-align:middle}
+.nas-table tbody tr:last-child td{border-bottom:none}
+.nas-table tbody tr{cursor:pointer;transition:background .12s}
+.nas-table tbody tr:hover{background:var(--surface2)}
+.nas-table tbody tr.sel{background:var(--nas-dim,rgba(14,154,167,.1));box-shadow:inset 3px 0 0 var(--nas)}
+.sum-name{font-weight:600;color:var(--text)}
+.sum-sub{font-size:11px;color:var(--text-dim);font-family:var(--mono)}
+@media (max-width:760px){.nas-table .c-model,.nas-table .c-temp{display:none}.nas-table thead th,.nas-table tbody td{padding-left:8px;padding-right:8px}}
+
+/* Fila expandible del resumen y su detalle (mismo estilo que UPS Monitor) / Expandable summary row and its detail (same look as UPS Monitor) */
+.nas-table tbody tr.nas-row.expanded{background:var(--nas-dim,rgba(14,154,167,.1));box-shadow:inset 3px 0 0 var(--nas)}
+.nas-table tbody tr.detail-row,.nas-table tbody tr.detail-row:hover{display:none;background:var(--surface2);cursor:default}
+.nas-table tbody tr.detail-row.show{display:table-row}
+.nas-table tbody td.detail-cell{padding:0;white-space:normal;border-bottom:1px solid var(--border)}
+.nas-detail{padding:14px 16px;display:flex;flex-direction:column;gap:14px;cursor:default}
+.nas-detail .nas-head{margin-bottom:0}
+.expand-arrow{font-size:12px;color:var(--text-dim);transition:transform .2s;display:inline-block}
+.expand-arrow.open{transform:rotate(90deg)}
+.c-spark svg.spark{display:block}
+.nas-gauges{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.gauge-box{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm)}
+.gauge-lbl{font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px}
+.circle-wrap{position:relative;width:56px;height:56px}
+.circle-wrap svg{width:100%;height:100%;transform:rotate(-90deg);overflow:visible}
+.circle-bg{fill:none;stroke:var(--bg);stroke-width:4.5}
+.circle-fill{fill:none;stroke-width:4.5;stroke-linecap:round;transition:stroke-dashoffset .8s ease,stroke .3s}
+.circle-val{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)}
+.gauge-unit{font-size:10px;color:var(--text-dim);min-height:12px}
+.gauge-num{display:flex;align-items:center;justify-content:center;height:56px}
+.runtime-num{font-family:var(--mono);font-size:20px;font-weight:600;color:var(--text);line-height:1}
+.vchart-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden}
+.vchart-header{padding:7px 12px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"title legend filters";align-items:center;column-gap:14px;row-gap:6px}
+.vchart-title{grid-area:title;font-size:12px;font-weight:600;color:var(--text);white-space:nowrap}
+.vchart-legend{grid-area:legend;display:flex;gap:14px;flex-wrap:wrap;justify-content:flex-end;min-width:0}
+.vchart-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-dim);font-weight:500;white-space:nowrap}
+.vchart-legend-dot{width:10px;height:3px;border-radius:99px}
+.vchart-filters{grid-area:filters;display:flex;gap:4px}
+.vchart-filter{font-size:11px;font-weight:500;padding:3px 9px;min-width:34px;border-radius:99px;border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer;transition:all .15s;font-family:inherit}
+.vchart-filter:hover{border-color:var(--border-b);color:var(--text)}
+.vchart-filter.active{background:var(--nas);border-color:var(--nas);color:#fff}
+.vchart-body{padding:6px 12px 8px}
+canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
+.vchart-tooltip{position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:7px 10px;font-size:11px;font-family:var(--mono);color:var(--text);pointer-events:none;z-index:100;box-shadow:var(--shadow-md,var(--shadow));white-space:nowrap;display:none}
+.vchart-tooltip.show{display:block}
+@media(max-width:1180px){.nas-gauges{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:760px){.nas-gauges{grid-template-columns:1fr 1fr}.nas-table .c-spark{display:none}.vchart-header{grid-template-columns:1fr auto;grid-template-areas:"title filters" "legend legend"}.vchart-legend{justify-content:flex-start}}

@@ -268,6 +268,23 @@ class Http(unittest.TestCase):
         finally:
             os.environ["PATH"] = old; os.environ.pop("FAKE_LOG", None); os.environ.pop("FAKE_FAIL", None); shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_history_by_range(self):
+        c = self.srv.call
+        s, j = c("POST", "/api/nas", {**CFG3, "name": "H", "host": "192.0.2.88"}, token=self.admin); nid = j["nas"]["id"]
+        now = int(time.time()); cn = support.auth.metrics_conn()
+        try:
+            cn.executemany("INSERT OR REPLACE INTO nas_samples (nid,ts,cpu,mem,temp,rx,tx) VALUES (?,?,?,?,?,?,?)",
+                           [(nid, now - i * 30, 10.0, 50.0, 40.0, 1000, 500) for i in range(3000)] + [(nid, now - 3 * 86400, 20.0, 60.0, None, 0, 0)])
+            cn.commit()
+        finally: cn.close()
+        s, j = c("GET", f"/api/nas/{nid}/history?range=1h", token=self.ro); self.assertEqual(s, 200)
+        self.assertTrue(100 < len(j["history"]) <= 130, len(j["history"]))                  # 1 h a 30 s ≈ 120 puntos
+        s, j = c("GET", f"/api/nas/{nid}/history?range=all", token=self.ro); self.assertEqual(s, 200)
+        self.assertTrue(len(j["history"]) <= 600); self.assertEqual(j["history"][-1]["cpu"], 10.0)
+        self.assertEqual(c("GET", f"/api/nas/{nid}/history?range=zz", token=self.ro)[0], 400)
+        self.assertEqual(c("GET", "/api/nas/nope/history?range=1h", token=self.ro)[0], 404)
+        self.assertEqual(c("GET", f"/api/nas/{nid}/history?range=1h")[0], 401)
+
     def test_cross_site_post_is_blocked(self):
         s, _ = self.srv.call("POST", "/api/nas", {"name": "a", "host": "192.0.2.9", "user": "u"}, token=self.admin, headers={"Sec-Fetch-Site": "cross-site"})
         self.assertEqual(s, 403)

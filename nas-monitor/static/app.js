@@ -16,7 +16,7 @@ const LANG={
     online:'Online',offline:'Unreachable',connError:'Connection error',connErrorHint:'Check host, port, SNMP version and credentials; SNMP must be allowed from this Pi.',
     system:'System',model:'Model',serial:'Serial',dsm:'DSM',uptime:'Uptime',temp:'Temperature',cpu:'CPU',memory:'Memory',load:'Load',swap:'Swap',
     power:'Power supply',fans:'Fans',normal:'Normal',failed:'Failed',upgradeYes:'Update available',upgradeNo:'Up to date',upgradeUnk:'—',updates:'DSM update',
-    volumes:'Volumes',disks:'Disks',network:'Network',ups:'UPS',diskLoad:'Disk activity',history:'History (last hours)',histCpuMem:'CPU / RAM',histTemp:'Temperature',histNet:'Network traffic',
+    volumes:'Volumes',disks:'Disks',network:'Network',ups:'UPS',diskLoad:'Disk activity',history:'History (last hours)',histCpuMem:'CPU / RAM',histTemp:'Temperature',filterAll:'All',trend:'CPU / RAM',accumulating:'Collecting data…',noDataChart:'No data for this range',summary:'NAS Summary',colNas:'NAS',colModel:'Model',colAlerts:'Alerts',histNet:'Network traffic',
     noVolumes:'No volume data (is this a Synology with the Synology MIB enabled?)',noDisks:'No disk data',noNet:'No network data yet',noHist:'Collecting history…',
     used:'used',free:'free',rx:'In',tx:'Out',model2:'Model',status:'Status',charge:'Battery',loadPct:'Load',
     disk:{1:'Normal',2:'Initialized',3:'Not initialized',4:'System partition failed',5:'Crashed',6:'Disconnected'},
@@ -39,7 +39,7 @@ const LANG={
     online:'En línea',offline:'Sin conexión',connError:'Error de conexión',connErrorHint:'Revisa host, puerto, versión de SNMP y credenciales; SNMP debe permitirse desde esta Pi.',
     system:'Sistema',model:'Modelo',serial:'Serie',dsm:'DSM',uptime:'Tiempo encendido',temp:'Temperatura',cpu:'CPU',memory:'Memoria',load:'Carga',swap:'Swap',
     power:'Fuente de poder',fans:'Ventiladores',normal:'Normal',failed:'Falla',upgradeYes:'Actualización disponible',upgradeNo:'Al día',upgradeUnk:'—',updates:'Actualización de DSM',
-    volumes:'Volúmenes',disks:'Discos',network:'Red',ups:'UPS',diskLoad:'Actividad de disco',history:'Historial (últimas horas)',histCpuMem:'CPU / RAM',histTemp:'Temperatura',histNet:'Tráfico de red',
+    volumes:'Volúmenes',disks:'Discos',network:'Red',ups:'UPS',diskLoad:'Actividad de disco',history:'Historial (últimas horas)',histCpuMem:'CPU / RAM',histTemp:'Temperatura',filterAll:'Todo',trend:'CPU / RAM',accumulating:'Reuniendo datos…',noDataChart:'Sin datos en este rango',summary:'Resumen de NAS',colNas:'NAS',colModel:'Modelo',colAlerts:'Avisos',histNet:'Tráfico de red',
     noVolumes:'Sin datos de volúmenes (¿es un Synology con la MIB de Synology habilitada?)',noDisks:'Sin datos de discos',noNet:'Aún sin datos de red',noHist:'Reuniendo historial…',
     used:'usado',free:'libre',rx:'Entrada',tx:'Salida',model2:'Modelo',status:'Estado',charge:'Batería',loadPct:'Carga',
     disk:{1:'Normal',2:'Inicializado',3:'Sin inicializar',4:'Falla de partición del sistema',5:'Dañado',6:'Desconectado'},
@@ -169,12 +169,15 @@ async function fetchAll(){
     items=d.nas||[];
     items.forEach(n=>{if(wantHist)_histCache[n.id]=n.history; else n.history=_histCache[n.id]||[];});
     if(wantHist)_histTs=Date.now();
-    if(!items.some(n=>n.id===activeId))activeId=items[0]?.id||null;
-    renderAll();
+    if(activeId!==''&&!items.some(n=>n.id===activeId))activeId=items[0]?.id||null;   // '' = el usuario cerró todas las filas
+    renderAll();ensureRanges();
   }catch(e){console.error(e);}
 }
-function renderAll(){renderSidebar();renderDashboard();updateGlobalStats();}
-function selectNas(id){activeId=id;renderAll();}
+function renderAll(){renderSidebar();renderSummary();renderDashboard();updateGlobalStats();}
+function selectNas(id){activeId=id;renderAll();ensureRanges();}
+// Pulsar la fila abierta la cierra; pulsar otra la abre (solo una a la vez, como en UPS Monitor).
+// EN: Clicking the open row closes it; clicking another opens it (only one at a time, like UPS Monitor).
+function toggleNas(id){activeId=activeId===id?'':id;renderAll();ensureRanges();}
 
 function lvOf(n){const s=n.snap;if(!s?.ts)return 'loading';if(s.error)return 'err';return 'ok';}
 function renderSidebar(){
@@ -209,6 +212,38 @@ function updateGlobalStats(){
   document.getElementById('st-vols').innerHTML=pc(vN?vS/vN:null);
 }
 
+
+// Tabla con todos los NAS (como el resumen de UPS Monitor): cada fila se abre y muestra el detalle justo debajo. Por defecto, el primero.
+// EN: Table with every NAS (like UPS Monitor's summary): each row opens and shows its detail right below. The first one by default.
+function renderSummary(){
+  const box=document.getElementById('nas-summary');if(!box)return;
+  if(!items.length){box.innerHTML='';return;}
+  const pc=v=>v==null?'—':Math.round(v)+'%';
+  const rows=items.map(n=>{
+    const sn=n.snap||{},d=sn.data,sy=d?.system||{},lv=lvOf(n),open=n.id===activeId;
+    const vmax=(d?.raids||[]).filter(x=>x.pct!=null&&!x.pool).reduce((m,x)=>Math.max(m,x.pct),-1);
+    const dk=d?.disks||[],dOk=dk.filter(x=>x.lv==='ok').length;
+    const al=(d?.alerts||[]).filter(a=>a.lv!=='info'),worst=al.some(a=>a.lv==='crit')?'crit':al.length?'warn':'ok';
+    const state=lv==='loading'?pill('off','…'):lv==='err'?pill('crit',t('offline')):pill(worst,worst==='ok'?t('online'):al.length+' ⚠');
+    const cell=(v,w,c)=>v==null?'—':`<span style="color:${barColor(v,w,c)};font-weight:600">${esc(pc(v))}</span>`;
+    return `<tr class="nas-row${open?' expanded':''}" data-on-click="toggleNas" data-on-click-args="${jsargs([n.id])}">
+      <td><span class="cluster-dot ${lv}"></span></td>
+      <td><div class="sum-name">${esc(n.name)}</div><div class="sum-sub">${esc(n.host)}</div></td>
+      <td class="c-model">${esc(sy.model||'—')}<div class="sum-sub">${esc(sy.dsm||'')}</div></td>
+      <td>${state}</td>
+      <td>${cell(d?.cpu?.pct,CPU_W,CPU_C)}</td><td>${cell(d?.mem?.pct,MEM_W,MEM_C)}</td>
+      <td class="c-temp">${sy.temp==null?'—':esc(sy.temp)+' °C'}</td>
+      <td>${dk.length?esc(dOk+'/'+dk.length):'—'}</td>
+      <td>${vmax>=0?cell(vmax,VOL_W,VOL_C):'—'}</td>
+      <td class="c-spark">${spark(n.history)}</td>
+      <td><span class="expand-arrow ${open?'open':''}">▶</span></td></tr>
+    <tr class="detail-row${open?' show':''}"><td colspan="11" class="detail-cell"><div class="nas-detail">${open?buildDetail(n):''}</div></td></tr>`;
+  }).join('');
+  box.innerHTML=`<div class="card"><div class="card-hd"><span class="card-title">${esc(t('summary'))}</span><span class="card-meta">${esc(items.length)}</span></div>
+    <div class="tbl-wrap"><table class="nas-table"><thead><tr><th style="width:24px"></th><th>${esc(t('colNas'))}</th><th class="c-model">${esc(t('colModel'))}</th><th>${esc(t('status'))}</th><th>${esc(t('cpu'))}</th><th>RAM</th><th class="c-temp">${esc(t('temp'))}</th><th>${esc(t('disks'))}</th><th>${esc(t('volumes'))}</th><th class="c-spark">${esc(t('trend'))}</th><th style="width:28px"></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  drawCharts(activeId);
+}
+
 // ── Panel del NAS activo ─────────────────────────────────────────────────────
 function pill(lv,text){return `<span class="pill ${esc(lv)}">${esc(text)}</span>`;}
 function barColor(p,w,c){return p>=c?'var(--red)':p>=w?'var(--orange)':'var(--green)';}
@@ -216,20 +251,23 @@ function bar(p,w=80,c=92){p=Math.max(0,Math.min(100,Number(p)||0));return `<div 
 function kv(k,v){return `<div class="kv"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`;}
 function okFail(v){return v==null?'—':v===1?pill('ok',t('normal')):pill('crit',t('failed'));}
 
+// Título de la barra superior y mensaje cuando no hay NAS; el detalle de cada NAS vive dentro de su fila (buildDetail).
+// EN: Top bar title and the message when there is no NAS; each NAS's detail lives inside its row (buildDetail).
 function renderDashboard(){
   const main=document.getElementById('main-content');
   const n=items.find(x=>x.id===activeId);
-  if(!n){
-    document.getElementById('tb-title').textContent='NAS Monitor';document.getElementById('tb-sub').textContent='';
-    main.innerHTML='<div class="state-msg"><strong>'+esc(t('noNas'))+'</strong>'+esc(t('noNasHint'))+'</div>';return;
-  }
-  document.getElementById('tb-title').textContent=n.name;
-  {const sub=document.getElementById('tb-sub');sub.textContent='';const hs=document.createElement('span');hs.textContent=n.host;hs.setAttribute('data-nethost',n.host);hs.setAttribute('data-nethost-click','1');sub.appendChild(hs);sub.appendChild(document.createTextNode(':'+n.port+' · SNMP '+n.version));}
+  main.innerHTML=items.length?'':'<div class="state-msg"><strong>'+esc(t('noNas'))+'</strong>'+esc(t('noNasHint'))+'</div>';
+  const sub=document.getElementById('tb-sub');sub.textContent='';
+  document.getElementById('tb-title').textContent=n?n.name:'NAS Monitor';
+  if(n){const hs=document.createElement('span');hs.textContent=n.host;hs.setAttribute('data-nethost',n.host);hs.setAttribute('data-nethost-click','1');sub.appendChild(hs);sub.appendChild(document.createTextNode(':'+n.port+' · SNMP '+n.version));}
+}
+
+function buildDetail(n){
   const snap=n.snap||{};
   const tools=canAdmin()?`<div class="nas-tools"><button class="btn-secondary" data-on-click="openNasForm" data-on-click-args="${jsargs([n.id])}">${esc(t('edit'))}</button><button class="btn-secondary" data-on-click="confirmDelete" data-on-click-args="${jsargs([n.id,n.name])}" style="color:var(--red)">${esc(t('delete'))}</button></div>`:'';
-  if(!snap.ts){main.innerHTML='<div class="state-msg"><strong>'+esc(t('connecting'))+'</strong>'+esc(t('connectingMsg'))+'</div>';return;}
+  if(!snap.ts){return '<div class="state-msg"><strong>'+esc(t('connecting'))+'</strong>'+esc(t('connectingMsg'))+'</div>';}
   if(snap.error&&!snap.data?.system){
-    main.innerHTML=`<div class="nas-head"><div><h2>${esc(n.name)}</h2></div>${tools}</div><div class="state-msg err"><strong>${esc(t('connError'))}</strong>${esc(snap.error)}<br><br><span style="font-size:12px;font-family:var(--mono)">${esc(t('connErrorHint'))}</span></div>`;return;
+    return `<div class="nas-head"><div><h2>${esc(n.name)}</h2></div>${tools}</div><div class="state-msg err"><strong>${esc(t('connError'))}</strong>${esc(snap.error)}<br><br><span style="font-size:12px;font-family:var(--mono)">${esc(t('connErrorHint'))}</span></div>`;
   }
   const d=snap.data,s=d.system||{};
   const offline=!!snap.error;
@@ -240,6 +278,7 @@ function renderDashboard(){
     h+='<div class="alerts">'+al.map(a=>{const f=LANG[_lang].al[a.type]||LANG.en.al[a.type];const txt=typeof f==='function'?(a.item!==undefined?f(a.item,a.value):f(a.value)):(f||a.type);
       return `<div class="alert ${esc(a.lv)}">${a.lv==='crit'?'⛔':a.lv==='warn'?'⚠':'ℹ'} ${esc(txt)}</div>`;}).join('')+'</div>';
   }
+  h+=gauges(d);
   h+='<div class="nas-grid">';
   // Sistema
   const cpu=d.cpu||{},mem=d.mem;
@@ -289,32 +328,142 @@ function renderDashboard(){
   if((d.io||[]).length){
     h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('diskLoad'))}</div></div>`+d.io.map(x=>`<div class="vol-row"><div class="vol-top"><span class="vol-name">${esc(x.dev)}</span><span class="vol-size">${x.load==null?'—':esc(x.load)+'%'}</span></div>${bar(x.load||0,70,90)}</div>`).join('')+'</div>';
   }
-  // Historial
-  h+=`<div class="node-card wide"><div class="node-hd"><div class="node-name">${esc(t('history'))}</div></div>
-    <div class="chart-wrap"><div class="node-sub" style="margin-bottom:4px">${esc(t('histCpuMem'))}</div>${lineChart(n.history,[['cpu','var(--orange)'],['mem','var(--purple)']],100)}<div class="chart-leg"><span><i style="background:var(--orange)"></i>${esc(t('cpu'))}</span><span><i style="background:var(--purple)"></i>RAM</span></div></div>
-    <div class="chart-wrap"><div class="node-sub" style="margin-bottom:4px">${esc(t('histTemp'))}</div>${lineChart(n.history,[['temp','var(--red)']],0,v=>Math.round(v)+' °C')}<div class="chart-leg"><span><i style="background:var(--red)"></i>${esc(t('histTemp'))}</span></div></div>
-    <div class="chart-wrap"><div class="node-sub" style="margin-bottom:4px">${esc(t('histNet'))}</div>${lineChart(n.history,[['rx','var(--green)'],['tx','var(--blue)']],0)}<div class="chart-leg"><span><i style="background:var(--green)"></i>↓ ${esc(t('rx'))}</span><span><i style="background:var(--blue)"></i>↑ ${esc(t('tx'))}</span></div></div></div>`;
-  h+='</div>';
-  main.innerHTML=h;
+  h+='</div>'+chartSections(n);
+  return h;
 }
 const CPU_W=70,CPU_C=85,MEM_W=80,MEM_C=90,VOL_W=80,VOL_C=90,DISK_HOT=55;
 
-// Gráfico de líneas en SVG con números solamente (max=0: escala automática).
-// EN: SVG line chart, numbers only (max=0: automatic scale).
-function lineChart(hist,series,max,fmt){
-  const pts=(hist||[]).filter(p=>p&&typeof p.ts==='number');
-  if(pts.length<3)return `<div class="nas-empty" style="padding:8px 0">${esc(t('noHist'))}</div>`;
-  const W=600,H=80,t0=pts[0].ts,t1=pts[pts.length-1].ts||t0+1;
-  let top=max;if(!top){top=1;pts.forEach(p=>series.forEach(([k])=>{const v=Number(p[k]);if(v>top)top=v;}));}
-  const X=ts=>((ts-t0)/Math.max(1,t1-t0))*W,Y=v=>H-2-(Math.max(0,Math.min(top,v))/top)*(H-4);
-  const paths=series.map(([k,c])=>{
-    let d='',pen=false;
-    pts.forEach(p=>{const v=Number(p[k]);if(p[k]==null||!isFinite(v)){pen=false;return;}d+=(pen?'L':'M')+X(p.ts).toFixed(1)+' '+Y(v).toFixed(1)+' ';pen=true;});
-    return `<path d="${d}" fill="none" stroke="${c}" stroke-width="1.6" stroke-linejoin="round"/>`;}).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><line x1="0" y1="${H-1}" x2="${W}" y2="${H-1}" stroke="var(--border)"/>${paths}</svg>`+
-    (max?'':`<div class="node-sub" style="text-align:right">max ${esc((fmt||fmtBps)(top))}</div>`);
-}
+// ── Gráficos de detalle (como los de UPS Monitor): canvas con rangos 1h / 1d / 1mo / todo, cuadrícula, valores actuales y cursor con tooltip ──
+// EN: Detail charts (like UPS Monitor's): canvas with 1h / 1d / 1mo / all ranges, grid, current values and a hover cursor with tooltip.
+const RANGES=['1h','1d','1mo','all'];
+const CHARTS={
+  cm:{title:'histCpuMem',max:100,series:[{k:'cpu',c:'#f97316',l:'cpu',f:v=>v.toFixed(1)+'%'},{k:'mem',c:'#8b5cf6',l:'RAM',f:v=>v.toFixed(1)+'%'}],axis:v=>Math.round(v)+'%',h:140},
+  tp:{title:'histTemp',min:null,series:[{k:'temp',c:'#ef4444',l:'temp',f:v=>v.toFixed(1)+' °C'}],axis:v=>Math.round(v)+'°',h:120},
+  nt:{title:'histNet',max:0,series:[{k:'rx',c:'#22c55e',l:'rx',f:fmtBps},{k:'tx',c:'#4361ee',l:'tx',f:fmtBps}],axis:fmtBps,h:120},
+};
+const chartRange={cm:'1d',tp:'1d',nt:'1d'};
+const _rangeData={}, _rangeBusy={};          // «id|rango» → {ts, pts}
+const _cid=(id,kind)=>'nch-'+kind+'-'+String(id).replace(/[^a-z0-9]/gi,'-');
 
+// Pide al servidor el historial de un NAS y rango; se reutiliza 30 s (1h) o 2 min (el resto).
+// EN: Ask the server for one NAS and range history; reused for 30 s (1h) or 2 min (the rest).
+async function loadRange(id,range,force){
+  const key=id+'|'+range,c=_rangeData[key],ttl=range==='1h'?30000:120000;
+  if(!force&&c&&Date.now()-c.ts<ttl)return;
+  if(_rangeBusy[key])return;_rangeBusy[key]=true;
+  try{
+    const r=await fetch('api/nas/'+encodeURIComponent(id)+'/history?range='+range);
+    if(r.ok){const d=await r.json();_rangeData[key]={ts:Date.now(),pts:d.history||[]};drawCharts(id);}
+  }catch(e){console.error(e);}
+  finally{_rangeBusy[key]=false;}
+}
+function ensureRanges(){
+  const n=items.find(x=>x.id===activeId);if(!n)return;
+  Object.keys(CHARTS).forEach(k=>loadRange(n.id,chartRange[k]));
+}
+function setRange(btn,kind,range){
+  chartRange[kind]=range;
+  btn.parentNode.querySelectorAll('.vchart-filter').forEach(b=>b.classList.toggle('active',b===btn));
+  const n=items.find(x=>x.id===activeId);if(!n)return;
+  if(_rangeData[n.id+'|'+range])drawCharts(n.id);
+  loadRange(n.id,range,true);
+}
+function chartSections(n){
+  return Object.keys(CHARTS).map(k=>{
+    const C=CHARTS[k],id=_cid(n.id,k);
+    const leg=C.series.map(x=>`<div class="vchart-legend-item"><div class="vchart-legend-dot" style="background:${x.c}"></div>${esc(x.l==='cpu'?t('cpu'):x.l==='temp'?t('temp'):x.l==='rx'?'↓ '+t('rx'):x.l==='tx'?'↑ '+t('tx'):x.l)}</div>`).join('');
+    const flt=RANGES.map(r=>`<button class="vchart-filter${chartRange[k]===r?' active':''}" data-on-click="setRange" data-on-click-args="${jsargs([{'@':'this'},k,r])}">${r==='all'?esc(t('filterAll')):r}</button>`).join('');
+    return `<div class="vchart-section"><div class="vchart-header"><span class="vchart-title">${esc(t(C.title))}</span><div class="vchart-legend">${leg}</div><div class="vchart-filters">${flt}</div></div>
+      <div class="vchart-body" style="position:relative"><div class="vchart-tooltip" id="${id}-tip"></div><canvas class="vchart" id="${id}" style="--chart-h:${C.h}px"></canvas></div></div>`;
+  }).join('');
+}
+function drawCharts(id){
+  if(id!==activeId)return;
+  Object.keys(CHARTS).forEach(k=>drawChart(id,k,-1));
+}
+function drawChart(id,kind,hover){
+  const C=CHARTS[kind],cv=document.getElementById(_cid(id,kind));if(!cv)return;
+  const range=chartRange[kind],pts=((_rangeData[id+'|'+range]||{}).pts||[]).filter(p=>p&&typeof p.ts==='number');
+  const dpr=window.devicePixelRatio||1,W=cv.offsetWidth||600,H=Math.round(cv.getBoundingClientRect().height)||C.h;
+  if(cv.width!==W*dpr||cv.height!==H*dpr){cv.width=W*dpr;cv.height=H*dpr;}
+  const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+  const css=k=>getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+  const cBg=css('--bg')||'#f0f2f5',cBorder=css('--border')||'#e3e8ef',cDim=css('--text-dim')||'#94a3b8',cSurface=css('--surface')||'#fff';
+  ctx.fillStyle=cBg;ctx.fillRect(0,0,W,H);
+  ctx.font='11px DM Mono,monospace';ctx.textAlign='center';
+  if(pts.length<2){ctx.fillStyle=cDim;ctx.fillText(t(pts.length?'accumulating':'noDataChart'),W/2,H/2);cv._pts=[];return;}
+  const N=pts.length,PL=C.series[0].k==='rx'?64:38,PR=10,PT=8,PB=18,W2=W-PL-PR,H2=H-PT-PB;
+  const vals=[];pts.forEach(p=>C.series.forEach(x=>{const v=Number(p[x.k]);if(p[x.k]!=null&&isFinite(v))vals.push(v);}));
+  if(!vals.length){ctx.fillStyle=cDim;ctx.fillText(t('noDataChart'),W/2,H/2);cv._pts=[];return;}
+  let lo=0,hi=C.max===100?100:Math.max(...vals);
+  if(kind==='tp'){lo=Math.max(0,Math.floor(Math.min(...vals)-3));hi=Math.ceil(Math.max(...vals)+3);}
+  else if(!C.max)hi=Math.max(hi,1)*1.1;
+  const rg=hi-lo||1,xOf=i=>PL+(i/(N-1))*W2,yOf=v=>PT+H2-((v-lo)/rg)*H2;
+  ctx.strokeStyle=cBorder;ctx.lineWidth=.5;ctx.fillStyle=cDim;ctx.font='9px DM Mono,monospace';ctx.textAlign='right';
+  for(let i=0;i<=4;i++){const v=lo+rg/4*i,y=yOf(v);ctx.beginPath();ctx.moveTo(PL,y);ctx.lineTo(W-PR,y);ctx.stroke();ctx.fillText(C.axis(v),PL-3,y+3);}
+  C.series.forEach((x,si)=>{
+    const line=()=>{ctx.beginPath();let pen=false;pts.forEach((p,i)=>{const v=Number(p[x.k]);if(p[x.k]==null||!isFinite(v)){pen=false;return;}pen?ctx.lineTo(xOf(i),yOf(v)):ctx.moveTo(xOf(i),yOf(v));pen=true;});};
+    if(si===0){line();ctx.lineTo(xOf(N-1),PT+H2);ctx.lineTo(PL,PT+H2);ctx.closePath();const g=ctx.createLinearGradient(0,PT,0,PT+H2);g.addColorStop(0,x.c+'33');g.addColorStop(1,x.c+'00');ctx.fillStyle=g;ctx.fill();}
+    line();ctx.strokeStyle=x.c;ctx.lineWidth=1.8;ctx.stroke();
+  });
+  ctx.fillStyle=cDim;ctx.font='9px DM Mono,monospace';ctx.textAlign='center';
+  const step=Math.max(1,Math.floor(N/5));
+  for(let i=0;i<N;i+=step){const d=new Date(pts[i].ts*1000);ctx.fillText(range==='1mo'||range==='all'?d.toLocaleDateString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit'}):PCT.time(d),xOf(i),H-3);}
+  if(hover>=0&&hover<N){
+    const cx=xOf(hover),p=pts[hover];
+    ctx.beginPath();ctx.moveTo(cx,PT);ctx.lineTo(cx,PT+H2);ctx.strokeStyle='rgba(100,116,139,.4)';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([]);
+    C.series.forEach(x=>{if(p[x.k]==null)return;ctx.beginPath();ctx.arc(cx,yOf(Number(p[x.k])),4,0,2*Math.PI);ctx.fillStyle=x.c;ctx.fill();ctx.strokeStyle=cSurface;ctx.lineWidth=1.5;ctx.stroke();});
+  }
+  cv._pts=pts;cv._geo={PL,W2,N};
+  if(!cv._bound){
+    cv._bound=true;
+    cv.addEventListener('mousemove',e=>{
+      const g=cv._geo,ps=cv._pts;if(!g||!ps||!ps.length)return;
+      const r=cv.getBoundingClientRect(),x=e.clientX-r.left;
+      const i=Math.max(0,Math.min(g.N-1,Math.round((x-g.PL)/g.W2*(g.N-1))));
+      drawChart(id,kind,i);
+      const tip=document.getElementById(_cid(id,kind)+'-tip');if(!tip)return;
+      const p=ps[i],d=new Date(p.ts*1000);
+      tip.replaceChildren();
+      const hd=document.createElement('div');hd.style.color='var(--text-dim)';hd.textContent=d.toLocaleDateString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit'})+' '+PCT.time(d,true);tip.appendChild(hd);
+      C.series.forEach(sx=>{const row=document.createElement('div');const dot=document.createElement('span');dot.style.cssText='display:inline-block;width:8px;height:3px;border-radius:2px;margin-right:6px;background:'+sx.c;
+        row.appendChild(dot);row.appendChild(document.createTextNode((sx.l==='cpu'?t('cpu'):sx.l==='temp'?t('temp'):sx.l==='rx'?'↓ '+t('rx'):sx.l==='tx'?'↑ '+t('tx'):sx.l)+': '+(p[sx.k]==null?'—':sx.f(Number(p[sx.k])))));tip.appendChild(row);});
+      tip.classList.add('show');
+      const tw=tip.offsetWidth,px=e.clientX-r.left+14;tip.style.left=Math.max(0,Math.min(r.width-tw,px>r.width-tw?e.clientX-r.left-tw-14:px))+'px';tip.style.top='6px';
+    });
+    cv.addEventListener('mouseleave',()=>{const tip=document.getElementById(_cid(id,kind)+'-tip');if(tip)tip.classList.remove('show');drawChart(id,kind,-1);});
+  }
+}
+window.addEventListener('resize',()=>{if(activeId)drawCharts(activeId);});
+
+// Anillos y números de la parte alta del detalle (como los medidores de UPS Monitor).
+// EN: Rings and numbers at the top of the detail (like UPS Monitor's gauges).
+function ring(label,pct,color,txt){
+  const C=2*Math.PI*14.5,p=pct==null?0:Math.max(0,Math.min(100,pct));
+  return `<div class="gauge-box"><span class="gauge-lbl">${esc(label)}</span><div class="circle-wrap"><svg viewBox="0 0 36 36"><circle class="circle-bg" cx="18" cy="18" r="14.5"/><circle class="circle-fill" cx="18" cy="18" r="14.5" style="opacity:${pct==null?0:1};stroke-dasharray:${C.toFixed(1)};stroke-dashoffset:${(C*(1-p/100)).toFixed(1)};stroke:${color}"/></svg><span class="circle-val">${pct==null?'—':esc(Math.round(pct))}</span></div><span class="gauge-unit">${esc(txt||'%')}</span></div>`;
+}
+function bigNum(label,val,unit,color){
+  return `<div class="gauge-box"><span class="gauge-lbl">${esc(label)}</span><div class="gauge-num"><span class="runtime-num" style="color:${color||'var(--text)'}">${esc(val)}</span></div><span class="gauge-unit">${esc(unit||'')}</span></div>`;
+}
+function gauges(d){
+  const cpu=d.cpu||{},mem=d.mem,s=d.system||{};
+  const vmax=(d.raids||[]).filter(x=>x.pct!=null&&!x.pool).reduce((m,x)=>Math.max(m,x.pct),-1);
+  const dk=d.disks||[],dOk=dk.filter(x=>x.lv==='ok').length;
+  const tc=s.temp==null?'var(--text)':s.temp>=70?'var(--red)':s.temp>=55?'var(--orange)':'var(--blue)';
+  return '<div class="nas-gauges">'+
+    ring(t('cpu'),cpu.pct,barColor(cpu.pct||0,CPU_W,CPU_C))+ring('RAM',mem?mem.pct:null,barColor(mem?mem.pct:0,MEM_W,MEM_C))+
+    ring(t('volumes'),vmax>=0?vmax:null,barColor(vmax,VOL_W,VOL_C))+
+    bigNum(t('temp'),s.temp==null?'—':s.temp,s.temp==null?'':'°C',tc)+bigNum(t('disks'),dk.length?dOk+'/'+dk.length:'—','',dk.length&&dOk<dk.length?'var(--red)':'var(--text)')+
+    bigNum(t('uptime'),fmtUptime(s.uptime),'')+'</div>';
+}
+// Mini-gráfico (CPU y RAM de las últimas horas) para la tabla: al pulsarlo se abre el detalle de ese NAS.
+// EN: Mini chart (CPU and RAM of the last hours) for the table: clicking it opens that NAS's detail.
+function spark(hist){
+  const pts=(hist||[]).filter(p=>p&&typeof p.ts==='number');if(pts.length<3)return '<span class="sum-sub">—</span>';
+  const W=90,H=24,t0=pts[0].ts,t1=pts[pts.length-1].ts||t0+1;
+  const path=(k,c)=>{let d='',pen=false;pts.forEach(p=>{const v=Number(p[k]);if(p[k]==null||!isFinite(v)){pen=false;return;}d+=(pen?'L':'M')+(((p.ts-t0)/Math.max(1,t1-t0))*W).toFixed(1)+' '+(H-1-Math.max(0,Math.min(100,v))/100*(H-2)).toFixed(1)+' ';pen=true;});return `<path d="${d}" fill="none" stroke="${c}" stroke-width="1.4" stroke-linejoin="round"/>`;};
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${path('cpu','#f97316')}${path('mem','#8b5cf6')}</svg>`;
+}
 // ── Alta, edición, prueba y borrado (solo administradores) ────────────────────
 // SNMP v3 (usuario y claves) o v2c (comunidad). Al editar, los secretos llegan vacíos: dejarlos vacíos conserva los guardados.
 // EN: SNMP v3 (user and keys) or v2c (community). When editing, secrets arrive empty: leaving them empty keeps the stored ones.

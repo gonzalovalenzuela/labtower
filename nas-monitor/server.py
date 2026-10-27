@@ -378,6 +378,28 @@ def load_history() -> int:
         log.warning(f"could not load the history: {e}")
     return n
 
+# Historial de un NAS para un rango (1h, 1d, 1w, 1mo o all) desde la base, reducido a un máximo de puntos promediando intervalos.
+# EN: History of one NAS for a range (1h, 1d, 1w, 1mo or all) from the database, reduced to a maximum number of points by averaging intervals.
+RANGE_SECS = {"1h": 3600, "1d": 86400, "1w": 604800, "1mo": 2592000}
+RANGE_POINTS = 600
+
+def history_range(nid: str, range_: str) -> list:
+    since = int(time.time()) - RANGE_SECS[range_] if range_ in RANGE_SECS else 0
+    c = auth.metrics_conn()
+    try:
+        rows = c.execute("SELECT ts,cpu,mem,temp,rx,tx FROM nas_samples WHERE nid = ? AND ts >= ? ORDER BY ts", (nid, since)).fetchall()
+    finally: c.close()
+    if len(rows) <= RANGE_POINTS: step = 1
+    else: step = -(-len(rows) // RANGE_POINTS)
+    out = []
+    for i in range(0, len(rows), step):
+        grp = rows[i:i + step]
+        def avg(k):
+            v = [r[k] for r in grp if r[k] is not None]
+            return round(sum(v) / len(v), 2) if v else None
+        out.append({"ts": grp[len(grp) // 2][0], "cpu": avg(1), "mem": avg(2), "temp": avg(3), "rx": avg(4), "tx": avg(5)})
+    return out
+
 def forget_history(nid: str):
     with _hist_lock: _HISTORY.pop(nid, None)
     try:
@@ -572,6 +594,16 @@ class H(BaseHTTPRequestHandler):
                 snap = _cache.get(n["id"], NasCache(n["id"])).snap()
                 out.append({**public(n), "snap": snap, "history": get_history(n["id"]) if with_hist else []})
             return self._json(200, {"nas": out})
+        # GET /api/nas/<id>/history?range=1h|1d|1w|1mo|all: historial reducido de un NAS para los gráficos de detalle.
+        # EN: GET /api/nas/<id>/history?range=...: reduced history of one NAS for the detail charts.
+        mh = re.fullmatch(r"/api/nas/([A-Za-z0-9_-]{1,40})/history", path)
+        if mh:
+            if not any(n.get("id") == mh.group(1) for n in load_nas()): return self._json(404, {"error": "NAS not found"})
+            rng = parse_qs(urlparse(self.path).query).get("range", ["1d"])[0]
+            if rng not in RANGE_SECS and rng != "all": return self._json(400, {"error": "Invalid range"})
+            try: return self._json(200, {"range": rng, "history": history_range(mh.group(1), rng)})
+            except Exception as e:
+                log.warning(f"history query failed: {e}"); return self._json(500, {"error": "Could not read the history"})
         self._json(404, {"error": "Not found"})
 
     # POST: login/logout y, solo admin, alta de NAS, edición y prueba de conexión.
