@@ -292,7 +292,7 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
 .nas-table tbody tr.detail-row,.nas-table tbody tr.detail-row:hover{display:none;background:var(--surface2);cursor:default}
 .nas-table tbody tr.detail-row.show{display:table-row}
 .nas-table tbody td.detail-cell{padding:0;white-space:normal;border-bottom:1px solid var(--border)}
-.nas-detail{padding:14px 16px;display:flex;flex-direction:column;gap:14px;cursor:default}
+.nas-detail{padding:14px 16px;display:flex;flex-direction:column;gap:14px;cursor:default;position:sticky;left:0;box-sizing:border-box;width:var(--wrapw,100%)}
 .nas-detail .nas-head{margin-bottom:0}
 .expand-arrow{font-size:12px;color:var(--text-dim);transition:transform .2s;display:inline-block}
 .expand-arrow.open{transform:rotate(90deg)}
@@ -324,3 +324,5 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
 .vchart-tooltip.show{display:block}
 @media(max-width:1180px){.nas-gauges{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:760px){.nas-gauges{grid-template-columns:1fr 1fr}.nas-table .c-spark{display:none}.vchart-header{grid-template-columns:1fr auto;grid-template-areas:"title filters" "legend legend"}.vchart-legend{justify-content:flex-start}}
+
+@media(max-width:1180px){.nas-table .c-spark,.nas-table .c-model{display:none}}

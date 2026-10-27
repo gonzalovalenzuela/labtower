@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3g — 2026-10-27
+
+**NAS Monitor**
+- Arreglado en iPad y pantallas angostas: el detalle del NAS se cortaba por la derecha (botones Editar/Eliminar y tarjetas). Ahora siempre ocupa el ancho visible, y en pantallas medianas se ocultan las columnas «Modelo» y «CPU / RAM» de la tabla.
+
 ## 1.3f — 2026-10-27
 
 **NAS Monitor**

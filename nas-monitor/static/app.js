@@ -241,8 +241,11 @@ function renderSummary(){
   }).join('');
   box.innerHTML=`<div class="card"><div class="card-hd"><span class="card-title">${esc(t('summary'))}</span><span class="card-meta">${esc(items.length)}</span></div>
     <div class="tbl-wrap"><table class="nas-table"><thead><tr><th style="width:24px"></th><th>${esc(t('colNas'))}</th><th class="c-model">${esc(t('colModel'))}</th><th>${esc(t('status'))}</th><th>${esc(t('cpu'))}</th><th>RAM</th><th class="c-temp">${esc(t('temp'))}</th><th>${esc(t('disks'))}</th><th>${esc(t('volumes'))}</th><th class="c-spark">${esc(t('trend'))}</th><th style="width:28px"></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
-  drawCharts(activeId);
+  fitDetail();drawCharts(activeId);
 }
+// El detalle ocupa el ancho visible de la tarjeta aunque la tabla sea más ancha y se desplace (iPad, pantallas angostas).
+// EN: The detail takes the visible card width even if the table is wider and scrolls (iPad, narrow screens).
+function fitDetail(){const w=document.querySelector('#nas-summary .tbl-wrap');if(w)w.style.setProperty('--wrapw',w.clientWidth+'px');}
 
 // ── Panel del NAS activo ─────────────────────────────────────────────────────
 function pill(lv,text){return `<span class="pill ${esc(lv)}">${esc(text)}</span>`;}
@@ -434,7 +437,7 @@ function drawChart(id,kind,hover){
     cv.addEventListener('mouseleave',()=>{const tip=document.getElementById(_cid(id,kind)+'-tip');if(tip)tip.classList.remove('show');drawChart(id,kind,-1);});
   }
 }
-window.addEventListener('resize',()=>{if(activeId)drawCharts(activeId);});
+window.addEventListener('resize',()=>{fitDetail();if(activeId)drawCharts(activeId);});
 
 // Anillos y números de la parte alta del detalle (como los medidores de UPS Monitor).
 // EN: Rings and numbers at the top of the detail (like UPS Monitor's gauges).
