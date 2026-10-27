@@ -22,6 +22,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 .app-card:hover{box-shadow:var(--shadow-md);border-color:var(--border-b);transform:translateY(-1px)}
 .app-card:active{transform:translateY(0)}
 .app-ico{width:44px;height:44px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.app-ico-img{background:none;overflow:hidden;border-radius:11px}
+.app-ico-img img{width:44px;height:44px;display:block}
 .app-ico svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2}
 .app-ico.blue{background:var(--blue-dim);color:var(--blue)}
 .app-ico.yellow{background:var(--yellow-dim);color:var(--yellow)}

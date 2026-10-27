@@ -7,8 +7,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 #login-screen{position:fixed;inset:0;background:var(--bg);display:none;align-items:center;justify-content:center;z-index:99999;padding:24px;transition:opacity .15s}
 .login-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:32px;width:100%;max-width:360px;box-shadow:var(--shadow-md)}
 .login-logo{display:flex;align-items:center;gap:10px;margin-bottom:24px}
-.login-logo-ico{width:36px;height:36px;border-radius:8px;background:var(--teal);display:flex;align-items:center;justify-content:center}
+.login-logo-ico{width:36px;height:36px;border-radius:9px;background:none;overflow:hidden;display:flex;align-items:center;justify-content:center}
 .login-logo-ico svg{width:18px;height:18px;stroke:#fff;fill:none;stroke-width:2}
+.login-logo-ico img{width:36px;height:36px;display:block}
 .login-err{background:var(--red-dim);border:1px solid rgba(239,68,68,.2);border-radius:var(--r-sm);padding:10px;font-size:12px;color:var(--red);margin-bottom:14px;display:none}
 .login-err.show{display:block}
 .lfield{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}

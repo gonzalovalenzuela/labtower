@@ -43,9 +43,9 @@ All screens (light and dark, 4 sizes) are in [`docs/screenshots/`](docs/screensh
 ## Install
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.0/labtower_2.0_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.0.1/labtower_2.0.1_all.deb
 sudo apt-get update
-sudo apt-get install -y ./labtower_2.0_all.deb
+sudo apt-get install -y ./labtower_2.0.1_all.deb
 ```
 
 Use `apt-get install ./file.deb`, not `dpkg -i`, so `apt` installs the dependencies. Then open `http://<pi-ip>/`.
@@ -57,8 +57,8 @@ The installer creates the `labtower` system user, the systemd services, the ngin
 ## Update
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.0/labtower_2.0_all.deb
-sudo apt-get install -y ./labtower_2.0_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.0.1/labtower_2.0.1_all.deb
+sudo apt-get install -y ./labtower_2.0.1_all.deb
 labtower-health
 ```
 

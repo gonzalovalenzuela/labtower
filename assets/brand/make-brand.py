@@ -34,32 +34,33 @@ def slab(cy, top, left, right, t=28, hw=104, hh=50):
             f'<path d="M256 {cy-hh} L{256+hw} {cy} L256 {cy+hh} L{256-hw} {cy} Z" fill="{top}" stroke="{top}" stroke-width="6" stroke-linejoin="round"/>')
 
 def solid(name, dark):
-    """Bold two-tone symbol standing on the platform. F = glyph fill, D = cut-outs, S = soft secondary tone."""
+    """Bold two-tone version of each module's original symbol (the Feather-style glyphs used in the app from earlier versions), drawn on its 24 grid.
+    F = main fill, S = soft secondary tone, D = cut-outs.   EN: solid two-tone take on the symbols the app already uses."""
     F, S, D = "url(#gf)", "url(#gs)", dark
-    if name == "overview":
-        return (f'<rect x="164" y="104" width="86" height="86" rx="24" fill="{F}"/><rect x="262" y="104" width="86" height="86" rx="24" fill="{S}"/>'
-                f'<rect x="164" y="202" width="86" height="86" rx="24" fill="{S}"/><rect x="262" y="202" width="86" height="86" rx="24" fill="{F}"/>')
-    if name == "ups":
-        return (f'<rect x="226" y="86" width="60" height="30" rx="10" fill="{S}"/><rect x="186" y="106" width="140" height="196" rx="36" fill="{F}"/>'
-                f'<path d="M270 138 L222 224 H252 L240 276 L292 190 H262 Z" fill="{D}"/>')
-    if name == "net":
-        pts = [(176, 128), (336, 128), (176, 290), (336, 290)]
-        lines = "".join(f'<path d="M{x} {y} L256 209" stroke="{S}" stroke-width="14" stroke-linecap="round"/>' for x, y in pts)
-        return lines + "".join(f'<circle cx="{x}" cy="{y}" r="28" fill="{S}"/>' for x, y in pts) + f'<circle cx="256" cy="209" r="44" fill="{F}"/><circle cx="256" cy="209" r="16" fill="{D}"/>'
-    if name == "proxmox":
-        return (f'<path d="M256 168 L190 252 M256 168 L322 252" stroke="{S}" stroke-width="14" stroke-linecap="round"/>'
-                f'<rect x="196" y="92" width="120" height="82" rx="24" fill="{F}"/><rect x="132" y="236" width="120" height="82" rx="24" fill="{S}"/><rect x="260" y="236" width="120" height="82" rx="24" fill="{S}"/>'
-                f'<circle cx="290" cy="133" r="10" fill="{D}"/><circle cx="226" cy="277" r="10" fill="{D}"/><circle cx="354" cy="277" r="10" fill="{D}"/>')
-    if name == "nas":
-        return "".join(f'<rect x="156" y="{y}" width="200" height="62" rx="20" fill="{F if i == 0 else S}"/><circle cx="324" cy="{y+31}" r="9" fill="{D}"/><rect x="180" y="{y+25}" width="74" height="12" rx="6" fill="{D}" opacity=".55"/>'
-                       for i, y in enumerate((96, 172, 248)))
-    if name == "wol":
-        return (f'<path d="M184 150 A98 98 0 1 0 328 150" fill="none" stroke="{F}" stroke-width="30" stroke-linecap="round"/>'
-                f'<path d="M256 96 V204" stroke="{F}" stroke-width="30" stroke-linecap="round"/><circle cx="256" cy="244" r="0" fill="{D}"/>')
-    if name == "admin":
-        return (f'<path d="M256 90 L366 134 V224 C366 276 322 312 256 332 C190 312 146 276 146 224 V134 Z" fill="{F}"/>'
-                f'<path d="M204 216 L242 254 L312 176" fill="none" stroke="{D}" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>')
-    raise ValueError(name)
+    if name == "overview":      # layout / dashboard
+        g = (f'<rect x="3" y="3" width="7" height="9" rx="1.8" fill="{F}"/><rect x="14" y="3" width="7" height="5" rx="1.8" fill="{S}"/>'
+             f'<rect x="14" y="12" width="7" height="9" rx="1.8" fill="{F}"/><rect x="3" y="16" width="7" height="5" rx="1.8" fill="{S}"/>')
+    elif name == "ups":         # box with handle and a line
+        g = (f'<path d="M5.6 9 V5.2 a1.6 1.6 0 0 1 1.6-1.6 h9.6 a1.6 1.6 0 0 1 1.6 1.6 V9" fill="none" stroke="{S}" stroke-width="2.4" stroke-linecap="round"/>'
+             f'<rect x="3" y="9" width="18" height="11.5" rx="2.6" fill="{F}"/><path d="M12 12.6 V16.4" stroke="{D}" stroke-width="2.2" stroke-linecap="round"/>')
+    elif name == "net":         # two stacked servers
+        g = (f'<rect x="2" y="2" width="20" height="8.4" rx="2.4" fill="{F}"/><rect x="2" y="13.6" width="20" height="8.4" rx="2.4" fill="{S}"/>'
+             f'<circle cx="6.2" cy="6.2" r="1.3" fill="{D}"/><circle cx="6.2" cy="17.8" r="1.3" fill="{D}"/>'
+             f'<path d="M10.5 6.2 H18 M10.5 17.8 H18" stroke="{D}" stroke-width="1.6" stroke-linecap="round" opacity=".5"/>')
+    elif name == "proxmox":     # monitor on a stand
+        g = (f'<path d="M8 21 H16 M12 17 V21" stroke="{S}" stroke-width="2.4" stroke-linecap="round"/>'
+             f'<rect x="2" y="3" width="20" height="14.4" rx="2.6" fill="{F}"/><rect x="4.4" y="5.4" width="15.2" height="9.6" rx="1.4" fill="{D}" opacity=".38"/>')
+    elif name == "nas":         # storage unit with two bays and an LED
+        g = (f'<rect x="3" y="3" width="18" height="18" rx="3" fill="{F}"/><path d="M7 9 H17 M7 14 H17" stroke="{D}" stroke-width="2" stroke-linecap="round" opacity=".5"/>'
+             f'<circle cx="16" cy="18" r="1.3" fill="{D}"/>')
+    elif name == "wol":         # lightning bolt
+        g = f'<path d="M13 2 L3.6 13.6 H11.6 L10.8 22 L20.6 10.2 H12.4 Z" fill="{F}" stroke="{F}" stroke-width="1.2" stroke-linejoin="round"/>'
+    elif name == "admin":       # shield
+        g = (f'<path d="M12 22 s8-4 8-10 V5 l-8-3 -8 3 v7 c0 6 8 10 8 10 z" fill="{F}"/>'
+             f'<path d="M8.4 11.8 l2.5 2.5 L15.8 9.2" fill="none" stroke="{D}" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>')
+    else:
+        raise ValueError(name)
+    return f'<g transform="translate(128 76) scale(10.667)">{g}</g>'
 
 def svg(name, accent):
     """Modern family icon: slate tile, a two-slab platform in the module colour (the brand mark's slabs) and a bold symbol standing on it."""

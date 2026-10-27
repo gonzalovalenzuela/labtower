@@ -1,17 +1,13 @@
 # Changelog
 
-## 2.0c — 2026-10-27
+## 2.0.1 — 2026-10-27
 
-- Icono nuevo: una pila isométrica de tres niveles. Reemplaza al icono anterior en el home, el Resumen, la pestaña del navegador, el icono de la app instalada y el README.
-- Kit de marca en `assets/brand/`: un icono por módulo (SVG y PNG) y la paleta (`palette.css`, `palette.json`), generados con `assets/brand/make-brand.py`.
+Reúne los cambios de los builds 2.0a a 2.0c: solo cambia la imagen, no hay cambios de funcionamiento.
 
-## 2.0b — 2026-10-27
-
-- El icono nuevo (servidor con los cuatro nodos) también está en el Resumen, en la pestaña del navegador y en el icono de la app instalada (iPad, teléfono). `assets/icons/make-icons.py` ahora genera todo desde `icon-source.png`.
-
-## 2.0a — 2026-10-27
-
-- Logo nuevo en la página de inicio y en el README (servidor con los cuatro nodos). Los iconos de la app instalada no cambian.
+- Icono nuevo: una pila isométrica de tres niveles. Está en el home, el Resumen, la pestaña del navegador, el icono de la app instalada (iPad, teléfono) y el README. `assets/icons/make-icons.py` genera todo desde `icon-source.png`.
+- Cada módulo tiene su icono (Resumen, UPS, Red, Proxmox, NAS, WOL y Admin): el mismo símbolo de siempre sobre una plataforma isométrica del color del módulo. Aparecen en las tarjetas de la página de inicio y en la pantalla de acceso de cada módulo.
+- Kit de marca en `assets/brand/`: los iconos de módulo (SVG y PNG) y la paleta (`palette.css`, `palette.json`), generados con `assets/brand/make-brand.py`.
+- Los respaldos con nombre `pi-console-*` se siguen pudiendo restaurar.
 
 ## 2.0 — 2026-10-27
 

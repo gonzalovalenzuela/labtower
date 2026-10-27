@@ -43,9 +43,9 @@ Todas las pantallas (tema claro y oscuro, 4 tamaños) están en [`docs/screensho
 ## Instalar
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.0/labtower_2.0_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.0.1/labtower_2.0.1_all.deb
 sudo apt-get update
-sudo apt-get install -y ./labtower_2.0_all.deb
+sudo apt-get install -y ./labtower_2.0.1_all.deb
 ```
 
 Usa `apt-get install ./archivo.deb` y no `dpkg -i`, para que `apt` instale las dependencias. Luego abre `http://<ip-de-la-pi>/`.
@@ -57,8 +57,8 @@ El instalador crea el usuario del sistema `labtower`, los servicios systemd, la 
 ## Actualizar
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.0/labtower_2.0_all.deb
-sudo apt-get install -y ./labtower_2.0_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.0.1/labtower_2.0.1_all.deb
+sudo apt-get install -y ./labtower_2.0.1_all.deb
 labtower-health
 ```
 
