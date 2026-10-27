@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0b — 2026-10-27
+
+- El icono nuevo (servidor con los cuatro nodos) también está en el Resumen, en la pestaña del navegador y en el icono de la app instalada (iPad, teléfono). `assets/icons/make-icons.py` ahora genera todo desde `icon-source.png`.
+
 ## 2.0a — 2026-10-27
 
 - Logo nuevo en la página de inicio y en el README (servidor con los cuatro nodos). Los iconos de la app instalada no cambian.

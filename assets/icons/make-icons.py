@@ -1,39 +1,51 @@
 #!/usr/bin/env python3
-"""Regenera los PNG de home/ desde los SVG de esta carpeta (requiere playwright + chromium).
-EN: Regenerates the home/ PNGs from the SVGs in this folder (needs playwright + chromium).
+"""Regenera los iconos de la app desde assets/icons/icon-source.png (necesita Pillow).
+EN: Regenerates the app icons from assets/icons/icon-source.png (needs Pillow).
 
     python3 assets/icons/make-icons.py
 
-icon.svg         → icon-192.png, icon-512.png (esquinas redondeadas, transparente / rounded corners, transparent)
-icon-square.svg  → apple-touch-icon.png (180, sin transparencia: iOS pone su propia máscara / no transparency: iOS applies its own mask)
-icon-maskable.svg → icon-maskable-512.png
+icon-192.png / icon-512.png  → esquinas redondeadas, transparente / rounded corners, transparent
+apple-touch-icon.png (180)   → cuadrado, sin transparencia: iOS pone su propia máscara / square, no transparency: iOS applies its own mask
+icon-maskable-512.png        → ilustración más pequeña dentro de la zona segura / artwork inside the safe zone
+logo.png (256)               → logo de la cabecera de inicio y Resumen / logo of the home and Overview headers
+docs/logo.png (512)          → logo del README
 """
-import pathlib
-from playwright.sync_api import sync_playwright
+import base64, io, pathlib, re
+from PIL import Image, ImageDraw
 here = pathlib.Path(__file__).resolve().parent
-out = here.parent.parent / "home"
-jobs = [("icon.svg", "icon-192.png", 192, True), ("icon.svg", "icon-512.png", 512, True),
-        ("icon-square.svg", "apple-touch-icon.png", 180, False), ("icon-maskable.svg", "icon-maskable-512.png", 512, False)]
-with sync_playwright() as p:
-    b = p.chromium.launch()
-    for src, name, size, transparent in jobs:
-        pg = b.new_page(viewport={"width": size, "height": size})
-        svg = (here / src).read_text()
-        pg.set_content(f'<body style="margin:0;background:transparent"><div style="width:{size}px;height:{size}px">{svg.replace(chr(10)," ").replace("width=\"512\" height=\"512\"", f"width=\"{size}\" height=\"{size}\"",1)}</div></body>')
-        pg.screenshot(path=str(out / name), omit_background=transparent, clip={"x": 0, "y": 0, "width": size, "height": size})
-        pg.close()
-    b.close()
+root = here.parent.parent
+out = root / "home"
+src = Image.open(here / "icon-source.png").convert("RGB")
+BG = src.getpixel((4, 4))
 
-# iOS vuelve a descargar el icono al añadir la app a la pantalla de inicio con un proceso aparte que puede fallar (certificado propio, redirección…) y pone una «P». Por eso el apple-touch-icon va incrustado (data:) en cada página: no hay segunda descarga.
-# EN: iOS downloads the icon again when adding the app to the home screen, in a separate process that can fail (own certificate, redirect…) and shows a "P". That is why the apple-touch-icon is embedded (data:) in every page: there is no second download.
-import base64, io, re
-from PIL import Image
-buf = io.BytesIO(); Image.open(out / "apple-touch-icon.png").convert("RGB").save(buf, "PNG", optimize=True)
-uri = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
-root = out.parent
+def rounded(size, radius):
+    img = src.resize((size, size), Image.LANCZOS).convert("RGBA")
+    m = Image.new("L", (size * 4, size * 4), 0)
+    ImageDraw.Draw(m).rounded_rectangle((0, 0, size * 4 - 1, size * 4 - 1), radius=radius * 4, fill=255)
+    img.putalpha(m.resize((size, size), Image.LANCZOS))
+    return img
+
+rounded(192, 36).save(out / "icon-192.png", optimize=True)
+rounded(512, 96).save(out / "icon-512.png", optimize=True)
+rounded(256, 48).save(out / "logo.png", optimize=True)
+rounded(512, 96).save(root / "docs" / "logo.png", optimize=True)
+src.resize((180, 180), Image.LANCZOS).save(out / "apple-touch-icon.png", optimize=True)
+mask = Image.new("RGB", (512, 512), BG)                       # maskable: el sistema recorta hasta un 20 % por lado
+mask.paste(src.resize((360, 360), Image.LANCZOS), (76, 76))
+mask.save(out / "icon-maskable-512.png", optimize=True)
+
+def data_uri(img, fmt="PNG"):
+    buf = io.BytesIO(); img.save(buf, fmt, optimize=True)
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+# iOS vuelve a descargar el icono al añadir la app a la pantalla de inicio con un proceso aparte que puede fallar (certificado propio, redirección…) y pone una «P». Por eso el apple-touch-icon va incrustado (data:) en cada página: no hay segunda descarga. El favicon también va incrustado.
+# EN: iOS downloads the icon again when adding the app to the home screen, in a separate process that can fail (own certificate, redirect…). That is why the apple-touch-icon is embedded (data:) in every page: there is no second download. The favicon is embedded too.
+touch = data_uri(Image.open(out / "apple-touch-icon.png").convert("RGB"))
+fav = data_uri(rounded(64, 12))
 pages = [out / "index.html"] + [root / m / "static" / "index.html" for m in ("auth", "wol-console", "nut-monitor", "net-monitor", "proxmox-monitor", "nas-monitor", "overview")]
 for f in pages:
     t = f.read_text()
-    n = re.sub(r'<link rel="apple-touch-icon" href="[^"]*">', lambda m: f'<link rel="apple-touch-icon" href="{uri}">', t, count=1)
+    n = re.sub(r'<link rel="apple-touch-icon" href="[^"]*">', lambda m: f'<link rel="apple-touch-icon" href="{touch}">', t, count=1)
+    n = re.sub(r'<link rel="icon" type="image/[a-z+]+" href="[^"]*">', lambda m: f'<link rel="icon" type="image/png" href="{fav}">', n, count=1)
     if n != t: f.write_text(n)
-print("ok", len(uri), "bytes de icono incrustado")
+print("ok")
