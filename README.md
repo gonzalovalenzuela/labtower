@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/icons/icon.svg" alt="LabTower" width="110"></p>
+<p align="center"><img src="docs/logo.png" alt="LabTower" width="120"></p>
 
 # LabTower
 

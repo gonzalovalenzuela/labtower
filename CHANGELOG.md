@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0a — 2026-10-27
+
+- Logo nuevo en la página de inicio y en el README (servidor con los cuatro nodos). Los iconos de la app instalada no cambian.
+
 ## 2.0 — 2026-10-27
 
 **El proyecto se llama LabTower** (antes Pi Console). Ya no es solo para la Raspberry Pi y había muchos proyectos con el nombre anterior. Hay logo nuevo (una torre de tres niveles con los nodos arriba) en el menú, la página de inicio, los iconos de la app y las capturas.
