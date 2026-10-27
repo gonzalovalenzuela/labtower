@@ -1,7 +1,7 @@
 // ───────── Textos / texts ─────────
 const TXT={
  en:{title:'Overview',sortBtn:'Reorder',sortDone:'Done',sortReset:'Reset order',mvEarlier:'Move earlier',mvLater:'Move later',mvDrag:'Drag to move',home:'Home',kiosk:'Kiosk',logout:'Sign out',login:'Sign in',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',exitk:'Exit kiosk',rint:'Refresh every',rman:'Manual',rnow:'Refresh now',ascroll:'Auto-scroll',updated:'Updated',allok:'All good',attn:'Attention',fail:'Failure',
-  ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',dns:'DNS Monitor',wan:'WAN Monitor',net:'Net Monitor',pi:'LabTower Server',ev:'Timeline',open:'Open →',noups:'No UPS servers configured',nopve:'No clusters configured',nonas:'No NAS configured',nodns:'No DNS servers configured',issue_dnsdown:'DNS server unreachable',dnsq:'Queries',dnsblk:'Blocked',dnsms:'Response',dnsprot:'Blocking',protoff:'Paused',proton:'Active',protfail:'Failed',wanrtt:'Latency',wanloss:'Loss',wanup:'Uptime 24 h',wandown:'Download',wanip:'Public IP',wanstate:'Internet',wanon:'Online',wannet:'Down',wanlan:'No LAN',wanwait:'Measuring…',issue_wandown:'No internet access',issue_wanlan:'Local network unreachable',nasdisks:'Disks OK',nasvol:'Volume',issue_nasdown:'NAS unreachable',nonet:'No scan yet',noev:'No events yet',
+  ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',dns:'DNS Monitor',wan:'WAN Monitor',net:'Net Monitor',pi:'LabTower Server',ev:'Timeline',open:'Open →',noups:'No UPS servers configured',nopve:'No clusters configured',nonas:'No NAS configured',nodns:'No DNS servers configured',dnspct:'% blocked',issue_dnsdown:'DNS server unreachable',dnsq:'Queries',dnsblk:'Blocked',dnsms:'Response',dnsprot:'Blocking',protoff:'Paused',proton:'Active',protfail:'Failed',wanrtt:'Latency',wanloss:'Loss',wanup:'Uptime 24 h',wandown:'Download',wanip:'Public IP',wanstate:'Internet',wanon:'Online',wannet:'Down',wanlan:'No LAN',wanwait:'Measuring…',issue_wandown:'No internet access',issue_wanlan:'Local network unreachable',nasdisks:'Disks OK',nasvol:'Volume',issue_nasdown:'NAS unreachable',nonet:'No scan yet',noev:'No events yet',
   uptimeOnl:'Online',avail:'Availability',lastOut:'Last outage',noOut:'no outages recorded',onbattNow:'on battery now',
   mains:'On mains',batt:'On battery',lowb:'Low battery',unreach:'Unreachable',battery:'Battery',load:'Load',runtime:'Runtime',power:'Power',nodes:'Nodes',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memory',disk:'Disk',temp:'Temp',uptime:'Uptime',
   online:'Online',known:'Known',offline:'Offline',newdev:'New devices',lastscan:'Last scan',scanning:'Scanning…',ceph:'Ceph',types:'By device type',nonew:'No new devices',
@@ -9,7 +9,7 @@ const TXT={
   issue_batt:'is running on battery',issue_lowb:'has low battery',issue_srv:'unreachable',issue_node:'node offline',issue_cl:'cluster unreachable',issue_cpu:'high CPU',issue_ram:'high memory',issue_ceph:'Ceph',
   issue_temp:'Pi temperature high',issue_disk:'Pi disk almost full',issue_mem:'Pi memory high',issue_pwr:'Pi power supply problem',issue_scan:'scan error',h_temp:'Temp',h_min:'min',h_max:'max',h_uv:'Under-voltage',h_nouv:'no under-voltage',h_utemp:'UPS temperature 24 h'},
  es:{title:'Resumen',sortBtn:'Ordenar',sortDone:'Listo',sortReset:'Restablecer orden',mvEarlier:'Mover antes',mvLater:'Mover después',mvDrag:'Arrastra para mover',home:'Inicio',kiosk:'Kiosko',logout:'Cerrar sesión',login:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',exitk:'Salir de kiosko',rint:'Actualizar cada',rman:'Manual',rnow:'Actualizar ahora',ascroll:'Auto-desplazar',updated:'Actualizado',allok:'Todo en orden',attn:'Atención',fail:'Falla',
-  ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',dns:'DNS Monitor',wan:'WAN Monitor',net:'Net Monitor',pi:'LabTower Server',ev:'Línea de tiempo',open:'Abrir →',noups:'Sin servidores UPS configurados',nopve:'Sin clusters configurados',nonas:'Sin NAS configurados',nodns:'Sin servidores DNS configurados',issue_dnsdown:'Servidor DNS sin conexión',dnsq:'Consultas',dnsblk:'Bloqueadas',dnsms:'Respuesta',dnsprot:'Bloqueo',protoff:'Pausado',proton:'Activo',protfail:'Con falla',wanrtt:'Latencia',wanloss:'Pérdida',wanup:'Disponibilidad 24 h',wandown:'Bajada',wanip:'IP pública',wanstate:'Internet',wanon:'En línea',wannet:'Caído',wanlan:'Sin LAN',wanwait:'Midiendo…',issue_wandown:'Sin acceso a internet',issue_wanlan:'Red local sin respuesta',nasdisks:'Discos OK',nasvol:'Volumen',issue_nasdown:'NAS sin conexión',nonet:'Aún sin escaneo',noev:'Sin eventos todavía',
+  ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',dns:'DNS Monitor',wan:'WAN Monitor',net:'Net Monitor',pi:'LabTower Server',ev:'Línea de tiempo',open:'Abrir →',noups:'Sin servidores UPS configurados',nopve:'Sin clusters configurados',nonas:'Sin NAS configurados',nodns:'Sin servidores DNS configurados',dnspct:'% bloqueado',issue_dnsdown:'Servidor DNS sin conexión',dnsq:'Consultas',dnsblk:'Bloqueadas',dnsms:'Respuesta',dnsprot:'Bloqueo',protoff:'Pausado',proton:'Activo',protfail:'Con falla',wanrtt:'Latencia',wanloss:'Pérdida',wanup:'Disponibilidad 24 h',wandown:'Bajada',wanip:'IP pública',wanstate:'Internet',wanon:'En línea',wannet:'Caído',wanlan:'Sin LAN',wanwait:'Midiendo…',issue_wandown:'Sin acceso a internet',issue_wanlan:'Red local sin respuesta',nasdisks:'Discos OK',nasvol:'Volumen',issue_nasdown:'NAS sin conexión',nonet:'Aún sin escaneo',noev:'Sin eventos todavía',
   uptimeOnl:'En línea',avail:'Disponibilidad',lastOut:'Último corte',noOut:'sin cortes registrados',onbattNow:'en batería ahora',
   mains:'En red eléctrica',batt:'Con batería',lowb:'Batería baja',unreach:'Sin conexión',battery:'Batería',load:'Carga',runtime:'Autonomía',power:'Consumo',nodes:'Nodos',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memoria',disk:'Disco',temp:'Temp',uptime:'Encendida',
   online:'En línea',known:'Conocidos',offline:'Apagados',newdev:'Equipos nuevos',lastscan:'Último escaneo',scanning:'Escaneando…',ceph:'Ceph',types:'Por tipo de equipo',nonew:'Sin equipos nuevos',
@@ -86,7 +86,7 @@ function donut(parts){ // parts: [{label,n,color}]
 const PAL=['#4361ee','#16a34a','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#0ea5e9','#d946ef','#14b8a6','#94a3b8'];
 
 // ───────── Estado / state ─────────
-let me=null,issues=[],hist={},histTs=0,timer=null,piH=null,piHTs=0,pveH={},pveHTs=0,nasH={},nasHTs=0;
+let me=null,issues=[],hist={},histTs=0,timer=null,piH=null,piHTs=0,pveH={},pveHTs=0,nasH={},nasHTs=0,dnsH={},dnsHTs=0;
 const lvl=(m)=>({readonly:1,execute:2,admin:3})[(me.permissions||{})[m]]||0;
 
 // ───────── UPS ─────────
@@ -189,6 +189,18 @@ const DNS_AL={
  es:{blocking_off:'el bloqueo está pausado',blocking_failed:'el bloqueo falló',no_lists:'no hay dominios en las listas de bloqueo',slow_upstream:'DNS de salida lento'}
 };
 function dnsAl(a){const w=(DNS_AL[lang]||DNS_AL.en)[a.type]||a.type;return w+(a.type==='slow_upstream'&&a.value!=null?` (${a.value} ms)`:'')}
+// Historial de % bloqueado de un servidor DNS en tramos de 5 min / merge a DNS server's % blocked history into 5-min buckets
+function aggDns(n){
+  const b={};(n.history||[]).forEach(p=>{if(p.pct==null)return;const k=Math.floor(p.ts/300),o=b[k]||(b[k]={v:0,n:0});o.v+=p.pct;o.n++});
+  return Object.keys(b).map(Number).sort((x,y)=>x-y).map(k=>b[k].v/b[k].n);
+}
+function dnsChart(id){
+  const a=dnsH[id]||[];if(a.length<3)return '';
+  // El % bloqueado ronda valores bajos: se amplía al rango real para que se vea la variación / zoomed to the real range so the variation is visible
+  let lo=Math.min.apply(null,a),hi=Math.max.apply(null,a);if(hi-lo<4){const m=(hi+lo)/2;lo=m-2;hi=m+2}
+  const v=a.map(x=>(x-lo)/(hi-lo)*100),f=x=>Math.max(0,Math.round(x));
+  return '<div class="kp">'+lchart([{vals:v,color:'#10b981'}])+`<div class="hc"><i style="background:#10b981"></i>${T('dnspct')} ${f(lo)}–${f(hi)}% · ${dur(a.length*300)}</div></div>`;
+}
 function renderDNS(d){
   const el=$('c-dns');let sev='ok',body='';const L=d.servers||[];
   L.forEach(n=>{
@@ -199,7 +211,7 @@ function renderDNS(d){
     const pr=data?({enabled:T('proton'),disabled:T('protoff'),failed:T('protfail')}[data.blocking]||'—'):'—';
     body+=`<div class="unit"><div class="uh">${esc(n.name)} <span class="sub">${esc(n.type==='adguard'?'AdGuard':'Pi-hole')}</span>${pill(s,off&&!data?T('unreach'):s==='ok'?'OK':s==='warn'?T('attn'):T('fail'))}</div>
      <div class="kpis"><div class="kpi"><b>${data?esc(Number(data.queries||0).toLocaleString(lang==='es'?'es-CL':'en-GB')):'—'}</b><span>${T('dnsq')}</span></div><div class="kpi"><b>${data&&data.pct!=null?esc(data.pct)+'%':'—'}</b><span>${T('dnsblk')}</span></div><div class="kpi"><b>${data&&data.ms!=null?esc(data.ms)+' ms':'—'}</b><span>${T('dnsms')}</span></div></div>
-     <div class="row"><span class="l">${T('dnsprot')}</span><span class="v">${esc(pr)}</span></div></div>`;
+     <div class="row"><span class="l">${T('dnsprot')}</span><span class="v">${esc(pr)}</span></div>${dnsChart(n.id)}</div>`;
   });
   el.innerHTML=`<div class="ch"><h2>${T('dns')}</h2>${L.length?pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail')):''}<a class="go" href="/dns/">${T('open')}</a></div>`+(L.length?body:`<div class="empty">${T('nodns')}</div>`);
   return sev;
@@ -297,7 +309,8 @@ async function refresh(){
   if(lvl('pve')){jobs.pve=jget('/pve/api/clusters'+(wantPH?'':'?hist=0'))}
   const wantNH=Date.now()-nasHTs>60000;
   if(lvl('nas')){jobs.nas=jget('/nas/api/nas'+(wantNH?'':'?hist=0'))}
-  if(lvl('dns')){jobs.dns=jget('/dns/api/dns?hist=0')}
+  const wantDH=Date.now()-dnsHTs>60000;
+  if(lvl('dns')){jobs.dns=jget('/dns/api/dns'+(wantDH?'':'?hist=0'))}
   if(lvl('wan')){jobs.wan=jget('/wan/api/wan?hist=0')}
   if(lvl('net')){jobs.net=jget('/net/api/hosts')}
   jobs.sys=jget('api/system');jobs.ev=jget('api/events?limit=40');
@@ -312,6 +325,7 @@ async function refresh(){
   }
   if(wantPH&&R.pve&&R.pve.status==='fulfilled'){pveHTs=Date.now();pveH={};(R.pve.value.clusters||[]).forEach(c=>{pveH[c.id]=aggHist(c)})}
   if(wantNH&&R.nas&&R.nas.status==='fulfilled'){nasHTs=Date.now();nasH={};(R.nas.value.nas||[]).forEach(n=>{nasH[n.id]=aggNas(n)})}
+  if(wantDH&&R.dns&&R.dns.status==='fulfilled'){dnsHTs=Date.now();dnsH={};(R.dns.value.servers||[]).forEach(n=>{dnsH[n.id]=aggDns(n)})}
   // Historial de temperatura y subtensión de la Pi (solo existe en una Raspberry Pi) / Pi history (Raspberry Pi only)
   if(R.sys.status==='fulfilled'&&Date.now()-piHTs>60000){
     piHTs=Date.now();

@@ -2,6 +2,7 @@
 
 ## 2.1h — 2026-10-27
 
+- Resumen: la tarjeta de DNS Monitor muestra un gráfico del % bloqueado de las últimas horas, ajustado al rango real para que se vea la variación.
 - DNS Monitor: el color pasa de rosa a verde esmeralda (página, icono y paleta de marca).
 - WAN Monitor: nueva opción «Motor de la prueba» en Ajustes. Además del integrado (Cloudflare), se puede usar Ookla Speedtest CLI o LibreSpeed CLI si están instalados, para contrastar la velocidad. Ookla es solo para uso personal no comercial. El paquete sugiere `librespeed-cli`.
 
