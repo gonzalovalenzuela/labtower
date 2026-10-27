@@ -4,8 +4,8 @@ EN: Generates the brand kit: one icon per module (SVG + PNG) and the palette (pa
 
     python3 assets/brand/make-brand.py     (needs playwright + chromium for the PNGs)
 
-Todos los iconos comparten la misma construcción que la marca: baldosa pizarra azulada, trazo de línea con degradado y «nodos» (anillo con punto) como terminales.
-EN: Every icon shares the brand's construction: slate-blue tile, gradient line stroke and "nodes" (ring with a dot) as terminals.
+Todos los iconos usan la construcción de la marca: baldosa pizarra azulada y tres losas isométricas teñidas con el color del módulo; el símbolo del módulo está dibujado sobre la cara superior.
+EN: Every icon uses the brand's construction: slate-blue tile and three isometric slabs tinted with the module colour; the module symbol is drawn on the top face.
 """
 import json, pathlib
 here = pathlib.Path(__file__).resolve().parent
@@ -59,13 +59,35 @@ def glyph(name):
                 f'<path d="M200 262 L242 304 L318 220" {L}/>')
     raise ValueError(name)
 
+def slab(cy, top, left, right, t=44):
+    """Isometric slab (same construction as the brand mark): top rhombus plus two sides."""
+    return (f'<path d="M146 {cy} L256 {cy+64} L256 {cy+64+t} L146 {cy+t} Z" fill="{left}"/>'
+            f'<path d="M366 {cy} L256 {cy+64} L256 {cy+64+t} L366 {cy+t} Z" fill="{right}"/>'
+            f'<path d="M256 {cy-64} L366 {cy} L256 {cy+64} L146 {cy} Z" fill="{top}" stroke="{top}" stroke-width="6" stroke-linejoin="round"/>')
+
+# centro (en la rejilla de 512) y escala con que cada símbolo cabe en la cara superior
+# EN: centre (on the 512 grid) and scale that fit each symbol inside the top face
+FIT = {"overview": (256, 256, .43), "ups": (256, 272, .36), "net": (256, 256, .40), "proxmox": (256, 270, .38), "nas": (256, 293, .37), "wol": (256, 230, .40), "admin": (256, 260, .39)}
+
 def svg(name, accent):
-    hi = mix(accent, "#ffffff", .55); lo = accent
-    body = glyph(name).replace("{hi}", hi)
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">'
-            f'<defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="120" y1="100" x2="400" y2="420"><stop offset="0" stop-color="{hi}"/><stop offset="1" stop-color="{lo}"/></linearGradient>'
-            f'<radialGradient id="glow" cx=".5" cy=".38" r=".62"><stop offset="0" stop-color="{accent}" stop-opacity=".30"/><stop offset="1" stop-color="{accent}" stop-opacity="0"/></radialGradient></defs>'
-            f'<rect width="512" height="512" rx="112" fill="{BRAND["night"]}"/><rect width="512" height="512" rx="112" fill="url(#glow)"/>{body}</svg>\n')
+    """The brand mark's three isometric slabs tinted with the module accent; the module glyph lies on the top face."""
+    N = BRAND["night"]; W = "#ffffff"
+    ink = mix(accent, "#000000", .18)
+    g = glyph(name).replace("url(#g)", ink).replace("{hi}", ink)
+    uid = "s" + name
+    defs = (f'<defs><linearGradient id="{uid}l1"><stop offset="0" stop-color="{mix(accent, N, .50)}"/><stop offset="1" stop-color="{mix(accent, N, .78)}"/></linearGradient>'
+            f'<linearGradient id="{uid}r1"><stop offset="0" stop-color="{mix(accent, N, .86)}"/><stop offset="1" stop-color="{mix(accent, N, .94)}"/></linearGradient>'
+            f'<linearGradient id="{uid}l2"><stop offset="0" stop-color="{mix(accent, W, .45)}"/><stop offset="1" stop-color="{mix(accent, W, .7)}"/></linearGradient>'
+            f'<linearGradient id="{uid}r2"><stop offset="0" stop-color="{mix(accent, "#000000", .05)}"/><stop offset="1" stop-color="{mix(accent, "#000000", .28)}"/></linearGradient>'
+            f'<linearGradient id="{uid}l3"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#f1f5fb"/></linearGradient>'
+            f'<linearGradient id="{uid}r3"><stop offset="0" stop-color="{mix(accent, W, .3)}"/><stop offset="1" stop-color="{mix(accent, W, .5)}"/></linearGradient>'
+            f'<radialGradient id="{uid}glow" cx=".5" cy=".42" r=".6"><stop offset="0" stop-color="{accent}" stop-opacity=".28"/><stop offset="1" stop-color="{accent}" stop-opacity="0"/></radialGradient></defs>')
+    tower = (slab(352, "#f4f6fb", f"url(#{uid}l3)", f"url(#{uid}r3)") + slab(284, mix(accent, W, .88), f"url(#{uid}l2)", f"url(#{uid}r2)")
+             + slab(216, "#eef0f6", f"url(#{uid}l1)", f"url(#{uid}r1)")
+             + f'<g transform="translate(256 216) matrix({.866*FIT[name][2]:.4f} {.5*FIT[name][2]:.4f} {-.866*FIT[name][2]:.4f} {.5*FIT[name][2]:.4f} 0 0) translate(-{FIT[name][0]} -{FIT[name][1]})">{g}</g>')
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">{defs}'
+            f'<rect width="512" height="512" rx="112" fill="{N}"/><rect width="512" height="512" rx="112" fill="url(#{uid}glow)"/>'
+            f'<g transform="translate(256 256) scale(1.2) translate(-256 -262)">{tower}</g></svg>\n')
 
 for n, _, a in MODULES:
     (icons / f"{n}.svg").write_text(svg(n, a))
