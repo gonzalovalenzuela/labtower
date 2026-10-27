@@ -1,0 +1,56 @@
+{
+  "brand": {
+    "night": "#191e32",
+    "night-2": "#222a45",
+    "ice": "#b4dcff",
+    "sky": "#4aa8f5",
+    "blue": "#1b6db8",
+    "slate": "#4e6bb0",
+    "ink": "#eef0f6"
+  },
+  "modules": {
+    "overview": {
+      "name": "Resumen / Overview",
+      "accent": "#8b5cf6",
+      "accent-light": "#cbb6fb",
+      "accent-dim": "#2e2955"
+    },
+    "ups": {
+      "name": "UPS Monitor",
+      "accent": "#eab308",
+      "accent-light": "#f6dd90",
+      "accent-dim": "#3f392a"
+    },
+    "net": {
+      "name": "Net Monitor",
+      "accent": "#14b8a6",
+      "accent-light": "#95dfd7",
+      "accent-dim": "#183a47"
+    },
+    "proxmox": {
+      "name": "Proxmox Monitor",
+      "accent": "#e15c00",
+      "accent-light": "#f2b68c",
+      "accent-dim": "#3d2929"
+    },
+    "nas": {
+      "name": "NAS Monitor",
+      "accent": "#0e9aa7",
+      "accent-light": "#93d2d7",
+      "accent-dim": "#173447"
+    },
+    "wol": {
+      "name": "WOL Console",
+      "accent": "#4361ee",
+      "accent-light": "#aab8f7",
+      "accent-dim": "#212a54"
+    },
+    "admin": {
+      "name": "Admin Panel",
+      "accent": "#f0527a",
+      "accent-light": "#f8b1c3",
+      "accent-dim": "#40273f"
+    }
+  },
+  "gradient": "linear-gradient(135deg, #b4dcff, #4aa8f5 55%, #1b6db8)"
+}

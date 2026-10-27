@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0c — 2026-10-27
+
+- Icono nuevo: una pila isométrica de tres niveles. Reemplaza al icono anterior en el home, el Resumen, la pestaña del navegador, el icono de la app instalada y el README.
+- Kit de marca en `assets/brand/`: un icono por módulo (SVG y PNG) y la paleta (`palette.css`, `palette.json`), generados con `assets/brand/make-brand.py`.
+
 ## 2.0b — 2026-10-27
 
 - El icono nuevo (servidor con los cuatro nodos) también está en el Resumen, en la pestaña del navegador y en el icono de la app instalada (iPad, teléfono). `assets/icons/make-icons.py` ahora genera todo desde `icon-source.png`.

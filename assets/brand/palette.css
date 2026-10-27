@@ -1,0 +1,32 @@
+/* LabTower: paleta de marca / brand palette (generado por make-brand.py) */
+:root{
+  --lt-night: #191e32;
+  --lt-night-2: #222a45;
+  --lt-ice: #b4dcff;
+  --lt-sky: #4aa8f5;
+  --lt-blue: #1b6db8;
+  --lt-slate: #4e6bb0;
+  --lt-ink: #eef0f6;
+  --lt-overview: #8b5cf6;
+  --lt-overview-light: #cbb6fb;
+  --lt-overview-dim: #2e2955;
+  --lt-ups: #eab308;
+  --lt-ups-light: #f6dd90;
+  --lt-ups-dim: #3f392a;
+  --lt-net: #14b8a6;
+  --lt-net-light: #95dfd7;
+  --lt-net-dim: #183a47;
+  --lt-proxmox: #e15c00;
+  --lt-proxmox-light: #f2b68c;
+  --lt-proxmox-dim: #3d2929;
+  --lt-nas: #0e9aa7;
+  --lt-nas-light: #93d2d7;
+  --lt-nas-dim: #173447;
+  --lt-wol: #4361ee;
+  --lt-wol-light: #aab8f7;
+  --lt-wol-dim: #212a54;
+  --lt-admin: #f0527a;
+  --lt-admin-light: #f8b1c3;
+  --lt-admin-dim: #40273f;
+  --lt-gradient: linear-gradient(135deg, #b4dcff, #4aa8f5 55%, #1b6db8);
+}

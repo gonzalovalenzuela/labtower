@@ -280,7 +280,8 @@ labtower/
 ├── etc/               # nginx, backup.conf, cron
 ├── scripts/           # teleporter.sh, labtower-sftp-backup, -https, -health, -resources, apt-repo.py
 ├── debian/            # .deb packaging
-├── assets/icons/      # source icons and the script that regenerates the PNGs
+├── assets/icons/      # source icon and the script that regenerates the PNGs
+├── assets/brand/      # brand kit: one icon per module and the palette
 ├── tests/             # automated tests (unittest)
 ├── docs/              # APT.md and screenshots
 ├── CHANGELOG.md, RELEASE_NOTES_2.0.md, VERSION, LICENSE
