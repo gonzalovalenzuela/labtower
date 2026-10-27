@@ -75,7 +75,7 @@ function tchart(h){
 // Une los historiales de los nodos de un cluster en tramos de 5 min / merge a cluster's node histories into 5-min buckets
 function aggHist(c){
   const b={};((c.snap&&c.snap.data&&c.snap.data.nodes)||[]).forEach(n=>(n.history||[]).forEach(p=>{const k=Math.floor(p.ts/300),o=b[k]||(b[k]={c:0,m:0,n:0});o.c+=p.cpu;o.m+=p.mem;o.n++}));
-  return Object.keys(b).map(Number).sort((x,y)=>x-y).map(k=>({cpu:b[k].c/b[k].n,mem:b[k].m/b[k].n}));
+  return Object.keys(b).map(Number).sort((x,y)=>x-y).map(k=>({cpu:b[k].c/b[k].n,mem:b[k].m/b[k].n,temp:b[k].tn?b[k].t/b[k].tn:null}));
 }
 function donut(parts){ // parts: [{label,n,color}]
   const tot=parts.reduce((a,p)=>a+p.n,0);if(!tot)return '';
@@ -117,8 +117,8 @@ function renderUPS(d){
 // ───────── Proxmox ─────────
 function pveChart(id){
   const a=pveH[id]||[];if(a.length<3)return '';
-  return '<div class="kp">'+lchart([{vals:a.map(p=>p.cpu),color:'var(--blue)'},{vals:a.map(p=>p.mem),color:'#8b5cf6'}])+
-    `<div class="hc"><i style="background:var(--blue)"></i>${T('cpu')}<i style="background:#8b5cf6"></i>${T('mem')} · ${dur(a.length*300)}</div></div>`;
+  return '<div class="kp">'+lchart([{vals:a.map(p=>p.cpu),color:'var(--blue)'},{vals:a.map(p=>p.mem),color:'#8b5cf6'},...(a.some(p=>p.temp!=null)?[{vals:(l=>a.map(p=>l=p.temp!=null?p.temp:l))(0),color:'var(--red)'}]:[])])+
+    `<div class="hc"><i style="background:var(--blue)"></i>${T('cpu')}<i style="background:#8b5cf6"></i>${T('mem')}${a.some(p=>p.temp!=null)?`<i style="background:var(--red)"></i>${T('temp')}`:''} · ${dur(a.length*300)}</div></div>`;
 }
 function renderPVE(d){
   const el=$('c-pve');let sev='ok',body='';const cl=d.clusters||[];
@@ -156,13 +156,13 @@ function nasAl(a){
 }
 // Une el historial de un NAS en tramos de 5 min / merge a NAS history into 5-min buckets
 function aggNas(n){
-  const b={};(n.history||[]).forEach(p=>{if(p.cpu==null&&p.mem==null)return;const k=Math.floor(p.ts/300),o=b[k]||(b[k]={c:0,m:0,n:0});o.c+=p.cpu||0;o.m+=p.mem||0;o.n++});
+  const b={};(n.history||[]).forEach(p=>{if(p.cpu==null&&p.mem==null)return;const k=Math.floor(p.ts/300),o=b[k]||(b[k]={c:0,m:0,t:0,tn:0,n:0});o.c+=p.cpu||0;o.m+=p.mem||0;if(p.temp!=null){o.t+=p.temp;o.tn++}o.n++});
   return Object.keys(b).map(Number).sort((x,y)=>x-y).map(k=>({cpu:b[k].c/b[k].n,mem:b[k].m/b[k].n}));
 }
 function nasChart(id){
   const a=nasH[id]||[];if(a.length<3)return '';
-  return '<div class="kp">'+lchart([{vals:a.map(p=>p.cpu),color:'var(--blue)'},{vals:a.map(p=>p.mem),color:'#8b5cf6'}])+
-    `<div class="hc"><i style="background:var(--blue)"></i>${T('cpu')}<i style="background:#8b5cf6"></i>${T('mem')} · ${dur(a.length*300)}</div></div>`;
+  return '<div class="kp">'+lchart([{vals:a.map(p=>p.cpu),color:'var(--blue)'},{vals:a.map(p=>p.mem),color:'#8b5cf6'},...(a.some(p=>p.temp!=null)?[{vals:(l=>a.map(p=>l=p.temp!=null?p.temp:l))(0),color:'var(--red)'}]:[])])+
+    `<div class="hc"><i style="background:var(--blue)"></i>${T('cpu')}<i style="background:#8b5cf6"></i>${T('mem')}${a.some(p=>p.temp!=null)?`<i style="background:var(--red)"></i>${T('temp')}`:''} · ${dur(a.length*300)}</div></div>`;
 }
 function renderNAS(d){
   const el=$('c-nas');let sev='ok',body='';const L=d.nas||[];

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3e — 2026-10-26
+
+**NAS Monitor y Resumen**
+- Nuevo gráfico de la **temperatura del NAS** (12 h) en la página de NAS, y una línea de temperatura en el gráfico de cada NAS del Resumen.
+
 ## 1.3d — 2026-10-26
 
 **NAS Monitor y Resumen**

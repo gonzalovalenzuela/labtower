@@ -16,7 +16,7 @@ const LANG={
     online:'Online',offline:'Unreachable',connError:'Connection error',connErrorHint:'Check host, port, SNMP version and credentials; SNMP must be allowed from this Pi.',
     system:'System',model:'Model',serial:'Serial',dsm:'DSM',uptime:'Uptime',temp:'Temperature',cpu:'CPU',memory:'Memory',load:'Load',swap:'Swap',
     power:'Power supply',fans:'Fans',normal:'Normal',failed:'Failed',upgradeYes:'Update available',upgradeNo:'Up to date',upgradeUnk:'—',updates:'DSM update',
-    volumes:'Volumes',disks:'Disks',network:'Network',ups:'UPS',diskLoad:'Disk activity',history:'History (last hours)',histCpuMem:'CPU / RAM',histNet:'Network traffic',
+    volumes:'Volumes',disks:'Disks',network:'Network',ups:'UPS',diskLoad:'Disk activity',history:'History (last hours)',histCpuMem:'CPU / RAM',histTemp:'Temperature',histNet:'Network traffic',
     noVolumes:'No volume data (is this a Synology with the Synology MIB enabled?)',noDisks:'No disk data',noNet:'No network data yet',noHist:'Collecting history…',
     used:'used',free:'free',rx:'In',tx:'Out',model2:'Model',status:'Status',charge:'Battery',loadPct:'Load',
     disk:{1:'Normal',2:'Initialized',3:'Not initialized',4:'System partition failed',5:'Crashed',6:'Disconnected'},
@@ -39,7 +39,7 @@ const LANG={
     online:'En línea',offline:'Sin conexión',connError:'Error de conexión',connErrorHint:'Revisa host, puerto, versión de SNMP y credenciales; SNMP debe permitirse desde esta Pi.',
     system:'Sistema',model:'Modelo',serial:'Serie',dsm:'DSM',uptime:'Tiempo encendido',temp:'Temperatura',cpu:'CPU',memory:'Memoria',load:'Carga',swap:'Swap',
     power:'Fuente de poder',fans:'Ventiladores',normal:'Normal',failed:'Falla',upgradeYes:'Actualización disponible',upgradeNo:'Al día',upgradeUnk:'—',updates:'Actualización de DSM',
-    volumes:'Volúmenes',disks:'Discos',network:'Red',ups:'UPS',diskLoad:'Actividad de disco',history:'Historial (últimas horas)',histCpuMem:'CPU / RAM',histNet:'Tráfico de red',
+    volumes:'Volúmenes',disks:'Discos',network:'Red',ups:'UPS',diskLoad:'Actividad de disco',history:'Historial (últimas horas)',histCpuMem:'CPU / RAM',histTemp:'Temperatura',histNet:'Tráfico de red',
     noVolumes:'Sin datos de volúmenes (¿es un Synology con la MIB de Synology habilitada?)',noDisks:'Sin datos de discos',noNet:'Aún sin datos de red',noHist:'Reuniendo historial…',
     used:'usado',free:'libre',rx:'Entrada',tx:'Salida',model2:'Modelo',status:'Estado',charge:'Batería',loadPct:'Carga',
     disk:{1:'Normal',2:'Inicializado',3:'Sin inicializar',4:'Falla de partición del sistema',5:'Dañado',6:'Desconectado'},
@@ -292,6 +292,7 @@ function renderDashboard(){
   // Historial
   h+=`<div class="node-card wide"><div class="node-hd"><div class="node-name">${esc(t('history'))}</div></div>
     <div class="chart-wrap"><div class="node-sub" style="margin-bottom:4px">${esc(t('histCpuMem'))}</div>${lineChart(n.history,[['cpu','var(--orange)'],['mem','var(--purple)']],100)}<div class="chart-leg"><span><i style="background:var(--orange)"></i>${esc(t('cpu'))}</span><span><i style="background:var(--purple)"></i>RAM</span></div></div>
+    <div class="chart-wrap"><div class="node-sub" style="margin-bottom:4px">${esc(t('histTemp'))}</div>${lineChart(n.history,[['temp','var(--red)']],0,v=>Math.round(v)+' °C')}<div class="chart-leg"><span><i style="background:var(--red)"></i>${esc(t('histTemp'))}</span></div></div>
     <div class="chart-wrap"><div class="node-sub" style="margin-bottom:4px">${esc(t('histNet'))}</div>${lineChart(n.history,[['rx','var(--green)'],['tx','var(--blue)']],0)}<div class="chart-leg"><span><i style="background:var(--green)"></i>↓ ${esc(t('rx'))}</span><span><i style="background:var(--blue)"></i>↑ ${esc(t('tx'))}</span></div></div></div>`;
   h+='</div>';
   main.innerHTML=h;
@@ -300,7 +301,7 @@ const CPU_W=70,CPU_C=85,MEM_W=80,MEM_C=90,VOL_W=80,VOL_C=90,DISK_HOT=55;
 
 // Gráfico de líneas en SVG con números solamente (max=0: escala automática).
 // EN: SVG line chart, numbers only (max=0: automatic scale).
-function lineChart(hist,series,max){
+function lineChart(hist,series,max,fmt){
   const pts=(hist||[]).filter(p=>p&&typeof p.ts==='number');
   if(pts.length<3)return `<div class="nas-empty" style="padding:8px 0">${esc(t('noHist'))}</div>`;
   const W=600,H=80,t0=pts[0].ts,t1=pts[pts.length-1].ts||t0+1;
@@ -311,7 +312,7 @@ function lineChart(hist,series,max){
     pts.forEach(p=>{const v=Number(p[k]);if(p[k]==null||!isFinite(v)){pen=false;return;}d+=(pen?'L':'M')+X(p.ts).toFixed(1)+' '+Y(v).toFixed(1)+' ';pen=true;});
     return `<path d="${d}" fill="none" stroke="${c}" stroke-width="1.6" stroke-linejoin="round"/>`;}).join('');
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><line x1="0" y1="${H-1}" x2="${W}" y2="${H-1}" stroke="var(--border)"/>${paths}</svg>`+
-    (max?'':`<div class="node-sub" style="text-align:right">max ${esc(fmtBps(top))}</div>`);
+    (max?'':`<div class="node-sub" style="text-align:right">max ${esc((fmt||fmtBps)(top))}</div>`);
 }
 
 // ── Alta, edición, prueba y borrado (solo administradores) ────────────────────
