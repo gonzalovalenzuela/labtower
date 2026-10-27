@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1j — 2026-10-27
+
+- NAS Monitor, actividad de disco: marcaba 0 % en todos los discos porque la columna de carga instantánea del NAS casi siempre vale 0. Ahora usa el mayor entre ella y el promedio de 1 minuto, y muestra además la lectura y escritura reales (R/W por segundo) calculadas con los contadores del disco.
+
 ## 2.1i — 2026-10-27
 
 - Resumen, modo kiosko: las tarjetas se acomodan en mosaico por columnas (la siguiente va a la columna más baja, respetando tu orden) en vez de filas de igual altura. Así una tarjeta corta ya no deja un hueco blanco debajo y caben más datos en el iPad. Se recalcula al refrescar y al girar la pantalla.

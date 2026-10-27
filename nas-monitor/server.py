@@ -277,8 +277,26 @@ def collect(cfg: dict, prev: dict) -> dict:
     if any(v is not None for v in u.values()):
         ups = {"model": u["model"] or "", "status": u["status"] or "", "load": _fnum(u["load"]), "charge": _fnum(u["charge"])}
 
-    io_name, io_la = _col(syn, f"{OID_SYNO}.101.1.1", 2), _col(syn, f"{OID_SYNO}.101.1.1", 8)
-    io = [{"dev": io_name[i], "load": io_la.get(i)} for i in sorted(io_name, key=_idx_key)]
+    # ES: Actividad de disco. La columna 8 (LA) es instantánea y en muchos equipos marca 0 casi siempre; se usa también el promedio de 1 min (9) y se calcula el rendimiento real (bytes leídos/escritos entre dos lecturas; contadores de 64 bits 12/13, o 3/4 de 32 bits).
+    # EN: Disk activity. Column 8 (LA) is instantaneous and reads 0 most of the time on many units; the 1-min average (9) is used too, and real throughput is computed (bytes read/written between two readings; 64-bit counters 12/13, or 32-bit 3/4).
+    ib = f"{OID_SYNO}.101.1.1"
+    io_name, io_la, io_la1 = (_col(syn, ib, c) for c in (2, 8, 9))
+    io_rd, io_wr = _col(syn, ib, 12), _col(syn, ib, 13)
+    io_rd32, io_wr32 = _col(syn, ib, 3), _col(syn, ib, 4)
+    io, io_cnt, dtio = [], {}, now - prev.get("io_ts", 0)
+    for i in sorted(io_name, key=_idx_key):
+        dev = io_name[i]
+        rd = io_rd.get(i) if _num(io_rd.get(i)) else io_rd32.get(i)
+        wr = io_wr.get(i) if _num(io_wr.get(i)) else io_wr32.get(i)
+        rrate = wrate = None
+        if _num(rd) and _num(wr):
+            io_cnt[dev] = (rd, wr)
+            p = prev.get("io", {}).get(dev)
+            if p and 0 < dtio < 600 and rd >= p[0] and wr >= p[1]:
+                rrate, wrate = round((rd - p[0]) / dtio), round((wr - p[1]) / dtio)
+        la = [v for v in (io_la.get(i), io_la1.get(i)) if _num(v)]
+        io.append({"dev": dev, "load": max(la) if la else None, "read": rrate, "write": wrate})
+    prev["io"], prev["io_ts"] = io_cnt, now
 
     n_name, n_in, n_out, n_speed = (_col(ifx, OID_IFX, c) for c in (1, 6, 10, 15))
     net, counters = [], {}

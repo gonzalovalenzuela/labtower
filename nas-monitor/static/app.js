@@ -331,7 +331,7 @@ function buildDetail(n){
   }
   // Actividad de disco
   if((d.io||[]).length){
-    h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('diskLoad'))}</div></div>`+d.io.map(x=>`<div class="vol-row"><div class="vol-top"><span class="vol-name">${esc(x.dev)}</span><span class="vol-size">${x.load==null?'—':esc(x.load)+'%'}</span></div>${bar(x.load||0,70,90)}</div>`).join('')+'</div>';
+    h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('diskLoad'))}</div></div>`+d.io.map(x=>`<div class="vol-row"><div class="vol-top"><span class="vol-name">${esc(x.dev)}</span><span class="vol-size">${x.read!=null&&x.write!=null?'<small style="color:var(--text-dim);font-weight:400">R '+esc(fmtBytes(x.read))+'/s · W '+esc(fmtBytes(x.write))+'/s</small> · ':''}${x.load==null?'—':esc(x.load)+'%'}</span></div>${bar(x.load||0,70,90)}</div>`).join('')+'</div>';
   }
   h+='</div>'+chartSections(n);
   return h;

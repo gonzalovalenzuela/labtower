@@ -37,7 +37,7 @@ FAKE = textwrap.dedent('''\
      B+"3.1.1.2.1": 'STRING: "Volume 1"', B+"3.1.1.3.1": "INTEGER: 1", B+"3.1.1.4.1": "Counter64: 500", B+"3.1.1.5.1": "Counter64: 1000",
      B+"3.1.1.2.2": 'STRING: "Volume 2"', B+"3.1.1.3.2": "INTEGER: 12", B+"3.1.1.4.2": "Counter64: 40", B+"3.1.1.5.2": "Counter64: 1000",
      B+"4.1.1.0": 'STRING: "UPS-X"', B+"4.2.1.0": 'STRING: "OL"', B+"4.3.1.1.0": "Gauge32: 100",
-     B+"101.1.1.2.1": 'STRING: "sda"', B+"101.1.1.8.1": "INTEGER: 12",
+     B+"101.1.1.2.1": 'STRING: "sda"', B+"101.1.1.8.1": "INTEGER: 12", B+"101.1.1.9.1": "INTEGER: 30", B+"101.1.1.12.1": "Counter64: 1000000", B+"101.1.1.13.1": "Counter64: 2000000",
      ".1.3.6.1.2.1.31.1.1.1.1.1": 'STRING: "lo"', ".1.3.6.1.2.1.31.1.1.1.6.1": "Counter64: 5", ".1.3.6.1.2.1.31.1.1.1.10.1": "Counter64: 5",
      ".1.3.6.1.2.1.31.1.1.1.1.2": 'STRING: "eth0"', ".1.3.6.1.2.1.31.1.1.1.6.2": "Counter64: %%d" %% (1000000 + step * 1250000),
      ".1.3.6.1.2.1.31.1.1.1.10.2": "Counter64: %%d" %% (2000000 + step * 625000), ".1.3.6.1.2.1.31.1.1.1.15.2": "Gauge32: 1000",
@@ -135,6 +135,13 @@ class Collect(unittest.TestCase):
     def step(self, n): Path(self.tmp, "step").write_text(str(n))
     def calls(self): return [json.loads(l) for l in Path(self.tmp, "calls.log").read_text().splitlines()]
 
+    def test_disk_throughput(self):
+        prev = {}
+        m.collect(m.validate(CFG3), prev)
+        prev["io_ts"] -= 10; prev["io"]["sda"] = (0, 0)                           # 10 s antes, contadores en 0
+        s = m.collect(m.validate(CFG3), prev)
+        self.assertAlmostEqual(s["io"][0]["read"], 100000, delta=2000); self.assertAlmostEqual(s["io"][0]["write"], 200000, delta=4000)
+
     def test_full_reading(self):
         s = m.collect(m.validate(CFG3), {})
         sy = s["system"]
@@ -146,7 +153,7 @@ class Collect(unittest.TestCase):
         self.assertEqual([d["lv"] for d in s["disks"]], ["ok", "crit"])
         self.assertEqual(s["disks"][0]["model"], "WD40")                          # sin espacios sobrantes
         self.assertEqual([(r["name"], r["lv"], r["pct"]) for r in s["raids"]], [("Volume 1", "ok", 50.0), ("Volume 2", "crit", 96.0)])
-        self.assertEqual(s["ups"]["status"], "OL"); self.assertEqual(s["io"], [{"dev": "sda", "load": 12}])
+        self.assertEqual(s["ups"]["status"], "OL"); self.assertEqual(s["io"], [{"dev": "sda", "load": 30, "read": None, "write": None}])   # carga = el mayor entre LA y el promedio de 1 min
         self.assertEqual([n["name"] for n in s["net"]], ["eth0"])                 # sin lo ni docker0
         self.assertTrue(s["synology"]); self.assertEqual(s["warnings"], [])
 
