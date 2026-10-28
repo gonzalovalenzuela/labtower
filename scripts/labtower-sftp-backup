@@ -283,7 +283,13 @@ cmd_status() {
   [ -f "$STATUS_FILE" ] || { echo "No backup has run yet."; return 0; }
   python3 -I - "$STATUS_FILE" <<'PY'
 import json, sys, time
-d = json.load(open(sys.argv[1]))
+try:
+    d = json.load(open(sys.argv[1]))
+    if not isinstance(d, dict): raise ValueError("not an object")
+except Exception:
+    print("The status file is empty or unreadable (%s)." % sys.argv[1])
+    print("Run 'sudo labtower-sftp-backup run' to write it again.")
+    sys.exit(0)
 when = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(d.get("time", 0)))
 print("Last run:  %s" % when)
 print("Result:    %s" % ("OK" if d.get("ok") else "FAILED"))
