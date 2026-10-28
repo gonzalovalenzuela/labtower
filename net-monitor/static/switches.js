@@ -15,7 +15,10 @@ Object.assign(LANG.en, {
   swEmptyAdmin: 'No switches yet. Add one to start monitoring ports, temperature and errors.', swEmptyRead: 'No switches have been added yet.',
   swLegUp: 'Up', swLegDown: 'Down', swLegWarn: 'New errors', swLegUplink: 'Link between switches', swLegOff: 'Disabled', swLegLoop: 'Loop',
   swTotal: 'Total rx / tx', swInfoTotal: 'Total received / sent',
-  swSubStatus: 'Status', swSubHist: 'History',
+  swSubStatus: 'Status', swSubHist: 'History', swSubMac: 'MAC table',
+  swMacSearch: 'Search MAC, IP, name, port or VLAN…', swMacAll: 'All switches', swMacKnown: 'Only known devices', swMacCount: (n, m) => n + ' of ' + m + ' addresses',
+  swMacEmpty: 'No MAC addresses yet: they appear after the first reading.', swMacNone: 'Nothing matches the search.', swColSw: 'Switch', swColMac: 'MAC', swColVlan: 'VLAN', swColIp: 'IP', swColName: 'Name', swMacUplink: 'link to another switch',
+  swTopoReset: 'Reset layout', swTopoDrag: 'Drag the nodes to arrange the map; the layout is kept in this browser.',
   swHistNote: 'Cumulative data, not affected by restarts: LabTower adds up how much each counter advances between reads, so the totals do not drop when a switch reboots or its counters are cleared. They start from the value the switch already had when it was added, and the traffic of the few seconds around a restart is lost.',
   swHistSince: d => 'Counting since ' + d, swHistResets: n => n ? n + ' counter reset' + (n > 1 ? 's' : '') + ' detected' : 'no counter resets detected',
   swHistEmpty: 'No totals yet: they appear after the first reading.', swColRx: 'Received', swColTx: 'Sent', swColSum: 'Total', swColPkRx: 'Packets received', swColPkTx: 'Packets sent', swHistTotal: 'All ports',
@@ -46,7 +49,10 @@ Object.assign(LANG.es, {
   swEmptyAdmin: 'Aún no hay switches. Agrega uno para monitorear puertos, temperatura y errores.', swEmptyRead: 'Todavía no se ha agregado ningún switch.',
   swLegUp: 'Arriba', swLegDown: 'Abajo', swLegWarn: 'Errores nuevos', swLegUplink: 'Enlace entre switches', swLegOff: 'Deshabilitado', swLegLoop: 'Loop',
   swTotal: 'Total rx / tx', swInfoTotal: 'Total recibido / enviado',
-  swSubStatus: 'Estado', swSubHist: 'Historial',
+  swSubStatus: 'Estado', swSubHist: 'Historial', swSubMac: 'Tabla MAC',
+  swMacSearch: 'Buscar MAC, IP, nombre, puerto o VLAN…', swMacAll: 'Todos los switches', swMacKnown: 'Solo equipos conocidos', swMacCount: (n, m) => n + ' de ' + m + ' direcciones',
+  swMacEmpty: 'Aún no hay direcciones MAC: aparecen tras la primera lectura.', swMacNone: 'Nada coincide con la búsqueda.', swColSw: 'Switch', swColMac: 'MAC', swColVlan: 'VLAN', swColIp: 'IP', swColName: 'Nombre', swMacUplink: 'enlace a otro switch',
+  swTopoReset: 'Restablecer posiciones', swTopoDrag: 'Arrastra los nodos para ordenar el mapa; la disposición se guarda en este navegador.',
   swHistNote: 'Datos acumulados, sin tomar en cuenta los reinicios: LabTower suma cuánto avanza cada contador entre lecturas, así que el total no baja cuando el switch se reinicia o se borran sus contadores. Parte del valor que el switch ya traía al agregarlo, y se pierde el tráfico de los pocos segundos alrededor de un reinicio.',
   swHistSince: d => 'Contando desde ' + d, swHistResets: n => n ? n + ' reinicio' + (n > 1 ? 's' : '') + ' de contadores detectado' + (n > 1 ? 's' : '') : 'sin reinicios de contadores detectados',
   swHistEmpty: 'Aún no hay totales: aparecen tras la primera lectura.', swColRx: 'Recibido', swColTx: 'Enviado', swColSum: 'Total', swColPkRx: 'Paquetes recibidos', swColPkTx: 'Paquetes enviados', swHistTotal: 'Todos los puertos',
@@ -72,7 +78,7 @@ Object.assign(LANG.es, {
 });
 
 const $ = id => document.getElementById(id);
-const SW = { sub: 'status', tot: null, view: 'hosts', data: null, hash: '', sel: null, range: '1d', hist: {}, charts: {}, showAll: {}, timer: null, busy: false, cfg: null };
+const SW = { sub: 'status', tot: null, macs: null, q: '', msw: '', known: false, pos: {}, drag: null, view: 'hosts', data: null, hash: '', sel: null, range: '1d', hist: {}, charts: {}, showAll: {}, timer: null, busy: false, cfg: null };
 const POLLS = [30, 60, 120, 300, 600];
 
 async function api(path, opts) {
@@ -124,7 +130,8 @@ async function load() {
   try {
     const d = await api('api/switches');
     if (SW.sub === 'hist') { try { SW.tot = await api('api/switches/totals'); } catch (e) { if (e.message === '401') throw e; } }
-    const h = (SW.sub === 'hist' ? JSON.stringify(SW.tot) : '') + SW.sub + JSON.stringify(d.switches) + JSON.stringify(d.edges) + d.poll_seconds + (typeof ME !== 'undefined' && ME && ME.permissions ? ME.permissions.net : '');
+    if (SW.sub === 'mac') { try { SW.macs = await api('api/switches/macs'); } catch (e) { if (e.message === '401') throw e; } }
+    const h = (SW.sub === 'hist' ? JSON.stringify(SW.tot) : SW.sub === 'mac' ? JSON.stringify(SW.macs) : '') + SW.sub + JSON.stringify(d.switches) + JSON.stringify(d.edges) + d.poll_seconds + (typeof ME !== 'undefined' && ME && ME.permissions ? ME.permissions.net : '');
     const changed = h !== SW.hash;
     SW.data = d; SW.hash = h;
     if (changed) render();
@@ -313,11 +320,13 @@ function card(s) {
     (!hasT && s.ports.length ? `<div class="sw-note">${esc(t('swNoTemp'))}</div>` : '') + '</div>';
 }
 
-function topology(d) {
-  const sw = d.switches; if (sw.length < 2) return '';
-  const W = 460, H = 150, pos = {};
-  const n = sw.length;
-  sw.forEach((s, i) => { pos[s.name] = n === 2 ? [i ? 365 : 95, 75] : i === 0 ? [230, 28] : [n === 3 ? (i === 1 ? 95 : 365) : 40 + (i - 1) * (380 / (n - 2)), 118]; });
+function topoPos(d) {
+  const sw = d.switches, n = sw.length, pos = {};
+  sw.forEach((s, i) => { pos[s.name] = SW.pos[s.name] || (n === 2 ? [i ? 395 : 125, 100] : i === 0 ? [260, 38] : [n === 3 ? (i === 1 ? 125 : 395) : 60 + (i - 1) * (400 / (n - 2)), 160]); });
+  return pos;
+}
+function topoSvg(d) {
+  const sw = d.switches, W = 520, H = 200, pos = topoPos(d);
   let g = '';
   d.edges.forEach(e => {
     const a = pos[e.a], b = pos[e.b]; if (!a || !b) return;
@@ -325,9 +334,35 @@ function topology(d) {
   });
   sw.forEach(s => {
     const p = pos[s.name], c = s.online ? 'var(--green)' : 'var(--red)', tp = s.system && s.system.temperature_c != null ? ' · ' + Math.round(s.system.temperature_c) + '°' : '';
-    g += `<rect x="${p[0] - 62}" y="${p[1] - 15}" width="124" height="30" rx="7" fill="var(--surface2)" stroke="${c}"/><text x="${p[0]}" y="${p[1] + 4}" text-anchor="middle" class="sw-node">${esc(s.name)}${esc(tp)}</text>`;
+    g += `<g class="sw-node-g" data-name="${esc(s.name)}"><rect x="${p[0] - 62}" y="${p[1] - 15}" width="124" height="30" rx="7" fill="var(--surface2)" stroke="${c}"/><text x="${p[0]}" y="${p[1] + 4}" text-anchor="middle" class="sw-node">${esc(s.name)}${esc(tp)}</text></g>`;
   });
-  return `<div class="card sw-card"><div class="sw-sechead">${esc(t('swTopo'))}</div>${d.edges.length ? `<svg viewBox="0 0 ${W} ${H}" class="sw-topo">${g}</svg>` : `<div class="sw-nodata">${esc(t('swTopoNone'))}</div>`}<div class="sw-note">${esc(t('swTopoHint'))}</div></div>`;
+  return `<svg viewBox="0 0 ${W} ${H}" class="sw-topo" data-w="${W}" data-h="${H}">${g}</svg>`;
+}
+function topology(d) {
+  const sw = d.switches; if (sw.length < 2) return '';
+  return `<div class="card sw-card"><div class="sw-head"><span class="sw-sechead">${esc(t('swTopo'))}</span><span class="grow"></span>${Object.keys(SW.pos).length ? `<button type="button" class="sw-link" data-act="toporeset">${esc(t('swTopoReset'))}</button>` : ''}</div>` +
+    (d.edges.length ? `<div id="sw-topo-box">${topoSvg(d)}</div>` : `<div class="sw-nodata">${esc(t('swTopoNone'))}</div>`) +
+    `<div class="sw-note">${esc(t('swTopoHint'))} ${esc(t('swTopoDrag'))}</div></div>`;
+}
+
+function macRows() {
+  const all = SW.macs && SW.macs.macs || [], q = SW.q.trim().toLowerCase();
+  const rows = all.filter(r => (!SW.msw || r.switch === SW.msw) && (!SW.known || r.ip || r.name) &&
+    (!q || [r.mac, r.ip, r.name, r.label, r.switch, String(r.port), r.vlan == null ? '' : 'vlan' + r.vlan + ' ' + r.vlan].join(' ').toLowerCase().includes(q)));
+  return { all, rows };
+}
+function macBody() {
+  const { all, rows } = macRows();
+  const tr = rows.map(r => `<tr><td>${esc(r.switch)}</td><td>${esc(r.port)}${r.label ? ' <span class="dim">' + esc(r.label) + '</span>' : ''}${r.uplink ? ' <span class="sw-pill teal" title="' + esc(t('swMacUplink')) + '">↔</span>' : ''}</td><td><code>${esc(r.mac)}</code></td><td>${r.vlan != null ? esc(r.vlan) : '—'}</td><td>${r.ip ? esc(r.ip) : '<span class="dim">—</span>'}</td><td class="sw-conn">${r.name ? esc(r.name) : '<span class="dim">—</span>'}</td></tr>`).join('');
+  return { html: tr || `<tr><td colspan="6" class="sw-nodata">${esc(all.length ? t('swMacNone') : t('swMacEmpty'))}</td></tr>`, count: t('swMacCount', rows.length, all.length) };
+}
+function macHtml() {
+  const names = [...new Set((SW.macs && SW.macs.macs || []).map(r => r.switch))].sort();
+  const b = macBody();
+  return `<div class="card sw-card"><div class="sw-macbar"><input id="sw-q" type="search" class="sw-search" placeholder="${esc(t('swMacSearch'))}" value="${esc(SW.q)}" autocomplete="off">` +
+    `<select id="sw-msw" class="sw-sel"><option value="">${esc(t('swMacAll'))}</option>${names.map(n => `<option${SW.msw === n ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>` +
+    `<label class="chk dim"><input type="checkbox" id="sw-mknown"${SW.known ? ' checked' : ''}> ${esc(t('swMacKnown'))}</label><span class="grow"></span><span class="dim mono" id="sw-maccount">${esc(b.count)}</span></div>` +
+    `<div class="sw-tablewrap"><table class="sw-table"><thead><tr>${['swColSw', 'swPort', 'swColMac', 'swColVlan', 'swColIp', 'swColName'].map(h => `<th>${esc(t(h))}</th>`).join('')}</tr></thead><tbody id="sw-macbody">${b.html}</tbody></table></div></div>`;
 }
 
 function histHtml() {
@@ -364,8 +399,9 @@ function render() {
   const bar = `<div class="sw-bar"><span class="dim mono" id="sw-stamp"></span><span class="dim mono">· ${esc(t('swEvery'))} ${admin ? `<select id="sw-poll" class="sw-sel">${polls}</select>` : polls.match(new RegExp('value="' + d.poll_seconds + '"[^>]*>([^<]*)'))[1]}</span><span class="grow"></span>` +
     `<button type="button" class="sw-btn" data-act="refresh">↻ ${esc(t('swRefresh'))}</button>${admin ? `<button type="button" class="sw-btn teal" data-act="add">${esc(t('swAdd'))}</button>` : ''}</div>`;
   const empty = S.length ? '' : `<div class="card sw-card"><div class="sw-nodata">${esc(admin ? t('swEmptyAdmin') : t('swEmptyRead'))}</div></div>`;
-  const subbar = `<div class="sw-sub"><button type="button" class="sw-chip${SW.sub === 'status' ? ' active' : ''}" data-act="sub" data-sub="status">${esc(t('swSubStatus'))}</button><button type="button" class="sw-chip${SW.sub === 'hist' ? ' active' : ''}" data-act="sub" data-sub="hist">${esc(t('swSubHist'))}</button></div>`;
+  const subbar = `<div class="sw-sub"><button type="button" class="sw-chip${SW.sub === 'status' ? ' active' : ''}" data-act="sub" data-sub="status">${esc(t('swSubStatus'))}</button><button type="button" class="sw-chip${SW.sub === 'hist' ? ' active' : ''}" data-act="sub" data-sub="hist">${esc(t('swSubHist'))}</button><button type="button" class="sw-chip${SW.sub === 'mac' ? ' active' : ''}" data-act="sub" data-sub="mac">${esc(t('swSubMac'))}</button></div>`;
   if (SW.sub === 'hist') { root.innerHTML = bar + subbar + histHtml(); updateStamp(); return; }
+  if (SW.sub === 'mac') { root.innerHTML = bar + subbar + macHtml(); updateStamp(); return; }
   root.innerHTML = bar + subbar +
     (S.length ? `<div class="stats-row">${kpi('teal', upSw + '/' + S.length, t('swKpiOnline'))}${kpi('green', pUp + '<span class="dim"> / ' + pTot + '</span>', t('swKpiPorts'))}${kpi('orange', tmax ? Math.round(tmax.system.temperature_c) + ' °C' : '—', t('swKpiTemp') + (tmax ? ' (' + tmax.name + ')' : ''), tcol)}${kpi('red', errPorts, t('swKpiErr'), errPorts ? 'var(--amber)' : '')}${kpi('blue', macs, t('swKpiMacs'))}</div>` : '') +
     empty + S.map(card).join('') + topology(d) + (S.length ? `<div class="sw-note">${esc(t('swReadOnlyNote'))}</div>` : '');
@@ -423,10 +459,11 @@ async function onClick(e) {
       if (SW.sel) { const d = document.querySelector('.sw-detail'); if (d) d.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
     }
     else if (act === 'sub') {
-      SW.sub = el.dataset.sub === 'hist' ? 'hist' : 'status';
+      SW.sub = el.dataset.sub === 'hist' ? 'hist' : el.dataset.sub === 'mac' ? 'mac' : 'status';
       try { localStorage.setItem('pi-net-sub', SW.sub); } catch (e) {}
       SW.hash = ''; await load();
     }
+    else if (act === 'toporeset') { SW.pos = {}; try { localStorage.removeItem('pi-sw-topo'); } catch (e) {} render(); }
     else if (act === 'closeport') { SW.sel = null; render(); }
     else if (act === 'range') { SW.range = el.dataset.range; render(); loadHistory(true); }
     else if (act === 'showall') { SW.showAll[id] = !SW.showAll[id]; render(); }
@@ -459,6 +496,28 @@ function init() {
   root.addEventListener('click', onClick);
   document.addEventListener('click', e => { if (e.target.closest && e.target.closest('#sw-modal')) onClick(e); });
   root.addEventListener('mousemove', onMove); root.addEventListener('mouseleave', () => { const tip = $('sw-tip'); if (tip) tip.style.display = 'none'; });
+  const refreshMac = () => { const b = macBody(), body = $('sw-macbody'); if (body) body.innerHTML = b.html; const c = $('sw-maccount'); if (c) c.textContent = b.count; };
+  root.addEventListener('input', e => { if (e.target.id === 'sw-q') { SW.q = e.target.value; refreshMac(); } });
+  root.addEventListener('change', e => {
+    if (e.target.id === 'sw-msw') { SW.msw = e.target.value; refreshMac(); }
+    else if (e.target.id === 'sw-mknown') { SW.known = e.target.checked; refreshMac(); }
+  });
+  // Arrastrar los nodos del mapa. / EN: Drag the map nodes.
+  root.addEventListener('pointerdown', e => {
+    const g = e.target.closest && e.target.closest('.sw-node-g'); if (!g) return;
+    SW.drag = { name: g.dataset.name }; e.preventDefault();
+  });
+  document.addEventListener('pointermove', e => {
+    if (!SW.drag || !SW.data) return;
+    const svg = document.querySelector('#sw-topo-box svg'); if (!svg) return;
+    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const m = svg.getScreenCTM(); if (!m) return;
+    const p = pt.matrixTransform(m.inverse()), W = +svg.dataset.w, H = +svg.dataset.h;
+    SW.pos[SW.drag.name] = [Math.round(Math.min(W - 62, Math.max(62, p.x))), Math.round(Math.min(H - 15, Math.max(15, p.y)))];
+    $('sw-topo-box').innerHTML = topoSvg(SW.data);
+  });
+  const endDrag = () => { if (!SW.drag) return; SW.drag = null; try { localStorage.setItem('pi-sw-topo', JSON.stringify(SW.pos)); } catch (e) {} render(); };
+  document.addEventListener('pointerup', endDrag); document.addEventListener('pointercancel', endDrag);
   root.addEventListener('change', async e => {
     if (e.target.id !== 'sw-poll') return;
     try { await post('api/switches/poll', { seconds: Number(e.target.value) }); toast(t('swPollSet')); SW.hash = ''; load(); } catch (er) { toast(er.message, true); }
@@ -472,7 +531,7 @@ function init() {
     window.setLang = function (l) { orig.apply(this, arguments); document.querySelectorAll('.view-tab').forEach(b => { b.textContent = t(b.dataset.i18n); }); if (SW.data) render(); };
   }
   document.querySelectorAll('.view-tab').forEach(b => { b.textContent = t(b.dataset.i18n); });
-  try { if (localStorage.getItem('pi-net-sub') === 'hist') SW.sub = 'hist'; } catch (e) {}
+  try { const sv = localStorage.getItem('pi-net-sub'); if (sv === 'hist' || sv === 'mac') SW.sub = sv; SW.pos = JSON.parse(localStorage.getItem('pi-sw-topo') || '{}') || {}; } catch (e) {}
   let v = 'hosts';
   try { v = location.hash === '#switches' ? 'switches' : (location.hash === '' && localStorage.getItem('pi-net-view') === 'switches' ? 'switches' : 'hosts'); } catch (e) {}
   setView(v);

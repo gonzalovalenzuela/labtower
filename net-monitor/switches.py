@@ -1019,6 +1019,29 @@ class Manager:
                         out[(sid, m["port"])] = other
         return out
 
+    def macs(self):
+        """Tabla MAC de todos los switches, cruzada con los equipos que conoce Net Monitor. / MAC tables of all switches, matched with the hosts Net Monitor knows."""
+        try:
+            hosts = self.hooks["hosts"]() if self.hooks.get("hosts") else {}
+        except Exception as e:  # noqa: BLE001
+            self._say("debug", f"hosts hook: {e}")
+            hosts = {}
+        rows = []
+        with self.lock:
+            links = self._links_locked()
+            names = {s["id"]: s["name"] for s in self.cfg["switches"]}
+            for cfg in self.cfg["switches"]:
+                sid = cfg["id"]
+                meta = cfg.get("ports") or {}
+                for m in (self.rec.get(sid) or {}).get("macs") or []:
+                    pm = meta.get(str(m["port"])) or {}
+                    h = hosts.get(_mkey(m["mac"])) or {}
+                    rows.append({"switch": cfg["name"], "port": m["port"], "mac": m["mac"], "vlan": m.get("vlan"),
+                                 "ip": h.get("ip"), "name": h.get("name"), "label": pm.get("label", ""),
+                                 "uplink": bool(pm.get("uplink")) or (sid, m["port"]) in links})
+        rows.sort(key=lambda r: (r["switch"], r["port"], r["mac"]))
+        return {"macs": rows, "now": int(time.time())}
+
     # ---- respuesta para la página / page response
     def _err_1h(self, rec, n):
         dq = rec["errq"].get(n) or []

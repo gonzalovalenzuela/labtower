@@ -333,6 +333,15 @@ class ManagerTests(unittest.TestCase):
         self.m.delete_switch(sid2)
         self.assertEqual(len(self.m.totals()["switches"]), 1)
 
+    def test_mac_table_is_matched_with_known_hosts(self):
+        sid = self.add()["id"]
+        self.feed(sid, mk_snap("zx310s", 2_000_000.0, [mk_port(3), mk_port(7)],
+                               macs=[{"mac": "B8:27:EB:00:00:01", "vlan": 1, "port": 3}, {"mac": "AA:AA:AA:00:00:09", "vlan": 1, "port": 7}]))
+        rows = {r["mac"]: r for r in self.m.macs()["macs"]}
+        self.assertEqual((rows["B8:27:EB:00:00:01"]["ip"], rows["B8:27:EB:00:00:01"]["name"]), ("192.0.2.50", "Pi-hole"))
+        self.assertIsNone(rows["AA:AA:AA:00:00:09"]["ip"])
+        self.assertEqual(rows["AA:AA:AA:00:00:09"]["switch"], "zx310s")
+
     def test_temperature_alert_levels_and_events(self):
         sid = self.add()["id"]
         t = 3_000_000.0
@@ -479,6 +488,8 @@ class Api(unittest.TestCase):
         self.assertEqual(self.call("POST", "/api/switches/nope", {}, token=self.admin)[0], 404)
         self.assertEqual(self.call("POST", "/api/switches/delete", {"id": sid}, token=self.admin)[0], 200)
         self.assertEqual(self.call("GET", "/api/switches/summary", token=self.ro)[1]["switches"], [])
+        self.assertEqual(self.call("GET", "/api/switches/macs", token=self.none)[0], 401)
+        self.assertEqual(self.call("GET", "/api/switches/macs", token=self.ro)[1]["macs"], [])
         self.assertEqual(self.call("GET", "/api/switches/totals", token=self.none)[0], 401)
         self.assertEqual(self.call("GET", "/api/switches/totals", token=self.ro)[1]["switches"], [])
 

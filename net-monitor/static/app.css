@@ -321,3 +321,5 @@ label.chk{flex-direction:row!important;align-items:center;gap:6px!important}
 @media(max-width:600px){.view-tabs{padding:10px 14px 0}.sw-port{width:64px}}
 
 .sw-sub{display:flex;gap:6px}.sw-histnote{padding:12px 16px}.sw-sumrow td{border-top:2px solid var(--border-b);font-weight:700}
+.sw-macbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.sw-search{flex:1;min-width:200px;max-width:380px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--r-sm);color:var(--text);font:13px var(--sans);padding:7px 10px}
+.sw-topo{touch-action:none}.sw-node-g{cursor:grab}.sw-node-g:active{cursor:grabbing}.sw-node{pointer-events:none}.sw-nodata{text-align:left}
