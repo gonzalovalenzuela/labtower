@@ -78,7 +78,20 @@ sudo apt-get install -y librespeed-cli     # Debian 13 (trixie) o posterior
 librespeed-cli --version
 ```
 
-En versiones donde el paquete no existe, descarga el binario de tu arquitectura desde <https://github.com/librespeed/speedtest-cli/releases>, déjalo como `/usr/local/bin/librespeed-cli` y dale permisos con `sudo chmod 755 /usr/local/bin/librespeed-cli`.
+Donde el paquete no existe, usa el binario de la [versión v1.0.14](https://github.com/librespeed/speedtest-cli/releases/tag/v1.0.14). Cada archivo es un `.tar.gz` con el programa `librespeed-cli`; elige el de tu arquitectura (`uname -m`):
+
+| `uname -m` | Archivo |
+|---|---|
+| `x86_64` | `librespeed-cli_1.0.14_linux_amd64.tar.gz` |
+| `aarch64` (Raspberry Pi 64 bits) | `librespeed-cli_1.0.14_linux_arm64.tar.gz` |
+| `armv7l` (Raspberry Pi 32 bits) | `librespeed-cli_1.0.14_linux_armv7.tar.gz` |
+
+```bash
+wget https://github.com/librespeed/speedtest-cli/releases/download/v1.0.14/librespeed-cli_1.0.14_linux_arm64.tar.gz
+tar -xzf librespeed-cli_1.0.14_linux_arm64.tar.gz librespeed-cli
+sudo install -m 755 librespeed-cli /usr/local/bin/librespeed-cli
+librespeed-cli --version
+```
 
 ## Actualizar
 
