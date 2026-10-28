@@ -334,7 +334,7 @@ function buildDetail(n){
   if((d.io||[]).length){
     const busy=d.io.filter(x=>(x.load||0)>=5||((x.read||0)+(x.write||0))>=262144),idle=d.io.length-busy.length;
     h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('diskLoad'))}</div></div>`+busy.map(x=>`<div class="vol-row"><div class="vol-top"><span class="vol-name">${esc(x.dev)}</span><span class="vol-size">${x.read!=null&&x.write!=null?'<small style="color:var(--text-dim);font-weight:400">R '+esc(fmtBytes(x.read))+'/s · W '+esc(fmtBytes(x.write))+'/s</small> · ':''}${x.load==null?'—':esc(x.load)+'%'}</span></div>${bar(x.load||0,70,90)}</div>`).join('')+
-      (idle?`<div class="sum-sub" style="margin-top:6px">${esc(t(busy.length?'diskIdleN':'diskAllIdle').replace('{n}',idle))}</div>`:'')+'</div>';
+      (idle?`<div style="padding:10px 16px;font-size:12px;color:var(--text-dim)">${esc(t(busy.length?'diskIdleN':'diskAllIdle').replace('{n}',idle))}</div>`:'')+'</div>';
   }
   h+='</div>'+chartSections(n);
   return h;
