@@ -658,6 +658,11 @@ def validate(body, current=None):
         raise ValueError("Invalid host (IP or name" + ("" if driver == "snmp" else ", optional :port") + ")")
     cfg = {"id": cur.get("id", ""), "name": name, "driver": driver, "host": host,
            "enabled": bool(body.get("enabled", cur.get("enabled", True))), "ports": dict(cur.get("ports") or {})}
+    # Distribución del panel frontal: una fila, o dos filas alternadas (1 arriba, 2 abajo, 3 arriba…). / EN: front-panel layout: one row, or two alternating rows.
+    layout = body.get("layout", cur.get("layout", "auto"))
+    if layout not in ("auto", "row", "alt"):
+        raise ValueError("Invalid layout (auto, row or alt)")
+    cfg["layout"] = layout
     if driver == "snmp":
         comm = body.get("community") or cur.get("community") or ""
         if not comm or len(comm) > 64 or not comm.isprintable():
@@ -1088,6 +1093,7 @@ class Manager:
                     "online": online, "error": rec["err"], "updated": rec["ok_ts"] or None,
                     "age": int(now - rec["ok_ts"]) if rec["ok_ts"] else None, "scrape": (snap or {}).get("scrape_seconds"),
                     "system": sy, "temp_level": tlv, "ports": ports,
+                    "layout": cfg.get("layout") if cfg.get("layout") in ("row", "alt") else ("alt" if cfg["driver"] == "snmp" and len(ports) >= 16 else "row"),
                     "has_bytes": any(q.get("rx_bytes") is not None for q in ((snap or {}).get("ports") or [])),
                     "ports_up": sum(1 for p in ports if p["link_up"]), "ports_total": len(ports),
                     "macs_total": len(rec["macs"] or []), "alerts": alerts,

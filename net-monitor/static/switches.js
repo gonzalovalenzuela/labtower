@@ -29,6 +29,7 @@ Object.assign(LANG.en, {
   swTest: 'Test', swTesting: 'Testing…', swSave: 'Save', swDelete: 'Delete', swCancel: 'Cancel', swDelConfirm: n => 'Delete "' + n + '" and its history?',
   swTestOk: r => 'OK — ' + (r.model || 'switch') + ', ' + r.ports + ' ports (' + r.ports_up + ' up)' + (r.temperature_c != null ? ', ' + r.temperature_c + ' °C' : '') + (r.has_bytes ? ', byte counters available' : ', packet counters only') + ' · ' + r.seconds + ' s',
   swSaved: 'Switch saved', swDeleted: 'Switch deleted', swPollSet: 'Interval updated', swRefreshing: 'Refreshing…',
+  swLayout: 'Panel layout', swLayAuto: 'Automatic', swLayRow: 'One row (1-2-3…)', swLayAlt: 'Two rows (odd on top, even below)',
   swReadOnlyNote: 'Read-only: these tools only read from the switches; nothing here changes them.',
   swAlertDown: 'unreachable', swAlertTemp: 'temperature', swAlertLoop: n => 'loop on port ' + n, swAlertErr: (n, d) => 'port ' + n + ': ' + d + ' new errors',
   swSec: 's', swMin: 'min'
@@ -54,6 +55,7 @@ Object.assign(LANG.es, {
   swTest: 'Probar', swTesting: 'Probando…', swSave: 'Guardar', swDelete: 'Eliminar', swCancel: 'Cancelar', swDelConfirm: n => '¿Eliminar «' + n + '» y su historial?',
   swTestOk: r => 'OK — ' + (r.model || 'switch') + ', ' + r.ports + ' puertos (' + r.ports_up + ' arriba)' + (r.temperature_c != null ? ', ' + r.temperature_c + ' °C' : '') + (r.has_bytes ? ', con contadores de bytes' : ', solo contadores de paquetes') + ' · ' + r.seconds + ' s',
   swSaved: 'Switch guardado', swDeleted: 'Switch eliminado', swPollSet: 'Intervalo actualizado', swRefreshing: 'Actualizando…',
+  swLayout: 'Distribución del panel', swLayAuto: 'Automática', swLayRow: 'Una fila (1-2-3…)', swLayAlt: 'Dos filas (impares arriba, pares abajo)',
   swReadOnlyNote: 'Solo lectura: esta herramienta solo lee de los switches; nada aquí los modifica.',
   swAlertDown: 'sin conexión', swAlertTemp: 'temperatura', swAlertLoop: n => 'loop en el puerto ' + n, swAlertErr: (n, d) => 'puerto ' + n + ': ' + d + ' errores nuevos',
   swSec: 's', swMin: 'min'
@@ -274,16 +276,17 @@ function card(s) {
   const state = !s.updated ? `<span class="sw-pill">${esc(t('swWaiting'))}</span>` : s.online ? `<span class="sw-pill green">${esc(t('swOnline'))}</span>` : `<span class="sw-pill red">${esc(t('swOffline'))}</span>`;
   const sub = [sy.model, s.host, sy.fw ? 'fw ' + sy.fw : ''].filter(Boolean).join(' · ');
   let grid = '', prev = 0;
-  s.ports.forEach(p => { if (s.driver === 'zx' && p.port > 8 && prev <= 8) grid += '<span class="sw-gap"></span>'; prev = p.port; grid += tile(s, p); });
+  s.ports.forEach(p => { if (s.layout !== 'alt' && s.driver === 'zx' && p.port > 8 && prev <= 8) grid += '<span class="sw-gap"></span>'; prev = p.port; grid += tile(s, p); });
   const all = SW.showAll[s.id], hasMore = s.ports.some(p => p.flag === 'down');
   const rows = s.ports.filter(p => all || p.flag !== 'down' || p.label);
   const selP = SW.sel && SW.sel.sid === s.id ? s.ports.find(p => p.port === SW.sel.port) : null;
   const heads = ['swPort', 'swState', 'swSpeed', 'swRxPps', 'swTxPps'].concat(s.has_bytes ? ['swMbps'] : [], ['swErrors', 'swStp', 'swConn']);
   const errs = s.error && !s.online ? `<div class="sw-err">${esc(s.error)}</div>` : '';
   const hasT = sy.temperature_c != null;
+  const alt = s.layout === 'alt';
   return `<div class="card sw-card"><div class="sw-head"><b class="sw-name">${esc(s.name)}</b><span class="dim mono">${esc(sub)}</span>${state}${tPill}<span class="grow"></span>` +
     `<span class="dim mono sw-scr">${esc(s.driver)}${s.scrape != null ? ' · ' + s.scrape + ' s' : ''}</span>${admin ? `<button type="button" class="sw-btn" data-act="edit" data-id="${esc(s.id)}">${esc(t('swEdit'))}</button>` : ''}</div>${errs}` +
-    (s.ports.length ? `<div class="sw-grid-ports">${grid}</div><div class="sw-leg"><span class="up">${esc(t('swLegUp'))}</span><span class="down">${esc(t('swLegDown'))}</span><span class="warn">${esc(t('swLegWarn'))}</span><span class="uplink">${esc(t('swLegUplink'))}</span><span class="off">${esc(t('swLegOff'))}</span>${s.driver !== 'hc' ? `<span class="loop">${esc(t('swLegLoop'))}</span>` : ''}</div>` +
+    (s.ports.length ? `<div class="sw-grid-ports${alt ? ' alt' : ''}">${grid}</div><div class="sw-leg"><span class="up">${esc(t('swLegUp'))}</span><span class="down">${esc(t('swLegDown'))}</span><span class="warn">${esc(t('swLegWarn'))}</span><span class="uplink">${esc(t('swLegUplink'))}</span><span class="off">${esc(t('swLegOff'))}</span>${s.driver !== 'hc' ? `<span class="loop">${esc(t('swLegLoop'))}</span>` : ''}</div>` +
       `<div class="sw-tablewrap"><table class="sw-table"><thead><tr>${heads.map(h => `<th>${esc(t(h))}</th>`).join('')}</tr></thead><tbody>${rows.map(p => portRow(s, p)).join('')}</tbody></table></div>` +
       (hasMore ? `<button type="button" class="sw-link" data-act="showall" data-id="${esc(s.id)}">${esc(all ? t('swShowActive') : t('swShowAll', s.ports.length))}</button>` : '') : '') +
     (selP ? portDetail(s, selP) : '') +
@@ -346,17 +349,18 @@ async function openModal(id) {
     `<label class="chk m-hc"><input type="checkbox" id="m-pag"${c.mac_paginate ? ' checked' : ''}> ${esc(t('swMacPag'))}</label></div>` +
     `<div class="m-snmp"><label>${esc(t('swCommunity'))}<input id="m-comm" type="password" autocomplete="new-password" placeholder="${cur && c.has_community ? esc(t('swKeep')) : ''}"></label>` +
     `<label>${esc(t('swSnmpPort'))}<input id="m-sport" type="number" min="1" max="65535" value="${esc(c.port || 161)}"></label></div>` +
+    `<label>${esc(t('swLayout'))}<select id="m-layout"><option value="auto">${esc(t('swLayAuto'))}</option><option value="row">${esc(t('swLayRow'))}</option><option value="alt">${esc(t('swLayAlt'))}</option></select></label>` +
     `<div id="m-res" class="m-res"></div><div class="m-btns">${cur ? `<button type="button" class="sw-btn red" data-act="mdel" data-id="${esc(c.id)}">${esc(t('swDelete'))}</button>` : ''}<span class="grow"></span>` +
     `<button type="button" class="sw-btn" data-act="mcancel">${esc(t('swCancel'))}</button><button type="button" class="sw-btn" data-act="mtest" data-id="${esc(c.id || '')}">${esc(t('swTest'))}</button><button type="button" class="sw-btn teal" data-act="msave" data-id="${esc(c.id || '')}">${esc(t('swSave'))}</button></div></div>`;
   document.body.appendChild(m);
-  $('m-driver').value = c.driver;
+  $('m-driver').value = c.driver; $('m-layout').value = c.layout || 'auto';
   const sync = () => { const v = $('m-driver').value; m.querySelector('.m-web').style.display = v === 'snmp' ? 'none' : ''; m.querySelector('.m-snmp').style.display = v === 'snmp' ? '' : 'none'; m.querySelector('.m-hc').style.display = v === 'hc' ? '' : 'none'; };
   $('m-driver').addEventListener('change', sync); sync();
   m.addEventListener('click', e => { if (e.target === m) closeModal(); });
   $('m-name').focus();
 }
 function formBody(id) {
-  const b = { name: $('m-name').value.trim(), driver: $('m-driver').value, host: $('m-host').value.trim() };
+  const b = { name: $('m-name').value.trim(), driver: $('m-driver').value, host: $('m-host').value.trim(), layout: $('m-layout').value };
   if (id) b.id = id;
   if (b.driver === 'snmp') { b.community = $('m-comm').value; b.port = Number($('m-sport').value) || 161; }
   else { b.user = $('m-user').value.trim() || 'admin'; b.password = $('m-pass').value; if (b.driver === 'hc') b.mac_paginate = $('m-pag').checked; }

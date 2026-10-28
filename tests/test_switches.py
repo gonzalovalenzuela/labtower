@@ -165,6 +165,13 @@ class Drivers(unittest.TestCase):
         with self.assertRaises(RuntimeError) as cm: d2.login()
         self.assertIn("HTTP 400", str(cm.exception))
 
+    def test_layout_validation_and_default(self):
+        base = {"name": "t", "driver": "snmp", "host": "192.0.2.3", "community": "c"}
+        self.assertEqual(sw.validate(base)["layout"], "auto")
+        self.assertEqual(sw.validate(dict(base, layout="alt"))["layout"], "alt")
+        with self.assertRaises(ValueError): sw.validate(dict(base, layout="diag"))
+        self.assertEqual(sw.validate({}, dict(sw.validate(dict(base, layout="row")), id="x"))["layout"], "row")
+
     def test_snmp_snapshot_has_bytes_and_bridge_mac(self):
         d = sw.SNMPDriver("tplink", "192.0.2.3", "public")
         d.snmp = FakeSNMP(snmp_data())
