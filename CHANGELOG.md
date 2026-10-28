@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.2 — 2026-10-28
+
+**Correcciones**
+- Respaldo SFTP: `openssh-client`, `gnupg` y `gpg-agent` pasan a ser dependencias obligatorias del paquete (antes `gnupg` era solo recomendado y faltaba `gpg-agent`, por lo que el cifrado fallaba en instalaciones mínimas con «No agent running»).
+- `labtower-sftp-backup status` ya no se cae con un archivo de estado vacío o dañado: lo explica e indica cómo regenerarlo.
+- El archivo de estado se sincroniza a disco antes de renombrarse, para que un corte brusco no lo deje vacío.
+
 ## 2.1.1 — 2026-10-27
 
 Reúne todos los cambios desde 2.1 (builds 2.1a a 2.1n).
