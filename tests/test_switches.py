@@ -150,6 +150,21 @@ class Drivers(unittest.TestCase):
         with self.assertRaises(ValueError): d._fetch("mac.cgi?page=fwd_tbl", {"cmd": "mactblclr"})   # esto borraría la tabla MAC
         with self.assertRaises(ValueError): d._fetch("port.cgi", {"x": "1"})
 
+    def test_hc_login_post_400_is_tolerated_when_the_cookie_is_enough(self):
+        d = sw.HCDriver("hc", "192.0.2.4", "admin", "pw", gap=0)
+        calls = []
+        def fake(path, data=None):
+            calls.append(path)
+            if path == "login.cgi": raise OSError("el switch respondió HTTP 400 a POST /login.cgi")
+            return "<html>" + "x" * 800 + "</html>"          # info.cgi con contenido real: sesión válida
+        d._open = fake
+        d.login()
+        self.assertTrue(d.logged_in)
+        fake2 = lambda path, data=None: (_ for _ in ()).throw(OSError("HTTP 400 login")) if path == "login.cgi" else "<script>location='/login.cgi'</script>"
+        d2 = sw.HCDriver("hc", "192.0.2.4", "admin", "pw", gap=0); d2._open = fake2
+        with self.assertRaises(RuntimeError) as cm: d2.login()
+        self.assertIn("HTTP 400", str(cm.exception))
+
     def test_snmp_snapshot_has_bytes_and_bridge_mac(self):
         d = sw.SNMPDriver("tplink", "192.0.2.3", "public")
         d.snmp = FakeSNMP(snmp_data())
@@ -160,6 +175,23 @@ class Drivers(unittest.TestCase):
         self.assertEqual(snap["system"]["mac"], "AA:BB:CC:DD:EE:20")
         self.assertEqual(snap["system"]["name"], "tplink")
         self.assertEqual([(m["mac"], m["port"], m["vlan"]) for m in snap["macs"]], [("AA:BB:CC:DD:EE:01", 1, 1)])
+
+    def test_snmp_tplink_style_ifindex_and_vlan_interface(self):
+        # Caso real (T2600G-18TS): ifIndex 49153…, nombre «gigabitEthernet 1/0/N : copper», una «Vlan-interface1» declarada ethernet,
+        # y la tabla MAC usa los números 1…16 / EN: real case: ifIndex 49153…, vlan interface declared as ethernet, MAC table uses 1…16
+        IF, IFX = "1.3.6.1.2.1.2.2.1", "1.3.6.1.2.1.31.1.1.1"
+        d = {"1.3.6.1.2.1.1.1.0": b"JetStream", "1.3.6.1.2.1.1.3.0": 100, "1.3.6.1.2.1.1.5.0": b"T2600G"}
+        d[f"{IF}.3.1"], d[f"{IF}.2.1"], d[f"{IFX}.1.1"] = 6, b"Vlan-interface1", b"Vlan-interface1"
+        for n in (1, 2):
+            i = 49152 + n
+            d[f"{IF}.3.{i}"], d[f"{IF}.2.{i}"], d[f"{IFX}.1.{i}"] = 6, b"x", f"gigabitEthernet 1/0/{n} : copper".encode()
+            d[f"{IF}.7.{i}"], d[f"{IF}.8.{i}"], d[f"{IFX}.15.{i}"] = 1, 1, 1000
+            d[f"1.3.6.1.2.1.17.1.4.1.2.{i}"] = i
+        d["1.3.6.1.2.1.17.7.1.2.2.1.2.1.170.187.204.221.238.2"] = 2
+        drv = sw.SNMPDriver("t", "192.0.2.3", "public"); drv.snmp = FakeSNMP(d)
+        snap = drv.snapshot()
+        self.assertEqual([p["port"] for p in snap["ports"]], [1, 2])
+        self.assertEqual(snap["macs"][0]["port"], 2)
 
     def test_every_driver_has_the_same_shape(self):
         d = sw.SNMPDriver("t", "192.0.2.3", "public"); d.snmp = FakeSNMP(snmp_data())

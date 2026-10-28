@@ -242,10 +242,16 @@ class HCDriver(BaseDriver):
         self.jar.set_cookie(http.cookiejar.Cookie(
             0, "admin", token, None, False, self.host.split(":")[0], False, False,
             "/", True, False, None, False, None, None, {}))
-        self._open("login.cgi", {"username": self.user, "password": self.password,
-                                 "language": "EN", "Response": token})
+        # El POST a login.cgi es «de cortesía»: en el equipo real puede responder 400 aunque la cookie ya baste. Lo que decide es info.cgi.
+        # EN: The login.cgi POST is best-effort: the real unit may answer 400 even when the cookie is enough. info.cgi decides.
+        post_err = None
+        try:
+            self._open("login.cgi", {"username": self.user, "password": self.password,
+                                     "language": "EN", "Response": token})
+        except OSError as e:
+            post_err = str(e)
         if self._is_login(self._open("info.cgi")):
-            raise RuntimeError(f"{self.name}: login rechazado")
+            raise RuntimeError(f"{self.name}: login rechazado" + (f" ({post_err})" if post_err else ""))
         self.logged_in = True
 
     @staticmethod
@@ -486,6 +492,8 @@ class SNMPDriver(BaseDriver):
     BASE_PORT_IFINDEX = "1.3.6.1.2.1.17.1.4.1.2"
     Q_FDB_PORT = "1.3.6.1.2.1.17.7.1.2.2.1.2"   # dot1qTpFdbPort (fdbId.mac)
     D_FDB_PORT = "1.3.6.1.2.1.17.4.3.1.2"       # dot1dTpFdbPort (mac)
+    VIRTUAL = re.compile(r"^(vlan|loopback|null|port-?channel|link.?aggregation|tunnel|lo\d*$)", re.I)
+    PORT_NAME = re.compile(r"\d+/\d+/(\d+)")
 
     def __init__(self, name, host, community, port=161, **kw):
         super().__init__(name, host, "", "")
@@ -522,9 +530,17 @@ class SNMPDriver(BaseDriver):
 
             # puertos físicos: ifType 6 (ethernetCsmacd); numerados por puerto de bridge
             # EN: physical ports: ifType 6 (ethernetCsmacd); numbered by bridge port
-            phys = sorted((int(i) for i, t in if_type.items() if t == 6))
+            # Se descartan las interfaces virtuales que algunos equipos declaran como ethernet (p. ej. «Vlan-interface1» del TP-Link).
+            # EN: Virtual interfaces some devices declare as ethernet (e.g. the TP-Link's "Vlan-interface1") are skipped.
+            pname = lambda i: _s(x[1].get(str(i))) or _s(if_descr.get(str(i))) or ""  # noqa: E731
+            phys = sorted(int(i) for i, t in if_type.items() if t == 6 and not self.VIRTUAL.match(pname(i)))
             port_no = {i: int(bp[str(i)]) if str(i) in bp else n
                        for n, i in enumerate(phys, 1)}
+            # Con nombres tipo «gigabitEthernet 1/0/12» el número del puerto es el último (el índice puede ser 49164 y la tabla MAC usa 12).
+            # EN: With names like "gigabitEthernet 1/0/12" the port number is the last one (the ifIndex may be 49164 while the MAC table uses 12).
+            named = {i: int(m.group(1)) for i in phys for m in [self.PORT_NAME.search(pname(i))] if m}
+            if len(named) == len(phys) and len(set(named.values())) == len(phys):
+                port_no = named
             ports = []
             for i in phys:
                 k = str(i)
