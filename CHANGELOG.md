@@ -4,6 +4,7 @@
 
 **Correcciones**
 - Respaldo SFTP: `openssh-client`, `gnupg`, `gpg-agent`, `openssl` y `cron` pasan a ser dependencias obligatorias del paquete (antes `gnupg` era solo recomendado y faltaba `gpg-agent`, por lo que el cifrado fallaba en instalaciones mínimas con «No agent running»).
+- Paquete: tras revisar los comandos que usan los módulos y los scripts, también se declaran `iproute2` (`ip`), `systemd` (`systemctl`, `journalctl`), `curl` (`labtower-health`), `ca-certificates` (descargas HTTPS), `passwd` (`useradd`, `usermod`, `userdel`), `hostname` y `awk`.
 - `labtower-sftp-backup status` ya no se cae con un archivo de estado vacío o dañado: lo explica e indica cómo regenerarlo.
 - El archivo de estado se sincroniza a disco antes de renombrarse, para que un corte brusco no lo deje vacío.
 
