@@ -104,7 +104,7 @@ write_status() {
   printf '{"time": %s, "ok": %s, "file": "%s", "size": %s, "remote": "%s@%s:%s", "message": "%s"}\n' \
     "$(date +%s)" "$([ "$ok" = 1 ] && echo true || echo false)" "$(clean "$file")" "${size:-0}" \
     "$(clean "$SFTP_USER")" "$(clean "$SFTP_HOST")" "$(clean "$SFTP_DIR")" "$msg" > "$tmp" 2>/dev/null \
-    && chmod 644 "$tmp" && mv -f "$tmp" "$STATUS_FILE" 2>/dev/null || rm -f "$tmp" 2>/dev/null
+    && chmod 644 "$tmp" && { sync "$tmp" 2>/dev/null || true; } && mv -f "$tmp" "$STATUS_FILE" 2>/dev/null || rm -f "$tmp" 2>/dev/null
   return 0
 }
 
