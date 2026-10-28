@@ -150,6 +150,22 @@ class Drivers(unittest.TestCase):
         with self.assertRaises(ValueError): d._fetch("mac.cgi?page=fwd_tbl", {"cmd": "mactblclr"})   # esto borraría la tabla MAC
         with self.assertRaises(ValueError): d._fetch("port.cgi", {"x": "1"})
 
+    def test_hc_mac_pagination_uses_goto_and_never_clears(self):
+        d = sw.HCDriver("hc", "192.0.2.4", "admin", "pw", gap=0, mac_paginate=True)
+        pages = {None: [["No.", "MAC", "VLAN", "Type", "Port"], ["1", "AA:00:00:00:00:01", "1", "Dynamic", "1"]],
+                 "1": [["No.", "MAC", "VLAN", "Type", "Port"], ["1", "AA:00:00:00:00:01", "1", "Dynamic", "1"], ["2", "AA:00:00:00:00:02", "1", "Dynamic", "2"]],
+                 "2": [["No.", "MAC", "VLAN", "Type", "Port"], ["3", "AA:00:00:00:00:03", "1", "Dynamic", "3"]],
+                 "3": [["No.", "MAC", "VLAN", "Type", "Port"]]}
+        sent = []
+        def fake(path, data=None):
+            sent.append(data)
+            return table(pages[(data or {}).get("pageidx")])
+        d.fetch = fake
+        macs = d._macs(True)
+        self.assertEqual([m["mac"] for m in macs], ["AA:00:00:00:00:01", "AA:00:00:00:00:02", "AA:00:00:00:00:03"])
+        self.assertTrue(all(x is None or x["cmd"] == "goto" for x in sent))
+        with self.assertRaises(ValueError): d._fetch("mac.cgi?page=fwd_tbl", {"cmd": "mactblclr"})
+
     def test_hc_reads_byte_columns_when_the_firmware_has_them(self):
         d = sw.HCDriver("hc", "192.0.2.4", "admin", "pw", gap=0)
         pages = {

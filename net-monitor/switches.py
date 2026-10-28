@@ -259,8 +259,8 @@ class HCDriver(BaseDriver):
         return "login.cgi" in text and len(text) < 600
 
     def _fetch(self, path, data=None):
-        if data is not None and path.startswith("mac.cgi") and data.get("cmd") != "nextpage":
-            raise ValueError("POST a mac.cgi sin cmd=nextpage borraría la tabla MAC")
+        if data is not None and path.startswith("mac.cgi") and data.get("cmd") not in ("nextpage", "goto"):
+            raise ValueError("POST a mac.cgi sin cmd=nextpage/goto borraría la tabla MAC")
         if data is not None and not path.startswith("mac.cgi"):
             raise ValueError("el driver HC solo hace POST para paginar la tabla MAC")
         text = self._open(path, data)
@@ -270,10 +270,12 @@ class HCDriver(BaseDriver):
 
     def _macs(self, paginate):
         rows = find_table(self.fetch("mac.cgi?page=fwd_tbl"), "No.")[1:]
-        if paginate:  # opcional: la paginación no fue probada contra el equipo real / optional: pagination was never tried on the real unit
+        if paginate:  # opcional: no se probó contra el equipo real / optional: never tried on the real unit
+            # Paginación como la de otros clientes que sí funcionan con este firmware: POST cmd=goto + pageidx + perpage (30 por página).
+            # EN: Pagination like other clients that do work with this firmware: POST cmd=goto + pageidx + perpage (30 per page).
             seen = {r[1] for r in rows}
-            for _ in range(20):
-                more = find_table(self.fetch("mac.cgi?page=fwd_tbl", {"cmd": "nextpage"}), "No.")[1:]
+            for page in range(1, 40):
+                more = find_table(self.fetch("mac.cgi?page=fwd_tbl", {"cmd": "goto", "pageidx": str(page), "perpage": "3"}), "No.")[1:]
                 new = [r for r in more if r[1] not in seen]
                 if not new:
                     break
