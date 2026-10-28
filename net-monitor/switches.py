@@ -34,6 +34,7 @@ import sys
 import threading
 import time
 import urllib.parse
+import urllib.error
 import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path
@@ -83,8 +84,12 @@ class BaseDriver:
     def _open(self, path, data=None):
         self._check(path)
         body = urllib.parse.urlencode(data).encode() if data is not None else None
-        with self.opener.open(self.base + path, data=body, timeout=self.timeout) as r:
-            text = r.read().decode("utf-8", errors="replace")
+        try:
+            with self.opener.open(self.base + path, data=body, timeout=self.timeout) as r:
+                text = r.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as e:
+            # Indica qué petición falló (sin la consulta: lleva las credenciales en MD5). / EN: Says which request failed (no query string: it carries the MD5 credentials).
+            raise OSError(f"el switch respondió HTTP {e.code} a {'POST' if body is not None else 'GET'} /{path.split('?')[0]}") from None
         time.sleep(self.gap)
         return text
 
@@ -1248,7 +1253,9 @@ def _cli(argv):
     ap.add_argument("--no-macs", action="store_true")
     a = ap.parse_args(argv)
     res = {}
-    for s in json.load(open(a.config)):
+    data = json.load(open(a.config))
+    # Acepta el formato de LabTower ({"switches":[…]}) y una lista simple. / EN: Accepts LabTower's format ({"switches":[…]}) and a plain list.
+    for s in (data.get("switches", []) if isinstance(data, dict) else data):
         pw = os.environ.get(s.get("pass_env", ""), "") or (open(s["pass_file"]).read().strip() if s.get("pass_file") else "")
         cfg = {"name": s["name"], "driver": s["driver"], "host": s["host"], "user": s.get("user", "admin"), "password": pw,
                "community": os.environ.get(s.get("community_env", ""), "") or s.get("community", ""), "port": s.get("port", 161),
