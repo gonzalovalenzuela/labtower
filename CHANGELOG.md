@@ -8,7 +8,7 @@
 ## 2.1m — 2026-10-27
 
 - Tema: el botón ◐ del Resumen y de la página de inicio ahora rota entre oscuro, claro y «Auto» (sigue el modo del sistema, con una «A» en el botón); antes solo alternaba claro y oscuro. En «Auto» el tema cambia solo cuando cambia el del sistema.
-- Resumen, tarjeta de WAN Monitor: nuevo gráfico de latencia de las últimas 24 h (línea azul con huecos donde no hubo respuesta y franjas rojas donde el enlace estuvo caído), con el mínimo y máximo; se actualiza cada minuto.
+- Resumen, tarjeta de WAN Monitor: nuevo gráfico de latencia de las últimas 24 h (línea azul con espacios donde no hubo respuesta y franjas rojas donde el enlace estuvo caído), con el mínimo y máximo; se actualiza cada minuto.
 
 ## 2.1l — 2026-10-27
 
@@ -16,7 +16,7 @@
 
 ## 2.1k — 2026-10-27
 
-- Nuevo aspecto, una mezcla de NOC y estilo Apple: tema oscuro por defecto (claro y «sistema» siguen disponibles; botón ◐ en el Resumen y en la página de inicio), tarjetas más redondeadas con un leve brillo, títulos de bloque pequeños en mayúsculas, cifras grandes, tablas densas, menú lateral con marca de acento y barra superior translúcida. Todo sale de una hoja común (`theme.css`/`theme.js`) que cargan todos los módulos, el panel Admin y la página de inicio. Ya no se cargan tipografías de Google: se usa la del sistema (San Francisco en Apple).
+- Nuevo aspecto: tema oscuro por defecto (claro y «sistema» siguen disponibles; botón ◐ en el Resumen y en la página de inicio), tarjetas más redondeadas con un leve brillo, títulos de bloque pequeños en mayúsculas, cifras grandes, tablas densas, menú lateral con marca de acento y barra superior translúcida. Todo sale de una hoja común (`theme.css`/`theme.js`) que cargan todos los módulos, el panel Admin y la página de inicio. Ya no se cargan tipografías de Google: se usa la del sistema (San Francisco en Apple).
 - Resumen: nueva franja de indicadores arriba (autonomía de la UPS, nodos de Proxmox, discos del NAS, % bloqueado con anillo, velocidad de WAN y equipos en línea), con el borde de cada tile en el color del estado.
 
 ## 2.1j — 2026-10-27

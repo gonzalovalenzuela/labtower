@@ -224,7 +224,7 @@ const WAN_AL={
  es:{loss:'pérdida de paquetes',latency:'latencia alta',dns_slow:'resolución DNS lenta',dns_fail:'falló la resolución DNS'}
 };
 function wanAl(a){const w=(WAN_AL[lang]||WAN_AL.en)[a.type]||a.type;const u={loss:'%',latency:' ms',dns_slow:' ms'}[a.type];return w+(u!==undefined&&a.value!=null?` (${Math.round(a.value*10)/10}${u})`:'')}
-// Latencia de WAN de las últimas 24 h: línea azul con huecos donde no hubo respuesta y franjas rojas donde se cayó el enlace
+// Latencia de WAN de las últimas 24 h: línea azul con espacios donde no hubo respuesta y franjas rojas donde se cayó el enlace
 // EN: WAN latency over the last 24 h: blue line with gaps where there was no reply and red bands where the link was down
 function wanChart(){
   const a=wanH;if(a.length<3)return '';
