@@ -297,6 +297,12 @@ class HCDriver(BaseDriver):
                 if len(r) >= 3 and r[0].startswith("Port ") and r[1] in (
                         "Forwarding", "Blocking", "Learning", "Listening", "Disabled", "Discarding"):
                     stp[int(r[0].split()[1])] = r[1]
+        # Algunos firmwares añaden columnas de bytes (TxBytes / RxBytes) a la tabla de estadísticas; se detectan por el nombre del encabezado.
+        # EN: Some firmwares add byte columns (TxBytes / RxBytes) to the statistics table; they are found by header name.
+        hdr = [h.lower().replace(" ", "") for h in (stats[0] if stats else [])]
+        ix_tx = next((i for i, h in enumerate(hdr) if "tx" in h and "byte" in h), None)
+        ix_rx = next((i for i, h in enumerate(hdr) if "rx" in h and "byte" in h), None)
+        count = lambda r, i: (_num(r[i].replace(",", "")) if i is not None and i < len(r) else None)  # noqa: E731
         ports = []
         for r in stats[1:]:
             if len(r) < 7 or not r[0].startswith("Port "):
@@ -312,6 +318,8 @@ class HCDriver(BaseDriver):
                 "speed_cfg": c[2] or None, "flow_ctrl": c[5] or None,
                 "tx_good_pkts": int(r[3]), "tx_bad_pkts": int(r[4]),
                 "rx_good_pkts": int(r[5]), "rx_bad_pkts": int(r[6]),
+                **({"rx_bytes": int(count(r, ix_rx)), "tx_bytes": int(count(r, ix_tx))}
+                   if count(r, ix_rx) is not None and count(r, ix_tx) is not None else {}),
                 "loop_detected": None,  # este firmware no reporta loop por puerto / this firmware has no per-port loop flag
                 "stp_state": stp.get(n),
             })

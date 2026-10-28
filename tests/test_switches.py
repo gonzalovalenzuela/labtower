@@ -150,6 +150,24 @@ class Drivers(unittest.TestCase):
         with self.assertRaises(ValueError): d._fetch("mac.cgi?page=fwd_tbl", {"cmd": "mactblclr"})   # esto borraría la tabla MAC
         with self.assertRaises(ValueError): d._fetch("port.cgi", {"x": "1"})
 
+    def test_hc_reads_byte_columns_when_the_firmware_has_them(self):
+        d = sw.HCDriver("hc", "192.0.2.4", "admin", "pw", gap=0)
+        pages = {
+            "info.cgi": table([["Device Model", "HC-SWTGW218AS"]]),
+            "port.cgi?page=stats": table([["Port", "State", "Link Status", "TxGoodPkt", "TxBadPkt", "RxGoodPkt", "RxBadPkt", "TxBytes", "RxBytes"],
+                                          ["Port 1", "Enable", "Link Up", "100", "0", "200", "0", "1,500,000", "9,000,000"],
+                                          ["Port 2", "Enable", "Link Down", "0", "0", "0", "0", "0", "0"]]),
+            "port.cgi": table([["Port 1", "Enable", "Auto", "2500Full", "Off", "Off"]]),
+            "loop.cgi?page=stp_port": table([["Port 1", "Forwarding", "x"]]),
+        }
+        d.fetch = lambda path, data=None: pages[path]
+        snap = d._collect(False)
+        p1 = snap["ports"][0]
+        self.assertEqual((p1["tx_bytes"], p1["rx_bytes"]), (1_500_000, 9_000_000))
+        pages["port.cgi?page=stats"] = table([["Port", "State", "Link Status", "TxGoodPkt", "TxBadPkt", "RxGoodPkt", "RxBadPkt"],
+                                              ["Port 1", "Enable", "Link Up", "1", "0", "2", "0"]])
+        self.assertNotIn("rx_bytes", d._collect(False)["ports"][0])          # firmware de 7 columnas: sin bytes
+
     def test_hc_login_post_400_is_tolerated_when_the_cookie_is_enough(self):
         d = sw.HCDriver("hc", "192.0.2.4", "admin", "pw", gap=0)
         calls = []
