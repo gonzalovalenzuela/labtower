@@ -67,6 +67,8 @@ DATA_FILES=(
   "data/nut-monitor/history.db|$DATA_DIR/nut-monitor/history.db"
   "data/net-monitor/hosts.json|$DATA_DIR/net-monitor/hosts.json"
   "data/net-monitor/config.json|$DATA_DIR/net-monitor/config.json"
+  "data/net-monitor/switches.json|$DATA_DIR/net-monitor/switches.json"
+  "data/net-monitor/switches.db|$DATA_DIR/net-monitor/switches.db"
   "data/proxmox-monitor/clusters.json|$DATA_DIR/proxmox-monitor/clusters.json"
   "data/nas-monitor/nas.json|$DATA_DIR/nas-monitor/nas.json"
   "data/dns-monitor/dns.json|$DATA_DIR/dns-monitor/dns.json"
@@ -712,7 +714,7 @@ LabTower Teleporter v$TELEPORTER_VERSION
                                           pass --nut / --nginx.
 
 Backup contents: users, WOL devices, UPS servers + history.db (includes UPS temperature),
-Net Monitor hosts + config (SNMP), Proxmox clusters, NAS list (SNMP), metrics.db (Proxmox and NAS CPU/memory and Pi
+Net Monitor hosts + config (SNMP), switches (list + history), Proxmox clusters, NAS list (SNMP), metrics.db (Proxmox and NAS CPU/memory and Pi
 temperature/under-voltage histories), NUT config, nginx site.
 The archive holds passwords and tokens (mode 600) — keep it private.
 EOF

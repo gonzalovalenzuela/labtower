@@ -148,6 +148,17 @@ labtower-health
 - Al pasar el mouse (o tocar en iPad) por una IP en UPS, Proxmox, WOL o Resumen aparece una tarjeta con los datos del equipo.
 - Las credenciales SNMP y la clave de Pi-hole se guardan con permisos 600 y la API nunca las devuelve.
 
+#### Switch Monitor (pestaña de Net Monitor)
+- Segunda pestaña junto a *Equipos*. Para cada switch muestra el panel frontal con el estado de cada puerto (arriba, abajo, deshabilitado, errores nuevos, enlace entre switches, loop), velocidad negociada, paquetes por segundo, errores, STP, temperatura y a qué equipo está conectado cada puerto (cruza la tabla MAC del switch con los equipos que ya conoce Net Monitor).
+- **Modelos:** ZX310S (interfaz web), HC-SWTGW218AS (interfaz web) y cualquier switch con SNMP v2c (TP-Link y otros); este último es el único que entrega bytes, así que solo ahí hay Mb/s.
+- **Se agregan desde la interfaz** (botón *+ Agregar switch*, solo administradores), con botón *Probar* antes de guardar. Usuario, contraseña o community se guardan en `switches.json` con permisos 600 y la API nunca los devuelve.
+- **Solo lectura:** no cambia nada en los switches. Las operaciones peligrosas (borrar contadores del ZX, vaciar la tabla MAC del HC, reiniciar, guardar) están bloqueadas en el código.
+- **Historial de 1 año** (como UPS Monitor): temperatura y, por puerto, estado, velocidad, paquetes o Mb/s y errores; rangos 1 h, 1 d, 1 sem, 1 mes y todo. Las tasas se calculan entre muestras y toleran contadores que vuelven a cero.
+- **Alertas** en el Resumen (tarjeta Net Monitor y línea de tiempo): switch sin conexión (tras 2 lecturas fallidas), temperatura ≥ 70 °C (aviso) / ≥ 80 °C (crítico), errores nuevos en un puerto, cambios de enlace y loop. Los puertos entre switches no alertan por loop. Los umbrales se pueden cambiar con `SWITCH_TEMP_WARN` y `SWITCH_TEMP_CRIT`.
+- **Topología básica** deducida de las tablas MAC. Etiqueta y «enlace a otro switch» se editan por puerto.
+- Se consulta cada 60 s por defecto (30 s a 1 h, configurable); cada switch se lee de a una petición a la vez, con pausas, porque sus servidores web son frágiles.
+- Diagnóstico por consola: `python3 /opt/labtower/net-monitor/switches.py --config switches.json --once`.
+
 ### Proxmox Monitor
 - Consulta cada cluster cada 5 s con la página abierta y cada 60 s en reposo.
 - Orden de nodos y nodos fijados por cluster (solo admin).
@@ -204,7 +215,7 @@ teleporter check ~/labtower-20261009.tar.gz                # verificar, no cambi
 sudo teleporter restore ~/labtower-20261009.tar.gz         # restaurar (-y para no preguntar)
 ```
 
-- **Incluye:** usuarios, WOL, UPS (servidores e historial), Net Monitor (hosts y SNMP), Proxmox, NAS Monitor (lista de NAS e historial), históricos del Resumen, y la configuración de NUT y nginx. **No incluye** sesiones, certificados HTTPS ni la llave del respaldo SFTP.
+- **Incluye:** usuarios, WOL, UPS (servidores e historial), Net Monitor (hosts, SNMP y switches con su historial), Proxmox, NAS Monitor (lista de NAS e historial), históricos del Resumen, y la configuración de NUT y nginx. **No incluye** sesiones, certificados HTTPS ni la llave del respaldo SFTP.
 - **Restaurar NUT y nginx** solo se hace desde la consola con `--nut` y `--nginx`; el panel no lo permite.
 - **Antes de restaurar** se guarda una copia del estado actual en `/var/backups/labtower/`.
 - **Límites:** se rechaza un archivo que descomprima a más de 2 GiB; las subidas desde el panel tienen tope de 200 MB.

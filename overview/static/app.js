@@ -7,7 +7,7 @@ const TXT={
   online:'Online',known:'Known',offline:'Offline',newdev:'New devices',lastscan:'Last scan',scanning:'Scanning…',ceph:'Ceph',types:'By device type',nonew:'No new devices',
   ago:'ago',backup:'Backup',bkok:'OK',bkfail:'Failed',bkold:'Overdue',bkpend:'Not run yet',issue_bkfail:'Last backup failed',issue_bkold:'No backup for over 36 h',now:'now',min:'min',h:'h',d:'d',s:'s',power_uv:'Under-voltage',power_th:'Throttled',power_ok:'Power supply OK',invalid:'Invalid credentials',
   issue_batt:'is running on battery',issue_lowb:'has low battery',issue_srv:'unreachable',issue_node:'node offline',issue_cl:'cluster unreachable',issue_cpu:'high CPU',issue_ram:'high memory',issue_ceph:'Ceph',
-  issue_temp:'Pi temperature high',issue_disk:'Pi disk almost full',issue_mem:'Pi memory high',issue_pwr:'Pi power supply problem',issue_scan:'scan error',h_temp:'Temp',h_min:'min',h_max:'max',h_uv:'Under-voltage',h_nouv:'no under-voltage',h_utemp:'UPS temperature 24 h'},
+  issue_temp:'Pi temperature high',swtitle:'Switches',swup:'Switch unreachable',swtemp:'Switch temperature',swtempc:'Switch temperature critical',swloop:'loop',swerr:'new errors',swports:'ports',issue_disk:'Pi disk almost full',issue_mem:'Pi memory high',issue_pwr:'Pi power supply problem',issue_scan:'scan error',h_temp:'Temp',h_min:'min',h_max:'max',h_uv:'Under-voltage',h_nouv:'no under-voltage',h_utemp:'UPS temperature 24 h'},
  es:{title:'Resumen',sortBtn:'Ordenar',sortDone:'Listo',sortReset:'Restablecer orden',mvEarlier:'Mover antes',mvLater:'Mover después',mvDrag:'Arrastra para mover',home:'Inicio',kiosk:'Kiosko',logout:'Cerrar sesión',login:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',exitk:'Salir de kiosko',rint:'Actualizar cada',rman:'Manual',rnow:'Actualizar ahora',ascroll:'Auto-desplazar',updated:'Actualizado',allok:'Todo en orden',attn:'Atención',fail:'Falla',
   ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',dns:'DNS Monitor',wan:'WAN Monitor',net:'Net Monitor',pi:'LabTower Server',ev:'Línea de tiempo',open:'Abrir →',noups:'Sin servidores UPS configurados',nopve:'Sin clusters configurados',nonas:'Sin NAS configurados',nodns:'Sin servidores DNS configurados',dnspct:'% bloqueado',issue_dnsdown:'Servidor DNS sin conexión',dnsq:'Consultas',dnsblk:'Bloqueadas',dnsms:'Respuesta',dnsprot:'Bloqueo',protoff:'Pausado',proton:'Activo',protfail:'Con falla',wanrtt:'Latencia',wanloss:'Pérdida',wanup:'Disponibilidad 24 h',wandown:'Bajada',wanip:'IP pública',wanstate:'Internet',wanon:'En línea',wannet:'Caído',wanlan:'Sin LAN',wanwait:'Midiendo…',issue_wandown:'Sin acceso a internet',issue_wanlan:'Red local sin respuesta',nasdisks:'Discos OK',nasvol:'Volumen',issue_nasdown:'NAS sin conexión',nonet:'Aún sin escaneo',noev:'Sin eventos todavía',
   uptimeOnl:'En línea',avail:'Disponibilidad',lastOut:'Último corte',noOut:'sin cortes registrados',onbattNow:'en batería ahora',
@@ -15,7 +15,7 @@ const TXT={
   online:'En línea',known:'Conocidos',offline:'Apagados',newdev:'Equipos nuevos',lastscan:'Último escaneo',scanning:'Escaneando…',ceph:'Ceph',types:'Por tipo de equipo',nonew:'Sin equipos nuevos',
   ago:'hace',backup:'Respaldo',bkok:'OK',bkfail:'Falló',bkold:'Atrasado',bkpend:'Sin ejecutar',issue_bkfail:'El último respaldo falló',issue_bkold:'Sin respaldo hace más de 36 h',now:'ahora',min:'min',h:'h',d:'d',s:'s',power_uv:'Subtensión',power_th:'Limitada',power_ok:'Fuente de poder OK',invalid:'Credenciales inválidas',
   issue_batt:'funciona con batería',issue_lowb:'tiene batería baja',issue_srv:'sin conexión',issue_node:'nodo caído',issue_cl:'cluster sin conexión',issue_cpu:'CPU alta',issue_ram:'memoria alta',issue_ceph:'Ceph',
-  issue_temp:'temperatura alta de la Pi',issue_disk:'disco de la Pi casi lleno',issue_mem:'memoria de la Pi alta',issue_pwr:'problema de alimentación de la Pi',issue_scan:'error de escaneo',h_temp:'Temp.',h_min:'mín',h_max:'máx',h_uv:'Subtensión',h_nouv:'sin subtensión',h_utemp:'Temperatura UPS 24 h'}
+  issue_temp:'temperatura alta de la Pi',swtitle:'Switches',swup:'Switch sin conexión',swtemp:'Temperatura del switch',swtempc:'Temperatura crítica del switch',swloop:'loop',swerr:'errores nuevos',swports:'puertos',issue_disk:'disco de la Pi casi lleno',issue_mem:'memoria de la Pi alta',issue_pwr:'problema de alimentación de la Pi',issue_scan:'error de escaneo',h_temp:'Temp.',h_min:'mín',h_max:'máx',h_uv:'Subtensión',h_nouv:'sin subtensión',h_utemp:'Temperatura UPS 24 h'}
 };
 let lang='en';try{lang=localStorage.getItem('pi-lang')||''}catch(e){}
 if(!TXT[lang])lang=(navigator.language||'').toLowerCase().startsWith('es')?'es':'en';
@@ -257,19 +257,27 @@ const TYPE_SH_EN={computer:'PC',phone:'Phone',router:'Router',switch:'Switch',ap
 const TYPE_SH_ES={computer:'PC',phone:'Teléf.',router:'Router',switch:'Switch',ap:'Wi-Fi',storage:'NAS',tv:'TV',camera:'Cám.',appliance:'Electro.',printer:'Impres.',tablet:'Tablet',console:'Consola',server:'Servidor',voip:'Tel. IP',ups:'UPS',speaker:'Altavoz',other:'Otro'};
 const TYPE_ES={computer:'Computador',phone:'Teléfono',router:'Router',switch:'Switch',ap:'AP Wi-Fi',storage:'Almacenamiento',tv:'TV',camera:'Cámara',appliance:'Electrodoméstico',printer:'Impresora',tablet:'Tablet',console:'Consola de juegos',server:'Servidor',voip:'Teléfono IP',ups:'UPS',speaker:'Altavoz inteligente',other:'Otro'};
 const TYPE_EN={computer:'Computer',phone:'Phone',router:'Router',switch:'Switch',ap:'Wi-Fi AP',storage:'Storage',tv:'TV',camera:'Camera',appliance:'Appliance',printer:'Printer',tablet:'Tablet',console:'Game Console',server:'Server',voip:'IP Phone',ups:'UPS',speaker:'Smart Speaker',other:'Other'};
-function renderNet(d){
+function renderNet(d,swd){
   const el=$('c-net'),hosts=d.hosts||[],sc=d.scan||{};let sev='ok';
   const on=hosts.filter(h=>h.online),off=hosts.length-on.length;
   const now=Date.now()/1000;
   const fresh=hosts.filter(h=>h.new_device&&now-(h.first_seen||0)<48*3600).sort((a,b)=>b.first_seen-a.first_seen);
   if(sc.error){sev='warn';issues.push({lv:'warn',m:'net',t:`${T('issue_scan')}: ${sc.error}`,href:'/net/'})}
+  const SW=swd&&swd.switches||[];
+  SW.forEach(w=>{
+    if(!w.online){sev=worst(sev,'crit');issues.push({lv:'crit',m:'net',t:`${T('swup')}: ${w.name}`,href:'/net/#switches'});return}
+    (w.alerts||[]).forEach(a=>{
+      if(a.k==='temp'){sev=worst(sev,a.lv);issues.push({lv:a.lv,m:'net',t:`${T(a.lv==='crit'?'swtempc':'swtemp')}: ${w.name} (${Math.round(a.t)} °C)`,href:'/net/#switches'})}
+      else if(a.k==='loop'||a.k==='err'){sev=worst(sev,'warn');issues.push({lv:'warn',m:'net',t:`${w.name}/${a.p}: ${T(a.k==='loop'?'swloop':'swerr')}`,href:'/net/#switches'})}});
+  });
+  const swHtml=SW.length?`<div><div class="sub" style="margin-bottom:5px;font-weight:600">${T('swtitle')}</div><div class="list">${SW.map(w=>`<div>${pill(!w.online?'crit':w.lv==='ok'?'ok':w.lv,!w.online?'—':w.lv==='ok'?'OK':T('attn'))}<a href="/net/#switches" style="color:inherit;text-decoration:none"><code>${esc(w.name)}</code></a><span>${w.online?`${w.ports_up}/${w.ports_total} ${T('swports')}${w.temp!=null?` · ${Math.round(w.temp)} °C`:''}`:T('unreach')}</span></div>`).join('')}</div></div>`:'';
   const cnt={};on.forEach(h=>{const k=h.device_type||'other';cnt[k]=(cnt[k]||0)+1});
   const parts=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).map(([k,n],i)=>({label:(lang==='es'?TYPE_ES:TYPE_EN)[k]||k,short:(lang==='es'?TYPE_SH_ES:TYPE_SH_EN)[k]||k,n,color:PAL[Math.min(i,PAL.length-1)]}));
   const scanTxt=sc.running?T('scanning'):sc.finished?dur(Date.now()/1000-sc.finished):'—';
   el.innerHTML=`<div class="ch"><h2>${T('net')}</h2>${hosts.length?pill(sev,sev==='ok'?'OK':T('attn')):''}<a class="go" href="/net/">${T('open')}</a></div>`+
    (hosts.length?`<div class="kpis"><div class="kpi"><b>${on.length}</b><span>${T('online')}</span></div><div class="kpi"><b>${hosts.length}</b><span>${T('known')}</span></div><div class="kpi"><b>${off}</b><span>${T('offline')}</span></div><div class="kpi"><b style="font-size:1rem;white-space:nowrap">${esc(scanTxt)}</b><span>${T('lastscan')}</span></div></div>
    <div class="donutbox">${donut(parts)}<div class="legend${parts.length>5?' lg2':''}">${parts.map(p=>`<div><i style="background:${p.color}"></i><span class="lb"><span class="lf">${esc(p.label)}</span><span class="ls">${esc(p.short)}</span></span><span class="ln">· ${p.n}</span></div>`).join('')}</div></div>
-   <div><div class="sub" style="margin-bottom:5px;font-weight:600">${T('newdev')} (48 ${T('h')})</div>${fresh.length?`<div class="list">${fresh.slice(0,5).map(h=>`<div>${pill('warn','NEW')}<code data-nethost="${esc(h.ip)}" data-nethost-click="1">${esc(h.ip)}</code><span>${esc(h.alias||h.hostname||h.vendor||'')}</span></div>`).join('')}</div>`:`<div class="empty">${T('nonew')}</div>`}</div>`:`<div class="empty">${T('nonet')}</div>`);
+   <div><div class="sub" style="margin-bottom:5px;font-weight:600">${T('newdev')} (48 ${T('h')})</div>${fresh.length?`<div class="list">${fresh.slice(0,5).map(h=>`<div>${pill('warn','NEW')}<code data-nethost="${esc(h.ip)}" data-nethost-click="1">${esc(h.ip)}</code><span>${esc(h.alias||h.hostname||h.vendor||'')}</span></div>`).join('')}</div>`:`<div class="empty">${T('nonew')}</div>`}</div>${swHtml}`:`<div class="empty">${T('nonet')}</div>`);
   return hosts.length?sev:'ok';
 }
 // ───────── Pi ─────────
@@ -306,13 +314,15 @@ const EVT={
   dns_off:'{n}: blocking paused',dns_on:'{n}: blocking active',dns_fail:'{n}: blocking failed',dns_down:'{n}: DNS server unreachable',dns_up:'{n}: DNS server reachable again',
   wan_down_internet:'Internet connection down',wan_down_lan:'Internet down (local network too)',wan_up:'Internet connection restored after {d} s',wan_ip:'Public IP changed to {ip}',
   nas_down:'{n}: NAS unreachable',nas_up:'{n}: NAS reachable again',nas_sys:'{n}: system or power failure',nas_raid:'{n}/{v}: volume status {st}',nas_disk:'{n}/{d}: disk status {st}',
-  net_first:'First scan: {n} hosts found',net_new:'New device: {ip} {n} {v}',net_up:'Back online: {ip} {n}',net_down:'Went offline: {ip} {n}',net_new_n:'{n} new devices',net_up_n:'{n} hosts back online',net_down_n:'{n} hosts went offline'},
+  net_first:'First scan: {n} hosts found',net_new:'New device: {ip} {n} {v}',net_up:'Back online: {ip} {n}',net_down:'Went offline: {ip} {n}',net_new_n:'{n} new devices',net_up_n:'{n} hosts back online',net_down_n:'{n} hosts went offline',
+  sw_down:'{n}: switch unreachable',sw_up:'{n}: switch reachable again',sw_temp:'{n}: temperature {t} °C',sw_temp_ok:'{n}: temperature back to normal ({t} °C)',sw_err:'{n}/port {p}: {d} new errors',sw_link:'{n}/port {p}: link {st}',sw_loop:'{n}/port {p}: loop detected'},
  es:{ups_lowb:'{n}: batería baja ({pct})',ups_batt:'{n}: funcionando con batería ({pct})',ups_mains:'{n}: volvió la red eléctrica ({pct})',ups_other:'{n}: estado {st}',ups_srv_down:'Servidor UPS {n} sin conexión: {e}',ups_srv_up:'Servidor UPS {n} otra vez disponible',
   pve_cl_down:'{c}: cluster sin conexión',pve_cl_up:'{c}: cluster otra vez disponible',pve_node_on:'{c}/{n}: nodo en línea',pve_node_off:'{c}/{n}: nodo {st}',pve_ceph:'{c}: Ceph {a} → {b}',
   dns_off:'{n}: bloqueo pausado',dns_on:'{n}: bloqueo activo',dns_fail:'{n}: el bloqueo falló',dns_down:'{n}: servidor DNS sin conexión',dns_up:'{n}: servidor DNS otra vez disponible',
   wan_down_internet:'Se cayó la conexión a internet',wan_down_lan:'Internet caído (la red local también)',wan_up:'Volvió internet tras {d} s',wan_ip:'La IP pública cambió a {ip}',
   nas_down:'{n}: NAS sin conexión',nas_up:'{n}: NAS otra vez disponible',nas_sys:'{n}: falla del sistema o de la fuente de poder',nas_raid:'{n}/{v}: estado del volumen {st}',nas_disk:'{n}/{d}: estado del disco {st}',
-  net_first:'Primer escaneo: {n} equipos encontrados',net_new:'Equipo nuevo: {ip} {n} {v}',net_up:'Volvió a estar en línea: {ip} {n}',net_down:'Dejó de responder: {ip} {n}',net_new_n:'{n} equipos nuevos',net_up_n:'{n} equipos volvieron a estar en línea',net_down_n:'{n} equipos dejaron de responder'}
+  net_first:'Primer escaneo: {n} equipos encontrados',net_new:'Equipo nuevo: {ip} {n} {v}',net_up:'Volvió a estar en línea: {ip} {n}',net_down:'Dejó de responder: {ip} {n}',net_new_n:'{n} equipos nuevos',net_up_n:'{n} equipos volvieron a estar en línea',net_down_n:'{n} equipos dejaron de responder',
+  sw_down:'{n}: switch sin conexión',sw_up:'{n}: switch otra vez disponible',sw_temp:'{n}: temperatura {t} °C',sw_temp_ok:'{n}: la temperatura volvió a la normalidad ({t} °C)',sw_err:'{n}/puerto {p}: {d} errores nuevos',sw_link:'{n}/puerto {p}: enlace {st}',sw_loop:'{n}/puerto {p}: loop detectado'}
 };
 // Texto de un evento en el idioma actual; si la clave no se conoce, el texto en inglés guardado / Event text in the current language; unknown key → stored English text
 function evText(e){const t=e.k&&EVT[lang][e.k];return t?t.replace(/\{(\w+)\}/g,(_,k)=>(e.p&&e.p[k]!=null?e.p[k]:'')).replace(/\s+/g,' ').trim():e.tx}
@@ -337,7 +347,7 @@ async function refresh(){
   if(lvl('dns')){jobs.dns=jget('/dns/api/dns'+(wantDH?'':'?hist=0'))}
   const wantWH=Date.now()-wanHTs>60000;
   if(lvl('wan')){jobs.wan=jget('/wan/api/wan?hist=0');if(wantWH)jobs.wanh=jget('/wan/api/wan/history?range=1d')}
-  if(lvl('net')){jobs.net=jget('/net/api/hosts')}
+  if(lvl('net')){jobs.net=jget('/net/api/hosts');jobs.sw=jget('/net/api/switches/summary')}
   jobs.sys=jget('api/system');jobs.ev=jget('api/events?limit=40');
   const keys=Object.keys(jobs),res=await Promise.allSettled(Object.values(jobs));
   const R={};keys.forEach((k,i)=>R[k]=res[i]);
@@ -365,7 +375,7 @@ async function refresh(){
   if(R.nas)sevs.push(R.nas.status==='fulfilled'?renderNAS(R.nas.value):fail('c-nas',T('nas')));
   if(R.dns)sevs.push(R.dns.status==='fulfilled'?renderDNS(R.dns.value):fail('c-dns',T('dns')));
   if(R.wan)sevs.push(R.wan.status==='fulfilled'?renderWAN(R.wan.value):fail('c-wan',T('wan')));
-  if(R.net)sevs.push(R.net.status==='fulfilled'?renderNet(R.net.value):fail('c-net',T('net')));
+  if(R.net)sevs.push(R.net.status==='fulfilled'?renderNet(R.net.value,R.sw&&R.sw.status==='fulfilled'?R.sw.value:null):fail('c-net',T('net')));
   if(R.sys.status==='fulfilled')sevs.push(renderPi(R.sys.value));
   if(R.ev.status==='fulfilled')renderEvents(R.ev.value.events||[]);
   fitGrid();   // ES: con el contenido ya pintado (el mosaico del kiosko mide las tarjetas) / EN: with the content painted (kiosk masonry measures the cards)

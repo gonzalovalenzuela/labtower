@@ -210,7 +210,12 @@
     <span id="scan-pct" style="font-family:var(--mono);font-size:11px;flex-shrink:0">0%</span>
   </div>
 
-  <div class="content">
+  <div class="view-tabs" role="tablist">
+    <button type="button" class="view-tab active" role="tab" data-view="hosts" data-i18n="tabHosts">Devices</button>
+    <button type="button" class="view-tab" role="tab" data-view="switches" data-i18n="tabSwitches">Switch Monitor</button>
+  </div>
+
+  <div class="content" id="view-hosts">
     <!-- Stats -->
     <div class="stats-row">
       <div class="stat-card"><div class="stat-ico teal"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg></div><div><div class="stat-val" id="st-total">—</div><div class="stat-lbl" data-i18n="statDiscovered">Hosts discovered</div></div></div>
@@ -257,13 +262,17 @@
       </div>
     </div>
   </div>
+
+  <div class="content" id="view-switches" hidden></div>
 </div>
 
+<div id="sw-tip" class="sw-tip" style="display:none"></div>
 <div id="toast"></div>
 
 <script src="csp-bind.js"></script>
 <script src="timefmt.js"></script>
 <script src="app.js"></script>
+<script src="switches.js"></script>
 <script src="footer.js"></script>
 </body>
 </html>

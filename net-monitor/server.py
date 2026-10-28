@@ -33,7 +33,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 # Cola de conexiones pendientes más grande que la de fábrica (5), para no rechazar ráfagas.
 # EN: Larger pending-connection queue than the default (5), so bursts are not rejected.
 ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 try:
@@ -46,6 +46,8 @@ except ImportError:
 # EN: Shared authentication module (sibling folder /auth).
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
+sys.path.insert(0, str(Path(__file__).parent))
+import switches as swmod      # Switch Monitor: drivers, sondeo, historial / drivers, polling, history
 
 # Solo loopback; el acceso desde la red pasa por nginx. hosts.json: equipos descubiertos. config.json: ajustes (SNMP, Pi-hole, intervalo).
 # EN: Loopback only; network access goes through nginx. hosts.json: discovered devices. config.json: settings (SNMP, Pi-hole, interval).
@@ -958,6 +960,28 @@ def save_hosts(hosts: dict):
     with _hosts_lock:
         auth.write_json(DATA_FILE, hosts, mode=0o644)   # WOL Console reads this file
 
+# ─── Switch Monitor ───────────────────────────────────────────────
+# El gestor se crea la primera vez que se usa (importar este archivo no lanza hilos) y se arranca en __main__.
+# EN: The manager is created on first use (importing this file starts no threads) and started in __main__.
+_sw_mgr = None
+_sw_lock = threading.Lock()
+
+# Equipos conocidos por MAC (sin separadores), para mostrar qué hay conectado a cada puerto.
+# EN: Known devices by MAC (no separators), to show what is connected to each port.
+def _sw_hosts() -> dict:
+    out = {}
+    for ip, h in load_hosts().items():
+        k = _mac_key(h.get("mac"))
+        if k: out[k] = {"ip": ip, "name": h.get("alias") or h.get("hostname") or h.get("vendor") or ""}
+    return out
+
+def sw_manager():
+    global _sw_mgr
+    with _sw_lock:
+        if _sw_mgr is None:
+            _sw_mgr = swmod.Manager(DATA_DIR, hooks={"event": auth.record_event, "changed": auth.state_changed, "hosts": _sw_hosts}, log=log)
+        return _sw_mgr
+
 # ─── Scanner ──────────────────────────────────────────────────────────────────
 # Estado del escáner (para la barra de progreso), temporizador del próximo escaneo automático e intervalo actual.
 # EN: Scanner state (for the progress bar), timer of the next automatic scan and current interval.
@@ -1199,6 +1223,15 @@ def health_report(detailed=False):
             c["auto_scan"] = auth.chk(auth.OK, f"every {iv} s")
     else:
         c["auto_scan"] = auth.chk(auth.OK, "manual mode")
+    try:
+        cfgs = [x for x in sw_manager().list_config()["switches"] if x.get("enabled", True)]
+        if cfgs:
+            st = {x["id"]: x for x in sw_manager().state()["switches"]}
+            bad = [x["name"] for x in cfgs if not st.get(x["id"], {}).get("online")]
+            c["switches"] = (auth.chk(auth.WARN, f"{len(bad)} of {len(cfgs)} switches unreachable: {', '.join(bad)[:120]}") if bad
+                             else auth.chk(auth.OK, f"{len(cfgs)} switches reachable"))
+    except Exception as e:
+        c["switches"] = auth.chk(auth.WARN, f"switch monitor: {str(e)[:100]}")
     return auth.health_reply("net", c, detailed)
 
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
@@ -1274,6 +1307,21 @@ class H(BaseHTTPRequestHandler):
                 "scan":    _scan_status,
                 "network": NETWORK,
             })
+        # Switch Monitor: estado de todos los switches, resumen para el Resumen, configuración (sin secretos) e historial.
+        # EN: Switch Monitor: state of all switches, summary for the Overview, configuration (no secrets) and history.
+        elif path == "/api/switches":
+            self._json(200, sw_manager().state())
+        elif path == "/api/switches/summary":
+            self._json(200, sw_manager().summary())
+        elif path == "/api/switches/config":
+            self._json(200, sw_manager().list_config())
+        elif re.fullmatch(r"/api/switches/[a-z0-9-]+/history", path):
+            q = parse_qs(urlparse(self.path).query)
+            rng = (q.get("range") or ["1d"])[0]
+            port = (q.get("port") or [None])[0]
+            if rng not in ("1h", "1d", "1w", "1mo", "all") or (port is not None and not port.isdigit()):
+                return self._json(400, {"error": "Invalid range or port"})
+            self._json(200, sw_manager().history(path.split("/")[3], rng, port))
         elif path == "/api/snmp":
             with _snmp_lock:
                 st = dict(_snmp_status)
@@ -1386,6 +1434,37 @@ class H(BaseHTTPRequestHandler):
             except Exception as e:
                 _oui_status["error"] = str(e)[:200]
                 return self._json(502, {"error": str(e)[:200]})
+
+        # Switch Monitor: «actualizar ahora» (cualquiera con acceso a Net) y, solo admin, guardar, borrar, probar, etiquetar puertos
+        # y cambiar el intervalo. Las contraseñas nunca se devuelven.
+        # EN: Switch Monitor: "refresh now" (anyone with Net access) and, admin only, save, delete, test, label ports and change
+        #     the interval. Passwords are never returned.
+        elif path == "/api/switches/refresh":
+            return self._json(200, {"ok": True, "n": sw_manager().refresh(body.get("id") or None)})
+        elif path.startswith("/api/switches/"):
+            if not auth.check_permission(tok, "net", "admin"):
+                return self._json(403, {"error": "Admin permission required"})
+            m, act = sw_manager(), path[len("/api/switches/"):]
+            try:
+                if act == "save":
+                    return self._json(200, {"ok": True, "switch": m.save_switch(body)})
+                if act == "delete":
+                    m.delete_switch(str(body.get("id") or ""))
+                    return self._json(200, {"ok": True})
+                if act == "test":
+                    return self._json(200, m.test(body))
+                if act == "port":
+                    m.set_port_meta(str(body.get("id") or ""), body.get("port"), body.get("label", ""), bool(body.get("uplink")))
+                    return self._json(200, {"ok": True})
+                if act == "poll":
+                    m.set_poll(body.get("seconds"))
+                    return self._json(200, {"ok": True})
+            except ValueError as e:
+                return self._json(400, {"error": str(e)})
+            except Exception as e:
+                log.warning(f"switches/{act}: {e}")
+                return self._json(502, {"error": f"{type(e).__name__}: {e}"[:200]})
+            return self._json(404, {"error": "Not found"})
 
         # SNMP: guardar la configuración o solo probarla sin guardar (admin).
         # EN: SNMP: save the configuration or only test it without saving (admin).
@@ -1530,6 +1609,8 @@ if __name__ == "__main__":
     log.info(f"Network: {NETWORK} | Workers: {MAX_WORKERS} | Auto-scan: {_current_interval//60}min (0 = manual)")
     log.info("Detection: TTL + Python ports + HTTP banner (no nmap)")
     start_auto_scan()
+    try: sw_manager().start()
+    except Exception as e: log.warning(f"Switch Monitor did not start: {e}")
     try:
         srv = ThreadingHTTPServer((HOST, PORT), H)
         srv.daemon_threads = True
