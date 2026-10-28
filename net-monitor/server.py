@@ -1313,6 +1313,8 @@ class H(BaseHTTPRequestHandler):
             self._json(200, sw_manager().state())
         elif path == "/api/switches/summary":
             self._json(200, sw_manager().summary())
+        elif path == "/api/switches/totals":
+            self._json(200, sw_manager().totals())
         elif path == "/api/switches/config":
             self._json(200, sw_manager().list_config())
         elif re.fullmatch(r"/api/switches/[a-z0-9-]+/history", path):

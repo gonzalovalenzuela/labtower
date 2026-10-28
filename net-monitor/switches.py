@@ -804,7 +804,7 @@ class Manager:
         with self.db_lock:
             conn = self._db()
             try:
-                for t in ("sw_sys", "sw_port", "sw_sys_agg", "sw_port_agg"):
+                for t in ("sw_sys", "sw_port", "sw_sys_agg", "sw_port_agg", "sw_total"):
                     conn.execute(f"DELETE FROM {t} WHERE sw=?", (sid,))
                 conn.commit()
             finally:
@@ -1157,9 +1157,69 @@ class Manager:
                         ts INTEGER NOT NULL, sw TEXT NOT NULL, port INTEGER NOT NULL, link INTEGER, speed INTEGER,
                         rxp REAL, txp REAL, rxb REAL, txb REAL, err INTEGER,
                         PRIMARY KEY (sw, port, ts))""")
+                # Totales acumulados por puerto: suman las diferencias entre lecturas y sobreviven a reinicios del switch y de LabTower.
+                # EN: Cumulative per-port totals: they add up the differences between reads and survive switch and LabTower restarts.
+                conn.execute("""CREATE TABLE IF NOT EXISTS sw_total (
+                    sw TEXT NOT NULL, port INTEGER NOT NULL, rxb INTEGER, txb INTEGER, rxp INTEGER, txp INTEGER,
+                    lrxb INTEGER, ltxb INTEGER, lrxp INTEGER, ltxp INTEGER, since INTEGER, updated INTEGER, resets INTEGER DEFAULT 0,
+                    PRIMARY KEY (sw, port))""")
                 conn.commit()
             finally:
                 conn.close()
+
+    @staticmethod
+    def _totals_update(conn, sid, t, ports):
+        """Suma al total de cada puerto lo que avanzó su contador desde la lectura anterior. Si el contador bajó (reinicio o borrado)
+        se suma el valor actual, porque el contador volvió a empezar de cero. Un puerto nuevo parte del valor que ya traía el switch.
+        EN: Adds to each port's total how far its counter advanced since the previous read. If the counter went down (reboot or clear)
+        the current value is added, since the counter restarted from zero. A new port starts from the value the switch already had."""
+        for p in ports:
+            cur = (p.get("rx_bytes"), p.get("tx_bytes"), p.get("rx_good_pkts"), p.get("tx_good_pkts"))
+            row = conn.execute("SELECT rxb,txb,rxp,txp,lrxb,ltxb,lrxp,ltxp,resets FROM sw_total WHERE sw=? AND port=?", (sid, p["port"])).fetchone()
+            if row is None:
+                conn.execute("INSERT INTO sw_total VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0)",
+                             (sid, p["port"], *cur, *cur, t, t))
+                continue
+            tot, last, resets = list(row[0:4]), list(row[4:8]), row[8] or 0
+            dropped = False
+            for i, v in enumerate(cur):
+                if v is None:
+                    continue
+                if last[i] is None or tot[i] is None:
+                    tot[i] = v
+                elif v >= last[i]:
+                    tot[i] += v - last[i]
+                else:
+                    tot[i] += v
+                    dropped = True
+                last[i] = v
+            conn.execute("UPDATE sw_total SET rxb=?,txb=?,rxp=?,txp=?,lrxb=?,ltxb=?,lrxp=?,ltxp=?,updated=?,resets=? WHERE sw=? AND port=?",
+                         (*tot, *last, t, resets + (1 if dropped else 0), sid, p["port"]))
+
+    def totals(self):
+        """Totales acumulados de todos los switches para la pestaña «Historial». / Cumulative totals for the "History" tab."""
+        out = []
+        with self.db_lock:
+            conn = self._db()
+            try:
+                rows = conn.execute("SELECT sw,port,rxb,txb,rxp,txp,since,updated,resets FROM sw_total ORDER BY sw,port").fetchall()
+            finally:
+                conn.close()
+        by = {}
+        for sid, port, rxb, txb, rxp, txp, since, upd, resets in rows:
+            by.setdefault(sid, []).append({"port": port, "rx_bytes": rxb, "tx_bytes": txb, "rx_pkts": rxp, "tx_pkts": txp,
+                                           "since": since, "updated": upd, "resets": resets or 0})
+        with self.lock:
+            cfgs = [dict(c) for c in self.cfg["switches"]]
+        for c in cfgs:
+            ports = by.get(c["id"], [])
+            for p in ports:
+                p["label"] = str((c.get("ports") or {}).get(str(p["port"]), {}).get("label") or "")
+            out.append({"id": c["id"], "name": c["name"], "driver": c["driver"],
+                        "has_bytes": any(p["rx_bytes"] is not None for p in ports), "ports": ports,
+                        "since": min((p["since"] for p in ports if p["since"]), default=None),
+                        "resets": sum(p["resets"] for p in ports)})
+        return {"switches": out, "now": int(time.time())}
 
     def _db_write(self, sid, ts, snap, rates):
         """Una fila por switch y una por puerto con enlace (o que acaba de caer). / One row per switch and one per linked port."""
@@ -1182,6 +1242,7 @@ class Manager:
                             conn.execute("INSERT OR REPLACE INTO sw_port VALUES (?,?,?,?,?,?,?,?,?,?)",
                                          (t, sid, p["port"], int(p["link_up"]), p["speed_mbps"], r.get("rx_pps"), r.get("tx_pps"),
                                           r.get("rx_bps"), r.get("tx_bps"), (p.get("rx_bad_pkts") or 0) + (p.get("tx_bad_pkts") or 0)))
+                        self._totals_update(conn, sid, t, ports)
                     conn.commit()
                 finally:
                     conn.close()

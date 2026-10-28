@@ -290,6 +290,31 @@ class ManagerTests(unittest.TestCase):
         self.assertAlmostEqual(s["ports"][0]["rx_bps"], 1_000_000.0); self.assertAlmostEqual(s["ports"][0]["tx_bps"], 200_000.0)
         self.assertEqual((s["ports"][0]["rx_bytes"], s["ports"][0]["tx_bytes"]), (1_250_000, 250_000))   # contadores acumulados / cumulative counters
 
+    def test_cumulative_totals_survive_counter_resets_and_restarts(self):
+        sid = self.add("tplink", "snmp")["id"]
+        t = 2_000_000.0
+        tot = lambda: {p["port"]: p for p in self.m.totals()["switches"][0]["ports"]}[1]
+        self.feed(sid, mk_snap("tplink", t, [mk_port(1, rx=100, tx=50, rxb=1000, txb=500)]))
+        self.assertEqual((tot()["rx_bytes"], tot()["tx_bytes"]), (1000, 500))      # parte del valor que ya traía el switch
+        self.feed(sid, mk_snap("tplink", t + 60, [mk_port(1, rx=130, tx=70, rxb=4000, txb=900)]))
+        self.assertEqual((tot()["rx_bytes"], tot()["tx_bytes"], tot()["rx_pkts"], tot()["tx_pkts"]), (4000, 900, 130, 70))
+        # el switch se reinicia: los contadores vuelven a empezar y el total no baja
+        self.feed(sid, mk_snap("tplink", t + 120, [mk_port(1, rx=5, tx=2, rxb=300, txb=100)]))
+        self.assertEqual((tot()["rx_bytes"], tot()["tx_bytes"], tot()["resets"]), (4300, 1000, 1))
+        self.feed(sid, mk_snap("tplink", t + 180, [mk_port(1, rx=9, tx=4, rxb=800, txb=150)]))
+        self.assertEqual((tot()["rx_bytes"], tot()["tx_bytes"]), (4800, 1050))
+        # LabTower se reinicia: el total persiste en la base y sigue sumando
+        m2 = sw.Manager(self.d, hooks={"event": lambda *a, **k: None, "changed": lambda k, st: None, "hosts": lambda: {}})
+        m2.reconcile = lambda: None
+        self.assertEqual({p["port"]: p for p in m2.totals()["switches"][0]["ports"]}[1]["rx_bytes"], 4800)
+        # los equipos sin bytes (ZX / HC) llevan solo paquetes
+        sid2 = self.add("zx310s", "zx")["id"]
+        self.feed(sid2, mk_snap("zx310s", t, [mk_port(1, rx=10, tx=5)]))
+        z = [x for x in self.m.totals()["switches"] if x["id"] == sid2][0]
+        self.assertFalse(z["has_bytes"]); self.assertEqual(z["ports"][0]["rx_pkts"], 10)
+        self.m.delete_switch(sid2)
+        self.assertEqual(len(self.m.totals()["switches"]), 1)
+
     def test_temperature_alert_levels_and_events(self):
         sid = self.add()["id"]
         t = 3_000_000.0
@@ -436,6 +461,8 @@ class Api(unittest.TestCase):
         self.assertEqual(self.call("POST", "/api/switches/nope", {}, token=self.admin)[0], 404)
         self.assertEqual(self.call("POST", "/api/switches/delete", {"id": sid}, token=self.admin)[0], 200)
         self.assertEqual(self.call("GET", "/api/switches/summary", token=self.ro)[1]["switches"], [])
+        self.assertEqual(self.call("GET", "/api/switches/totals", token=self.none)[0], 401)
+        self.assertEqual(self.call("GET", "/api/switches/totals", token=self.ro)[1]["switches"], [])
 
 
 if __name__ == "__main__":

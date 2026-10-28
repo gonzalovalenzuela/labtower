@@ -154,6 +154,7 @@ labtower-health
 - **Se agregan desde la interfaz** (botón *+ Agregar switch*, solo administradores), con botón *Probar* antes de guardar. Usuario, contraseña o community se guardan en `switches.json` con permisos 600 y la API nunca los devuelve.
 - **Solo lectura:** no cambia nada en los switches. Las operaciones peligrosas (borrar contadores del ZX, vaciar la tabla MAC del HC, reiniciar, guardar) están bloqueadas en el código.
 - **Historial de 1 año** (como UPS Monitor): temperatura y, por puerto, estado, velocidad, paquetes o Mb/s y errores; rangos 1 h, 1 d, 1 sem, 1 mes y todo. Las tasas se calculan entre muestras y toleran contadores que vuelven a cero.
+- **Historial** (subpestaña): totales acumulados por puerto (bytes por SNMP; solo paquetes en ZX y HC), guardados en la base y sin perderse cuando el switch o LabTower se reinician. Suma cuánto avanza cada contador entre lecturas y parte del valor que el switch ya traía al agregarlo.
 - **Alertas** en el Resumen (tarjeta Net Monitor y línea de tiempo): switch sin conexión (tras 2 lecturas fallidas), temperatura ≥ 70 °C (aviso) / ≥ 80 °C (crítico), errores nuevos en un puerto, cambios de enlace y loop. Los puertos entre switches no alertan por loop. Los umbrales se pueden cambiar con `SWITCH_TEMP_WARN` y `SWITCH_TEMP_CRIT`.
 - **Topología básica** deducida de las tablas MAC. Etiqueta y «enlace a otro switch» se editan por puerto.
 - Se consulta cada 60 s por defecto (30 s a 1 h, configurable); cada switch se lee de a una petición a la vez, con pausas, porque sus servidores web son frágiles.

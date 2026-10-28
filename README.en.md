@@ -154,6 +154,7 @@ labtower-health
 - **Added from the UI** (*+ Add switch*, admins only), with a *Test* button before saving. User, password or community are stored in `switches.json` with 600 permissions and the API never returns them.
 - **Read-only:** nothing is changed on the switches. Dangerous operations (clearing the ZX counters, wiping the HC MAC table, reboot, save) are blocked in the code.
 - **1-year history** (like UPS Monitor): temperature and, per port, state, speed, packets or Mb/s and errors; ranges 1 h, 1 d, 1 wk, 1 mo and all. Rates are computed between samples and tolerate counters that reset to zero.
+- **History** (sub-tab): cumulative totals per port (bytes via SNMP; packets only on ZX and HC), stored in the database and kept across switch and LabTower restarts. It adds up how far each counter advances between reads and starts from the value the switch already had when it was added.
 - **Alerts** in the Overview (Net Monitor card and timeline): switch unreachable (after 2 failed reads), temperature ≥ 70 °C (warning) / ≥ 80 °C (critical), new errors on a port, link changes and loop. Ports between switches do not alert on loop. Thresholds can be changed with `SWITCH_TEMP_WARN` and `SWITCH_TEMP_CRIT`.
 - **Basic topology** worked out from the MAC tables. Label and "link to another switch" are edited per port.
 - Polled every 60 s by default (30 s to 1 h, configurable); each switch is read one request at a time, with pauses, because their web servers are fragile.

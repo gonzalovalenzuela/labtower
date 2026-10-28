@@ -14,7 +14,12 @@ Object.assign(LANG.en, {
   swUpdated: s => 'Updated ' + s + ' ago', swEvery: 'every', swNever: 'no data yet', swRefresh: 'Refresh', swAdd: '+ Add switch', swEdit: 'Edit',
   swEmptyAdmin: 'No switches yet. Add one to start monitoring ports, temperature and errors.', swEmptyRead: 'No switches have been added yet.',
   swLegUp: 'Up', swLegDown: 'Down', swLegWarn: 'New errors', swLegUplink: 'Link between switches', swLegOff: 'Disabled', swLegLoop: 'Loop',
-  swTotal: 'Total rx / tx', swInfoTotal: 'Total received / sent', swPort: 'Port', swState: 'State', swSpeed: 'Speed', swRxPps: 'Rx pkt/s', swTxPps: 'Tx pkt/s', swMbps: 'Mb/s rx / tx', swErrors: 'Errors', swStp: 'STP', swConn: 'Connected to',
+  swTotal: 'Total rx / tx', swInfoTotal: 'Total received / sent',
+  swSubStatus: 'Status', swSubHist: 'History',
+  swHistNote: 'Cumulative data, not affected by restarts: LabTower adds up how much each counter advances between reads, so the totals do not drop when a switch reboots or its counters are cleared. They start from the value the switch already had when it was added, and the traffic of the few seconds around a restart is lost.',
+  swHistSince: d => 'Counting since ' + d, swHistResets: n => n ? n + ' counter reset' + (n > 1 ? 's' : '') + ' detected' : 'no counter resets detected',
+  swHistEmpty: 'No totals yet: they appear after the first reading.', swColRx: 'Received', swColTx: 'Sent', swColSum: 'Total', swColPkRx: 'Packets received', swColPkTx: 'Packets sent', swHistTotal: 'All ports',
+  swHistPktOnly: 'This model does not report bytes, only packets.', swPort: 'Port', swState: 'State', swSpeed: 'Speed', swRxPps: 'Rx pkt/s', swTxPps: 'Tx pkt/s', swMbps: 'Mb/s rx / tx', swErrors: 'Errors', swStp: 'STP', swConn: 'Connected to',
   swStUp: 'Up', swStDown: 'Down', swStOff: 'Disabled', swStLoop: 'Loop', swStUplink: 'Uplink', swStWarn: 'Errors',
   swShowAll: n => 'Show all ' + n + ' ports', swShowActive: 'Show only active ports',
   swOnline: 'Online', swOffline: 'Unreachable', swWaiting: 'Waiting for the first reading…', swTempHigh: 'High temperature', swTempCrit: 'Critical temperature',
@@ -40,7 +45,12 @@ Object.assign(LANG.es, {
   swUpdated: s => 'Actualizado hace ' + s, swEvery: 'cada', swNever: 'sin datos aún', swRefresh: 'Actualizar', swAdd: '+ Agregar switch', swEdit: 'Editar',
   swEmptyAdmin: 'Aún no hay switches. Agrega uno para monitorear puertos, temperatura y errores.', swEmptyRead: 'Todavía no se ha agregado ningún switch.',
   swLegUp: 'Arriba', swLegDown: 'Abajo', swLegWarn: 'Errores nuevos', swLegUplink: 'Enlace entre switches', swLegOff: 'Deshabilitado', swLegLoop: 'Loop',
-  swTotal: 'Total rx / tx', swInfoTotal: 'Total recibido / enviado', swPort: 'Puerto', swState: 'Estado', swSpeed: 'Velocidad', swRxPps: 'Rx pkt/s', swTxPps: 'Tx pkt/s', swMbps: 'Mb/s rx / tx', swErrors: 'Errores', swStp: 'STP', swConn: 'Conectado a',
+  swTotal: 'Total rx / tx', swInfoTotal: 'Total recibido / enviado',
+  swSubStatus: 'Estado', swSubHist: 'Historial',
+  swHistNote: 'Datos acumulados, sin tomar en cuenta los reinicios: LabTower suma cuánto avanza cada contador entre lecturas, así que el total no baja cuando el switch se reinicia o se borran sus contadores. Parte del valor que el switch ya traía al agregarlo, y se pierde el tráfico de los pocos segundos alrededor de un reinicio.',
+  swHistSince: d => 'Contando desde ' + d, swHistResets: n => n ? n + ' reinicio' + (n > 1 ? 's' : '') + ' de contadores detectado' + (n > 1 ? 's' : '') : 'sin reinicios de contadores detectados',
+  swHistEmpty: 'Aún no hay totales: aparecen tras la primera lectura.', swColRx: 'Recibido', swColTx: 'Enviado', swColSum: 'Total', swColPkRx: 'Paquetes recibidos', swColPkTx: 'Paquetes enviados', swHistTotal: 'Todos los puertos',
+  swHistPktOnly: 'Este modelo no informa bytes, solo paquetes.', swPort: 'Puerto', swState: 'Estado', swSpeed: 'Velocidad', swRxPps: 'Rx pkt/s', swTxPps: 'Tx pkt/s', swMbps: 'Mb/s rx / tx', swErrors: 'Errores', swStp: 'STP', swConn: 'Conectado a',
   swStUp: 'Arriba', swStDown: 'Abajo', swStOff: 'Deshabilitado', swStLoop: 'Loop', swStUplink: 'Uplink', swStWarn: 'Errores',
   swShowAll: n => 'Mostrar los ' + n + ' puertos', swShowActive: 'Mostrar solo puertos activos',
   swOnline: 'En línea', swOffline: 'Sin conexión', swWaiting: 'Esperando la primera lectura…', swTempHigh: 'Temperatura alta', swTempCrit: 'Temperatura crítica',
@@ -62,7 +72,7 @@ Object.assign(LANG.es, {
 });
 
 const $ = id => document.getElementById(id);
-const SW = { view: 'hosts', data: null, hash: '', sel: null, range: '1d', hist: {}, charts: {}, showAll: {}, timer: null, busy: false, cfg: null };
+const SW = { sub: 'status', tot: null, view: 'hosts', data: null, hash: '', sel: null, range: '1d', hist: {}, charts: {}, showAll: {}, timer: null, busy: false, cfg: null };
 const POLLS = [30, 60, 120, 300, 600];
 
 async function api(path, opts) {
@@ -85,6 +95,8 @@ function bytesFmt(v) {
   while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
   return (i < 2 ? Math.round(v) : v.toFixed(v >= 100 ? 0 : v >= 10 ? 1 : 2)) + ' ' + u[i];
 }
+const num = v => v == null ? '—' : Number(v).toLocaleString(_lang === 'es' ? 'es-CL' : 'en-GB');
+const dateOf = ts => new Date(ts * 1000).toLocaleDateString(_lang === 'es' ? 'es-CL' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 function ago(sec) { return sec == null ? '—' : sec < 60 ? sec + ' ' + t('swSec') : Math.floor(sec / 60) + ' ' + t('swMin'); }
 function clock(ts, secs) { const d = new Date(ts * 1000); return typeof PCT !== 'undefined' ? PCT.time(d, secs) : d.toLocaleTimeString(); }
 function dayTime(ts) {
@@ -111,7 +123,8 @@ async function load() {
   SW.busy = true;
   try {
     const d = await api('api/switches');
-    const h = JSON.stringify(d.switches) + JSON.stringify(d.edges) + d.poll_seconds + (typeof ME !== 'undefined' && ME && ME.permissions ? ME.permissions.net : '');
+    if (SW.sub === 'hist') { try { SW.tot = await api('api/switches/totals'); } catch (e) { if (e.message === '401') throw e; } }
+    const h = (SW.sub === 'hist' ? JSON.stringify(SW.tot) : '') + SW.sub + JSON.stringify(d.switches) + JSON.stringify(d.edges) + d.poll_seconds + (typeof ME !== 'undefined' && ME && ME.permissions ? ME.permissions.net : '');
     const changed = h !== SW.hash;
     SW.data = d; SW.hash = h;
     if (changed) render();
@@ -317,6 +330,26 @@ function topology(d) {
   return `<div class="card sw-card"><div class="sw-sechead">${esc(t('swTopo'))}</div>${d.edges.length ? `<svg viewBox="0 0 ${W} ${H}" class="sw-topo">${g}</svg>` : `<div class="sw-nodata">${esc(t('swTopoNone'))}</div>`}<div class="sw-note">${esc(t('swTopoHint'))}</div></div>`;
 }
 
+function histHtml() {
+  const T = SW.tot && SW.tot.switches || [];
+  const note = `<div class="card sw-card sw-histnote"><div class="sw-note">${esc(t('swHistNote'))}</div></div>`;
+  if (!T.length || T.every(s => !s.ports.length)) return note + `<div class="card sw-card"><div class="sw-nodata">${esc(t('swHistEmpty'))}</div></div>`;
+  return note + T.filter(s => s.ports.length).map(s => {
+    const sum = k => s.ports.reduce((a, p) => a + (p[k] || 0), 0);
+    const heads = s.has_bytes ? ['swPort', 'swColRx', 'swColTx', 'swColSum', 'swColPkRx', 'swColPkTx'] : ['swPort', 'swColPkRx', 'swColPkTx'];
+    const row = (lbl, p, bold) => `<tr${bold ? ' class="sw-sumrow"' : ''}><td>${lbl}</td>` + (s.has_bytes ?
+      `<td>${esc(bytesFmt(p.rx_bytes))}</td><td>${esc(bytesFmt(p.tx_bytes))}</td><td>${esc(bytesFmt((p.rx_bytes || 0) + (p.tx_bytes || 0)))}</td>` : '') +
+      `<td>${num(p.rx_pkts)}</td><td>${num(p.tx_pkts)}</td></tr>`;
+    const total = { rx_bytes: sum('rx_bytes'), tx_bytes: sum('tx_bytes'), rx_pkts: sum('rx_pkts'), tx_pkts: sum('tx_pkts') };
+    const rows = s.ports.filter(p => (p.rx_bytes || 0) + (p.tx_bytes || 0) + (p.rx_pkts || 0) + (p.tx_pkts || 0) > 0);
+    return `<div class="card sw-card"><div class="sw-head"><b class="sw-name">${esc(s.name)}</b><span class="grow"></span>` +
+      `<span class="dim mono">${s.since ? esc(t('swHistSince', dateOf(s.since))) + ' · ' : ''}${esc(t('swHistResets', s.resets))}</span></div>` +
+      (s.has_bytes ? '' : `<div class="sw-note">${esc(t('swHistPktOnly'))}</div>`) +
+      `<div class="sw-tablewrap"><table class="sw-table"><thead><tr>${heads.map(h => `<th>${esc(t(h))}</th>`).join('')}</tr></thead><tbody>` +
+      rows.map(p => row(esc(p.port) + (p.label ? ' <span class="dim">' + esc(p.label) + '</span>' : ''), p)).join('') + row('<b>' + esc(t('swHistTotal')) + '</b>', total, true) + `</tbody></table></div></div>`;
+  }).join('');
+}
+
 function render() {
   const root = $('view-switches'); if (!root || !SW.data) return;
   const d = SW.data, admin = canAdmin(), S = d.switches;
@@ -331,7 +364,9 @@ function render() {
   const bar = `<div class="sw-bar"><span class="dim mono" id="sw-stamp"></span><span class="dim mono">· ${esc(t('swEvery'))} ${admin ? `<select id="sw-poll" class="sw-sel">${polls}</select>` : polls.match(new RegExp('value="' + d.poll_seconds + '"[^>]*>([^<]*)'))[1]}</span><span class="grow"></span>` +
     `<button type="button" class="sw-btn" data-act="refresh">↻ ${esc(t('swRefresh'))}</button>${admin ? `<button type="button" class="sw-btn teal" data-act="add">${esc(t('swAdd'))}</button>` : ''}</div>`;
   const empty = S.length ? '' : `<div class="card sw-card"><div class="sw-nodata">${esc(admin ? t('swEmptyAdmin') : t('swEmptyRead'))}</div></div>`;
-  root.innerHTML = bar +
+  const subbar = `<div class="sw-sub"><button type="button" class="sw-chip${SW.sub === 'status' ? ' active' : ''}" data-act="sub" data-sub="status">${esc(t('swSubStatus'))}</button><button type="button" class="sw-chip${SW.sub === 'hist' ? ' active' : ''}" data-act="sub" data-sub="hist">${esc(t('swSubHist'))}</button></div>`;
+  if (SW.sub === 'hist') { root.innerHTML = bar + subbar + histHtml(); updateStamp(); return; }
+  root.innerHTML = bar + subbar +
     (S.length ? `<div class="stats-row">${kpi('teal', upSw + '/' + S.length, t('swKpiOnline'))}${kpi('green', pUp + '<span class="dim"> / ' + pTot + '</span>', t('swKpiPorts'))}${kpi('orange', tmax ? Math.round(tmax.system.temperature_c) + ' °C' : '—', t('swKpiTemp') + (tmax ? ' (' + tmax.name + ')' : ''), tcol)}${kpi('red', errPorts, t('swKpiErr'), errPorts ? 'var(--amber)' : '')}${kpi('blue', macs, t('swKpiMacs'))}</div>` : '') +
     empty + S.map(card).join('') + topology(d) + (S.length ? `<div class="sw-note">${esc(t('swReadOnlyNote'))}</div>` : '');
   updateStamp();
@@ -387,6 +422,11 @@ async function onClick(e) {
       render(); loadHistory();
       if (SW.sel) { const d = document.querySelector('.sw-detail'); if (d) d.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
     }
+    else if (act === 'sub') {
+      SW.sub = el.dataset.sub === 'hist' ? 'hist' : 'status';
+      try { localStorage.setItem('pi-net-sub', SW.sub); } catch (e) {}
+      SW.hash = ''; await load();
+    }
     else if (act === 'closeport') { SW.sel = null; render(); }
     else if (act === 'range') { SW.range = el.dataset.range; render(); loadHistory(true); }
     else if (act === 'showall') { SW.showAll[id] = !SW.showAll[id]; render(); }
@@ -432,6 +472,7 @@ function init() {
     window.setLang = function (l) { orig.apply(this, arguments); document.querySelectorAll('.view-tab').forEach(b => { b.textContent = t(b.dataset.i18n); }); if (SW.data) render(); };
   }
   document.querySelectorAll('.view-tab').forEach(b => { b.textContent = t(b.dataset.i18n); });
+  try { if (localStorage.getItem('pi-net-sub') === 'hist') SW.sub = 'hist'; } catch (e) {}
   let v = 'hosts';
   try { v = location.hash === '#switches' ? 'switches' : (location.hash === '' && localStorage.getItem('pi-net-view') === 'switches' ? 'switches' : 'hosts'); } catch (e) {}
   setView(v);
