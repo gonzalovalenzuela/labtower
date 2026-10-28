@@ -39,8 +39,8 @@ Todas las pantallas (tema claro y oscuro, 4 tamaños) están en [`docs/screensho
 ## Requisitos
 
 - Raspberry Pi (probado en 3A+) o una VM/equipo x86, con Raspberry Pi OS, DietPi, Debian 12+ o Ubuntu.
-- Python 3.9+, nginx, `sudo`, `snmp` y NUT (`nut`, `nut-client`). `apt` los instala con el `.deb`.
-- Opcional: `ieee-data` (base local de fabricantes por MAC).
+- Python 3.9+, nginx, `sudo`, `snmp`, NUT (`nut`, `nut-client`), `openssh-client`, `gnupg`, `gpg-agent`, `openssl`, `cron`, `curl`, `iproute2`, `systemd` y otros paquetes base. `apt` los instala con el `.deb`.
+- Opcional: `ieee-data` (base local de fabricantes por MAC) y los motores de prueba de velocidad (ver más abajo).
 
 ## Instalar
 
@@ -55,6 +55,30 @@ Usa `apt-get install ./archivo.deb` y no `dpkg -i`, para que `apt` instale las d
 El instalador crea el usuario del sistema `labtower`, los servicios systemd, la configuración de nginx y el usuario `admin` con una **contraseña aleatoria** que muestra al terminar. Si la perdiste: `sudo cat /var/lib/labtower/initial-admin-password`.
 
 **Desde el código fuente** (desarrollo): copia los módulos a `/opt/labtower`, instala la configuración de `etc/nginx/` y crea los servicios con `debian/postinst` como guía.
+
+### Pruebas de velocidad (opcional)
+
+WAN Monitor trae un motor propio y no necesita nada más. Si quieres usar **Ookla** o **LibreSpeed**, instala su programa; después aparece como opción en *WAN Monitor → Ajustes → Motor de la prueba* (mientras falte, sale marcado «no instalado»).
+
+**Ookla `speedtest`** (el paquete oficial se llama `speedtest`; el `speedtest-cli` de Debian es otro programa y no sirve):
+
+```bash
+sudo apt-get install -y curl
+curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.deb.sh | sudo bash
+sudo apt-get install -y speedtest
+speedtest --version
+```
+
+Si el script del repositorio no reconoce tu versión de Debian o Raspberry Pi OS, descarga el `.tgz` de Linux para tu arquitectura (`x86_64`, `aarch64`, `armhf`) desde <https://www.speedtest.net/apps/cli>, descomprímelo y copia `speedtest` a `/usr/local/bin/`. LabTower lo ejecuta con `--accept-license --accept-gdpr`.
+
+**LibreSpeed `librespeed-cli`:**
+
+```bash
+sudo apt-get install -y librespeed-cli     # Debian 13 (trixie) o posterior
+librespeed-cli --version
+```
+
+En versiones donde el paquete no existe, descarga el binario de tu arquitectura desde <https://github.com/librespeed/speedtest-cli/releases>, déjalo como `/usr/local/bin/librespeed-cli` y dale permisos con `sudo chmod 755 /usr/local/bin/librespeed-cli`.
 
 ## Actualizar
 
