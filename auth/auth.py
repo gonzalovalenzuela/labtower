@@ -1014,6 +1014,29 @@ def _cpu_percent():
     except Exception:
         return None
 
+def backup_status():
+    """State of the automatic SFTP backup for the Overview card: off (not configured), pending (configured, no run yet), ok, fail or unknown.
+    ES: Estado del respaldo SFTP: lee el archivo que escribe labtower-sftp-backup (root, 644) y, si no existe, si hay SFTP_USER en la configuración."""
+    f = os.environ.get("LABTOWER_BACKUP_STATUS", "/var/log/labtower/backup.status")
+    conf = os.environ.get("LABTOWER_BACKUP_CONF", "/etc/labtower/backup.conf")
+    try:
+        d = json.loads(Path(f).read_text())
+        if not isinstance(d, dict): raise ValueError("not an object")
+        return {"state": "ok" if d.get("ok") is True else "fail", "time": d.get("time"), "file": d.get("file") or "",
+                "size": d.get("size"), "message": str(d.get("message") or "")[:220]}
+    except FileNotFoundError:
+        pass
+    except Exception:
+        return {"state": "unknown"}          # empty or corrupt file: shown as «sin datos», never an error
+    try:
+        user = ""
+        for ln in Path(conf).read_text().splitlines():
+            m = re.match(r"\s*SFTP_USER\s*=\s*(\S*)", ln)
+            if m: user = m.group(1)
+        return {"state": "pending" if user else "off"}
+    except Exception:
+        return {"state": "off"}
+
 def system_stats():
     """Snapshot of the machine: temp (°C), cpu %, load, memory, disk, uptime, model, power flags."""
     out = {"model": None, "temp": None, "cpu": _cpu_percent(), "load": None, "cores": os.cpu_count() or 1,
@@ -1049,6 +1072,7 @@ def system_stats():
                 out["power"] = {"under_voltage": bool(bits & 0x1), "throttled": bool(bits & 0x4),
                                 "temp_limit": bool(bits & 0x8), "since_boot": bool(bits & 0xF0000)}
     except Exception: pass
+    out["backup"] = backup_status()
     return out
 
 

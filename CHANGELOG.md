@@ -2,6 +2,13 @@
 
 ## 2.1.2 — 2026-10-28
 
+**Nuevo**
+- Tema: junto al icono ◐ ahora hay un botón que muestra el modo elegido (OSCURO / CLARO / AUTO, o DARK / LIGHT / AUTO en inglés), como los de «24H» y «ES». Se puede pulsar cualquiera de los dos para cambiar. Reemplaza la «A» pequeña del icono.
+- Resumen, tarjeta «LabTower Server»: muestra el estado del último respaldo SFTP (OK, atrasado si pasan más de 36 h, o falló) con hace cuánto se hizo. Si falló o está atrasado, también aparece en los avisos. No se muestra si el respaldo no está configurado.
+
+**Cambios**
+- NAS Monitor, «Actividad de disco»: solo lista los discos con actividad real (≥ 5 % o ≥ 256 KB/s); los que están en reposo se resumen en una línea («Todos los discos en reposo (8)») en vez de ocho filas con 0 %.
+
 **Correcciones**
 - Respaldo SFTP: `openssh-client`, `gnupg`, `gpg-agent`, `openssl` y `cron` pasan a ser dependencias obligatorias del paquete (antes `gnupg` era solo recomendado y faltaba `gpg-agent`, por lo que el cifrado fallaba en instalaciones mínimas con «No agent running»).
 - Paquete: tras revisar los comandos que usan los módulos y los scripts, también se declaran `iproute2` (`ip`), `systemd` (`systemctl`, `journalctl`), `curl` (`labtower-health`), `ca-certificates` (descargas HTTPS), `passwd` (`useradd`, `usermod`, `userdel`), `hostname` y `awk`.

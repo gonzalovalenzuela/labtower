@@ -58,6 +58,7 @@ input,select,textarea{background:var(--input-bg);border-color:var(--input-border
 *{scrollbar-width:thin;scrollbar-color:var(--border-b) transparent}
 ::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:var(--border-b);border-radius:9px}
 .theme-toggle{background:var(--surface);border:1px solid var(--border-b);color:var(--text-mid);border-radius:99px;width:34px;height:34px;display:inline-grid;place-items:center;cursor:pointer;font-size:15px;line-height:1;padding:0}
-.theme-toggle{position:relative}.theme-toggle[data-mode=system]::after{content:'A';position:absolute;right:-3px;bottom:-3px;width:15px;height:15px;border-radius:50%;background:var(--blue);color:#fff;font:700 9px/15px system-ui,sans-serif;text-align:center}
-.theme-toggle:hover{color:var(--text);border-color:var(--text-dim)}
-body.kiosk .theme-toggle{display:none!important}
+.theme-toggle{position:relative}
+.theme-toggle:hover,.theme-lbl:hover{color:var(--text);border-color:var(--text-dim)}
+.theme-lbl{background:var(--surface);border:1px solid var(--border-b);color:var(--text-mid);border-radius:var(--r-sm,8px);padding:0 10px;height:30px;font:600 11px/1 system-ui,sans-serif;letter-spacing:.04em;cursor:pointer;white-space:nowrap}
+body.kiosk .theme-toggle,body.kiosk .theme-lbl{display:none!important}

@@ -16,7 +16,7 @@ const LANG={
     online:'Online',offline:'Unreachable',connError:'Connection error',connErrorHint:'Check host, port, SNMP version and credentials; SNMP must be allowed from this Pi.',
     system:'System',model:'Model',serial:'Serial',dsm:'DSM',uptime:'Uptime',temp:'Temperature',cpu:'CPU',memory:'Memory',load:'Load',swap:'Swap',
     power:'Power supply',fans:'Fans',normal:'Normal',failed:'Failed',upgradeYes:'Update available',upgradeNo:'Up to date',upgradeUnk:'—',updates:'DSM update',
-    volumes:'Volumes',disks:'Disks',network:'Network',ups:'UPS',diskLoad:'Disk activity',history:'History (last hours)',histCpuMem:'CPU / RAM',histTemp:'Temperature',filterAll:'All',trend:'CPU / RAM',accumulating:'Collecting data…',noDataChart:'No data for this range',summary:'NAS Summary',colNas:'NAS',colModel:'Model',colAlerts:'Alerts',histNet:'Network traffic',
+    volumes:'Volumes',disks:'Disks',network:'Network',ups:'UPS',diskLoad:'Disk activity',diskAllIdle:'All disks idle ({n})',diskIdleN:'Idle disks: {n}',history:'History (last hours)',histCpuMem:'CPU / RAM',histTemp:'Temperature',filterAll:'All',trend:'CPU / RAM',accumulating:'Collecting data…',noDataChart:'No data for this range',summary:'NAS Summary',colNas:'NAS',colModel:'Model',colAlerts:'Alerts',histNet:'Network traffic',
     noVolumes:'No volume data (is this a Synology with the Synology MIB enabled?)',noDisks:'No disk data',noNet:'No network data yet',noHist:'Collecting history…',
     used:'used',free:'free',rx:'In',tx:'Out',model2:'Model',status:'Status',charge:'Battery',loadPct:'Load',
     disk:{1:'Normal',2:'Initialized',3:'Not initialized',4:'System partition failed',5:'Crashed',6:'Disconnected'},
@@ -39,7 +39,7 @@ const LANG={
     online:'En línea',offline:'Sin conexión',connError:'Error de conexión',connErrorHint:'Revisa host, puerto, versión de SNMP y credenciales; SNMP debe permitirse desde esta Pi.',
     system:'Sistema',model:'Modelo',serial:'Serie',dsm:'DSM',uptime:'Tiempo encendido',temp:'Temperatura',cpu:'CPU',memory:'Memoria',load:'Carga',swap:'Swap',
     power:'Fuente de poder',fans:'Ventiladores',normal:'Normal',failed:'Falla',upgradeYes:'Actualización disponible',upgradeNo:'Al día',upgradeUnk:'—',updates:'Actualización de DSM',
-    volumes:'Volúmenes',disks:'Discos',network:'Red',ups:'UPS',diskLoad:'Actividad de disco',history:'Historial (últimas horas)',histCpuMem:'CPU / RAM',histTemp:'Temperatura',filterAll:'Todo',trend:'CPU / RAM',accumulating:'Reuniendo datos…',noDataChart:'Sin datos en este rango',summary:'Resumen de NAS',colNas:'NAS',colModel:'Modelo',colAlerts:'Avisos',histNet:'Tráfico de red',
+    volumes:'Volúmenes',disks:'Discos',network:'Red',ups:'UPS',diskLoad:'Actividad de disco',diskAllIdle:'Todos los discos en reposo ({n})',diskIdleN:'Discos en reposo: {n}',history:'Historial (últimas horas)',histCpuMem:'CPU / RAM',histTemp:'Temperatura',filterAll:'Todo',trend:'CPU / RAM',accumulating:'Reuniendo datos…',noDataChart:'Sin datos en este rango',summary:'Resumen de NAS',colNas:'NAS',colModel:'Modelo',colAlerts:'Avisos',histNet:'Tráfico de red',
     noVolumes:'Sin datos de volúmenes (¿es un Synology con la MIB de Synology habilitada?)',noDisks:'Sin datos de discos',noNet:'Aún sin datos de red',noHist:'Reuniendo historial…',
     used:'usado',free:'libre',rx:'Entrada',tx:'Salida',model2:'Modelo',status:'Estado',charge:'Batería',loadPct:'Carga',
     disk:{1:'Normal',2:'Inicializado',3:'Sin inicializar',4:'Falla de partición del sistema',5:'Dañado',6:'Desconectado'},
@@ -329,9 +329,12 @@ function buildDetail(n){
   if(d.ups){
     h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('ups'))}</div></div>${kv(t('model2'),esc(d.ups.model||'—'))}${kv(t('status'),esc(d.ups.status||'—'))}${kv(t('charge'),d.ups.charge==null?'—':esc(d.ups.charge)+'%')}${kv(t('loadPct'),d.ups.load==null?'—':esc(d.ups.load)+'%')}</div>`;
   }
-  // Actividad de disco
+  // Actividad de disco: solo se listan los discos con actividad real; los que están en reposo se resumen en una línea (con 8 discos a 0 % eran filas de ruido).
+  // EN: Disk activity: only disks with real activity are listed; idle ones are summed up in one line (eight disks at 0 % were noise).
   if((d.io||[]).length){
-    h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('diskLoad'))}</div></div>`+d.io.map(x=>`<div class="vol-row"><div class="vol-top"><span class="vol-name">${esc(x.dev)}</span><span class="vol-size">${x.read!=null&&x.write!=null?'<small style="color:var(--text-dim);font-weight:400">R '+esc(fmtBytes(x.read))+'/s · W '+esc(fmtBytes(x.write))+'/s</small> · ':''}${x.load==null?'—':esc(x.load)+'%'}</span></div>${bar(x.load||0,70,90)}</div>`).join('')+'</div>';
+    const busy=d.io.filter(x=>(x.load||0)>=5||((x.read||0)+(x.write||0))>=262144),idle=d.io.length-busy.length;
+    h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('diskLoad'))}</div></div>`+busy.map(x=>`<div class="vol-row"><div class="vol-top"><span class="vol-name">${esc(x.dev)}</span><span class="vol-size">${x.read!=null&&x.write!=null?'<small style="color:var(--text-dim);font-weight:400">R '+esc(fmtBytes(x.read))+'/s · W '+esc(fmtBytes(x.write))+'/s</small> · ':''}${x.load==null?'—':esc(x.load)+'%'}</span></div>${bar(x.load||0,70,90)}</div>`).join('')+
+      (idle?`<div class="sum-sub" style="margin-top:6px">${esc(t(busy.length?'diskIdleN':'diskAllIdle').replace('{n}',idle))}</div>`:'')+'</div>';
   }
   h+='</div>'+chartSections(n);
   return h;

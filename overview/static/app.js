@@ -5,7 +5,7 @@ const TXT={
   uptimeOnl:'Online',avail:'Availability',lastOut:'Last outage',noOut:'no outages recorded',onbattNow:'on battery now',
   mains:'On mains',batt:'On battery',lowb:'Low battery',unreach:'Unreachable',battery:'Battery',load:'Load',runtime:'Runtime',power:'Power',nodes:'Nodes',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memory',disk:'Disk',temp:'Temp',uptime:'Uptime',
   online:'Online',known:'Known',offline:'Offline',newdev:'New devices',lastscan:'Last scan',scanning:'Scanning…',ceph:'Ceph',types:'By device type',nonew:'No new devices',
-  ago:'ago',now:'now',min:'min',h:'h',d:'d',s:'s',power_uv:'Under-voltage',power_th:'Throttled',power_ok:'Power supply OK',invalid:'Invalid credentials',
+  ago:'ago',backup:'Backup',bkok:'OK',bkfail:'Failed',bkold:'Overdue',bkpend:'Not run yet',issue_bkfail:'Last backup failed',issue_bkold:'No backup for over 36 h',now:'now',min:'min',h:'h',d:'d',s:'s',power_uv:'Under-voltage',power_th:'Throttled',power_ok:'Power supply OK',invalid:'Invalid credentials',
   issue_batt:'is running on battery',issue_lowb:'has low battery',issue_srv:'unreachable',issue_node:'node offline',issue_cl:'cluster unreachable',issue_cpu:'high CPU',issue_ram:'high memory',issue_ceph:'Ceph',
   issue_temp:'Pi temperature high',issue_disk:'Pi disk almost full',issue_mem:'Pi memory high',issue_pwr:'Pi power supply problem',issue_scan:'scan error',h_temp:'Temp',h_min:'min',h_max:'max',h_uv:'Under-voltage',h_nouv:'no under-voltage',h_utemp:'UPS temperature 24 h'},
  es:{title:'Resumen',sortBtn:'Ordenar',sortDone:'Listo',sortReset:'Restablecer orden',mvEarlier:'Mover antes',mvLater:'Mover después',mvDrag:'Arrastra para mover',home:'Inicio',kiosk:'Kiosko',logout:'Cerrar sesión',login:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',exitk:'Salir de kiosko',rint:'Actualizar cada',rman:'Manual',rnow:'Actualizar ahora',ascroll:'Auto-desplazar',updated:'Actualizado',allok:'Todo en orden',attn:'Atención',fail:'Falla',
@@ -13,7 +13,7 @@ const TXT={
   uptimeOnl:'En línea',avail:'Disponibilidad',lastOut:'Último corte',noOut:'sin cortes registrados',onbattNow:'en batería ahora',
   mains:'En red eléctrica',batt:'Con batería',lowb:'Batería baja',unreach:'Sin conexión',battery:'Batería',load:'Carga',runtime:'Autonomía',power:'Consumo',nodes:'Nodos',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memoria',disk:'Disco',temp:'Temp',uptime:'Encendida',
   online:'En línea',known:'Conocidos',offline:'Apagados',newdev:'Equipos nuevos',lastscan:'Último escaneo',scanning:'Escaneando…',ceph:'Ceph',types:'Por tipo de equipo',nonew:'Sin equipos nuevos',
-  ago:'hace',now:'ahora',min:'min',h:'h',d:'d',s:'s',power_uv:'Subtensión',power_th:'Limitada',power_ok:'Fuente de poder OK',invalid:'Credenciales inválidas',
+  ago:'hace',backup:'Respaldo',bkok:'OK',bkfail:'Falló',bkold:'Atrasado',bkpend:'Sin ejecutar',issue_bkfail:'El último respaldo falló',issue_bkold:'Sin respaldo hace más de 36 h',now:'ahora',min:'min',h:'h',d:'d',s:'s',power_uv:'Subtensión',power_th:'Limitada',power_ok:'Fuente de poder OK',invalid:'Credenciales inválidas',
   issue_batt:'funciona con batería',issue_lowb:'tiene batería baja',issue_srv:'sin conexión',issue_node:'nodo caído',issue_cl:'cluster sin conexión',issue_cpu:'CPU alta',issue_ram:'memoria alta',issue_ceph:'Ceph',
   issue_temp:'temperatura alta de la Pi',issue_disk:'disco de la Pi casi lleno',issue_mem:'memoria de la Pi alta',issue_pwr:'problema de alimentación de la Pi',issue_scan:'error de escaneo',h_temp:'Temp.',h_min:'mín',h_max:'máx',h_uv:'Subtensión',h_nouv:'sin subtensión',h_utemp:'Temperatura UPS 24 h'}
 };
@@ -279,6 +279,14 @@ function renderPi(s){
   if(s.disk){const l=s.disk.pct>=95?'crit':s.disk.pct>=90?'warn':'ok';sev=worst(sev,l);if(l!=='ok')issues.push({lv:l,m:'pi',t:`${T('issue_disk')} (${s.disk.pct}%)`})}
   if(s.mem&&s.mem.pct>=92){sev=worst(sev,'warn');issues.push({lv:'warn',m:'pi',t:`${T('issue_mem')} (${s.mem.pct}%)`})}
   if(s.power&&(s.power.under_voltage||s.power.throttled||s.power.temp_limit)){sev=worst(sev,'warn');issues.push({lv:'warn',m:'pi',t:T('issue_pwr')})}
+  // ES: Último respaldo SFTP: solo se muestra si el respaldo está configurado. EN: Last SFTP backup: shown only when the backup is configured.
+  let bkRow='';const bk=s.backup;
+  if(bk&&bk.state==='pending')bkRow=`<div class="row"><span class="l">${T('backup')}</span>${pill('none',T('bkpend'))}</div>`;
+  else if(bk&&(bk.state==='ok'||bk.state==='fail')){
+    const age=bk.time?Math.max(0,Date.now()/1000-bk.time):null,old=bk.state==='ok'&&age!=null&&age>36*3600,l=bk.state==='fail'?'warn':old?'warn':'ok';
+    sev=worst(sev,l);if(bk.state==='fail')issues.push({lv:'warn',m:'pi',t:`${T('issue_bkfail')}${bk.message?': '+bk.message:''}`});else if(old)issues.push({lv:'warn',m:'pi',t:T('issue_bkold')});
+    bkRow=`<div class="row"><span class="l">${T('backup')}</span>${pill(l,bk.state==='fail'?T('bkfail'):old?T('bkold'):T('bkok'))}<span class="v" style="flex:1;width:auto" title="${esc(bk.state==='fail'?bk.message:bk.file)}">${age!=null?T('ago')+' '+dur(age):'—'}</span></div>`;
+  }
   const cpu=s.cpu==null?0:s.cpu;
   el.innerHTML=`<div class="ch"><h2>${T('pi')}</h2>${pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail'))}<a class="go" href="#" data-pi-open="1">${T('open')}</a></div>
    ${s.model?`<div class="sub">${esc(s.model)}</div>`:''}
@@ -287,6 +295,7 @@ function renderPi(s){
    <div class="row"><span class="l">${T('cpu')}</span>${bar(cpu,75,92)}<span class="v">${cpu.toFixed(0)}%</span></div>
    ${s.mem?`<div class="row"><span class="l">${T('mem')}</span>${bar(s.mem.pct,80,92)}<span class="v">${s.mem.pct.toFixed(0)}%</span></div>`:''}
    ${s.disk?`<div class="row"><span class="l">${T('disk')}</span>${bar(s.disk.pct,85,95)}<span class="v">${s.disk.pct.toFixed(0)}%</span></div>`:''}
+   ${bkRow}
    ${s.power?`<div class="sub">${s.power.under_voltage?pill('warn',T('power_uv'))+' ':''}${s.power.throttled?pill('warn',T('power_th'))+' ':''}${!s.power.under_voltage&&!s.power.throttled?pill('ok',T('power_ok')):''}</div>`:''}`;
   return sev;
 }
