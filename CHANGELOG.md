@@ -25,7 +25,7 @@
 
 ## 2.1i — 2026-10-27
 
-- Resumen, modo kiosko: las tarjetas se acomodan en mosaico por columnas (la siguiente va a la columna más baja, respetando tu orden) en vez de filas de igual altura. Así una tarjeta corta ya no deja un hueco blanco debajo y caben más datos en el iPad. Se recalcula al refrescar y al girar la pantalla.
+- Resumen, modo kiosko: las tarjetas se acomodan en mosaico por columnas (la siguiente va a la columna más baja, respetando tu orden) en vez de filas de igual altura. Así una tarjeta corta ya no deja un espacio blanco debajo y caben más datos en el iPad. Se recalcula al refrescar y al girar la pantalla.
 
 ## 2.1h — 2026-10-27
 
@@ -189,11 +189,11 @@ Versión estable de la serie 1.2 (reúne 1.2.0a–x). El funcionamiento es el de
 
 ## 1.2.0x — 2026-10-15
 
-- **UPS Monitor:** los gráficos de voltaje, consumo y temperatura de cada UPS ocupan ahora todo el ancho del detalle (más amplios y sin el hueco que dejaba el de temperatura al quedar solo en una fila). En pantallas angostas ya iban a todo el ancho.
+- **UPS Monitor:** los gráficos de voltaje, consumo y temperatura de cada UPS ocupan ahora todo el ancho del detalle (más amplios y sin el espacio que dejaba el de temperatura al quedar solo en una fila). En pantallas angostas ya iban a todo el ancho.
 
 ## 1.2.0w — 2026-10-15
 
-- **Resumen:** las tarjetas se reparten de forma equilibrada. Si no caben todas en una fila (4 tarjetas con sitio para 3 columnas, típico en pantallas de ~1000–1300 px), pasan a 2×2 en vez de dejar la última sola en una segunda fila con un hueco a su derecha. En kiosko el ancho mínimo por tarjeta baja de 380 a 320 px: 4 tarjetas caben en una fila desde ~1400 px.
+- **Resumen:** las tarjetas se reparten de forma equilibrada. Si no caben todas en una fila (4 tarjetas con sitio para 3 columnas, típico en pantallas de ~1000–1300 px), pasan a 2×2 en vez de dejar la última sola en una segunda fila con un espacio a su derecha. En kiosko el ancho mínimo por tarjeta baja de 380 a 320 px: 4 tarjetas caben en una fila desde ~1400 px.
 
 ## 1.2.0v — 2026-10-15
 

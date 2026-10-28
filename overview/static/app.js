@@ -413,7 +413,7 @@ $('ri').onchange=e=>{riSec=parseInt(e.target.value,10);try{localStorage.setItem(
 $('rr').onclick=()=>{if(me&&me.username)loop()};
 $('bl').onclick=()=>{lang=lang==='es'?'en':'es';try{localStorage.setItem('pi-lang',lang)}catch(e){}applyLang();document.dispatchEvent(new Event('pi-lang'));if(me&&me.username){histTs=0;refresh()}};
 
-// ES: Reparto equilibrado de las tarjetas: si no caben todas en una fila, se reparten en filas parejas (4 tarjetas con sitio para 3 → 2×2) en vez de dejar una sola tarjeta huérfana con un hueco a su derecha.
+// ES: Reparto equilibrado de las tarjetas: si no caben todas en una fila, se reparten en filas parejas (4 tarjetas con sitio para 3 → 2×2) en vez de dejar una sola tarjeta huérfana con un espacio a su derecha.
 // EN: Balanced card layout: if they do not all fit in one row they are spread over even rows (4 cards with room for 3 → 2×2) instead of leaving one orphan card with a gap to its right.
 function fitGrid(){
   const g=$('grid');if(!g)return;
@@ -425,7 +425,7 @@ function fitGrid(){
   if(n>t&&t>0){const rows=Math.ceil(n/t);g.style.gridTemplateColumns='repeat('+Math.ceil(n/rows)+',minmax(0,1fr))'}
 }
 window.addEventListener('resize',fitGrid);
-// ES: Modo kiosko: las tarjetas se apilan por columnas (tipo mosaico) en vez de en filas de igual altura, así una tarjeta corta no deja un hueco bajo ella. Cada tarjeta ocupa tantas filas de 4 px como mide; el orden elegido se respeta (la siguiente va a la columna más baja). Funciona con CSS grid (iOS 10.3+), sin ResizeObserver.
+// ES: Modo kiosko: las tarjetas se apilan por columnas (tipo mosaico) en vez de en filas de igual altura, así una tarjeta corta no deja un espacio bajo ella. Cada tarjeta ocupa tantas filas de 4 px como mide; el orden elegido se respeta (la siguiente va a la columna más baja). Funciona con CSS grid (iOS 10.3+), sin ResizeObserver.
 // EN: Kiosk mode: cards stack by column (masonry) instead of equal-height rows, so a short card leaves no gap under it. Each card spans as many 4 px rows as it is tall; the chosen order is kept (the next one goes to the shortest column). Uses CSS grid (iOS 10.3+), no ResizeObserver needed.
 function masonry(g){
   const cs=getComputedStyle(g),gap=parseFloat(cs.columnGap||cs.gridColumnGap)||0,cards=[...g.children].filter(c=>!c.classList.contains('hide'));
