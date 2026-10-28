@@ -14,7 +14,7 @@ Object.assign(LANG.en, {
   swUpdated: s => 'Updated ' + s + ' ago', swEvery: 'every', swNever: 'no data yet', swRefresh: 'Refresh', swAdd: '+ Add switch', swEdit: 'Edit',
   swEmptyAdmin: 'No switches yet. Add one to start monitoring ports, temperature and errors.', swEmptyRead: 'No switches have been added yet.',
   swLegUp: 'Up', swLegDown: 'Down', swLegWarn: 'New errors', swLegUplink: 'Link between switches', swLegOff: 'Disabled', swLegLoop: 'Loop',
-  swPort: 'Port', swState: 'State', swSpeed: 'Speed', swRxPps: 'Rx pkt/s', swTxPps: 'Tx pkt/s', swMbps: 'Mb/s rx / tx', swErrors: 'Errors', swStp: 'STP', swConn: 'Connected to',
+  swTotal: 'Total rx / tx', swInfoTotal: 'Total received / sent', swPort: 'Port', swState: 'State', swSpeed: 'Speed', swRxPps: 'Rx pkt/s', swTxPps: 'Tx pkt/s', swMbps: 'Mb/s rx / tx', swErrors: 'Errors', swStp: 'STP', swConn: 'Connected to',
   swStUp: 'Up', swStDown: 'Down', swStOff: 'Disabled', swStLoop: 'Loop', swStUplink: 'Uplink', swStWarn: 'Errors',
   swShowAll: n => 'Show all ' + n + ' ports', swShowActive: 'Show only active ports',
   swOnline: 'Online', swOffline: 'Unreachable', swWaiting: 'Waiting for the first reading…', swTempHigh: 'High temperature', swTempCrit: 'Critical temperature',
@@ -40,7 +40,7 @@ Object.assign(LANG.es, {
   swUpdated: s => 'Actualizado hace ' + s, swEvery: 'cada', swNever: 'sin datos aún', swRefresh: 'Actualizar', swAdd: '+ Agregar switch', swEdit: 'Editar',
   swEmptyAdmin: 'Aún no hay switches. Agrega uno para monitorear puertos, temperatura y errores.', swEmptyRead: 'Todavía no se ha agregado ningún switch.',
   swLegUp: 'Arriba', swLegDown: 'Abajo', swLegWarn: 'Errores nuevos', swLegUplink: 'Enlace entre switches', swLegOff: 'Deshabilitado', swLegLoop: 'Loop',
-  swPort: 'Puerto', swState: 'Estado', swSpeed: 'Velocidad', swRxPps: 'Rx pkt/s', swTxPps: 'Tx pkt/s', swMbps: 'Mb/s rx / tx', swErrors: 'Errores', swStp: 'STP', swConn: 'Conectado a',
+  swTotal: 'Total rx / tx', swInfoTotal: 'Total recibido / enviado', swPort: 'Puerto', swState: 'Estado', swSpeed: 'Velocidad', swRxPps: 'Rx pkt/s', swTxPps: 'Tx pkt/s', swMbps: 'Mb/s rx / tx', swErrors: 'Errores', swStp: 'STP', swConn: 'Conectado a',
   swStUp: 'Arriba', swStDown: 'Abajo', swStOff: 'Deshabilitado', swStLoop: 'Loop', swStUplink: 'Uplink', swStWarn: 'Errores',
   swShowAll: n => 'Mostrar los ' + n + ' puertos', swShowActive: 'Mostrar solo puertos activos',
   swOnline: 'En línea', swOffline: 'Sin conexión', swWaiting: 'Esperando la primera lectura…', swTempHigh: 'Temperatura alta', swTempCrit: 'Temperatura crítica',
@@ -79,6 +79,12 @@ const spd = m => !m ? '—' : m >= 1000 ? (m / 1000 % 1 ? (m / 1000).toFixed(1) 
 const spdLong = m => !m ? '—' : m >= 1000 ? (m / 1000) + ' Gb/s' : m + ' Mb/s';
 function pps(v) { return v == null ? '—' : v >= 10000 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v >= 10 ? v.toFixed(0) : v.toFixed(1); }
 function mbps(v) { return v == null ? '—' : v >= 1e9 ? (v / 1e9).toFixed(2) + ' G' : v >= 1e6 ? (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) : v >= 1e3 ? (v / 1e6).toFixed(2) : '0'; }
+function bytesFmt(v) {
+  if (v == null) return '—';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']; let i = 0;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return (i < 2 ? Math.round(v) : v.toFixed(v >= 100 ? 0 : v >= 10 ? 1 : 2)) + ' ' + u[i];
+}
 function ago(sec) { return sec == null ? '—' : sec < 60 ? sec + ' ' + t('swSec') : Math.floor(sec / 60) + ' ' + t('swMin'); }
 function clock(ts, secs) { const d = new Date(ts * 1000); return typeof PCT !== 'undefined' ? PCT.time(d, secs) : d.toLocaleTimeString(); }
 function dayTime(ts) {
@@ -251,14 +257,14 @@ function errCell(p) {
 function portRow(s, p) {
   const on = SW.sel && SW.sel.sid === s.id && SW.sel.port === p.port;
   return `<tr class="sw-row${on ? ' sel' : ''}" data-act="port" data-id="${esc(s.id)}" data-port="${p.port}"><td>${esc(p.port)}</td><td>${stPill(p)}</td><td>${p.link_up ? esc(spdLong(p.speed_mbps)) : '<span class="dim">—</span>'}</td>` +
-    `<td>${pps(p.rx_pps)}</td><td>${pps(p.tx_pps)}</td>` + (s.has_bytes ? `<td>${p.rx_bps != null ? mbps(p.rx_bps) + ' / ' + mbps(p.tx_bps) : '—'}</td>` : '') +
+    `<td>${pps(p.rx_pps)}</td><td>${pps(p.tx_pps)}</td>` + (s.has_bytes ? `<td>${p.rx_bps != null ? mbps(p.rx_bps) + ' / ' + mbps(p.tx_bps) : '—'}</td><td>${p.rx_bytes != null ? esc(bytesFmt(p.rx_bytes) + ' / ' + bytesFmt(p.tx_bytes)) : '—'}</td>` : '') +
     `<td>${errCell(p)}</td><td>${esc(p.stp_state || '—')}</td><td class="sw-conn">${connCell(p)}</td></tr>`;
 }
 
 function portDetail(s, p) {
   const admin = canAdmin();
   const info = [[t('swInfoLink'), p.link_up ? spdLong(p.speed_mbps) : t('swStDown')], [t('swInfoCfg'), p.speed_cfg || '—'], [t('swInfoFlow'), p.flow_ctrl || '—'], [t('swStp'), p.stp_state || '—'],
-    [t('swErrors'), (p.rx_err || 0) + ' rx / ' + (p.tx_err || 0) + ' tx'], [t('swInfoErr1h'), p.err_1h], [t('swInfoDisc'), p.rx_discards != null ? p.rx_discards + ' / ' + p.tx_discards : '—'], [t('swInfoMacs'), p.mac_count]];
+    [t('swErrors'), (p.rx_err || 0) + ' rx / ' + (p.tx_err || 0) + ' tx'], [t('swInfoErr1h'), p.err_1h], ...(p.rx_bytes != null ? [[t('swInfoTotal'), bytesFmt(p.rx_bytes) + ' / ' + bytesFmt(p.tx_bytes)]] : []), [t('swInfoDisc'), p.rx_discards != null ? p.rx_discards + ' / ' + p.tx_discards : '—'], [t('swInfoMacs'), p.mac_count]];
   const macs = (p.neighbors || []).map(n => `<code>${esc(n.mac)}</code> ${n.name || n.ip ? esc(nameOf(n)) + (n.ip ? ' <span class="dim">' + esc(n.ip) + '</span>' : '') : '<span class="dim">—</span>'}${n.vlan != null ? ' <span class="dim">VLAN ' + esc(n.vlan) + '</span>' : ''}`).join('<br>');
   const ctl = admin ? `<div class="sw-portform"><label>${esc(t('swLabel'))}<input id="sw-lbl" maxlength="32" value="${esc(p.label || '')}" placeholder="${esc(t('swLabelPh'))}"></label>` +
     `<label class="chk"><input type="checkbox" id="sw-upl"${p.uplink_manual ? ' checked' : ''}> ${esc(t('swUplinkChk'))}</label><button type="button" class="sw-btn teal" data-act="saveport" data-id="${esc(s.id)}" data-port="${p.port}">${esc(t('swSavePort'))}</button></div>` : '';
@@ -280,7 +286,7 @@ function card(s) {
   const all = SW.showAll[s.id], hasMore = s.ports.some(p => p.flag === 'down');
   const rows = s.ports.filter(p => all || p.flag !== 'down' || p.label);
   const selP = SW.sel && SW.sel.sid === s.id ? s.ports.find(p => p.port === SW.sel.port) : null;
-  const heads = ['swPort', 'swState', 'swSpeed', 'swRxPps', 'swTxPps'].concat(s.has_bytes ? ['swMbps'] : [], ['swErrors', 'swStp', 'swConn']);
+  const heads = ['swPort', 'swState', 'swSpeed', 'swRxPps', 'swTxPps'].concat(s.has_bytes ? ['swMbps', 'swTotal'] : [], ['swErrors', 'swStp', 'swConn']);
   const errs = s.error && !s.online ? `<div class="sw-err">${esc(s.error)}</div>` : '';
   const hasT = sy.temperature_c != null;
   const alt = s.layout === 'alt';

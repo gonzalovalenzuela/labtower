@@ -1072,6 +1072,7 @@ class Manager:
                         "loop": loop if p.get("loop_detected") is not None else None,
                         "rx_err": p.get("rx_bad_pkts"), "tx_err": p.get("tx_bad_pkts"), "err_1h": e1h,
                         "rx_discards": p.get("rx_discards"), "tx_discards": p.get("tx_discards"),
+                        "rx_bytes": p.get("rx_bytes"), "tx_bytes": p.get("tx_bytes"),
                         "rx_pps": r.get("rx_pps"), "tx_pps": r.get("tx_pps"), "rx_bps": r.get("rx_bps"), "tx_bps": r.get("tx_bps"),
                         "mac_count": len(macs), "neighbors": nb,
                     })

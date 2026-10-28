@@ -288,6 +288,7 @@ class ManagerTests(unittest.TestCase):
         s = self.m.state()["switches"][0]
         self.assertTrue(s["has_bytes"])
         self.assertAlmostEqual(s["ports"][0]["rx_bps"], 1_000_000.0); self.assertAlmostEqual(s["ports"][0]["tx_bps"], 200_000.0)
+        self.assertEqual((s["ports"][0]["rx_bytes"], s["ports"][0]["tx_bytes"]), (1_250_000, 250_000))   # contadores acumulados / cumulative counters
 
     def test_temperature_alert_levels_and_events(self):
         sid = self.add()["id"]
