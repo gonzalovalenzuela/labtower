@@ -1,65 +1,29 @@
 # Changelog
 
-## 2.1n — 2026-10-27
+## 2.1.1 — 2026-10-27
 
-- WAN Monitor en el teléfono: las 5 tarjetas de arriba (estado, latencia, pérdida, descarga e IP pública) quedaban en una sola fila y el texto se cortaba. Ahora van en 2 columnas y la IP pública ocupa el ancho completo.
-- NAS Monitor y DNS Monitor en el teléfono: la tabla resumen se cortaba por la derecha (columna Volúmenes / Protección). Ahora es más compacta y cabe completa; en DNS se oculta la flecha de expandir (tocar la fila sigue expandiendo).
+Reúne todos los cambios desde 2.1 (builds 2.1a a 2.1n).
 
-## 2.1m — 2026-10-27
-
-- Tema: el botón ◐ del Resumen y de la página de inicio ahora rota entre oscuro, claro y «Auto» (sigue el modo del sistema, con una «A» en el botón); antes solo alternaba claro y oscuro. En «Auto» el tema cambia solo cuando cambia el del sistema.
-- Resumen, tarjeta de WAN Monitor: nuevo gráfico de latencia de las últimas 24 h (línea azul con espacios donde no hubo respuesta y franjas rojas donde el enlace estuvo caído), con el mínimo y máximo; se actualiza cada minuto.
-
-## 2.1l — 2026-10-27
-
-- Resumen: se quita la franja de indicadores de arriba (autonomía, nodos, discos, bloqueado, velocidad, equipos), porque ensuciaba y no se entendía. Los datos siguen en cada tarjeta.
-
-## 2.1k — 2026-10-27
-
-- Nuevo aspecto: tema oscuro por defecto (claro y «sistema» siguen disponibles; botón ◐ en el Resumen y en la página de inicio), tarjetas más redondeadas con un leve brillo, títulos de bloque pequeños en mayúsculas, cifras grandes, tablas densas, menú lateral con marca de acento y barra superior translúcida. Todo sale de una hoja común (`theme.css`/`theme.js`) que cargan todos los módulos, el panel Admin y la página de inicio. Ya no se cargan tipografías de Google: se usa la del sistema (San Francisco en Apple).
-- Resumen: nueva franja de indicadores arriba (autonomía de la UPS, nodos de Proxmox, discos del NAS, % bloqueado con anillo, velocidad de WAN y equipos en línea), con el borde de cada tile en el color del estado.
-
-## 2.1j — 2026-10-27
-
-- NAS Monitor, actividad de disco: marcaba 0 % en todos los discos porque la columna de carga instantánea del NAS casi siempre vale 0. Ahora usa el mayor entre ella y el promedio de 1 minuto, y muestra además la lectura y escritura reales (R/W por segundo) calculadas con los contadores del disco.
-
-## 2.1i — 2026-10-27
-
+**Nuevo**
+- Nuevo aspecto: tema oscuro por defecto (claro y «Auto» siguen disponibles), tarjetas más redondeadas con un leve brillo, títulos pequeños en mayúsculas, cifras grandes, tablas densas, menú lateral con acento y barra superior translúcida. Lo usan todos los módulos, el panel Admin y la página de inicio, desde una hoja común (`theme.css`/`theme.js`). Ya no se cargan tipografías de Google: se usa la del sistema (San Francisco en Apple).
+- Tema: el botón ◐ del Resumen y de la página de inicio rota entre oscuro, claro y «Auto» (sigue el modo del sistema, con una «A» en el botón; cambia solo cuando cambia el del sistema).
 - Resumen, modo kiosko: las tarjetas se acomodan en mosaico por columnas (la siguiente va a la columna más baja, respetando tu orden) en vez de filas de igual altura. Así una tarjeta corta ya no deja un espacio blanco debajo y caben más datos en el iPad. Se recalcula al refrescar y al girar la pantalla.
-
-## 2.1h — 2026-10-27
-
-- Resumen: la tarjeta de DNS Monitor muestra un gráfico del % bloqueado de las últimas horas, ajustado al rango real para que se vea la variación.
-- DNS Monitor: el color pasa de rosa a verde esmeralda (página, icono y paleta de marca).
+- Resumen, tarjeta de WAN Monitor: nuevo gráfico de latencia de las últimas 24 h (línea azul con espacios donde no hubo respuesta y franjas rojas donde el enlace estuvo caído), con el mínimo y máximo; se actualiza cada minuto.
+- Resumen, tarjeta de DNS Monitor: gráfico del % bloqueado de las últimas horas, ajustado al rango real para que se vea la variación.
 - WAN Monitor: nueva opción «Motor de la prueba» en Ajustes. Además del integrado (Cloudflare), se puede usar Ookla Speedtest CLI o LibreSpeed CLI si están instalados, para contrastar la velocidad. Ookla es solo para uso personal no comercial. El paquete sugiere `librespeed-cli`.
+- La tarjeta «Raspberry Pi» del Resumen ahora se llama «LabTower Server» (también su ventana de detalle).
+- DNS Monitor: el color pasa de rosa a verde esmeralda (página, icono y paleta de marca).
 
-## 2.1g — 2026-10-27
-
-- WAN Monitor, prueba de velocidad: pide bloques de 25 MB y envía cabeceras de navegador; si el servidor la rechaza, el error dice por qué (por ejemplo «HTTP 403») en vez de «No data received». Si falla solo la subida, se conserva el resultado de la bajada.
-
-## 2.1f — 2026-10-27
-
-- Desarrollo: los commits ya no llevan referencias a sesiones de Claude. `scripts/git-hooks/commit-msg` las quita (activar con `git config core.hooksPath scripts/git-hooks`; para permitirlas a propósito, `LABTOWER_ALLOW_CLAUDE_SESSION=1`) y una prueba revisa que ningún archivo las tenga.
-
-## 2.1e — 2026-10-27
-
-- Resumen, detalle del servidor: «Logged-in users» ahora también muestra a quien entró por SSH o por consola en equipos sin utmp ni logind (DietPi, Debian 13 mínimo). Antes aparecía vacío.
-
-## 2.1d — 2026-10-27
-
-- Resumen: la ventana de detalle también dice «LabTower Server» (antes «Raspberry Pi — detalle»).
-
-## 2.1c — 2026-10-27
-
-- Resumen: la tarjeta que decía «Raspberry Pi» ahora se llama «LabTower Server». Muestra la misma información.
-
-## 2.1b — 2026-10-27
-
+**Correcciones**
+- NAS Monitor, actividad de disco: marcaba 0 % en todos los discos porque la columna de carga instantánea del NAS casi siempre vale 0. Ahora usa el mayor entre ella y el promedio de 1 minuto, y muestra además la lectura y escritura reales (R/W por segundo) calculadas con los contadores del disco.
+- Admin, restaurar respaldos: fallaba con «file not found» porque la copia temporal quedaba en un /var/tmp privado del servicio. Ahora se guarda en `/var/backups/labtower`.
+- WAN Monitor, prueba de velocidad: pide bloques de 25 MB y envía cabeceras de navegador; si el servidor la rechaza, el error dice por qué (por ejemplo «HTTP 403»). Si falla solo la subida, se conserva el resultado de la bajada.
 - DNS Monitor: si no encuentra la API de Pi-hole, el mensaje dice qué probar (revisar el puerto, o usar https:// si Pi-hole solo escucha en el 443).
+- Resumen, detalle del servidor: «Logged-in users» ahora también muestra a quien entró por SSH o por consola en equipos sin utmp ni logind (DietPi, Debian 13 mínimo).
+- Teléfono: WAN Monitor muestra sus 5 tarjetas de arriba en 2 columnas (la IP pública a lo ancho), y las tablas resumen de NAS y DNS son más compactas y ya no se cortan por la derecha (en DNS se oculta la flecha de expandir; tocar la fila sigue expandiendo).
 
-## 2.1a — 2026-10-27
-
-- Corrige la restauración de respaldos desde el panel Admin: fallaba con «file not found» porque la copia temporal quedaba en un /var/tmp privado del servicio. Ahora se guarda en `/var/backups/labtower`.
+**Desarrollo**
+- Los commits ya no llevan referencias a sesiones de Claude: `scripts/git-hooks/commit-msg` las quita (activar con `git config core.hooksPath scripts/git-hooks`; para permitirlas a propósito, `LABTOWER_ALLOW_CLAUDE_SESSION=1`) y una prueba revisa que ningún archivo las tenga.
 
 ## 2.1 — 2026-10-27
 
