@@ -32,10 +32,10 @@ Object.assign(LANG.en, {
   swPortTitle: (n, p) => n + ' · Port ' + p, swLabel: 'Label', swLabelPh: 'e.g. NAS, uplink to the office', swUplinkChk: 'Link to another switch (do not alert on loop)', swSavePort: 'Save', swClose: 'Close',
   swInfoLink: 'Link', swInfoCfg: 'Configured', swInfoFlow: 'Flow control', swInfoDisc: 'Discards rx / tx', swInfoMacs: 'MACs seen', swInfoErr1h: 'New errors (1 h)',
   swMdlAdd: 'Add switch', swMdlEdit: 'Edit switch', swName: 'Name', swDriver: 'Type', swHost: 'IP or name', swUser: 'User', swPass: 'Password', swKeep: 'leave empty to keep the stored one',
-  swCommunity: 'SNMP community (read-only)', swSnmpPort: 'SNMP port', swMacPag: 'Read the whole MAC table (HC; not tried on the real unit)',
+  swCommunity: 'SNMP community (read-only)', swSnmpPort: 'SNMP port', swMacPag: 'Read the whole MAC table (HC; not tried on the real unit)', swEst: 'Estimated bytes per packet (0 = off)', swEstNote: 'Estimated: this model only reports packets, so bytes = packets × the average size set for this switch. Not exact.', swEstTip: 'estimated',
   swDrvZx: 'ZX310S (web interface)', swDrvHc: 'HC-SWTGW218AS (web interface)', swDrvSnmp: 'SNMP v2c (TP-Link and others)',
   swTest: 'Test', swTesting: 'Testing…', swSave: 'Save', swDelete: 'Delete', swCancel: 'Cancel', swDelConfirm: n => 'Delete "' + n + '" and its history?',
-  swTestOk: r => 'OK — ' + (r.model || 'switch') + ', ' + r.ports + ' ports (' + r.ports_up + ' up)' + (r.temperature_c != null ? ', ' + r.temperature_c + ' °C' : '') + (r.has_bytes ? ', byte counters available' : ', packet counters only') + ' · ' + r.seconds + ' s',
+  swTestOk: r => 'OK — ' + (r.model || 'switch') + ', ' + r.ports + ' ports (' + r.ports_up + ' up)' + (r.temperature_c != null ? ', ' + r.temperature_c + ' °C' : '') + (r.has_bytes ? ', byte counters available' : r.bytes_est ? ', packet counters (bytes estimated at ' + r.bytes_est + ' B/pkt)' : ', packet counters only') + ' · ' + r.seconds + ' s',
   swSaved: 'Switch saved', swDeleted: 'Switch deleted', swPollSet: 'Interval updated', swRefreshing: 'Refreshing…',
   swLayout: 'Panel layout', swLayAuto: 'Automatic', swLayRow: 'One row (1-2-3…)', swLayAlt: 'Two rows (odd on top, even below)',
   swReadOnlyNote: 'Read-only: these tools only read from the switches; nothing here changes them.',
@@ -66,10 +66,10 @@ Object.assign(LANG.es, {
   swPortTitle: (n, p) => n + ' · Puerto ' + p, swLabel: 'Etiqueta', swLabelPh: 'p. ej. NAS, enlace a la oficina', swUplinkChk: 'Enlace a otro switch (no alertar por loop)', swSavePort: 'Guardar', swClose: 'Cerrar',
   swInfoLink: 'Enlace', swInfoCfg: 'Configurado', swInfoFlow: 'Control de flujo', swInfoDisc: 'Descartes rx / tx', swInfoMacs: 'MACs vistas', swInfoErr1h: 'Errores nuevos (1 h)',
   swMdlAdd: 'Agregar switch', swMdlEdit: 'Editar switch', swName: 'Nombre', swDriver: 'Tipo', swHost: 'IP o nombre', swUser: 'Usuario', swPass: 'Contraseña', swKeep: 'vacío = conservar la guardada',
-  swCommunity: 'Community SNMP (solo lectura)', swSnmpPort: 'Puerto SNMP', swMacPag: 'Leer toda la tabla MAC (HC; no probado en el equipo real)',
+  swCommunity: 'Community SNMP (solo lectura)', swSnmpPort: 'Puerto SNMP', swMacPag: 'Leer toda la tabla MAC (HC; no probado en el equipo real)', swEst: 'Bytes estimados por paquete (0 = desactivado)', swEstNote: 'Estimado: este modelo solo informa paquetes, así que los bytes = paquetes × el tamaño medio configurado en este switch. No es exacto.', swEstTip: 'estimado',
   swDrvZx: 'ZX310S (interfaz web)', swDrvHc: 'HC-SWTGW218AS (interfaz web)', swDrvSnmp: 'SNMP v2c (TP-Link y otros)',
   swTest: 'Probar', swTesting: 'Probando…', swSave: 'Guardar', swDelete: 'Eliminar', swCancel: 'Cancelar', swDelConfirm: n => '¿Eliminar «' + n + '» y su historial?',
-  swTestOk: r => 'OK — ' + (r.model || 'switch') + ', ' + r.ports + ' puertos (' + r.ports_up + ' arriba)' + (r.temperature_c != null ? ', ' + r.temperature_c + ' °C' : '') + (r.has_bytes ? ', con contadores de bytes' : ', solo contadores de paquetes') + ' · ' + r.seconds + ' s',
+  swTestOk: r => 'OK — ' + (r.model || 'switch') + ', ' + r.ports + ' puertos (' + r.ports_up + ' arriba)' + (r.temperature_c != null ? ', ' + r.temperature_c + ' °C' : '') + (r.has_bytes ? ', con contadores de bytes' : r.bytes_est ? ', contadores de paquetes (bytes estimados a ' + r.bytes_est + ' B/paq.)' : ', solo contadores de paquetes') + ' · ' + r.seconds + ' s',
   swSaved: 'Switch guardado', swDeleted: 'Switch eliminado', swPollSet: 'Intervalo actualizado', swRefreshing: 'Actualizando…',
   swLayout: 'Distribución del panel', swLayAuto: 'Automática', swLayRow: 'Una fila (1-2-3…)', swLayAlt: 'Dos filas (impares arriba, pares abajo)',
   swReadOnlyNote: 'Solo lectura: esta herramienta solo lee de los switches; nada aquí los modifica.',
@@ -277,14 +277,14 @@ function errCell(p) {
 function portRow(s, p) {
   const on = SW.sel && SW.sel.sid === s.id && SW.sel.port === p.port;
   return `<tr class="sw-row${on ? ' sel' : ''}" data-act="port" data-id="${esc(s.id)}" data-port="${p.port}"><td>${esc(p.port)}</td><td>${stPill(p)}</td><td>${p.link_up ? esc(spdLong(p.speed_mbps)) : '<span class="dim">—</span>'}</td>` +
-    `<td>${pps(p.rx_pps)}</td><td>${pps(p.tx_pps)}</td>` + (s.has_bytes ? `<td>${p.rx_bps != null ? mbps(p.rx_bps) + ' / ' + mbps(p.tx_bps) : '—'}</td><td>${p.rx_bytes != null ? esc(bytesFmt(p.rx_bytes) + ' / ' + bytesFmt(p.tx_bytes)) : '—'}</td>` : '') +
+    `<td>${pps(p.rx_pps)}</td><td>${pps(p.tx_pps)}</td>` + (s.has_bytes ? `<td>${p.rx_bps != null ? (p.bytes_est ? '≈ ' : '') + mbps(p.rx_bps) + ' / ' + mbps(p.tx_bps) : '—'}</td><td>${p.rx_bytes != null ? esc((p.bytes_est ? '≈ ' : '') + bytesFmt(p.rx_bytes) + ' / ' + bytesFmt(p.tx_bytes)) : '—'}</td>` : '') +
     `<td>${errCell(p)}</td><td>${esc(p.stp_state || '—')}</td><td class="sw-conn">${connCell(p)}</td></tr>`;
 }
 
 function portDetail(s, p) {
   const admin = canAdmin();
   const info = [[t('swInfoLink'), p.link_up ? spdLong(p.speed_mbps) : t('swStDown')], [t('swInfoCfg'), p.speed_cfg || '—'], [t('swInfoFlow'), p.flow_ctrl || '—'], [t('swStp'), p.stp_state || '—'],
-    [t('swErrors'), (p.rx_err || 0) + ' rx / ' + (p.tx_err || 0) + ' tx'], [t('swInfoErr1h'), p.err_1h], ...(p.rx_bytes != null ? [[t('swInfoTotal'), bytesFmt(p.rx_bytes) + ' / ' + bytesFmt(p.tx_bytes)]] : []), [t('swInfoDisc'), p.rx_discards != null ? p.rx_discards + ' / ' + p.tx_discards : '—'], [t('swInfoMacs'), p.mac_count]];
+    [t('swErrors'), (p.rx_err || 0) + ' rx / ' + (p.tx_err || 0) + ' tx'], [t('swInfoErr1h'), p.err_1h], ...(p.rx_bytes != null ? [[t('swInfoTotal'), (p.bytes_est ? '≈ ' : '') + bytesFmt(p.rx_bytes) + ' / ' + bytesFmt(p.tx_bytes)]] : []), [t('swInfoDisc'), p.rx_discards != null ? p.rx_discards + ' / ' + p.tx_discards : '—'], [t('swInfoMacs'), p.mac_count]];
   const macs = (p.neighbors || []).map(n => `<code>${esc(n.mac)}</code> ${n.name || n.ip ? esc(nameOf(n)) + (n.ip ? ' <span class="dim">' + esc(n.ip) + '</span>' : '') : '<span class="dim">—</span>'}${n.vlan != null ? ' <span class="dim">VLAN ' + esc(n.vlan) + '</span>' : ''}`).join('<br>');
   const ctl = admin ? `<div class="sw-portform"><label>${esc(t('swLabel'))}<input id="sw-lbl" maxlength="32" value="${esc(p.label || '')}" placeholder="${esc(t('swLabelPh'))}"></label>` +
     `<label class="chk"><input type="checkbox" id="sw-upl"${p.uplink_manual ? ' checked' : ''}> ${esc(t('swUplinkChk'))}</label><button type="button" class="sw-btn teal" data-act="saveport" data-id="${esc(s.id)}" data-port="${p.port}">${esc(t('swSavePort'))}</button></div>` : '';
@@ -292,7 +292,7 @@ function portDetail(s, p) {
   const k = histKey(s.id, p.port);
   return `<div class="sw-detail"><div class="sw-dhead"><b>${esc(t('swPortTitle', s.name, p.port))}</b>${p.label ? ' <span class="dim">' + esc(p.label) + '</span>' : ''}<span class="grow"></span>${ranges}<button type="button" class="sw-btn" data-act="closeport">${esc(t('swClose'))}</button></div>` +
     `<div class="sw-info">${info.map(([a, b]) => `<div><span>${esc(a)}</span><b>${esc(b)}</b></div>`).join('')}</div>${macs ? '<div class="sw-macs">' + macs + '</div>' : ''}${ctl}` +
-    `<div class="sw-charttitle">${esc(s.has_bytes ? t('swTraffic') : t('swPackets'))}</div><div class="sw-chart" data-key="${esc(k)}" data-kind="traffic"></div>` +
+    `<div class="sw-charttitle">${esc(s.has_bytes ? t('swTraffic') + (s.bytes_est ? ' (≈ ' + t('swEstTip') + ')' : '') : t('swPackets'))}</div><div class="sw-chart" data-key="${esc(k)}" data-kind="traffic"></div>` +
     `<div class="sw-charttitle">${esc(t('swErrChart'))}</div><div class="sw-chart" data-key="${esc(k)}" data-kind="errs"></div></div>`;
 }
 
@@ -307,7 +307,7 @@ function card(s) {
   const rows = s.ports.filter(p => all || p.flag !== 'down' || p.label);
   const selP = SW.sel && SW.sel.sid === s.id ? s.ports.find(p => p.port === SW.sel.port) : null;
   const heads = ['swPort', 'swState', 'swSpeed', 'swRxPps', 'swTxPps'].concat(s.has_bytes ? ['swMbps', 'swTotal'] : [], ['swErrors', 'swStp', 'swConn']);
-  const errs = s.error && !s.online ? `<div class="sw-err">${esc(s.error)}</div>` : '';
+  const errs = (s.error && !s.online ? `<div class="sw-err">${esc(s.error)}</div>` : '') + (s.bytes_est ? `<div class="sw-note">${esc(t('swEstNote'))}</div>` : '');
   const hasT = sy.temperature_c != null;
   const alt = s.layout === 'alt';
   return `<div class="card sw-card"><div class="sw-head"><b class="sw-name">${esc(s.name)}</b><span class="dim mono">${esc(sub)}</span>${state}${tPill}<span class="grow"></span>` +
@@ -372,14 +372,15 @@ function histHtml() {
   return note + T.filter(s => s.ports.length).map(s => {
     const sum = k => s.ports.reduce((a, p) => a + (p[k] || 0), 0);
     const heads = s.has_bytes ? ['swPort', 'swColRx', 'swColTx', 'swColSum', 'swColPkRx', 'swColPkTx'] : ['swPort', 'swColPkRx', 'swColPkTx'];
+    const ap = s.bytes_est ? '≈ ' : '';
     const row = (lbl, p, bold) => `<tr${bold ? ' class="sw-sumrow"' : ''}><td>${lbl}</td>` + (s.has_bytes ?
-      `<td>${esc(bytesFmt(p.rx_bytes))}</td><td>${esc(bytesFmt(p.tx_bytes))}</td><td>${esc(bytesFmt((p.rx_bytes || 0) + (p.tx_bytes || 0)))}</td>` : '') +
+      `<td>${esc(ap + bytesFmt(p.rx_bytes))}</td><td>${esc(ap + bytesFmt(p.tx_bytes))}</td><td>${esc(ap + bytesFmt((p.rx_bytes || 0) + (p.tx_bytes || 0)))}</td>` : '') +
       `<td>${num(p.rx_pkts)}</td><td>${num(p.tx_pkts)}</td></tr>`;
     const total = { rx_bytes: sum('rx_bytes'), tx_bytes: sum('tx_bytes'), rx_pkts: sum('rx_pkts'), tx_pkts: sum('tx_pkts') };
     const rows = s.ports.filter(p => (p.rx_bytes || 0) + (p.tx_bytes || 0) + (p.rx_pkts || 0) + (p.tx_pkts || 0) > 0);
     return `<div class="card sw-card"><div class="sw-head"><b class="sw-name">${esc(s.name)}</b><span class="grow"></span>` +
       `<span class="dim mono">${s.since ? esc(t('swHistSince', dateOf(s.since))) + ' · ' : ''}${esc(t('swHistResets', s.resets))}</span></div>` +
-      (s.has_bytes ? '' : `<div class="sw-note">${esc(t('swHistPktOnly'))}</div>`) +
+      (s.has_bytes ? (s.bytes_est ? `<div class="sw-note">${esc(t('swEstNote'))}</div>` : '') : `<div class="sw-note">${esc(t('swHistPktOnly'))}</div>`) +
       `<div class="sw-tablewrap"><table class="sw-table"><thead><tr>${heads.map(h => `<th>${esc(t(h))}</th>`).join('')}</tr></thead><tbody>` +
       rows.map(p => row(esc(p.port) + (p.label ? ' <span class="dim">' + esc(p.label) + '</span>' : ''), p)).join('') + row('<b>' + esc(t('swHistTotal')) + '</b>', total, true) + `</tbody></table></div></div>`;
   }).join('');
@@ -424,6 +425,7 @@ async function openModal(id) {
     `<div class="m-web"><label>${esc(t('swUser'))}<input id="m-user" maxlength="64" value="${esc(c.user || 'admin')}" autocomplete="off"></label>` +
     `<label>${esc(t('swPass'))}<input id="m-pass" type="password" autocomplete="new-password" placeholder="${cur && c.has_password ? esc(t('swKeep')) : ''}"></label>` +
     `<label class="chk m-hc"><input type="checkbox" id="m-pag"${c.mac_paginate ? ' checked' : ''}> ${esc(t('swMacPag'))}</label></div>` +
+    `<label class="m-web m-est">${esc(t('swEst'))}<input id="m-est" type="number" min="0" max="9000" value="${esc(c.est_bytes != null ? c.est_bytes : 800)}"></label>` +
     `<div class="m-snmp"><label>${esc(t('swCommunity'))}<input id="m-comm" type="password" autocomplete="new-password" placeholder="${cur && c.has_community ? esc(t('swKeep')) : ''}"></label>` +
     `<label>${esc(t('swSnmpPort'))}<input id="m-sport" type="number" min="1" max="65535" value="${esc(c.port || 161)}"></label></div>` +
     `<label>${esc(t('swLayout'))}<select id="m-layout"><option value="auto">${esc(t('swLayAuto'))}</option><option value="row">${esc(t('swLayRow'))}</option><option value="alt">${esc(t('swLayAlt'))}</option></select></label>` +
@@ -431,7 +433,7 @@ async function openModal(id) {
     `<button type="button" class="sw-btn" data-act="mcancel">${esc(t('swCancel'))}</button><button type="button" class="sw-btn" data-act="mtest" data-id="${esc(c.id || '')}">${esc(t('swTest'))}</button><button type="button" class="sw-btn teal" data-act="msave" data-id="${esc(c.id || '')}">${esc(t('swSave'))}</button></div></div>`;
   document.body.appendChild(m);
   $('m-driver').value = c.driver; $('m-layout').value = c.layout || 'auto';
-  const sync = () => { const v = $('m-driver').value; m.querySelector('.m-web').style.display = v === 'snmp' ? 'none' : ''; m.querySelector('.m-snmp').style.display = v === 'snmp' ? '' : 'none'; m.querySelector('.m-hc').style.display = v === 'hc' ? '' : 'none'; };
+  const sync = () => { const v = $('m-driver').value; m.querySelector('.m-web').style.display = v === 'snmp' ? 'none' : ''; m.querySelector('.m-snmp').style.display = v === 'snmp' ? '' : 'none'; m.querySelector('.m-hc').style.display = v === 'hc' ? '' : 'none'; m.querySelector('.m-est').style.display = v === 'snmp' ? 'none' : ''; };
   $('m-driver').addEventListener('change', sync); sync();
   m.addEventListener('click', e => { if (e.target === m) closeModal(); });
   $('m-name').focus();
@@ -440,7 +442,7 @@ function formBody(id) {
   const b = { name: $('m-name').value.trim(), driver: $('m-driver').value, host: $('m-host').value.trim(), layout: $('m-layout').value };
   if (id) b.id = id;
   if (b.driver === 'snmp') { b.community = $('m-comm').value; b.port = Number($('m-sport').value) || 161; }
-  else { b.user = $('m-user').value.trim() || 'admin'; b.password = $('m-pass').value; if (b.driver === 'hc') b.mac_paginate = $('m-pag').checked; }
+  else { b.user = $('m-user').value.trim() || 'admin'; b.password = $('m-pass').value; if (b.driver === 'hc') b.mac_paginate = $('m-pag').checked; b.est_bytes = Number($('m-est').value); }
   return b;
 }
 

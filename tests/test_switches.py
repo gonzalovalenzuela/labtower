@@ -166,6 +166,19 @@ class Drivers(unittest.TestCase):
         self.assertTrue(all(x is None or x["cmd"] == "goto" for x in sent))
         with self.assertRaises(ValueError): d._fetch("mac.cgi?page=fwd_tbl", {"cmd": "mactblclr"})
 
+    def test_hc_mac_pagination_keeps_what_it_read_if_the_unit_drops_the_connection(self):
+        import http.client
+        d = sw.HCDriver("hc", "192.0.2.4", "admin", "pw", gap=0, mac_paginate=True)
+        hdr = ["No.", "MAC", "VLAN", "Type", "Port"]
+        def fake(path, data=None):
+            if data is None: return table([hdr, ["1", "AA:00:00:00:00:01", "1", "Dynamic", "1"]])
+            raise http.client.RemoteDisconnected("Remote end closed connection without response")
+        d.fetch = fake
+        orig = sw.time.sleep; sw.time.sleep = lambda s: None
+        try: macs = d._macs(True)
+        finally: sw.time.sleep = orig
+        self.assertEqual([m["mac"] for m in macs], ["AA:00:00:00:00:01"])
+
     def test_hc_reads_byte_columns_when_the_firmware_has_them(self):
         d = sw.HCDriver("hc", "192.0.2.4", "admin", "pw", gap=0)
         pages = {
@@ -341,13 +354,32 @@ class ManagerTests(unittest.TestCase):
         m2 = sw.Manager(self.d, hooks={"event": lambda *a, **k: None, "changed": lambda k, st: None, "hosts": lambda: {}})
         m2.reconcile = lambda: None
         self.assertEqual({p["port"]: p for p in m2.totals()["switches"][0]["ports"]}[1]["rx_bytes"], 4800)
-        # los equipos sin bytes (ZX / HC) llevan solo paquetes
-        sid2 = self.add("zx310s", "zx")["id"]
+        # los equipos sin bytes (ZX / HC) con la estimación apagada llevan solo paquetes
+        sid2 = self.m.save_switch({"name": "zx310s", "driver": "zx", "host": "192.0.2.6", "user": "admin", "password": "x", "est_bytes": 0})["id"]
         self.feed(sid2, mk_snap("zx310s", t, [mk_port(1, rx=10, tx=5)]))
         z = [x for x in self.m.totals()["switches"] if x["id"] == sid2][0]
         self.assertFalse(z["has_bytes"]); self.assertEqual(z["ports"][0]["rx_pkts"], 10)
         self.m.delete_switch(sid2)
         self.assertEqual(len(self.m.totals()["switches"]), 1)
+
+    def test_estimated_bytes_for_packet_only_switches(self):
+        sid = self.add("zx310s", "zx")["id"]                 # por defecto 800 B/paquete / default 800 B/packet
+        t = 2_000_000.0
+        tot = lambda: {p["port"]: p for p in self.m.totals()["switches"][0]["ports"]}[1]
+        self.feed(sid, mk_snap("zx310s", t, [mk_port(1, rx=100, tx=50)]))
+        self.feed(sid, mk_snap("zx310s", t + 10, [mk_port(1, rx=1100, tx=150)]))
+        s = self.m.state()["switches"][0]
+        self.assertTrue(s["has_bytes"]); self.assertEqual(s["bytes_est"], 800); self.assertEqual(s["ports"][0]["bytes_est"], 800)
+        self.assertAlmostEqual(s["ports"][0]["rx_bps"], 1000 * 800 * 8 / 10)
+        self.assertEqual((tot()["rx_bytes"], tot()["tx_bytes"]), (1100 * 800, 150 * 800))   # parte de lo que ya traía + Δpaquetes × factor
+        self.assertTrue(self.m.totals()["switches"][0]["bytes_est"])
+        # cambiar el factor no corrompe el acumulado: solo los paquetes nuevos usan el factor nuevo
+        self.m.save_switch({"id": sid, "est_bytes": 1000})
+        self.feed(sid, mk_snap("zx310s", t + 20, [mk_port(1, rx=1200, tx=250)]))
+        self.assertEqual((tot()["rx_bytes"], tot()["tx_bytes"]), (1100 * 800 + 100 * 1000, 150 * 800 + 100 * 1000))
+        self.assertEqual(tot()["rx_pkts"], 1200)
+        with self.assertRaises(ValueError): sw.validate({"name": "a", "driver": "zx", "host": "192.0.2.6", "password": "x", "est_bytes": 99999})
+        self.assertEqual(sw.est_factor({"driver": "snmp"}), 0)
 
     def test_mac_table_is_matched_with_known_hosts(self):
         sid = self.add()["id"]

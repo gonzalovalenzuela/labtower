@@ -24,6 +24,7 @@ EN: Switch Monitor — monitoring of managed switches for Net Monitor (Python 3 
 Uso de diagnóstico / Diagnostics:  python3 switches.py --config switches.json --once
 """
 import hashlib
+import http.client
 import http.cookiejar
 import json
 import os
@@ -85,8 +86,17 @@ class BaseDriver:
         self._check(path)
         body = urllib.parse.urlencode(data).encode() if data is not None else None
         try:
-            with self.opener.open(self.base + path, data=body, timeout=self.timeout) as r:
-                text = r.read().decode("utf-8", errors="replace")
+            try:
+                with self.opener.open(self.base + path, data=body, timeout=self.timeout) as r:
+                    text = r.read().decode("utf-8", errors="replace")
+            except (http.client.RemoteDisconnected, ConnectionResetError, urllib.error.URLError) as e:
+                if isinstance(e, urllib.error.URLError) and not isinstance(e.reason, (http.client.RemoteDisconnected, ConnectionResetError)):
+                    raise
+                # Estos equipos a veces cierran la conexión sin responder: se reintenta una vez tras una pausa (solo lecturas).
+                # EN: These units sometimes drop the connection without answering: retried once after a pause (reads only).
+                time.sleep(2.0)
+                with self.opener.open(self.base + path, data=body, timeout=self.timeout) as r:
+                    text = r.read().decode("utf-8", errors="replace")
         except urllib.error.HTTPError as e:
             # Indica qué petición falló (sin la consulta: lleva las credenciales en MD5). / EN: Says which request failed (no query string: it carries the MD5 credentials).
             raise OSError(f"el switch respondió HTTP {e.code} a {'POST' if body is not None else 'GET'} /{path.split('?')[0]}") from None
@@ -273,9 +283,15 @@ class HCDriver(BaseDriver):
         if paginate:  # opcional: no se probó contra el equipo real / optional: never tried on the real unit
             # Paginación como la de otros clientes que sí funcionan con este firmware: POST cmd=goto + pageidx + perpage (30 por página).
             # EN: Pagination like other clients that do work with this firmware: POST cmd=goto + pageidx + perpage (30 per page).
+            # Estos httpd son frágiles: pocas páginas, pausa entre ellas y, si el equipo cierra la conexión, se conserva lo leído.
+            # EN: These httpds are fragile: few pages, a pause between them and, if the unit drops the connection, what was read is kept.
             seen = {r[1] for r in rows}
-            for page in range(1, 40):
-                more = find_table(self.fetch("mac.cgi?page=fwd_tbl", {"cmd": "goto", "pageidx": str(page), "perpage": "3"}), "No.")[1:]
+            for page in range(1, 11):
+                time.sleep(max(self.gap, 1.0))
+                try:
+                    more = find_table(self.fetch("mac.cgi?page=fwd_tbl", {"cmd": "goto", "pageidx": str(page), "perpage": "3"}), "No.")[1:]
+                except (OSError, http.client.HTTPException):
+                    break
                 new = [r for r in more if r[1] not in seen]
                 if not new:
                     break
@@ -591,6 +607,21 @@ class SNMPDriver(BaseDriver):
 
 DRIVERS = {"zx": ZXDriver, "hc": HCDriver, "snmp": SNMPDriver}
 
+# ES: ZX y HC solo entregan paquetes. Los bytes se ESTIMAN como paquetes × tamaño medio (configurable por switch; 0 = sin estimar).
+# EN: ZX and HC only report packets. Bytes are ESTIMATED as packets × average size (configurable per switch; 0 = off).
+EST_DEFAULT = 800
+EST_MAX = 9000
+
+
+def est_factor(cfg):
+    """Bytes por paquete a usar para estimar, o 0 si no aplica. / Bytes per packet to estimate with, or 0 if not applicable."""
+    if cfg.get("driver") not in ("zx", "hc"):
+        return 0
+    try:
+        return max(0, min(EST_MAX, int(cfg.get("est_bytes", EST_DEFAULT))))
+    except (TypeError, ValueError):
+        return EST_DEFAULT
+
 
 def build_driver(cfg):
     """Driver a partir de una entrada de configuración. / Driver from a configuration entry."""
@@ -692,6 +723,13 @@ def validate(body, current=None):
         cfg.update(user=user, password=pw)
         if driver == "hc":
             cfg["mac_paginate"] = bool(body.get("mac_paginate", cur.get("mac_paginate", False)))
+        try:
+            est = int(body.get("est_bytes", cur.get("est_bytes", EST_DEFAULT)))
+        except (TypeError, ValueError):
+            raise ValueError("Invalid bytes-per-packet estimate (0 to %d)" % EST_MAX)
+        if not 0 <= est <= EST_MAX:
+            raise ValueError("Invalid bytes-per-packet estimate (0 to %d)" % EST_MAX)
+        cfg["est_bytes"] = est
     return cfg
 
 
@@ -846,7 +884,8 @@ class Manager:
         sy = snap["system"]
         return {"ok": True, "model": sy.get("model"), "fw": sy.get("fw"), "ports": len(snap["ports"]),
                 "ports_up": sum(1 for p in snap["ports"] if p["link_up"]), "temperature_c": sy.get("temperature_c"),
-                "has_bytes": any(p.get("rx_bytes") is not None for p in snap["ports"]), "seconds": snap["scrape_seconds"]}
+                "has_bytes": any(p.get("rx_bytes") is not None for p in snap["ports"]), "bytes_est": est_factor(cfg),
+                "seconds": snap["scrape_seconds"]}
 
     # ---- hilos / threads
     def start(self):
@@ -951,6 +990,14 @@ class Manager:
         now = snap["timestamp"]
         ports = snap["ports"]
         events = []
+        f = est_factor(cfg)
+        snap["bytes_est"] = 0
+        if f:
+            for p in ports:
+                if p.get("rx_bytes") is None and p.get("rx_good_pkts") is not None:
+                    p["rx_bytes"], p["tx_bytes"] = p["rx_good_pkts"] * f, (p.get("tx_good_pkts") or 0) * f
+                    p["bytes_est"] = f
+                    snap["bytes_est"] = f
         with self.lock:
             rec = self.rec.setdefault(sid, self._new_rec())
             if had_macs and snap.get("macs") is not None:
@@ -1105,7 +1152,7 @@ class Manager:
                         "loop": loop if p.get("loop_detected") is not None else None,
                         "rx_err": p.get("rx_bad_pkts"), "tx_err": p.get("tx_bad_pkts"), "err_1h": e1h,
                         "rx_discards": p.get("rx_discards"), "tx_discards": p.get("tx_discards"),
-                        "rx_bytes": p.get("rx_bytes"), "tx_bytes": p.get("tx_bytes"),
+                        "rx_bytes": p.get("rx_bytes"), "tx_bytes": p.get("tx_bytes"), "bytes_est": p.get("bytes_est") or 0,
                         "rx_pps": r.get("rx_pps"), "tx_pps": r.get("tx_pps"), "rx_bps": r.get("rx_bps"), "tx_bps": r.get("tx_bps"),
                         "mac_count": len(macs), "neighbors": nb,
                     })
@@ -1129,6 +1176,7 @@ class Manager:
                     "system": sy, "temp_level": tlv, "ports": ports,
                     "layout": cfg.get("layout") if cfg.get("layout") in ("row", "alt") else ("alt" if cfg["driver"] == "snmp" and len(ports) >= 16 else "row"),
                     "has_bytes": any(q.get("rx_bytes") is not None for q in ((snap or {}).get("ports") or [])),
+                    "bytes_est": (snap or {}).get("bytes_est") or 0,
                     "ports_up": sum(1 for p in ports if p["link_up"]), "ports_total": len(ports),
                     "macs_total": len(rec["macs"] or []), "alerts": alerts,
                 })
@@ -1215,8 +1263,21 @@ class Manager:
                 continue
             tot, last, resets = list(row[0:4]), list(row[4:8]), row[8] or 0
             dropped = False
+            fe = p.get("bytes_est") or 0
+            if fe:
+                # Estimado: se suma Δpaquetes × factor, así cambiar el factor no corrompe el acumulado.
+                # EN: Estimated: adds Δpackets × factor, so changing the factor does not corrupt the running total.
+                for bi, pi in ((0, 2), (1, 3)):
+                    v, lp = cur[pi], last[pi]
+                    if v is None:
+                        continue
+                    if tot[bi] is None:
+                        tot[bi] = v * fe
+                    elif lp is not None:
+                        tot[bi] += (v - lp if v >= lp else v) * fe
+                    last[bi] = cur[bi]
             for i, v in enumerate(cur):
-                if v is None:
+                if v is None or (fe and i < 2):
                     continue
                 if last[i] is None or tot[i] is None:
                     tot[i] = v
@@ -1248,7 +1309,7 @@ class Manager:
             ports = by.get(c["id"], [])
             for p in ports:
                 p["label"] = str((c.get("ports") or {}).get(str(p["port"]), {}).get("label") or "")
-            out.append({"id": c["id"], "name": c["name"], "driver": c["driver"],
+            out.append({"id": c["id"], "name": c["name"], "driver": c["driver"], "bytes_est": est_factor(c) if any(p["rx_bytes"] is not None for p in ports) else 0,
                         "has_bytes": any(p["rx_bytes"] is not None for p in ports), "ports": ports,
                         "since": min((p["since"] for p in ports if p["since"]), default=None),
                         "resets": sum(p["resets"] for p in ports)})

@@ -4,6 +4,7 @@
 
 **Nuevo**
 - **Switch Monitor**: nueva pestaña en Net Monitor para monitorear switches administrables (ZX310S, HC-SWTGW218AS y cualquier switch SNMP v2c, como los TP-Link). Panel frontal con el estado de cada puerto, velocidad, paquetes/s (y Mb/s por SNMP), errores nuevos, STP, temperatura, a qué equipo conocido está conectado cada puerto, topología básica e historial de 1 año con gráficos. Los switches se agregan, prueban y editan desde la interfaz (solo administradores); las credenciales quedan en `switches.json` (permisos 600) y la API no las devuelve. Es de solo lectura: las operaciones destructivas de los equipos están bloqueadas.
+- **Switch Monitor, bytes estimados**: el ZX310S y el HC solo informan paquetes; ahora se muestran Mb/s y totales estimados (paquetes × tamaño medio por paquete, 800 B por defecto, configurable por switch; 0 lo desactiva). Siempre aparecen marcados con «≈» y no son exactos. Los bytes reales (SNMP, o columnas de bytes del firmware) no se tocan.
 - Switch Monitor, subpestaña **Historial**: totales acumulados por puerto que no se pierden con reinicios del switch o de LabTower (se suma lo que avanza cada contador entre lecturas).
 - Resumen: la tarjeta Net Monitor lista los switches (puertos arriba y temperatura) y los avisos incluyen switch sin conexión, temperatura alta o crítica, errores nuevos y loop. La línea de tiempo registra caídas, temperatura, errores, cambios de enlace y loops (en español e inglés).
 - Respaldo (Teleporter, copia previa a actualizar y a desinstalar): incluye `switches.json` y `switches.db`.
