@@ -1,17 +1,17 @@
 # Changelog
 
-## 2.2.0 — 2026-10-28
-
-**Nuevo**
-- **Switch Monitor**: nueva pestaña en Net Monitor para monitorear switches administrables (ZX310S, HC-SWTGW218AS y cualquier switch SNMP v2c, como los TP-Link). Panel frontal con el estado de cada puerto, velocidad, paquetes/s (y Mb/s por SNMP), errores nuevos, STP, temperatura, a qué equipo conocido está conectado cada puerto, topología básica e historial de 1 año con gráficos. Los switches se agregan, prueban y editan desde la interfaz (solo administradores); las credenciales quedan en `switches.json` (permisos 600) y la API no las devuelve. Es de solo lectura: las operaciones destructivas de los equipos están bloqueadas.
-- **Switch Monitor, bytes estimados**: el ZX310S y el HC solo informan paquetes; ahora se muestran Mb/s y totales estimados (paquetes × tamaño medio por paquete, 800 B por defecto, configurable por switch; 0 lo desactiva). Siempre aparecen marcados con «≈» y no son exactos. Los bytes reales (SNMP, o columnas de bytes del firmware) no se tocan.
-- Switch Monitor, subpestaña **Historial**: totales acumulados por puerto que no se pierden con reinicios del switch o de LabTower (se suma lo que avanza cada contador entre lecturas).
-- Resumen: la tarjeta Net Monitor lista los switches (puertos arriba y temperatura) y los avisos incluyen switch sin conexión, temperatura alta o crítica, errores nuevos y loop. La línea de tiempo registra caídas, temperatura, errores, cambios de enlace y loops (en español e inglés).
-- Respaldo (Teleporter, copia previa a actualizar y a desinstalar): incluye `switches.json` y `switches.db`.
-
 ## 2.1.2 — 2026-10-28
 
 **Nuevo**
+- **Switch Monitor**: nueva pestaña en Net Monitor para monitorear switches administrables: ZX310S, HC-SWTGW218AS y cualquier switch SNMP v2c, como los TP-Link. Muestra el panel frontal con el estado de cada puerto (arriba, abajo, deshabilitado, errores nuevos, enlace entre switches, loop), velocidad, paquetes/s, errores, STP, temperatura, a qué equipo conocido está conectado cada puerto e historial de 1 año con gráficos. Los switches se agregan, prueban y editan desde la interfaz (solo administradores); las credenciales quedan en `switches.json` (permisos 600) y la API no las devuelve. Es de solo lectura: las operaciones destructivas de los equipos están bloqueadas.
+- Switch Monitor, **distribución del panel frontal** configurable (una fila o dos filas alternadas; con SNMP y 16 o más puertos se elige la alternada, como en los TP-Link) y puertos ordenados por su número físico.
+- Switch Monitor, **bytes reales por SNMP** (TP-Link): Mb/s, total por puerto y gráficos de tráfico.
+- Switch Monitor, **bytes estimados en ZX y HC**: como solo informan paquetes, se calculan paquetes × tamaño medio (800 B por defecto, configurable por switch; 0 lo desactiva). Siempre aparecen marcados con «≈» y no son exactos. Si el firmware del HC trae columnas de bytes, se usan las reales.
+- Switch Monitor, subpestaña **Historial**: totales acumulados por puerto que no se pierden con reinicios del switch ni de LabTower (se suma lo que avanza cada contador entre lecturas).
+- Switch Monitor, subpestaña **Tabla MAC**: buscador por MAC, IP, nombre, switch o puerto, cruzado con los equipos que conoce Net Monitor. En el HC hay una opción para leer toda la tabla MAC (desactivada por defecto).
+- Switch Monitor, **mapa de topología** con nodos arrastrables (la posición se recuerda en el navegador).
+- Resumen: la tarjeta Net Monitor lista los switches (puertos arriba y temperatura) y los avisos incluyen switch sin conexión, temperatura alta o crítica, errores nuevos y loop. La línea de tiempo registra caídas, temperatura, errores, cambios de enlace y loops (en español e inglés).
+- Respaldo (Teleporter, copia previa a actualizar y a desinstalar): incluye `switches.json` y `switches.db`.
 - Tema: junto al icono ◐ ahora hay un botón que muestra el modo elegido (OSCURO / CLARO / AUTO, o DARK / LIGHT / AUTO en inglés), como los de «24H» y «ES». Se puede pulsar cualquiera de los dos para cambiar. Reemplaza la «A» pequeña del icono.
 - Resumen, tarjeta «LabTower Server»: muestra el estado del último respaldo SFTP (OK, atrasado si pasan más de 36 h, o falló) con hace cuánto se hizo. Si falló o está atrasado, también aparece en los avisos. No se muestra si el respaldo no está configurado.
 
@@ -19,6 +19,9 @@
 - NAS Monitor, «Actividad de disco»: solo lista los discos con actividad real (≥ 5 % o ≥ 256 KB/s); los que están en reposo se resumen en una línea («Todos los discos en reposo (8)») en vez de ocho filas con 0 %.
 
 **Correcciones**
+- Switch Monitor, HC: el inicio de sesión tolera que el equipo responda HTTP 400 al POST; si el equipo cierra la conexión sin responder se reintenta una vez, y en la lectura de la tabla MAC se conserva lo leído en vez de fallar. Los errores HTTP de los switches indican qué petición falló.
+- Switch Monitor, SNMP: se omiten las interfaces virtuales y la numeración de puertos sale del nombre (`…1/0/N`).
+- Resumen: LabTower se identifica como servidor/VM y solo dice «Pi» cuando el equipo es una Raspberry Pi.
 - Respaldo SFTP: `openssh-client`, `gnupg`, `gpg-agent`, `openssl` y `cron` pasan a ser dependencias obligatorias del paquete (antes `gnupg` era solo recomendado y faltaba `gpg-agent`, por lo que el cifrado fallaba en instalaciones mínimas con «No agent running»).
 - Paquete: tras revisar los comandos que usan los módulos y los scripts, también se declaran `iproute2` (`ip`), `systemd` (`systemctl`, `journalctl`), `curl` (`labtower-health`), `ca-certificates` (descargas HTTPS), `passwd` (`useradd`, `usermod`, `userdel`), `hostname` y `awk`.
 - `labtower-sftp-backup status` ya no se cae con un archivo de estado vacío o dañado: lo explica e indica cómo regenerarlo.
