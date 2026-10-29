@@ -95,7 +95,10 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 .stat-ico.blue{background:var(--blue-dim);color:var(--blue)}
 .stat-ico.orange{background:var(--orange-dim);color:var(--orange)}
 .stat-val{font-size:20px;font-weight:600;color:var(--text);line-height:1}
-.stat-lbl{font-size:11px;color:var(--text-dim);margin-top:2px;font-weight:500}
+.stat-lbl{font-size:11px;color:var(--text-dim);margin-top:2px;font-weight:500;overflow-wrap:break-word}
+.stat-card>div:last-child{min-width:0}.stat-val{white-space:nowrap}
+/* Switch Monitor: las tarjetas pasan a otra fila en vez de apretarse. EN: the cards wrap onto another row instead of being squeezed. */
+#view-switches .stats-row{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
 /* Search + filter row */
 .filter-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .search-wrap{position:relative;flex:1;min-width:200px;max-width:320px}
@@ -290,7 +293,7 @@ body.view-sw .tb-right,body.view-sw .scan-bar,body.view-sw .sb-sec ~ .sb-sec{dis
 .sw-table{width:100%;border-collapse:collapse;font-size:12px}
 .sw-table th{text-align:left;font:600 10.5px var(--sans);text-transform:uppercase;letter-spacing:.04em;color:var(--text-dim);padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
 .sw-table td{padding:6px 8px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11.5px;white-space:nowrap}
-.sw-table td.sw-conn{white-space:normal;font-family:var(--sans);min-width:160px}
+.sw-table td.sw-conn{white-space:normal;font-family:var(--sans);min-width:240px;max-width:360px}
 .sw-row{cursor:pointer}.sw-row:hover,.sw-row.sel{background:var(--surface2)}
 .sw-link{align-self:flex-start;background:none;border:none;color:var(--teal);font:600 12px var(--sans);cursor:pointer;padding:0}
 .sw-detail{border:1px solid var(--border-b);border-radius:var(--r-sm);padding:12px 14px;background:var(--surface2);display:flex;flex-direction:column;gap:10px}

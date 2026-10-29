@@ -576,3 +576,7 @@ function toggleNav(force){
 // ── Recordarme ──
 function remValue(){const c=document.getElementById('l-rem'),s=document.getElementById('l-remsel');const v=c&&c.checked&&s?s.value:'';try{localStorage.setItem('pi-remember',v)}catch(e){}return v}
 (function remInit(){try{const v=localStorage.getItem('pi-remember')||'';const c=document.getElementById('l-rem'),s=document.getElementById('l-remsel');if(c&&s&&['day','week','month','forever'].includes(v)){c.checked=true;s.disabled=false;s.value=v}}catch(e){}})();
+
+// Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
+// EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
+if (window.cspRegister) cspRegister({ closeModals, confirmDelete, doLogin, levelChanged, logout, openNasForm, saveNas, setLang, setRange, setTheme, testNas, toggleNas, toggleNav, versionChanged });

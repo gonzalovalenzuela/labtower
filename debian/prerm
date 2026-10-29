@@ -16,9 +16,19 @@ done
 echo "labtower: final data backup..."
 BACKUP_DIR="/var/backups/labtower"
 STAMP=$(date +%Y%m%d_%H%M%S)
-if id -u labtower >/dev/null 2>&1 && command -v runuser >/dev/null 2>&1; then
+# ES: Quién es dueño de cada carpeta de datos (un usuario del sistema por módulo). Antes de actualizar, los datos pueden seguir siendo de «labtower».
+# EN: Who owns each data folder (one system user per module). Before upgrading, the data may still belong to "labtower".
+user_of() {
+    case "$(basename "$(dirname "$1")")" in
+        auth|teleporter) echo labtower-auth;; wol-console) echo labtower-wol;; nut-monitor) echo labtower-nut;;
+        net-monitor) echo labtower-net;; proxmox-monitor) echo labtower-pve;; nas-monitor) echo labtower-nas;;
+        dns-monitor) echo labtower-dns;; wan-monitor) echo labtower-wan;; overview) echo labtower-overview;; *) echo labtower;;
+    esac
+}
+if command -v runuser >/dev/null 2>&1; then
     mkdir -p "$BACKUP_DIR"; chmod 700 "$BACKUP_DIR"
     for f in \
+        /var/lib/labtower/auth/users.json \
         /var/lib/labtower/users.json \
         /var/lib/labtower/wol-console/devices.json \
         /var/lib/labtower/nut-monitor/servers.json \
@@ -32,9 +42,10 @@ if id -u labtower >/dev/null 2>&1 && command -v runuser >/dev/null 2>&1; then
         /var/lib/labtower/dns-monitor/dns.json \
         /var/lib/labtower/wan-monitor/wan.json
     do
-        if runuser -u labtower -- test -f "$f" 2>/dev/null && ! runuser -u labtower -- test -L "$f" 2>/dev/null; then
+        u=$(user_of "$f"); id -u "$u" >/dev/null 2>&1 || continue
+        if runuser -u "$u" -- test -f "$f" 2>/dev/null && ! runuser -u "$u" -- test -L "$f" 2>/dev/null; then
             out="$BACKUP_DIR/$(basename "$f").${STAMP}.bak"
-            (umask 077; runuser -u labtower -- cat -- "$f" > "$out") 2>/dev/null || rm -f "$out"
+            (umask 077; runuser -u "$u" -- cat -- "$f" > "$out") 2>/dev/null || rm -f "$out"
         fi
     done
     echo "labtower: data saved in $BACKUP_DIR"

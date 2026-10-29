@@ -89,7 +89,7 @@ def norm_url(u) -> str:
     try: port = p.port
     except ValueError: raise ValueError("Invalid port")
     h = p.hostname or ""
-    if not auth.valid_host(h): raise ValueError("Invalid host")
+    if not auth.valid_target(h): raise ValueError("Invalid host (this machine and link-local addresses are not allowed)")
     if port is not None and not 1 <= port <= 65535: raise ValueError("Invalid port")
     host = f"[{h}]" if ":" in h else h
     return f"{p.scheme}://{host}" + (f":{port}" if port else "")
@@ -108,6 +108,11 @@ def validate(body: dict, current=None) -> dict:
     if cfg["type"] not in TYPES: raise ValueError("Invalid server type")
     cfg["url"] = norm_url(cfg["url"])
     cfg["verify_tls"] = bool(cfg.get("verify_tls", True))
+    # La huella fijada (tls_pin) la aprende el servidor y nunca se acepta del formulario. Guardar el servidor otra vez la borra (se vuelve a aprender en la
+    # siguiente conexión): es la forma de aceptar un certificado nuevo a propósito.
+    # EN: The pinned fingerprint (tls_pin) is learned by the server and never accepted from the form. Saving the server again clears it (it is learned again
+    #     on the next connection): that is how a new certificate is accepted on purpose.
+    cfg["tls_pin"] = ""
     try:    cfg["timeout"] = int(cfg["timeout"])
     except (TypeError, ValueError): raise ValueError("Invalid timeout")
     if not 1 <= cfg["timeout"] <= 30: raise ValueError("Timeout must be 1-30 seconds")
@@ -125,10 +130,33 @@ def public(n: dict) -> dict:
     return out
 
 # ─── Cliente HTTP (biblioteca estándar, sin seguir redirecciones) ─────────────
+# Con «verificar TLS» activo se valida contra las CA del sistema. Sin él NO se acepta cualquier certificado: se FIJA la huella SHA-256 la primera vez
+# (TOFU, como Net Monitor y Proxmox) y, si luego cambia, la conexión se corta antes de enviar la contraseña.
+# EN: With "verify TLS" on, the certificate is validated against the system CAs. Without it, ANY certificate is NOT accepted: the SHA-256 fingerprint
+#     is PINNED the first time (TOFU, like Net Monitor and Proxmox) and, if it later changes, the connection is dropped before the password is sent.
 def _ctx(cfg):
     if cfg["url"].startswith("https") and not cfg.get("verify_tls", True):
         c = ssl.create_default_context(); c.check_hostname = False; c.verify_mode = ssl.CERT_NONE; return c
     return ssl.create_default_context()
+
+def _learn_pin(cfg, fp):
+    cfg["tls_pin"] = fp
+    sid = cfg.get("id")
+    if not sid: return                                   # connection test of an unsaved server: kept in memory only
+    with _dns_lock:
+        items = load_servers()
+        for x in items:
+            if x.get("id") == sid and not x.get("tls_pin") and x.get("url") == cfg.get("url"):
+                x["tls_pin"] = fp; save_servers(items)
+                log.info(f"DNS server {x.get('name')!r}: certificate fingerprint pinned ({fp[:16]}…)")
+                break
+
+def _check_pin(cfg, conn):
+    import hashlib
+    fp = hashlib.sha256(conn.sock.getpeercert(True)).hexdigest()
+    pin = cfg.get("tls_pin") or ""
+    if not pin: _learn_pin(cfg, fp)
+    elif pin != fp: raise DnsError("The server's certificate changed (pinned fingerprint mismatch); nothing was sent. Edit and save the server to learn it again")
 
 # Una petición. Devuelve (código, JSON o None). Falla (DnsError) solo si no hay conexión; un 4xx/5xx se devuelve para que quien llama decida.
 # EN: One request. Returns (code, JSON or None). It raises (DnsError) only when there is no connection; a 4xx/5xx is returned so the caller decides.
@@ -142,6 +170,8 @@ def _req(cfg, method, path, params=None, body=None, headers=None):
     try:
         conn = http.client.HTTPSConnection(host, port, timeout=cfg["timeout"], context=_ctx(cfg)) if https else http.client.HTTPConnection(host, port, timeout=cfg["timeout"])
         try:
+            if https and not cfg.get("verify_tls", True):
+                conn.connect(); _check_pin(cfg, conn)
             conn.request(method, path + q, data, h)
             r = conn.getresponse()
             raw = r.read(MAX_BODY + 1)
@@ -563,8 +593,9 @@ class H(BaseHTTPRequestHandler):
         try:
             n = int(self.headers.get("Content-Length", 0))
             if n < 0 or n > 8192: return None
-            return json.loads(self.rfile.read(n)) if n else {}
-        except (ValueError, TypeError, OSError): return None
+            d = json.loads(self.rfile.read(n)) if n else {}
+            return d if isinstance(d, dict) else None      # EN: a list/number would crash the handlers (500); reject it (400)
+        except (ValueError, TypeError, OSError, RecursionError): return None
     def _tok(self):
         return auth.token_from_request(dict(self.headers), self.headers.get("Cookie", ""))
     def _file(self, path, mime):
@@ -627,15 +658,12 @@ class H(BaseHTTPRequestHandler):
         body = self._body()
         if body is None: return self._json(400, {"error": "Invalid request body"})
         if path == "/api/login":
-            u, err = auth.login(self, body.get("username", ""), body.get("password", ""))
-            if not u: return self._json(err[0], {"error": err[1]})
-            ttl = auth.remember_ttl(body.get("remember"))
-            token = auth.create_session(body["username"], u["permissions"], ttl, self)
-            must = auth.load_users().get(body["username"], {}).get("must_change_password", False)
+            r, err = auth.login_session(self, body.get("username", ""), body.get("password", ""), body.get("remember"))   # the service checks the password and opens the session
+            if not r: return self._json(err[0], {"error": err[1]})
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
-            self.send_header("Set-Cookie", auth.session_cookie(token, ttl))
-            br = json.dumps({"ok": True, "username": body["username"], "permissions": u["permissions"], "must_change_password": must}).encode()
+            self.send_header("Set-Cookie", auth.session_cookie(r["token"], r["ttl"]))
+            br = json.dumps({"ok": True, "username": r["username"], "permissions": r["permissions"], "must_change_password": r["must_change_password"]}).encode()
             self.send_header("Content-Length", str(len(br)))
             self.end_headers(); self.wfile.write(br); return
         if path == "/api/logout":

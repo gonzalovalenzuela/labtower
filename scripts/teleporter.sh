@@ -37,7 +37,7 @@ TELEPORTER_VERSION="2.2.0"
 if [ -n "${SUDO_USER:-}" ]; then
   unset LABTOWER_HOME LABTOWER_DATA LABTOWER_AUTH_LINK LABTOWER_NUT_DIR LABTOWER_NGINX_CONF \
         LABTOWER_NGINX_ENABLED LABTOWER_SAFETY_DIR LABTOWER_LOCK TELEPORTER_SKIP_SYSTEM \
-        TELEPORTER_DROP LABTOWER_RESTORE_LOG LABTOWER_SERVICE_USER
+        TELEPORTER_DROP LABTOWER_RESTORE_LOG LABTOWER_SANDBOX_USER
 fi
 PI_HOME="${LABTOWER_HOME:-/opt/labtower}"
 DATA_DIR="${LABTOWER_DATA:-/var/lib/labtower}"
@@ -49,7 +49,11 @@ SAFETY_DIR="${LABTOWER_SAFETY_DIR:-/var/backups/labtower}"
 SPOOL_DIR="$DATA_DIR/teleporter"      # backups/uploads handled by the admin panel
 LOCK_FILE="${LABTOWER_LOCK:-/run/lock/labtower-teleporter.lock}"
 RESTORE_LOG="${LABTOWER_RESTORE_LOG:-/var/log/labtower/restore.log}"   # root-owned: the panel only reads it
-SERVICE_USER="${LABTOWER_SERVICE_USER:-labtower}"
+# ES: Usuario SIN datos con el que se abre un respaldo no confiable (extraer, validar JSON/SQLite). «labtower» ya no es dueño de nada ni corre ningún servicio.
+#     Cada archivo de datos pertenece al usuario de SU módulo (owner_of); el panel (labtower-auth) es dueño de auth/ y de la carpeta de intercambio.
+# EN: Data-less user used to open an untrusted backup (extract, validate JSON/SQLite). "labtower" owns nothing and runs no service any more.
+#     Every data file belongs to the user of ITS module (owner_of); the panel (labtower-auth) owns auth/ and the exchange folder.
+SANDBOX_USER="${LABTOWER_SANDBOX_USER:-labtower}"
 SERVICES="wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor labtower-overview"
 SKIP_SYSTEM="${TELEPORTER_SKIP_SYSTEM:-0}"   # 1 = no systemctl/nginx/chown (tests)
 DROP_FORCE="${TELEPORTER_DROP:-0}"           # 1 = drop to the service user even with SKIP_SYSTEM (tests)
@@ -60,7 +64,7 @@ SFS_BASE="$(realpath -m -- "$DATA_PARENT")"
 # member-in-archive | real path on disk
 # ES: Tabla «miembro dentro del archivo | ruta real en disco» de los datos de cada módulo. Si se agrega un módulo con datos, se agrega aquí.
 DATA_FILES=(
-  "data/users.json|$DATA_DIR/users.json"
+  "data/users.json|$DATA_DIR/auth/users.json"
   "data/wol-console/devices.json|$DATA_DIR/wol-console/devices.json"
   "data/wol-console/wake_log.json|$DATA_DIR/wol-console/wake_log.json"
   "data/nut-monitor/servers.json|$DATA_DIR/nut-monitor/servers.json"
@@ -74,14 +78,22 @@ DATA_FILES=(
   "data/dns-monitor/dns.json|$DATA_DIR/dns-monitor/dns.json"
   "data/wan-monitor/wan.json|$DATA_DIR/wan-monitor/wan.json"
   "data/wan-monitor/state.json|$DATA_DIR/wan-monitor/state.json"
-  "data/metrics.db|$DATA_DIR/metrics.db"
+  "data/overview/metrics.db|$DATA_DIR/overview/metrics.db"
+  "data/proxmox-monitor/metrics.db|$DATA_DIR/proxmox-monitor/metrics.db"
+  "data/nas-monitor/metrics.db|$DATA_DIR/nas-monitor/metrics.db"
+  "data/dns-monitor/metrics.db|$DATA_DIR/dns-monitor/metrics.db"
+  "data/wan-monitor/metrics.db|$DATA_DIR/wan-monitor/metrics.db"
 )
 # ES: Archivos de la versión 1.2.0o (historiales en JSON). Ya no se respaldan, pero un respaldo antiguo puede traerlos: al restaurar se dejan en su sitio y los servicios los importan a metrics.db una sola vez.
 # EN: Files of version 1.2.0o (JSON histories). They are no longer backed up, but an old backup may carry them: on restore they are put back and the services import them into metrics.db once.
 LEGACY_FILES=(
   "data/proxmox-monitor/history.json|$DATA_DIR/proxmox-monitor/history.json"
-  "data/pi-history.json|$DATA_DIR/pi-history.json"
+  "data/pi-history.json|$DATA_DIR/overview/pi-history.json"
 )
+# ES: Respaldos anteriores a 2.1.3 traen UN metrics.db compartido: al restaurar se parte por módulo (auth/migrate_layout.py).
+# EN: Backups from before 2.1.3 carry ONE shared metrics.db: on restore it is split per module (auth/migrate_layout.py).
+OLD_METRICS="data/metrics.db"
+METRICS_MODULES="overview proxmox-monitor nas-monitor dns-monitor wan-monitor"
 # ES: Igual para la configuración del sistema (nginx y NUT). Estos archivos solo se restauran por consola con --nut / --nginx.
 CONF_FILES=(
   "conf/nginx/labtower.conf|$NGINX_CONF"
@@ -103,8 +115,16 @@ hdr()  { echo; echo "${B}▶ $*${N}"; }
 die()  { echo "${R}Error:${N} $*" >&2; exit 1; }
 WARNINGS=0; ERRORS=0
 
-TMP=""; STAGE=""
-cleanup() { [ -n "$TMP" ] && rm -rf "$TMP"; [ -n "$STAGE" ] && rm -rf "$STAGE"; return 0; }
+TMP=""; STAGE=""; WORKROOT=""
+cleanup() { [ -n "$TMP" ] && rm -rf "$TMP"; [ -n "$STAGE" ] && rm -rf "$STAGE"; [ -n "$WORKROOT" ] && rm -rf "$WORKROOT"; return 0; }
+# ES: Carpeta de trabajo para ABRIR un respaldo no confiable. El padre es de root (700) y la subcarpeta de extracción pertenecerá al usuario de servicio:
+#     así ningún otro proceso de ese usuario puede alcanzarla por nombre mientras se extrae y se valida (solo el proceso lanzado desde ella la ve, por su cwd).
+# EN: Work folder to OPEN an untrusted backup. The parent is root's (700) and the extraction subfolder will belong to the service user:
+#     so no other process of that user can reach it by name while it is extracted and validated (only the process started from it sees it, via its cwd).
+mk_work() {  # sets WORKROOT and TMP
+  WORKROOT=$(mktemp -d) || die "cannot create a temporary directory"
+  TMP="$WORKROOT/x"; mkdir -m 700 "$TMP" || die "cannot create a temporary directory"
+}
 trap cleanup EXIT
 
 # ES: Exige ser root; si no, aborta indicando que se use sudo.
@@ -117,7 +137,11 @@ need_tools() {
     command -v "$t" >/dev/null 2>&1 || die "missing required tool: $t"
   done
 }
-svc_user_exists() { id -u "$SERVICE_USER" >/dev/null 2>&1; }
+users_exist() {
+  local u; for u in "$SANDBOX_USER" labtower-auth labtower-wol labtower-nut labtower-net labtower-pve labtower-nas labtower-dns labtower-wan labtower-overview; do
+    id -u "$u" >/dev/null 2>&1 || { echo "$u"; return 1; }
+  done
+}
 
 # ES: Ayudante «sfs»: toda operación de root sobre carpetas que controlan los servicios (datos, intercambio del panel) pasa por aquí.
 #     Recorre la ruta componente a componente con openat + O_NOFOLLOW desde una base de confianza, así un enlace simbólico plantado
@@ -226,7 +250,29 @@ sfs() {  # sfs <op> <path> [args…]   (paths under $DATA_DIR are re-based on th
 # ES: Ejecuta un comando como el usuario de servicio sin privilegios (en producción siempre; en pruebas solo con TELEPORTER_DROP=1).
 as_service() {
   if [ "$SKIP_SYSTEM" = "1" ] && [ "$DROP_FORCE" != "1" ]; then "$@"
-  else runuser -u "$SERVICE_USER" -- "$@"; fi
+  elif [ "$(id -u)" != "0" ]; then "$@"          # already unprivileged (e.g. "check" run by the panel itself): nothing to drop
+  else runuser -u "$SANDBOX_USER" -- "$@"; fi
+}
+# ES: Dueño de un archivo de datos según su carpeta (un usuario del sistema por módulo). «-» = no cambiar dueño (pruebas sin permisos de root).
+# EN: Owner of a data file according to its folder (one system user per module). "-" = do not change the owner (tests without root).
+owner_of() {  # <path under $DATA_DIR>
+  if [ "$SKIP_SYSTEM" = "1" ]; then [ "$DROP_FORCE" = "1" ] && echo "$SANDBOX_USER" || echo "-"; return; fi
+  local rel="${1#"$DATA_DIR"/}"
+  case "${rel%%/*}" in
+    auth|teleporter) echo labtower-auth;;   wol-console) echo labtower-wol;;      nut-monitor) echo labtower-nut;;
+    net-monitor) echo labtower-net;;        proxmox-monitor) echo labtower-pve;;   nas-monitor) echo labtower-nas;;
+    dns-monitor) echo labtower-dns;;        wan-monitor) echo labtower-wan;;       overview) echo labtower-overview;;
+    *) return 1;;
+  esac
+}
+# wol-console and net-monitor each publish ONE file for the other (group labtower reads it); everything else is private.
+dir_mode()  { case "$(basename -- "$1")" in wol-console|net-monitor) echo 710;; *) echo 700;; esac; }
+file_mode() { case "$1" in */wol-console/devices.json|*/net-monitor/hosts.json) echo 640;; *) echo 600;; esac; }
+# Run a command as the owner of a data file (so a database is read by the user that owns it, never by root).
+as_owner() {  # <user> cmd…
+  local u="$1"; shift
+  if [ "$u" = "-" ] || [ "$(id -u)" != "0" ] || { [ "$SKIP_SYSTEM" = "1" ] && [ "$DROP_FORCE" != "1" ]; }; then "$@"
+  else runuser -u "$u" -- "$@"; fi
 }
 is_secret() {
   case "$1" in
@@ -237,31 +283,47 @@ is_secret() {
 
 # ── validators ────────────────────────────────────────────────────────────────
 # ES: Validadores: JSON bien formado, base SQLite íntegra (devuelve la cantidad de filas) y que users.json tenga al menos un usuario (si no, restaurarlo dejaría fuera a todos).
+# ES: Los validadores abren un archivo NO confiable (sobre todo el analizador de SQLite): corren como el usuario de servicio, con la carpeta del archivo como
+#     directorio actual (ruta relativa), y no como root.
+# EN: The validators open an UNTRUSTED file (above all the SQLite parser): they run as the service user, with the file's folder as the current directory
+#     (relative path), and not as root.
+in_dir_as_service() {  # <file> <python source>  → runs the source with sys.argv[1] = the file's base name
+  local f="$1" src="$2"
+  ( cd "$(dirname -- "$f")" && as_service python3 -I -c "$src" "$(basename -- "$f")" ) 2>/dev/null
+}
 validate_json() {  # file -> prints nothing, rc 0/1
-  python3 -I - "$1" <<'PY' 2>/dev/null
-import json, sys
-with open(sys.argv[1], encoding="utf-8") as f: json.load(f)
-PY
+  in_dir_as_service "$1" 'import json, sys
+with open(sys.argv[1], encoding="utf-8") as f: json.load(f)'
 }
 validate_sqlite() {  # file -> prints row count on success
-  python3 -I - "$1" <<'PY' 2>/dev/null
-import sqlite3, sys
-c = sqlite3.connect("file:%s?mode=ro" % sys.argv[1], uri=True)
+  in_dir_as_service "$1" 'import sqlite3, sys
+# SQLite resuelve la ruta absoluta y la carpeta de trabajo no es alcanzable por nombre: se lee el archivo (ruta relativa) y se analiza en memoria.
+# EN: SQLite resolves the absolute path and the work folder is not reachable by name: the file is read (relative path) and analysed in memory.
+# Una imagen en modo WAL (respaldos de versiones anteriores) no se abre sin su -wal: se marca como modo clásico (bytes 18 y 19 del encabezado).
+# EN: A WAL-mode image (backups from older versions) cannot be opened without its -wal: it is flagged as rollback-journal mode (header bytes 18 and 19).
+c = sqlite3.connect(":memory:")
+with open(sys.argv[1], "rb") as f: raw = bytearray(f.read())
+if len(raw) > 20 and raw[18] == 2 and raw[19] == 2: raw[18] = raw[19] = 1
+c.deserialize(bytes(raw))
 r = c.execute("PRAGMA integrity_check").fetchone()
 if not r or r[0] != "ok": sys.exit(1)
 try: n = c.execute("SELECT COUNT(*) FROM history").fetchone()[0]
 except Exception:
     try: n = sum(c.execute("SELECT COUNT(*) FROM " + t).fetchone()[0] for t in ("pi_samples", "pve_samples"))
     except Exception: n = "?"
-print(n)
-PY
+print(n)'
 }
-users_have_admin() {
-  python3 -I - "$1" <<'PY' 2>/dev/null
-import json, sys
+users_have_admin() {  # users.json con forma válida: nombres seguros, hash de texto y niveles conocidos / users.json with a valid shape
+  in_dir_as_service "$1" 'import json, re, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))
-sys.exit(0 if isinstance(d, dict) and d else 1)
-PY
+if not isinstance(d, dict) or not d: sys.exit(1)
+LV = ("none", "readonly", "execute", "admin")
+for name, u in d.items():
+    if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", name): sys.exit(1)
+    if not isinstance(u, dict) or not isinstance(u.get("password_hash"), str): sys.exit(1)
+    p = u.get("permissions", {})
+    if not isinstance(p, dict) or any(not isinstance(k, str) or v not in LV for k, v in p.items()): sys.exit(1)
+sys.exit(0)'
 }
 
 # ── archive safety ────────────────────────────────────────────────────────────
@@ -296,9 +358,13 @@ archive_is_safe() {  # archive
   return 0
 }
 
-# ES: Extrae el archivo ya validado en una carpeta temporal privada.
+# ES: Extrae el archivo ya validado en la carpeta de trabajo (ver mk_work) COMO el usuario de servicio sin privilegios: el contenido de un respaldo no confiable
+#     nunca lo procesa root. La carpeta se le entrega a ese usuario y tar arranca con ella como directorio actual (la ruta por nombre no le sirve a nadie más).
+# EN: Extracts the already-checked archive into the work folder (see mk_work) AS the unprivileged service user: the content of an untrusted backup is
+#     never processed by root. The folder is handed to that user and tar starts with it as its current directory (the path by name is of no use to anyone else).
 extract_archive() {  # archive dest
-  tar -xzf "$1" -C "$2" --no-same-owner --no-same-permissions 2>/dev/null \
+  if [ "$(id -u)" = "0" ] && ! { [ "$SKIP_SYSTEM" = "1" ] && [ "$DROP_FORCE" != "1" ]; }; then chown "$SANDBOX_USER" "$2" || { err "could not prepare the work folder"; return 1; }; fi
+  ( cd "$2" && as_service tar -xzf - --no-same-owner --no-same-permissions ) < "$1" 2>/dev/null \
     || { err "could not extract the archive"; return 1; }
   # Legacy layout (teleporter 1.x): data/auth/{users,sessions}.json
   local f
@@ -339,19 +405,22 @@ cmd_backup() {
     mkdir -p "$TMP/$(dirname "$rel")"
     if [[ "$rel" == *.db ]]; then
       # ES: La instantánea SQLite la toma el usuario del servicio (no root): root solo recoge el resultado sin seguir enlaces.
-      local snap_n=".snap.$$.db"
-      spool_init
-      if as_service python3 -I -c 'import sqlite3, sys
+      # ES: La toma el DUEÑO del archivo (su módulo) y la deja en su propia carpeta; root solo la recoge sin seguir enlaces.
+      local snap="$(dirname -- "$src")/.snap.$$.db" owner
+      owner=$(owner_of "$src") || { err "$rel — unknown owner"; continue; }
+      if as_owner "$owner" python3 -I -c 'import sqlite3, sys
 s = sqlite3.connect("file:%s?mode=ro" % sys.argv[1], uri=True)
 d = sqlite3.connect(sys.argv[2])
-s.backup(d); d.close(); s.close()' "$src" "$SPOOL_DIR/$snap_n" 2>/dev/null \
-         && sfs get "$SPOOL_DIR/$snap_n" "$TMP/$rel"
+s.backup(d)
+d.execute("PRAGMA journal_mode=DELETE")     # the copy is a single self-contained file (a WAL-mode image cannot be opened without its -wal)
+d.close(); s.close()' "$src" "$snap" 2>/dev/null \
+         && sfs get "$snap" "$TMP/$rel"
       then ok "$rel ($(du -h "$TMP/$rel" | cut -f1)) — consistent SQLite snapshot"
-      else err "$rel — SQLite backup failed"; sfs rm "$SPOOL_DIR/$snap_n"; continue; fi
-      sfs rm "$SPOOL_DIR/$snap_n"
+      else err "$rel — SQLite backup failed"; sfs rm "$snap"; continue; fi
+      sfs rm "$snap"
     else
       sfs get "$src" "$TMP/$rel" || { err "$rel — copy failed"; continue; }
-      if [[ "$rel" == *.json ]] && ! validate_json "$TMP/$rel"; then
+      if [[ "$rel" == *.json ]] && ! python3 -I -c 'import json, sys; json.load(open(sys.argv[1], encoding="utf-8"))' "$TMP/$rel" 2>/dev/null; then
         warn "$rel — source is not valid JSON (copied as is)"
       else ok "$rel ($(du -h "$TMP/$rel" | cut -f1))"; fi
     fi
@@ -425,9 +494,15 @@ check_archive() {
       else err "$rel — SQLite CORRUPT"; fi
     fi
   done
+  if [ -f "$dir/$OLD_METRICS" ]; then
+    local rows
+    if rows=$(validate_sqlite "$dir/$OLD_METRICS"); then ok "$OLD_METRICS (old shared database) — SQLite OK, $rows rows; will be split per module"
+    else err "$OLD_METRICS — SQLite CORRUPT"; fi
+    found=$((found+1))
+  fi
   [ "$found" -gt 0 ] || { err "the backup contains no data files"; return 1; }
   if [ -f "$dir/data/users.json" ]; then
-    users_have_admin "$dir/data/users.json" || err "data/users.json has no users — restoring it would lock you out"
+    users_have_admin "$dir/data/users.json" || err "data/users.json has no users or an invalid structure — restoring it would lock you out"
   else warn "data/users.json not in backup: current users will be kept"; fi
   for entry in "${CONF_FILES[@]}"; do
     rel="${entry%%|*}"
@@ -437,26 +512,24 @@ check_archive() {
 }
 
 # ES: Igual que check_archive pero sin imprimir (se usa en la autoverificación del respaldo).
-cmd_check_quiet() { local d; d=$(mktemp -d) || return 1; ( check_archive "$1" "$d" >/dev/null 2>&1 ); local rc=$?; rm -rf "$d"; return $rc; }
+cmd_check_quiet() { local d; d=$(mktemp -d) || return 1; mkdir -m 700 "$d/x" || { rm -rf "$d"; return 1; }; ( check_archive "$1" "$d/x" >/dev/null 2>&1 ); local rc=$?; rm -rf "$d"; return $rc; }
 
 # ES: Comando «check» para el usuario: muestra el resultado y de dónde viene el respaldo (host, fecha, versiones).
 cmd_check() {
   need_tools
   [ $# -ge 1 ] || die "usage: teleporter check <file.tar.gz>"
-  TMP=$(mktemp -d) || die "cannot create a temporary directory"
+  mk_work
   echo "${B}LabTower Teleporter — check${N}"
   echo "  Backup: $1"
   hdr "Archive"
   check_archive "$1" "$TMP"; local rc=$?
   if [ -f "$TMP/backup.json" ]; then
     hdr "Origin"
-    python3 -I - "$TMP/backup.json" <<'PY' 2>/dev/null
-import json, sys
+    in_dir_as_service "$TMP/backup.json" 'import json, sys
 d = json.load(open(sys.argv[1]))
 print("  Host:     %s" % d.get("hostname", "?"))
 print("  Date:     %s" % d.get("date", "?"))
-print("  Package:  %s   teleporter %s" % (d.get("package_version", "?"), d.get("teleporter_version", "?")))
-PY
+print("  Package:  %s   teleporter %s" % (d.get("package_version", "?"), d.get("teleporter_version", "?")))'
   fi
   echo
   if [ $rc -ne 0 ]; then echo "${R}Backup NOT usable — $ERRORS error(s), $WARNINGS warning(s).${N}"; exit 1
@@ -519,9 +592,9 @@ cmd_restore() {
   RM_SOURCE=""; [ "$rm_source" -eq 1 ] && RM_SOURCE="$archive"
   take_lock
   [ -d "$PI_HOME" ] || die "$PI_HOME not found — install the package first: sudo dpkg -i labtower_*.deb"
-  if [ "$SKIP_SYSTEM" != "1" ]; then svc_user_exists || die "system user '$SERVICE_USER' not found — install the package first"; fi
+  if [ "$SKIP_SYSTEM" != "1" ]; then miss=$(users_exist) || die "system user '$miss' not found — install the package first"; fi
 
-  TMP=$(mktemp -d) || die "cannot create a temporary directory"
+  mk_work
   trap on_exit_restore EXIT
   umask 077
   echo "${B}LabTower Teleporter — restore${N}"
@@ -540,7 +613,9 @@ cmd_restore() {
   hdr "Safety snapshot of the current state"
   mkdir -p "$SAFETY_DIR" && chmod 700 "$SAFETY_DIR"
   local snap="$SAFETY_DIR/pre-restore-$(date +%Y%m%d_%H%M%S).tar.gz"
-  if ( ERRORS=0; cmd_backup "$snap" >/dev/null 2>&1 ); then ok "saved to $snap"
+  # ES: En un subshell: cmd_backup limpia SUS carpetas al salir y no debe tocar la carpeta de trabajo de esta restauración (WORKROOT/TMP).
+  # EN: In a subshell: cmd_backup cleans up ITS folders on exit and must not touch this restore's work folder (WORKROOT/TMP).
+  if ( ERRORS=0; WORKROOT=""; STAGE=""; cmd_backup "$snap" >/dev/null 2>&1 ); then ok "saved to $snap"
   else warn "could not create the safety snapshot (continuing)"; fi
 
   hdr "Stopping services"
@@ -550,27 +625,44 @@ cmd_restore() {
   fi
 
   hdr "Restoring data"
-  local entry rel dst src mode owner
-  owner="$SERVICE_USER"
-  [ "$SKIP_SYSTEM" = "1" ] && [ "$DROP_FORCE" != "1" ] && owner="-"
-  sfs mkdir "$DATA_DIR" "$owner" 750 || err "$DATA_DIR — unsafe or not usable"
+  local entry rel dst src mode owner m n_restored=0
+  [ -d "$TMP/data" ] || { err "the verified backup is no longer in the work folder — nothing was restored"; return 1; }
+  sfs mkdir "$DATA_DIR" - 750 || err "$DATA_DIR — unsafe or not usable"
+  # ES: Respaldo antiguo con un metrics.db común: se parte por módulo (con el usuario sin datos) y cada parte ocupa el lugar que le toca.
+  # EN: Old backup with one shared metrics.db: it is split per module (by the data-less user) and each part takes its place.
+  if [ -f "$TMP/$OLD_METRICS" ]; then
+    if as_service python3 -I "$PI_HOME/auth/migrate_layout.py" split-metrics "$TMP/$OLD_METRICS" "$TMP/data/.split" >/dev/null 2>&1; then
+      for m in $METRICS_MODULES; do
+        [ -f "$TMP/data/$m/metrics.db" ] || as_service sh -c 'mkdir -p "$1/data/$2" && [ -f "$1/data/.split/$2.db" ] && mv "$1/data/.split/$2.db" "$1/data/$2/metrics.db"' sh "$TMP" "$m" 2>/dev/null || true
+      done
+      ok "$OLD_METRICS split per module"
+    else warn "$OLD_METRICS — could not be split, the charts start empty"; fi
+  fi
+  put_data() {  # <rel> <dst> <src> -> sfs put with the owner/modes of the module
+    local o d
+    o=$(owner_of "$2") || return 1
+    d=$(dirname -- "$2")
+    [ "$d" = "$DATA_DIR" ] || sfs mkdir "$d" "$o" "$(dir_mode "$d")" || return 1
+    sfs put "$2" "$3" "$(file_mode "$2")" "$o"
+  }
   for entry in "${DATA_FILES[@]}"; do
     rel="${entry%%|*}"; dst="${entry#*|}"; src="$TMP/$rel"
     [ -f "$src" ] || { warn "$rel — not in backup, current file kept"; continue; }
     [[ "$rel" == *.db ]] && { sfs rm "$dst-wal"; sfs rm "$dst-shm"; sfs rm "$dst-journal"; }
-    if sfs put "$dst" "$src" 600 "$owner"; then ok "$rel"; else err "$rel — could not be restored"; fi
+    if put_data "$rel" "$dst" "$src"; then ok "$rel"; n_restored=$((n_restored+1)); else err "$rel — could not be restored"; fi
   done
+  [ "$n_restored" -gt 0 ] || err "no data file was restored"
   for entry in "${LEGACY_FILES[@]}"; do
     rel="${entry%%|*}"; dst="${entry#*|}"; src="$TMP/$rel"
     [ -f "$src" ] || continue
-    if sfs put "$dst" "$src" 600 "$owner"; then ok "$rel (old format, will be imported)"; else warn "$rel — could not be restored"; fi
+    if put_data "$rel" "$dst" "$src"; then ok "$rel (old format, will be imported)"; else warn "$rel — could not be restored"; fi
   done
 
   hdr "Auth links"
   mkdir -p "$AUTH_DIR"
   # ES: /opt/labtower-auth es de root: los servicios no pueden cambiar estos enlaces. sessions.json ya no se enlaza (el servicio lo crea en su carpeta de datos).
   ln -sfn "$PI_HOME/auth/auth.py" "$AUTH_DIR/auth.py"
-  ln -sfn "$DATA_DIR/users.json" "$AUTH_DIR/users.json"
+  ln -sfn "$DATA_DIR/auth/users.json" "$AUTH_DIR/users.json"
   rm -f "$AUTH_DIR/sessions.json"
   ok "$AUTH_DIR → $DATA_DIR"
 
@@ -606,7 +698,7 @@ cmd_restore() {
 
   # ES: El código en /opt/labtower es de root y de solo lectura para los servicios; solo los datos (/var/lib/labtower) son suyos.
   hdr "Permissions"
-  ok "code in $PI_HOME stays root-owned; data in $DATA_DIR is owned by $SERVICE_USER"
+  ok "code in $PI_HOME stays root-owned; every module owns only its folder in $DATA_DIR"
 
   hdr "Starting services"
   SERVICES_STOPPED=0
@@ -637,9 +729,9 @@ release_lock() { exec 9>&-; LOCK_HELD=0; }
 # ── admin-panel entry points (run through sudo as root; strict argument checks) ─
 # ES: PUNTOS DE ENTRADA DEL PANEL (corren como root vía sudo, con validación estricta). El nombre del respaldo debe cumplir este patrón: evita rutas con «../».
 NAME_RE='^((labtower|pi-console)-[A-Za-z0-9._-]{1,80}|upload-[0-9]{8}_[0-9]{6})\.tar\.gz$'
-# ES: Prepara la carpeta de intercambio con el panel (modo 700, dueño labtower).
+# ES: Prepara la carpeta de intercambio con el panel (modo 700, dueño labtower-auth).
 spool_init() {
-  local o="$SERVICE_USER"; [ "$SKIP_SYSTEM" = "1" ] && [ "$DROP_FORCE" != "1" ] && o="-"
+  local o; o=$(owner_of "$SPOOL_DIR")
   sfs mkdir "$SPOOL_DIR" "$o" 700 || die "the exchange folder $SPOOL_DIR is not safe"
 }
 # ES: Limpieza: se conservan los 5 respaldos más nuevos y se borran las subidas con más de un día.
@@ -654,7 +746,7 @@ cmd_gui_backup() {
   local name="labtower-$(hostname -s | tr -c 'A-Za-z0-9.\n-' '_')-$(date +%Y%m%d_%H%M%S).tar.gz"
   [[ "$name" =~ $NAME_RE ]] || die "could not build a valid backup name"
   # ES: Se arma en una carpeta de root y luego se entrega al panel sin seguir enlaces (la carpeta del panel la controla un servicio).
-  local o="$SERVICE_USER"; [ "$SKIP_SYSTEM" = "1" ] && [ "$DROP_FORCE" != "1" ] && o="-"
+  local o; o=$(owner_of "$SPOOL_DIR")
   mkdir -p "$SAFETY_DIR" && chmod 700 "$SAFETY_DIR"
   STAGE=$(mktemp -d "$SAFETY_DIR/.gui.XXXXXX") || die "cannot create a staging directory"
   cmd_backup "$STAGE/$name" || exit 1

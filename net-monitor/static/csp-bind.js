@@ -1,9 +1,18 @@
 /* LabTower — enlaza los atributos data-on-<evento> a funciones, sin JavaScript en línea (CSP sin 'unsafe-inline').
    Formato: data-on-click="funcion" data-on-click-args='[…JSON…]' data-on-click-stop="1".
    Argumentos especiales: {"@":"this"} (elemento), {"@":"event"} (evento), {"@":"value"} (this.value).
-   EN: Binds data-on-<event> attributes to functions, with no inline JavaScript (CSP without 'unsafe-inline'). */
+   EN: Binds data-on-<event> attributes to functions, with no inline JavaScript (CSP without 'unsafe-inline').
+
+   Seguridad: solo se pueden invocar las funciones REGISTRADAS con cspRegister({nombre: función, …}) (cada app.js registra las suyas) y las
+   internas «@…». Antes se buscaba cualquier nombre en window, así que un atributo inyectado (data-on-click="eval"/"fetch"…) habría podido llamar a cualquier función global.
+   EN: Security: only functions REGISTERED with cspRegister({name: fn, …}) (each app.js registers its own) and the "@…" built-ins can be called.
+       Before, any name was looked up on window, so an injected attribute (data-on-click="eval"/"fetch"…) could have called any global function. */
 (function () {
   'use strict';
+  var REG = Object.create(null);
+  window.cspRegister = function (map) {
+    for (var k in map) if (Object.prototype.hasOwnProperty.call(map, k) && typeof map[k] === 'function') REG[k] = map[k];
+  };
   var EV = ['click', 'change', 'keydown', 'mousemove', 'mouseleave', 'mouseover', 'mouseout'];
   var SEL = EV.map(function (e) { return '[data-on-' + e + ']'; }).join(',');
 
@@ -19,7 +28,7 @@
     '@reload': function () { location.reload(); },
     '@click-id': function (el, ev, a) { var x = document.getElementById(a[0]); if (x) x.click(); },
     '@disable-unless-checked': function (el, ev, a) { var x = document.getElementById(a[0]); if (x) x.disabled = !el.checked; },
-    '@self-only': function (el, ev, a) { if (ev.target === el && typeof window[a[0]] === 'function') window[a[0]](); },
+    '@self-only': function (el, ev, a) { if (ev.target === el && typeof REG[a[0]] === 'function') REG[a[0]](); },
     '@style': function (el, ev, a) { for (var k in a[0]) el.style[k] = a[0][k]; }
   };
 
@@ -34,9 +43,9 @@
     try { args = raw ? JSON.parse(raw) : []; } catch (err) { console.error('data-on-' + e + '-args inválido', raw); return; }
     el.addEventListener(e, function (ev) {
       try {
-        var fn = BUILTIN[name] || window[name];
-        if (typeof fn !== 'function') { console.error('Función no encontrada:', name); return; }
-        if (BUILTIN[name]) fn(el, ev, args);
+        var fn = Object.prototype.hasOwnProperty.call(BUILTIN, name) ? BUILTIN[name] : REG[name];
+        if (typeof fn !== 'function') { console.error('Función no registrada:', name); return; }
+        if (Object.prototype.hasOwnProperty.call(BUILTIN, name)) fn(el, ev, args);
         else fn.apply(el, args.map(function (a) { return val(a, el, ev); }));
       } finally {
         if (stop) ev.stopPropagation();

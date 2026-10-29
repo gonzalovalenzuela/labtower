@@ -353,7 +353,7 @@ function renderTable(){
     tr.innerHTML=`
       <td class="col-st"><span class="ind" id="ind-${d.id}"></span></td>
       <td><span class="dev-name">${esc(d.name)}</span><span class="dev-mac">${esc(d.mac)}${notes?' · <span style="color:var(--text-dim)">'+esc(notes)+'</span>':''}</span></td>
-      <td><span class="tag tag-${d.tag.toLowerCase()}">${esc(d.tag)}</span></td>
+      <td><span class="tag tag-${String(d.tag).toLowerCase().replace(/[^a-z0-9_-]/g,'')}">${esc(d.tag)}</span></td>
       <td class="col-ip">${ipCell(d)}</td>
       <td class="col-lw">${lwText}</td>
       <td class="col-act">
@@ -669,3 +669,7 @@ function toggleNav(force){
 // EN: Returns the chosen duration ("day","week","month","forever") or "" if unchecked. Remembers the last choice in this browser.
 function remValue(){const c=document.getElementById('l-rem'),s=document.getElementById('l-remsel');const v=c&&c.checked&&s?s.value:'';try{localStorage.setItem('pi-remember',v)}catch(e){}return v}
 (function remInit(){try{const v=localStorage.getItem('pi-remember')||'';const c=document.getElementById('l-rem'),s=document.getElementById('l-remsel');if(c&&s&&['day','week','month','forever'].includes(v)){c.checked=true;s.disabled=false;s.value=v}}catch(e){}})();
+
+// Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
+// EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
+if (window.cspRegister) cspRegister({ cancelEdit, clearLog, closeModals, confirmDelete, doLogin, editDevice, exportJSON, logout, openWakeAll, pickNetHost, setFilter, setLang, setTheme, showWakeLog, sortBy, submitForm, toggleNav, wakeDevice });

@@ -29,6 +29,8 @@ const LANG = {
     permHelpAdmin:'full access + device management',
     fieldNewPw:'New password (leave blank to keep current)',
     fieldNewPwPlaceholder:'New password',
+    exTitle:'Download backup', exMsg:'The backup holds password hashes and API tokens, so it is downloaded encrypted (AES-256). Choose a passphrase and keep it: without it the file cannot be opened.', exPass:'Passphrase (12+ characters)', exPass2:'Repeat the passphrase', exAcct:'Your account password', exPlain:'Download WITHOUT encryption (not recommended)', exBtn:'Download', exShort:'The passphrase must have at least 12 characters', exMismatch:'The passphrases do not match', exNeedPw:'Enter your account password', upPassMsg:'This backup is encrypted. Enter its passphrase.',
+    reauthTitle:'Confirm your password', reauthMsg:'This action is sensitive. Enter your current password to continue.', reauthBtn:'Confirm',
     fieldCurPw:'Current password (required to change your own)', curPwNeeded:'Enter your current password to change it',
     btnCancel:'Cancel', btnCreate:'Create user', btnSave:'Save changes',
     modalDeleteTitle:'Delete user', modalDeleteBtn:'Delete',
@@ -86,6 +88,8 @@ const LANG = {
     permHelpAdmin:'acceso total + gestión de dispositivos',
     fieldNewPw:'Nueva contraseña (dejar vacío para no cambiar)',
     fieldNewPwPlaceholder:'Nueva contraseña',
+    exTitle:'Descargar respaldo', exMsg:'El respaldo contiene hashes de contraseñas y tokens de API, por eso se descarga cifrado (AES-256). Elige una frase y guárdala: sin ella el archivo no se puede abrir.', exPass:'Frase de cifrado (12 o más caracteres)', exPass2:'Repite la frase', exAcct:'La contraseña de tu cuenta', exPlain:'Descargar SIN cifrar (no recomendado)', exBtn:'Descargar', exShort:'La frase debe tener al menos 12 caracteres', exMismatch:'Las frases no coinciden', exNeedPw:'Escribe la contraseña de tu cuenta', upPassMsg:'Este respaldo está cifrado. Escribe su frase.',
+    reauthTitle:'Confirma tu contraseña', reauthMsg:'Esta acción es sensible. Escribe tu contraseña actual para continuar.', reauthBtn:'Confirmar',
     fieldCurPw:'Contraseña actual (obligatoria para cambiar la tuya)', curPwNeeded:'Escribe tu contraseña actual para cambiarla',
     btnCancel:'Cancelar', btnCreate:'Crear usuario', btnSave:'Guardar cambios',
     modalDeleteTitle:'Eliminar usuario', modalDeleteBtn:'Eliminar',
@@ -132,6 +136,7 @@ function t(k,...args){ const v=(LANG[_lang]||LANG.en)[k]||(LANG.en)[k]||k; retur
 function setLang(l){
   _lang=l; localStorage.setItem('pi-lang',l); document.documentElement.lang=l;
   document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.getAttribute('data-i18n')));
+  document.querySelectorAll('[data-i18n-ph]').forEach(el=>el.placeholder=t(el.getAttribute('data-i18n-ph')));
   ['en','es'].forEach(x=>document.getElementById('lang-'+x)?.classList.toggle('active',x===l));
   // Update logout button title
   document.getElementById('btn-logout').title = t('logoutTitle');
@@ -418,7 +423,7 @@ function renderUsers(users) {
 // EN: Colored badge for the permission level.
 function permBadge(perm) {
   const labels = {admin:t('permAdmin'),execute:t('permExecute'),readonly:t('permReadonly'),none:t('permNone')};
-  return `<span class="perm-badge perm-${perm||'none'}">${labels[perm]||'—'}</span>`;
+  return `<span class="perm-badge perm-${labels[perm]?perm:'none'}">${labels[perm]||'—'}</span>`;
 }
 
 // ── Drawer ─────────────────────────────────────────────
@@ -484,9 +489,10 @@ async function saveUser() {
       const wan   = document.getElementById('d-wan').value;
       const must  = document.getElementById('d-must-change').checked;
       if (!uname || !pwd) { toast(t('loginFill'), true); return; }
+      const apw = await askPassword(); if (!apw) return;
       const r = await fetch('api/users', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({username:uname, password:pwd, wol_permission:wol, nut_permission:nut, net_permission:net, pve_permission:pve, nas_permission:nas, dns_permission:dns, wan_permission:wan, must_change_password:must})
+        body: JSON.stringify({username:uname, password:pwd, wol_permission:wol, nut_permission:nut, net_permission:net, pve_permission:pve, nas_permission:nas, dns_permission:dns, wan_permission:wan, must_change_password:must, current_password:apw})
       });
       const d = await r.json();
       if (!r.ok) { toast(d.error||'Error', true); return; }
@@ -510,8 +516,10 @@ async function saveUser() {
       if (!r.ok) { toast(d.error||'Error', true); return; }
       // Cambiar contraseña si se ingresó
       if (newPw) {
-        const curPw = document.getElementById('d-cur-pw').value;
-        if (me && uorig === me.username && !curPw) { toast(t('curPwNeeded'), true); return; }
+        let curPw = document.getElementById('d-cur-pw').value;
+        const own = me && uorig === me.username;
+        if (own && !curPw) { toast(t('curPwNeeded'), true); return; }
+        if (!own) { curPw = await askPassword(); if (!curPw) return; }
         const r2 = await fetch('api/change_password', {
           method: 'POST', headers: {'Content-Type':'application/json'},
           body: JSON.stringify({username:uorig, new_password:newPw, current_password:curPw})
@@ -541,6 +549,28 @@ function confirmDelete(username) {
   };
   document.getElementById('del-overlay').classList.add('show');
 }
+
+// Pide la contraseña actual en un diálogo y devuelve una promesa con ella (o null si se cancela). Acciones críticas: crear usuario, crear/restaurar respaldo, restablecer la clave de otro.
+// EN: Ask for the current password in a dialog; returns a promise with it (or null when cancelled). Critical actions: create user, create/restore backup, reset someone else's password.
+let _pwResolve = null;
+function askPassword(titleKey, msgKey) {
+  document.querySelector('#pw-overlay h3').textContent = t(titleKey || 'reauthTitle');
+  document.querySelector('#pw-overlay p').textContent = t(msgKey || 'reauthMsg');
+  return new Promise(res => {
+    if (_pwResolve) _pwResolve(null);
+    _pwResolve = res;
+    const i = document.getElementById('pw-input'); i.value = '';
+    document.getElementById('pw-overlay').classList.add('show'); i.focus();
+  });
+}
+function _pwDone(v) {
+  document.getElementById('pw-overlay').classList.remove('show');
+  document.getElementById('pw-input').value = '';
+  const r = _pwResolve; _pwResolve = null; if (r) r(v);
+}
+function reauthOk() { _pwDone(document.getElementById('pw-input').value || null); }
+function reauthCancel() { _pwDone(null); }
+document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') reauthOk(); if (e.key === 'Escape') reauthCancel(); });
 
 function closeModals() { document.querySelectorAll('.overlay:not(.noclose)').forEach(o=>o.classList.remove('show')); }
 
@@ -595,9 +625,40 @@ function tpShowOut(text, bad) {
   o.textContent = text; o.className = 'tp-out show' + (bad?' bad':'');
   o.scrollTop = 0;
 }
+// Descarga de un respaldo: pide la frase de cifrado y la contraseña de la cuenta, y baja el archivo ya cifrado (.gpg).
+// EN: Backup download: asks for the encryption passphrase and the account password, and downloads the already encrypted (.gpg) file.
+let _exName = '';
 function tpDownload(name) {
-  const a = document.createElement('a'); a.href = 'api/teleporter/download/'+encodeURIComponent(name); a.download = name;
-  document.body.appendChild(a); a.click(); a.remove();
+  _exName = name;
+  document.getElementById('tp-ex-name').textContent = name;
+  ['tp-ex-pass','tp-ex-pass2','tp-ex-acct'].forEach(i => { const e = document.getElementById(i); e.value = ''; e.disabled = false; });
+  document.getElementById('tp-ex-plain').checked = false;
+  document.getElementById('tp-ex-overlay').classList.add('show');
+}
+function exPlainToggle() {
+  const plain = document.getElementById('tp-ex-plain').checked;
+  ['tp-ex-pass','tp-ex-pass2'].forEach(i => document.getElementById(i).disabled = plain);
+}
+function exCancel() { document.getElementById('tp-ex-overlay').classList.remove('show'); }
+async function exGo() {
+  const plain = document.getElementById('tp-ex-plain').checked;
+  const pw = document.getElementById('tp-ex-pass').value, pw2 = document.getElementById('tp-ex-pass2').value;
+  const acct = document.getElementById('tp-ex-acct').value;
+  if (!acct) { toast(t('exNeedPw'), true); return; }
+  if (!plain) {
+    if (pw.length < 12) { toast(t('exShort'), true); return; }
+    if (pw !== pw2) { toast(t('exMismatch'), true); return; }
+  }
+  try {
+    const r = await fetch('api/teleporter/export', {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:_exName, current_password:acct, passphrase:plain?'':pw, plain})});
+    if (!r.ok) { let d = {}; try { d = await r.json(); } catch(e) {} toast(d.error||t('tpFailed'), true); return; }
+    const blob = await r.blob();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = _exName + (plain ? '' : '.gpg');
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    exCancel();
+  } catch(e) { toast(t('tpFailed'), true); }
 }
 // Crea un respaldo nuevo en el servidor.
 // EN: Create a new backup on the server.
@@ -608,7 +669,7 @@ async function tpCreate() {
     const r = await fetch('api/teleporter/backup', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
     const d = await r.json();
     if (!r.ok || !d.ok) { toast(d.error||t('tpFailed'), true); tpShowOut(d.output||'', true); }
-    else { toast(t('tpCreated')); tpShowOut(d.output||''); tpDownload(d.name); }
+    else { toast(t('tpCreated')); tpShowOut(d.output||''); }
   } catch(e) { toast(t('tpFailed'), true); }
   finally { btn.disabled=false; btn.innerHTML=`<span>${t('tpCreate')}</span>`; tpLoad(); }
 }
@@ -618,12 +679,15 @@ document.getElementById('tp-file').addEventListener('change', e => {
 });
 // Sube un respaldo .tar.gz; el servidor comprueba tamaño y formato.
 // EN: Upload a .tar.gz backup; the server checks size and format.
-function tpUpload(file) {
+async function tpUpload(file) {
   if (_tp.max && file.size > _tp.max) { toast(t('tpTooBig', Math.round(_tp.max/1048576)), true); return; }
+  let pass = '';
+  if (/\.gpg$/i.test(file.name)) { pass = await askPassword('exTitle', 'upPassMsg'); if (!pass) return; }
   const btn = document.getElementById('tp-upload-btn'); btn.disabled = true;
   const xhr = new XMLHttpRequest();
   xhr.open('POST', 'api/teleporter/upload');
   xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+  if (pass) xhr.setRequestHeader('X-Backup-Passphrase', pass);
   xhr.upload.onprogress = ev => { if (ev.lengthComputable) btn.textContent = t('tpUploading', Math.round(ev.loaded*100/ev.total)); };
   xhr.onload = async () => {
     btn.disabled = false; btn.textContent = t('tpUpload');
@@ -663,8 +727,9 @@ function tpRestoreOpen(name) {
 // Confirma y lanza la restauración en el servidor; luego sigue su avance.
 // EN: Confirm and start the restore on the server; then follow its progress.
 async function tpRestoreGo() {
-  const body = {name:_tpName, confirm:true};
   closeModals();
+  const apw = await askPassword(); if (!apw) return;
+  const body = {name:_tpName, confirm:true, current_password:apw};
   try {
     const r = await fetch('api/teleporter/restore', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
     const d = await r.json();
@@ -831,3 +896,7 @@ async function ssCloseOthers() {
   if (r.ok) toast(t('ssClosedN', (await r.json()).closed)); else toast(t('tpFailed'), true);
   ssLoad();
 }
+
+// Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
+// EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
+if (window.cspRegister) cspRegister({ closeDrawer, closeModals, confirmDelete, doLogin, editUser, exCancel, exGo, exPlainToggle, logout, openDrawer, reauthCancel, reauthOk, saveUser, setLang, setTheme, ssClose, ssCloseOthers, toggleNav, tpCheck, tpCreate, tpDelete, tpDownload, tpRestoreGo, tpRestoreOpen });

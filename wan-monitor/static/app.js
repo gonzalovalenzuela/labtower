@@ -659,3 +659,7 @@ _i18nReady=true;
   const ok=await checkSession();
   if(ok){applyPermissions();await initApp();const ls=document.getElementById('login-screen');ls.style.opacity='0';setTimeout(()=>ls.style.display='none',150);}else{document.getElementById('login-screen').style.display='flex';}
 })();
+
+// Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
+// EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
+if (window.cspRegister) cspRegister({ closeModals, doLogin, logout, runSpeed, saveSettings, setLang, setRange, setTheme, toggleNav });

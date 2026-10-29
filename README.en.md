@@ -52,7 +52,7 @@ sudo apt-get install -y ./labtower_2.1_all.deb
 
 Use `apt-get install ./file.deb`, not `dpkg -i`, so `apt` installs the dependencies. Then open `http://<pi-ip>/`.
 
-The installer creates the `labtower` system user, the systemd services, the nginx config and the `admin` user with a **random password**, shown when it finishes. If you lost it: `sudo cat /var/lib/labtower/initial-admin-password`.
+The installer creates one system user per service (`labtower-auth`, `labtower-wol`, …), the systemd services, the nginx config and the `admin` user with a **random password**, shown when it finishes. If you lost it: `sudo cat /var/lib/labtower/auth/initial-admin-password`.
 
 **From source** (development): copy the modules to `/opt/labtower`, install the config from `etc/nginx/` and create the services using `debian/postinst` as a guide.
 
@@ -220,7 +220,7 @@ sudo teleporter restore ~/labtower-20261009.tar.gz         # restore (-y to skip
 - **Restoring NUT and nginx** is only done from the console with `--nut` and `--nginx`; the panel does not allow it.
 - **Before restoring**, a copy of the current state is saved in `/var/backups/labtower/`.
 - **Limits:** an archive that expands to more than 2 GiB is rejected; uploads from the panel are capped at 200 MB.
-- **From the panel** (`/admin/` → *Backup & restore*): create and download, upload, verify and restore. Only admins of every module can use it.
+- **From the panel** (`/admin/` → *Backup & restore*): create, download, upload, verify and restore. Only admins of every module can use it. Downloading asks for your account password and the file comes out **encrypted** (gpg, AES-256) with a passphrase you choose (12+ characters); uploading a `.gpg` asks for that passphrase. To open it by hand: `gpg --decrypt backup.tar.gz.gpg > backup.tar.gz`. Creating a backup does not download it.
 - **Moving to another Pi:** install the `.deb`, sign in as `admin`, upload the backup and press *Restore*.
 - The file holds password hashes and tokens (600 permissions): keep it somewhere private.
 
@@ -268,7 +268,7 @@ Each module answers `GET /api/health` (200 = ok or degraded, 503 = failed). With
 | `wan-monitor` | WAN Monitor |
 | `labtower-overview` | Overview |
 
-**Uninstall:** `sudo apt remove labtower` stops the services and saves a copy of the data in `/var/backups/labtower`. `sudo apt purge labtower` also removes the code, services, nginx site and the `labtower` user. In both cases `/var/lib/labtower` and `/var/backups/labtower` are **not deleted**; remove them by hand for a clean machine.
+**Uninstall:** `sudo apt remove labtower` stops the services and saves a copy of the data in `/var/backups/labtower`. `sudo apt purge labtower` also removes the code, services, nginx site and the `labtower-*` users. In both cases `/var/lib/labtower` and `/var/backups/labtower` are **not deleted**; remove them by hand for a clean machine.
 
 ---
 
@@ -316,6 +316,13 @@ Designed for a **trusted local network**. Do not expose port 80 to the internet.
 - **Validated input:** NUT, Proxmox, NAS and Pi-hole hosts and names; the Pi-hole certificate is pinned on first connection; each Proxmox cluster's fingerprint is pinned. An old cluster without a fingerprint shows a permanent warning (use *Pin certificate*).
 - **Backup from the panel:** runs as root through a `sudo` rule limited to `teleporter.sh gui-backup` and `gui-restore`. Restoring the NUT config can bring in commands that `upsd` runs as root: restore trusted backups only.
 
+- **Critical actions:** creating a user, resetting someone else's password, restoring or downloading a backup ask again for your account password (with the same attempt brake as the login). A stolen session or an unattended browser is not enough.
+- **Session life:** besides the sliding window, every session has an absolute cap since its creation (14 days the normal one, 30 for "one week", 90 for "one month", 400 for "forever"): a stolen token is not good forever.
+- **Device credentials:** to connect to Proxmox, NAS, Pi-hole/AdGuard and switches, LabTower stores their users and passwords **readable** (they cannot be hashed because they are needed to log in) in files under `/var/lib/labtower/` with 600 permissions. Use **read-only** accounts on those devices and, if you can, a management VLAN; whoever reads those files (or an unencrypted backup) gets those credentials.
+- **Connection targets:** Proxmox, NAS, DNS, Pi-hole and switches do not accept the machine itself (loopback) or link-local addresses as a target, so LabTower cannot be used as a bridge to its own internal services. If a name is later changed to point there, the check is only repeated when the device is edited.
+- **DNS servers with their own certificate:** if you turn "Verify the TLS certificate" off, the fingerprint is pinned on the first connection and a change is refused (saving the server again clears it).
+- **Isolation between modules:** every service runs as its own system user (`labtower-wol`, `-nut`, `-net`, `-pve`, `-nas`, `-dns`, `-wan`, `-overview`) and can only write its own folder `/var/lib/labtower/<module>/` (mode 700, with its own `metrics.db`); systemd denies it the rest of the disk. Users, sessions, attempt counters and the event timeline belong to the **authentication service** (the Admin Panel, user `labtower-auth`, folder `auth/`), which the other modules query through a Unix socket (`/run/labtower/auth.sock`) that identifies the caller with the kernel (`SO_PEERCRED`). The socket only lets a module check a session, log in or out (the password is verified there, a module never sees a hash) and record events under the caller's own name; there is no operation to create a session without a password or to read users. A compromised module can no longer forge sessions, take password hashes away or read or delete another module's data. The only shared items are two read-only files (`wol-console/devices.json` and `net-monitor/hosts.json`, mode 640 for the `labtower` group) that each module reads from the other as untrusted input. Remaining limits: a compromised module can still **try** passwords against the authentication service (same per-account brake; it can dodge the per-IP brake by claiming another IP), and the Admin Panel keeps the only `sudo` into Teleporter.
+
 ---
 
 ## Layout
@@ -348,7 +355,7 @@ On the Pi:
 | Path | Content |
 |---|---|
 | `/opt/labtower/` | Code (replaced on every update) |
-| `/var/lib/labtower/` | Data: `users.json`, `<module>/`, `metrics.db`, `events.json` |
+| `/var/lib/labtower/` | Data: `auth/` (users, sessions, events; `labtower-auth` only) and `<module>/` (each with its own `metrics.db`) |
 | `/etc/labtower/` | `backup.conf`, backup key and passphrase, `tls/` |
 | `/var/backups/labtower/` | Copies made before updating, uninstalling or restoring |
 | `/var/log/labtower/` | SFTP backup status and restore log |

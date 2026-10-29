@@ -7,7 +7,7 @@ module only validates names/sizes and talks to that script."""
 # EN: Flow: the panel (unprivileged user "labtower") does NOT touch backups directly. Everything that
 #     needs root (create, restore) is done by /usr/local/bin/teleporter.sh through sudo with a very narrow
 #     sudoers rule; here only names and sizes are validated and the script is called.
-import os, re, subprocess, time
+import os, re, shutil, subprocess, tempfile, time
 from pathlib import Path
 
 # Rutas y límites; las variables TELEPORTER_* permiten cambiarlos en las pruebas.
@@ -60,6 +60,49 @@ def _tail(text, limit=OUT_LIMIT):
     return text if len(text) <= limit else "…" + text[-limit:]
 
 
+# Cifrado de respaldos (gpg simétrico AES-256, el mismo formato que usa labtower-sftp-backup): un respaldo contiene hashes de contraseñas y tokens de API, así que lo
+# que sale de esta máquina por el navegador va cifrado con una frase que el administrador elige. La frase viaja por una tubería (nunca en la línea de comandos).
+# EN: Backup encryption (symmetric gpg AES-256, the same format labtower-sftp-backup uses): a backup holds password hashes and API tokens, so what leaves this machine
+#     through the browser is encrypted with a passphrase the administrator chooses. The passphrase goes through a pipe (never on the command line).
+MIN_PASSPHRASE = 12
+GPG_MAGIC      = (0x8c, 0xc3, 0x84, 0x85)      # first byte of a gpg symmetric-encrypted message (old and new packet formats)
+
+def passphrase_error(pw):
+    if not isinstance(pw, str) or len(pw) < MIN_PASSPHRASE: return f"The passphrase must have at least {MIN_PASSPHRASE} characters"
+    if len(pw) > 256 or re.search(r"[\x00-\x1f\x7f]", pw): return "Invalid passphrase"
+    return None
+
+def _gpg(args, passphrase):
+    home = tempfile.mkdtemp(prefix="ltg-")            # short path: gpg-agent sockets have a length limit
+    r, w = os.pipe()
+    try:
+        os.write(w, passphrase.encode() + b"\n"); os.close(w)
+        cmd = ["gpg", "--homedir", home, "--batch", "--yes", "--quiet", "--no-tty", "--pinentry-mode", "loopback", "--passphrase-fd", str(r)] + args
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=600, pass_fds=(r,))
+        return p.returncode == 0, (p.stderr or "").strip()[:300]
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return False, str(e)[:300]
+    finally:
+        try: os.close(r)
+        except OSError: pass
+        subprocess.run(["gpgconf", "--homedir", home, "--kill", "gpg-agent"], capture_output=True, timeout=10)
+        shutil.rmtree(home, ignore_errors=True)
+
+# Cifra un respaldo del spool a un temporal privado y devuelve su ruta (quien llama lo borra). None + error si falla.
+# EN: Encrypt a spool backup into a private temp file and return its path (the caller deletes it). None + error on failure.
+def encrypt_backup(name, passphrase):
+    p = path_of(name)
+    if not p: return None, "Backup not found"
+    err = passphrase_error(passphrase)
+    if err: return None, err
+    out = SPOOL / f".export-{os.getpid()}-{os.urandom(4).hex()}.gpg"
+    ok, msg = _gpg(["--symmetric", "--cipher-algo", "AES256", "-o", str(out), str(p)], passphrase)
+    if not ok or not out.is_file():
+        out.unlink(missing_ok=True)
+        return None, "Could not encrypt the backup" + (f": {msg}" if msg else "")
+    os.chmod(out, 0o600)
+    return out, None
+
 # Ejecuta teleporter.sh (con sudo si hace falta) y devuelve (éxito, salida). Cubre los fallos típicos:
 # tiempo agotado, script ausente o error al lanzarlo.
 # EN: Run teleporter.sh (with sudo if needed) and return (success, output). Covers the typical failures:
@@ -110,7 +153,7 @@ def create_backup():
 # que llegue completo y que empiece con la firma de gzip; solo entonces lo renombra a «upload-<fecha>».
 # EN: Save an uploaded backup, reading it in 1 MB blocks into a private temp file (0600). Checks the size,
 #     that it arrives complete and that it starts with the gzip signature; only then renames it to "upload-<date>".
-def save_upload(rfile, length):
+def save_upload(rfile, length, passphrase=None):
     """Stream `length` bytes from rfile into the spool. Returns (name, error)."""
     if length <= 0:
         return None, "Empty upload"
@@ -137,6 +180,20 @@ def save_upload(rfile, length):
         if got != length:
             tmp.unlink(missing_ok=True)
             return None, "Upload interrupted"
+        if first[:1] and first[0] in GPG_MAGIC and first != b"\x1f\x8b":
+            # Respaldo cifrado: se descifra con la frase indicada a otro temporal y se sigue con ese. / EN: Encrypted backup: decrypt it with the given passphrase to another temp file and go on with that one.
+            if not passphrase:
+                tmp.unlink(missing_ok=True)
+                return None, "This backup is encrypted: enter its passphrase"
+            dec = SPOOL / f".upload-{os.getpid()}-{os.urandom(4).hex()}.dec"
+            ok, msg = _gpg(["--decrypt", "-o", str(dec), str(tmp)], passphrase)
+            tmp.unlink(missing_ok=True)
+            if not ok or not dec.is_file():
+                dec.unlink(missing_ok=True)
+                return None, "Could not decrypt the backup (wrong passphrase or damaged file)"
+            os.chmod(dec, 0o600)
+            tmp = dec
+            with open(tmp, "rb") as f: first = f.read(2)
         if first != b"\x1f\x8b":
             tmp.unlink(missing_ok=True)
             return None, "Not a .tar.gz file"

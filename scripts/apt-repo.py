@@ -17,7 +17,7 @@ Package fields come from `dpkg-deb -f` when available; otherwise from debian/con
 (the Version must match the file name). / Los campos salen de `dpkg-deb -f` o, si no existe
 (macOS), de debian/control del repo (la versión debe coincidir con el nombre del archivo).
 """
-import argparse, gzip, hashlib, os, re, shutil, subprocess, sys, time
+import argparse, gzip, hashlib, re, shutil, subprocess, sys, time
 from email.utils import formatdate
 from pathlib import Path
 
@@ -92,7 +92,7 @@ def build(repo: Path, key: str):
         write(base / "Packages", stanzas)
         write(base / "Packages.gz", gzip.compress(stanzas, mtime=0))
         files += [base / "Packages", base / "Packages.gz"]
-    lines = [f"Origin: LabTower", f"Label: LabTower", f"Suite: {SUITE}", f"Codename: {SUITE}",
+    lines = ["Origin: LabTower", "Label: LabTower", f"Suite: {SUITE}", f"Codename: {SUITE}",
              f"Date: {formatdate(time.time(), usegmt=True)}", f"Architectures: {' '.join(ARCHS)}",
              f"Components: {COMP}", "Description: LabTower APT repository"]
     for name, idx in (("MD5Sum", 0), ("SHA1", 1), ("SHA256", 2)):

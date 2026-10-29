@@ -293,6 +293,35 @@
   </div>
 </div>
 
+<!-- Re-entry of the password for critical actions / Re-ingreso de contraseña en acciones críticas -->
+<div class="overlay noclose" id="pw-overlay">
+  <div class="modal">
+    <h3 data-i18n="reauthTitle">Confirm your password</h3>
+    <p data-i18n="reauthMsg">This action is sensitive. Enter your current password to continue.</p>
+    <input type="password" id="pw-input" autocomplete="current-password" maxlength="256" style="width:100%;margin:8px 0">
+    <div class="modal-acts">
+      <button class="btn-mc" data-on-click="reauthCancel" data-i18n="btnCancel">Cancel</button>
+      <button class="btn-mok" data-on-click="reauthOk" data-i18n="reauthBtn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Descarga de un respaldo: frase de cifrado y contraseña de la cuenta / Backup download: encryption passphrase and account password -->
+<div class="overlay noclose" id="tp-ex-overlay">
+  <div class="modal">
+    <h3 data-i18n="exTitle">Download backup</h3>
+    <p><b id="tp-ex-name" style="font-family:var(--mono);font-size:12px"></b><br><span data-i18n="exMsg">The backup holds password hashes and API tokens, so it is downloaded encrypted (AES-256). Choose a passphrase and keep it: without it the file cannot be opened.</span></p>
+    <input type="password" id="tp-ex-pass" autocomplete="new-password" maxlength="256" data-i18n-ph="exPass" placeholder="Passphrase (12+ characters)" style="width:100%;margin:6px 0">
+    <input type="password" id="tp-ex-pass2" autocomplete="new-password" maxlength="256" data-i18n-ph="exPass2" placeholder="Repeat the passphrase" style="width:100%;margin:6px 0">
+    <input type="password" id="tp-ex-acct" autocomplete="current-password" maxlength="256" data-i18n-ph="exAcct" placeholder="Your account password" style="width:100%;margin:6px 0">
+    <label class="tp-opt"><input type="checkbox" id="tp-ex-plain" data-on-change="exPlainToggle"><span data-i18n="exPlain">Download WITHOUT encryption (not recommended)</span></label>
+    <div class="modal-acts">
+      <button class="btn-mc" data-on-click="exCancel" data-i18n="btnCancel">Cancel</button>
+      <button class="btn-mok" data-on-click="exGo" data-i18n="exBtn">Download</button>
+    </div>
+  </div>
+</div>
+
 <!-- Restore confirmation -->
 <div class="overlay" id="tp-rs-overlay">
   <div class="modal wide">

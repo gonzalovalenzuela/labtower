@@ -7,6 +7,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "auth"))
 import auth  # noqa: E402  (la ruta se agrega arriba)
 
+# Las pruebas levantan servidores falsos en 127.0.0.1; en producción valid_target() los rechaza (anti-SSRF). Aquí se relaja a valid_host y la función real
+# se conserva en real_valid_target para probarla por separado.
+# EN: The tests start fake servers on 127.0.0.1; in production valid_target() rejects them (anti-SSRF). Here it is relaxed to valid_host and the real
+#     function is kept in real_valid_target to be tested on its own.
+real_valid_target = auth.valid_target
+auth.valid_target = auth.valid_host
+
 _loaded = {}
 def load(rel):
     """Importa ROOT/rel (p. ej. 'nut-monitor/server.py') con un nombre único; los guiones no sirven en `import`."""

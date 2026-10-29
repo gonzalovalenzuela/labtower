@@ -466,7 +466,7 @@ def track_outage(r, first_fail_ts):
         if r["up"]:
             S.fails = 0
             if S.down_since is not None:
-                start, dur = S.down_since, r["ts"] - S.down_since
+                dur = r["ts"] - S.down_since
                 S.down_since, S.scope = None, None
                 try: _db("UPDATE wan_outages SET end = ? WHERE end IS NULL", (r["ts"],))
                 except Exception as e: log.warning(f"could not close the outage: {e}")
@@ -605,8 +605,9 @@ class H(BaseHTTPRequestHandler):
         try:
             n = int(self.headers.get("Content-Length", 0))
             if n < 0 or n > 8192: return None
-            return json.loads(self.rfile.read(n)) if n else {}
-        except (ValueError, TypeError, OSError): return None
+            d = json.loads(self.rfile.read(n)) if n else {}
+            return d if isinstance(d, dict) else None      # EN: a list/number would crash the handlers (500); reject it (400)
+        except (ValueError, TypeError, OSError, RecursionError): return None
     def _tok(self):
         return auth.token_from_request(dict(self.headers), self.headers.get("Cookie", ""))
     def _file(self, path, mime):
@@ -659,15 +660,12 @@ class H(BaseHTTPRequestHandler):
         body = self._body()
         if body is None: return self._json(400, {"error": "Invalid request body"})
         if path == "/api/login":
-            u, err = auth.login(self, body.get("username", ""), body.get("password", ""))
-            if not u: return self._json(err[0], {"error": err[1]})
-            ttl = auth.remember_ttl(body.get("remember"))
-            token = auth.create_session(body["username"], u["permissions"], ttl, self)
-            must = auth.load_users().get(body["username"], {}).get("must_change_password", False)
+            r, err = auth.login_session(self, body.get("username", ""), body.get("password", ""), body.get("remember"))   # the service checks the password and opens the session
+            if not r: return self._json(err[0], {"error": err[1]})
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
-            self.send_header("Set-Cookie", auth.session_cookie(token, ttl))
-            br = json.dumps({"ok": True, "username": body["username"], "permissions": u["permissions"], "must_change_password": must}).encode()
+            self.send_header("Set-Cookie", auth.session_cookie(r["token"], r["ttl"]))
+            br = json.dumps({"ok": True, "username": r["username"], "permissions": r["permissions"], "must_change_password": r["must_change_password"]}).encode()
             self.send_header("Content-Length", str(len(br)))
             self.end_headers(); self.wfile.write(br); return
         if path == "/api/logout":

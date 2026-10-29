@@ -40,6 +40,8 @@ import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path
 
+import auth      # valid_target(): the switch address cannot be this machine or a link-local address / la dirección no puede ser esta máquina ni de enlace local
+
 
 class SessionExpired(Exception):
     pass
@@ -697,6 +699,8 @@ def validate(body, current=None):
     host = _clean_text(body.get("host", cur.get("host", "")), 255)
     if not HOST_RE.match(host) or (driver == "snmp" and ":" in host):
         raise ValueError("Invalid host (IP or name" + ("" if driver == "snmp" else ", optional :port") + ")")
+    if not auth.valid_target(host.rsplit(":", 1)[0] if ":" in host and not host.count(":") > 1 else host):
+        raise ValueError("Invalid host (this machine and link-local addresses are not allowed)")
     cfg = {"id": cur.get("id", ""), "name": name, "driver": driver, "host": host,
            "enabled": bool(body.get("enabled", cur.get("enabled", True))), "ports": dict(cur.get("ports") or {})}
     # Distribución del panel frontal: una fila, o dos filas alternadas (1 arriba, 2 abajo, 3 arriba…). / EN: front-panel layout: one row, or two alternating rows.
@@ -1078,7 +1082,6 @@ class Manager:
         rows = []
         with self.lock:
             links = self._links_locked()
-            names = {s["id"]: s["name"] for s in self.cfg["switches"]}
             for cfg in self.cfg["switches"]:
                 sid = cfg["id"]
                 meta = cfg.get("ports") or {}

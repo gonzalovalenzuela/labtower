@@ -34,8 +34,6 @@ import json, os, re, ssl, sys, time, logging, threading, http.client, hashlib, s
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
 from urllib.parse import urlparse, parse_qs
-from urllib.request import urlopen, Request
-from urllib.error import URLError
 from pathlib import Path
 
 # Módulo compartido de autenticación (carpeta hermana /auth).
@@ -589,8 +587,9 @@ class H(BaseHTTPRequestHandler):
         try:
             n = int(self.headers.get("Content-Length", 0))
             if n < 0 or n > 8192: return None
-            return json.loads(self.rfile.read(n))
-        except (ValueError, TypeError, OSError): return None
+            d = json.loads(self.rfile.read(n))
+            return d if isinstance(d, dict) else None      # EN: a list/number would crash the handlers (500); reject it (400)
+        except (ValueError, TypeError, OSError, RecursionError): return None
 
     def _tok(self):
         return auth.token_from_request(dict(self.headers), self.headers.get("Cookie", ""))
@@ -718,19 +717,15 @@ class H(BaseHTTPRequestHandler):
         # Login con límite de intentos (auth.login); la cookie es HttpOnly y SameSite=Strict.
         # EN: Login with attempt limiting (auth.login); the cookie is HttpOnly and SameSite=Strict.
         if path == "/api/login":
-            u, err = auth.login(self, body.get("username",""), body.get("password",""))
-            if not u: return self._json(err[0], {"error": err[1]})
-            ttl = auth.remember_ttl(body.get("remember"))     # «Recordarme»: solo valores de la lista blanca / EN: only whitelisted values
-            token = auth.create_session(body["username"], u["permissions"], ttl, self)
-            users = auth.load_users()
-            must  = users.get(body["username"],{}).get("must_change_password", False)
+            r, err = auth.login_session(self, body.get("username", ""), body.get("password", ""), body.get("remember"))   # the service checks the password and opens the session
+            if not r: return self._json(err[0], {"error": err[1]})
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Set-Cookie",
-                auth.session_cookie(token, ttl))
-            br = json.dumps({"ok": True, "username": body["username"],
-                             "permissions": u["permissions"],
-                             "must_change_password": must}).encode()
+                auth.session_cookie(r["token"], r["ttl"]))
+            br = json.dumps({"ok": True, "username": r["username"],
+                             "permissions": r["permissions"],
+                             "must_change_password": r["must_change_password"]}).encode()
             self.send_header("Content-Length", str(len(br)))
             self.end_headers(); self.wfile.write(br); return
 
@@ -769,7 +764,7 @@ class H(BaseHTTPRequestHandler):
             if not auth.check_permission(tok, "pve", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
             host  = str(body.get("host","")).strip()
-            name  = (body.get("name","")).strip()
+            name  = str(body.get("name","")).strip()
             user  = str(body.get("user","")).strip()
             tname = str(body.get("token_name","")).strip()
             tval  = str(body.get("token_value","")).strip()
@@ -777,7 +772,7 @@ class H(BaseHTTPRequestHandler):
             except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
             if not all([host,name,user,tname,tval]):
                 return self._json(400, {"error": "All fields are required"})
-            if not auth.valid_host(host): return self._json(400, {"error": "Invalid host"})
+            if not auth.valid_target(host): return self._json(400, {"error": "Invalid host (this machine and link-local addresses are not allowed)"})
             if len(name) > 60 or re.search(r"[\x00-\x1f\x7f]", name): return self._json(400, {"error": "Invalid name"})
             if not re.fullmatch(r"[A-Za-z0-9_.@!-]{1,64}", user) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", tname):
                 return self._json(400, {"error": "Invalid user or token name"})
@@ -807,7 +802,7 @@ class H(BaseHTTPRequestHandler):
             host = str(body.get("host","")).strip()
             try: port = int(body.get("port", 8006))
             except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
-            if not auth.valid_host(host) or not 1 <= port <= 65535: return self._json(400, {"error": "Invalid host or port"})
+            if not auth.valid_target(host) or not 1 <= port <= 65535: return self._json(400, {"error": "Invalid host or port"})
             try:
                 self._json(200, {"ok": True, "fingerprint": _fp_fmt(fetch_fingerprint(host, port))})
             except Exception as e:
@@ -849,7 +844,7 @@ class H(BaseHTTPRequestHandler):
             host  = str(body.get("host","")).strip()
             try: port = int(body.get("port", 8006))
             except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
-            if not auth.valid_host(host) or not 1 <= port <= 65535: return self._json(400, {"error": "Invalid host or port"})
+            if not auth.valid_target(host) or not 1 <= port <= 65535: return self._json(400, {"error": "Invalid host or port"})
             user  = str(body.get("user","")).strip()
             tname = str(body.get("token_name","")).strip()
             tval  = str(body.get("token_value","")).strip()

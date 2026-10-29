@@ -14,7 +14,7 @@
 #       · health helpers  → queries each module's /api/health and builds the summary
 #       · class H         → HTTP handler: do_GET, do_POST, do_PUT and do_DELETE
 #       · final block     → permission migration and server startup
-import json, sys, time, logging, re
+import json, os, sys, time, logging, re
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
 from urllib.parse import urlparse
@@ -24,6 +24,7 @@ from pathlib import Path
 # EN: The auth module lives in the same folder; it is added to the path so it can be imported when the script is run directly.
 sys.path.insert(0, str(Path(__file__).parent))
 import auth
+import authrpc
 import teleporter_api as tp
 
 # Solo escucha en loopback: el acceso desde la red pasa por nginx (puerto 80), que es quien aplica cabeceras de seguridad.
@@ -134,8 +135,25 @@ class H(BaseHTTPRequestHandler):
         try:
             n = int(self.headers.get("Content-Length", 0))
             if n < 0 or n > 8192: return None
-            return json.loads(self.rfile.read(n))
-        except (ValueError, TypeError, OSError): return None
+            d = json.loads(self.rfile.read(n))
+            return d if isinstance(d, dict) else None      # a list/number/null would crash every .get() below → 400 instead of 500
+        except (ValueError, TypeError, OSError, RecursionError): return None
+
+    # Re-ingreso de contraseña para acciones críticas (crear usuario, crear/restaurar respaldo, restablecer la contraseña de otro): una sesión robada
+    # o un navegador desatendido no bastan. Usa el mismo freno de intentos que el cambio de contraseña. Devuelve None si está bien, o (código, mensaje).
+    # EN: Password re-entry for critical actions (create user, create/restore backup, reset someone else's password): a stolen session or an
+    #     unattended browser is not enough. Uses the same attempt brake as the password change. Returns None when fine, or (code, message).
+    def _reauth(self, me, body):
+        cur = body.get("current_password")
+        if not isinstance(cur, str) or not cur:
+            return (401, "Password confirmation required")
+        wait = auth.password_guard_wait(me)
+        if wait: return (429, f"Too many failed attempts. Try again in {wait} s")
+        if auth.authenticate(me, cur) is None:
+            auth.password_guard_fail(me)
+            return (403, "Current password is incorrect")
+        auth.password_guard_ok(me)
+        return None
 
     # Token de sesión de la petición, desde la cabecera Authorization o la cookie.
     # EN: Session token of the request, from the Authorization header or the cookie.
@@ -176,12 +194,12 @@ class H(BaseHTTPRequestHandler):
 
     # Descarga de un respaldo: se envía por bloques de 1 MB para no cargar el archivo completo en memoria.
     # EN: Backup download: sent in 1 MB blocks so the whole file is never loaded into memory.
-    def _tp_download(self, name):
-        p = tp.path_of(name)
+    def _tp_download(self, name, path=None, ctype="application/gzip"):
+        p = path or tp.path_of(name)
         if not p: return self._json(404, {"error": "Backup not found"})
         size = p.stat().st_size
         self.send_response(200)
-        self.send_header("Content-Type", "application/gzip")
+        self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(size))
         self.send_header("Content-Disposition", f'attachment; filename="{name}"')
         self.send_header("Cache-Control", "no-store")
@@ -200,15 +218,15 @@ class H(BaseHTTPRequestHandler):
         except ValueError: length = 0
         if length > tp.MAX_UPLOAD:
             return self._json(413, {"error": f"File too large (limit {tp.MAX_UPLOAD // (1024*1024)} MB)"})
-        name, err = tp.save_upload(self.rfile, length)
+        name, err = tp.save_upload(self.rfile, length, self.headers.get("X-Backup-Passphrase") or None)
         if err: return self._json(400, {"error": err})
         log.info(f"Backup uploaded: {name} by {self._me(tok)}")
         self._json(201, {"ok": True, "name": name})
 
     # GET: página, versión y salud son públicas (la salud sin detalle). Todo lo demás exige ser admin.
-    # Rutas: /api/teleporter, /api/teleporter/download/<archivo>, /api/users, /api/me.
+    # Rutas: /api/teleporter, /api/users, /api/me (la descarga de respaldos es POST /api/teleporter/export).
     # EN: GET: page, version and health are public (health without details). Everything else requires admin.
-    #     Routes: /api/teleporter, /api/teleporter/download/<file>, /api/users, /api/me.
+    #     Routes: /api/teleporter, /api/users, /api/me (backup download is POST /api/teleporter/export).
     def do_GET(self):
         path = urlparse(self.path).path.rstrip("/") or "/"
         tok  = self._tok()
@@ -247,8 +265,6 @@ class H(BaseHTTPRequestHandler):
             return self._json(200, {"available": tp.available(), "backups": tp.list_backups(),
                                     "restore": tp.restore_status(),
                                     "max_upload": tp.MAX_UPLOAD})
-        m = re.match(r"^/api/teleporter/download/([A-Za-z0-9._-]+)$", path)
-        if m: return self._tp_download(m.group(1))
 
         if path == "/api/users":
             users = auth.load_users()
@@ -364,12 +380,29 @@ class H(BaseHTTPRequestHandler):
                 return self._json(403, {"error": "Backups require administrator access on all modules"})
             if not tp.available(): return self._json(503, {"error": "teleporter.sh is not installed"})
             action = path.rsplit("/", 1)[1]
+            if action == "restore":
+                e = self._reauth(me, body)
+                if e: return self._json(e[0], {"error": e[1]})
             if action == "backup":
                 ok, name, out = tp.create_backup()
                 log.info(f"Backup created by {me}: {name if ok else 'FAILED'}")
                 return self._json(200 if ok else 500, {"ok": ok, "name": name, "output": out,
                                   **({} if ok else {"error": "Backup failed"})})
             name = body.get("name")
+            if action == "export":
+                # Descarga CIFRADA (o, solo si se pide expresamente, en claro): exige la contraseña de la cuenta y una frase de al menos 12 caracteres.
+                # EN: ENCRYPTED download (or, only if explicitly asked, plain): requires the account password and a passphrase of at least 12 characters.
+                e = self._reauth(me, body)
+                if e: return self._json(e[0], {"error": e[1]})
+                if not tp.valid_name(name): return self._json(404, {"error": "Backup not found"})
+                if body.get("plain") is True:
+                    log.warning(f"Backup downloaded UNENCRYPTED: {name} by {me}")
+                    return self._tp_download(name)
+                out, err = tp.encrypt_backup(name, body.get("passphrase"))
+                if err: return self._json(400 if "passphrase" in err.lower() else 500, {"error": err})
+                log.info(f"Backup downloaded encrypted: {name} by {me}")
+                try: return self._tp_download(name + ".gpg", path=out, ctype="application/octet-stream")
+                finally: out.unlink(missing_ok=True)
             if action == "check":
                 ok, out = tp.verify(name)
                 return self._json(200, {"ok": ok, "output": out})
@@ -388,8 +421,12 @@ class H(BaseHTTPRequestHandler):
         #     and Net/Proxmox no access. All under users_lock so other changes are not overwritten.
         if path == "/api/users":
             # Crear usuario
-            uname = (body.get("username") or "").strip()
-            pwd   = (body.get("password") or "").strip()
+            e = self._reauth(me, body)
+            if e: return self._json(e[0], {"error": e[1]})
+            uname = body.get("username"); pwd = body.get("password")
+            if not isinstance(uname, str) or not isinstance(pwd, str):
+                return self._json(400, {"error": "Invalid request body"})
+            uname = uname.strip(); pwd = pwd.strip()
             # Sin nivel indicado: «readonly» en WOL/UPS y «none» en Net/Proxmox, pero nunca más de lo que el admin tiene en ese módulo.
             # EN: With no level given: "readonly" on WOL/UPS and "none" on Net/Proxmox, but never more than the admin holds on that module.
             perms = {}
@@ -429,6 +466,8 @@ class H(BaseHTTPRequestHandler):
         #     closes every other session of that account.
         elif path == "/api/change_password":
             # Cambiar la propia contraseña (exige la actual) o la de otro usuario (restablecimiento por un admin)
+            if not isinstance(body.get("new_password", ""), str) or not isinstance(body.get("username", ""), str):
+                return self._json(400, {"error": "Invalid request body"})
             target = str(body.get("username") or me).strip()
             new_pw = str(body.get("new_password") or "").strip()
             perr = auth.password_error(new_pw, target)
@@ -437,6 +476,9 @@ class H(BaseHTTPRequestHandler):
             # No-admin solo puede cambiar la suya
             if target != me and not auth.check_permission(tok, "wol", "admin"):
                 return self._json(403, {"error": "You can only change your own password"})
+            if target != me:
+                e = self._reauth(me, body)
+                if e: return self._json(e[0], {"error": e[1]})
             if target == me:
                 # Con una sesión robada no se puede fijar una contraseña nueva sin conocer la actual; los intentos se limitan igual que en el login.
                 # EN: With a stolen session a new password cannot be set without knowing the current one; attempts are limited like the login.
@@ -572,6 +614,10 @@ if __name__ == "__main__":
         if auth.ensure_permissions(): log.info("'net'/'pve'/'nas'/'dns'/'wan' permissions filled in")
     except Exception as e:
         log.warning(f"Permissions: {e}")
+    # Servicio de autenticación para los demás módulos (socket Unix). Sin LABTOWER_AUTH_LISTEN (desarrollo) no se abre.
+    # EN: Authentication service for the other modules (Unix socket). Without LABTOWER_AUTH_LISTEN (development) it is not opened.
+    _sock = os.environ.get("LABTOWER_AUTH_LISTEN", "").strip()
+    if _sock: authrpc.serve(_sock, auth)
     log.info(f"Admin Panel en http://{HOST}:{PORT}")
     try:
         srv = ThreadingHTTPServer((HOST, PORT), H); srv.daemon_threads = True

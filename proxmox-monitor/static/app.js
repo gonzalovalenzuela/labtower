@@ -579,7 +579,7 @@ function buildVMSection(items, type, running, nodeName){
             <span class="vm-dot ${dotCls}"></span>
             <span class="vm-id">${esc(v.vmid)}</span>
             <span class="vm-name" title="${esc(v.name||'')}">${esc(v.name||'—')}${v.lock==='migrate'?' <span title="migrating" style="color:var(--orange)">⇄</span>':''}</span>
-            <span class="vm-type ${type.toLowerCase()}">${type}</span>
+            <span class="vm-type ${esc(String(type).toLowerCase().replace(/[^a-z0-9_-]/g,''))}">${esc(type)}</span>
             ${v.status==='running'?`
               <span class="vm-cpu">${cpuPct}%</span>
               <span class="vm-mem">${fmtBytes(v.mem||0)}</span>
@@ -736,3 +736,7 @@ function toggleNav(force){
 // EN: Returns the chosen duration ("day","week","month","forever") or "" if unchecked. Remembers the last choice in this browser.
 function remValue(){const c=document.getElementById('l-rem'),s=document.getElementById('l-remsel');const v=c&&c.checked&&s?s.value:'';try{localStorage.setItem('pi-remember',v)}catch(e){}return v}
 (function remInit(){try{const v=localStorage.getItem('pi-remember')||'';const c=document.getElementById('l-rem'),s=document.getElementById('l-remsel');if(c&&s&&['day','week','month','forever'].includes(v)){c.checked=true;s.disabled=false;s.value=v}}catch(e){}})();
+
+// Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
+// EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
+if (window.cspRegister) cspRegister({ closeModals, confirmDelete, doLogin, logout, moveNode, openAddCluster, pinCluster, resetLayout, saveCluster, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection });

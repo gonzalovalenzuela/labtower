@@ -55,7 +55,8 @@ EVENT_MODULES = ("nut", "net", "pve", "nas", "dns", "wan")
 #     version 1.2.0m/o is imported once and renamed to .migrated.
 PI_EVERY    = int(os.environ.get("LABTOWER_PI_EVERY", "60"))
 PI_KEEP     = auth.keep_days("LABTOWER_PI_KEEP_DAYS", 7) * 86400
-PI_LEGACY   = Path(os.environ.get("LABTOWER_PI_HISTORY", str(auth.EVENTS_FILE.with_name("pi-history.json"))))
+DATA_DIR    = auth.module_dir("overview")      # historial de la Pi (metrics.db) / EN: Pi history (metrics.db); path only, created at startup
+PI_LEGACY   = Path(os.environ.get("LABTOWER_PI_HISTORY", str(DATA_DIR / "pi-history.json")))
 
 def pi_enabled():
     return auth._is_raspberry_pi()
@@ -149,7 +150,7 @@ def pi_detail_cached(full):
 #     Common checks (users, sessions, disk) and that the events file is readable and writable.
 def health_report(detailed=False):
     c = auth.check_common()
-    c["events"] = auth.check_file(auth.EVENTS_FILE)
+    c["events"] = auth.events_check()
     return auth.health_reply("overview", c, detailed)
 
 
@@ -174,8 +175,9 @@ class H(BaseHTTPRequestHandler):
         try:
             n = int(self.headers.get("Content-Length", 0))
             if n < 0 or n > 8192: return None
-            return json.loads(self.rfile.read(n))
-        except Exception: return None
+            d = json.loads(self.rfile.read(n))
+            return d if isinstance(d, dict) else None      # EN: a list/number would crash the handlers (500); reject it (400)
+        except (ValueError, TypeError, OSError, RecursionError): return None
 
     def _tok(self):
         return auth.token_from_request(dict(self.headers), self.headers.get("Cookie", ""))
@@ -249,14 +251,11 @@ class H(BaseHTTPRequestHandler):
         body = self._body()
         if body is None: return self._json(400, {"error": "Invalid request body"})
         if path == "/api/login":
-            u, err = auth.login(self, body.get("username", ""), body.get("password", ""))
-            if not u: return self._json(err[0], {"error": err[1]})
-            ttl = auth.remember_ttl(body.get("remember"))     # «Recordarme»: solo valores de la lista blanca / EN: only whitelisted values
-            token = auth.create_session(body["username"], u["permissions"], ttl, self)
-            must  = auth.load_users().get(body["username"], {}).get("must_change_password", False)
-            return self._json(200, {"ok": True, "username": body["username"],
-                                    "permissions": u["permissions"], "must_change_password": must},
-                              [("Set-Cookie", auth.session_cookie(token, ttl))])
+            r, err = auth.login_session(self, body.get("username", ""), body.get("password", ""), body.get("remember"))   # the service checks the password and opens the session
+            if not r: return self._json(err[0], {"error": err[1]})
+            return self._json(200, {"ok": True, "username": r["username"],
+                                    "permissions": r["permissions"], "must_change_password": r["must_change_password"]},
+                              [("Set-Cookie", auth.session_cookie(r["token"], r["ttl"]))])
         if path == "/api/logout":
             auth.delete_session(tok); return self._json(200, {"ok": True})
         self._json(404, {"error": "Not found"})
@@ -266,6 +265,7 @@ class H(BaseHTTPRequestHandler):
 # EN: Startup: serves on loopback.
 if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
+    auth.prepare_module(DATA_DIR, Path(__file__).parent, ())
     auth.system_stats()           # primes the CPU counter so the first reading is meaningful
     if pi_enabled():
         threading.Thread(target=pi_loop, daemon=True, name="pi-history").start()

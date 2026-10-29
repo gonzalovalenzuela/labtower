@@ -16,7 +16,7 @@ echo "labtower: configuring installation..."
 #     certificates and backups. dpkg already removed the old package (Conflicts/Replaces); its services are stopped and nothing runs as the old user any more.
 migrate_from_pi_console() {
     OLD="pi-console"
-    if ! id -u "$OLD" >/dev/null 2>&1 && [ ! -e "/var/lib/$OLD" ] && [ ! -e "/etc/$OLD" ] && [ ! -e "/opt/$OLD" ]; then
+    if ! id -u "$OLD" >/dev/null 2>&1 && [ ! -e "/var/lib/$OLD" ] && [ ! -e "/etc/${OLD:?}" ] && [ ! -e "/opt/$OLD" ]; then
         return 0
     fi
     echo "  migrating from pi-console to labtower..."
@@ -106,6 +106,16 @@ if ! id -u labtower >/dev/null 2>&1; then
     useradd --system --no-create-home --shell /usr/sbin/nologin labtower
     echo "  system user labtower created"
 fi
+# ES: Aislamiento entre módulos: cada servicio corre con su propio usuario del sistema («labtower-<id>», sin shell ni home) y todos comparten el grupo
+#     «labtower». El usuario «labtower» solo queda para migrar datos antiguos: ningún servicio corre con él.
+# EN: Module isolation: every service runs as its own system user ("labtower-<id>", no shell, no home) and all share the group "labtower".
+#     The user "labtower" only remains to migrate old data: no service runs as it any more.
+for u in auth wol nut net pve nas dns wan overview; do
+    if ! id -u "labtower-$u" >/dev/null 2>&1; then
+        useradd --system --no-create-home --shell /usr/sbin/nologin -g labtower "labtower-$u"
+        echo "  system user labtower-$u created"
+    fi
+done
 
 # ── 2. Directorio de datos persistentes (nunca tocado por dpkg) ───────────────
 # EN: Step 2: persistent data folder (/var/lib/labtower). dpkg never touches it, so users and settings survive upgrades.
@@ -117,25 +127,33 @@ if [ -d "$DATA_DIR" ] && [ ! -L "$DATA_DIR" ] && [ "$(stat -c %u "$DATA_DIR")" =
     find "$DATA_DIR" -xdev -exec chown -h labtower:labtower {} +
     echo "  data of a previous installation handed back to labtower"
 fi
-install -d -m 750 -o labtower -g labtower "$DATA_DIR"
 as_svc() { runuser -u labtower -- "$@"; }
-for d in wol-console nut-monitor net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor; do
-    as_svc mkdir -p "$DATA_DIR/$d"
-    as_svc chmod 750 "$DATA_DIR/$d"
-done
+# ES: Instalación nueva o de una versión anterior al aislamiento (sin auth/): los datos son del usuario «labtower» hasta el paso 3c, que los reparte.
+# EN: New install or one from before the isolation (no auth/): the data belongs to user "labtower" until step 3c, which hands it out.
+LEGACY_LAYOUT=false
+[ -d "$DATA_DIR/auth" ] || LEGACY_LAYOUT=true
+if [ "$LEGACY_LAYOUT" = true ]; then
+    install -d -m 750 -o labtower -g labtower "$DATA_DIR"
+    for d in wol-console nut-monitor net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor; do
+        as_svc mkdir -p "$DATA_DIR/$d"
+        as_svc chmod 750 "$DATA_DIR/$d"
+    done
+fi
 
 # ── 2b. Teleporter: directorio de trabajo + regla sudo para el panel de admin ─
-# El panel (usuario labtower) solo puede ejecutar estas dos acciones como root.
-# EN: Step 2b: Teleporter work folder + sudo rule. The panel (user labtower) may run only these two actions as root.
-as_svc mkdir -p "$DATA_DIR/teleporter"
-as_svc chmod 700 "$DATA_DIR/teleporter"
+# El panel (usuario labtower-auth) solo puede ejecutar estas dos acciones como root.
+# EN: Step 2b: Teleporter work folder + sudo rule. The panel (user labtower-auth) may run only these two actions as root.
+if [ "$LEGACY_LAYOUT" = true ]; then
+    as_svc mkdir -p "$DATA_DIR/teleporter"
+    as_svc chmod 700 "$DATA_DIR/teleporter"
+fi
 if [ -d /etc/sudoers.d ] && command -v visudo >/dev/null 2>&1; then
     # La regla se escribe primero en un archivo temporal y se valida con visudo: una regla inválida bloquearía sudo en todo el sistema.
     # EN: The rule is written to a temp file first and validated with visudo: an invalid rule would break sudo on the whole system.
     SUDOERS_TMP=$(mktemp)
     cat > "$SUDOERS_TMP" <<'SUDOEOF'
 # LabTower: the admin panel runs backup/restore as root
-labtower ALL=(root) NOPASSWD: /usr/local/bin/teleporter.sh gui-backup, /usr/local/bin/teleporter.sh gui-restore *
+labtower-auth ALL=(root) NOPASSWD: /usr/local/bin/teleporter.sh gui-backup, /usr/local/bin/teleporter.sh gui-restore *
 SUDOEOF
     if visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
         install -m 0440 -o root -g root "$SUDOERS_TMP" /etc/sudoers.d/labtower-teleporter
@@ -155,7 +173,7 @@ fi
 mkdir -p "$AUTH_LINK"
 chown root:root "$AUTH_LINK"; chmod 755 "$AUTH_LINK"
 ln -sfn "$PI_HOME/auth/auth.py"        "$AUTH_LINK/auth.py"
-ln -sfn "$DATA_DIR/users.json"         "$AUTH_LINK/users.json"
+ln -sfn "$DATA_DIR/auth/users.json"    "$AUTH_LINK/users.json"
 rm -f "$AUTH_LINK/sessions.json"
 
 # ── 3b. Mover los datos de los módulos desde /opt/labtower (versiones < 1.2.0u) a /var/lib/labtower/<módulo>/ ──
@@ -167,6 +185,7 @@ MIGRATED=""
 for pair in wol-console/devices.json wol-console/wake_log.json nut-monitor/servers.json nut-monitor/history.db \
             net-monitor/hosts.json net-monitor/config.json proxmox-monitor/clusters.json proxmox-monitor/history.json; do
     old="$PI_HOME/$pair"; new="$DATA_DIR/$pair"
+    [ "$LEGACY_LAYOUT" = true ] || continue
     if as_svc sh -c '[ -f "$1" ] && [ ! -L "$1" ] && [ ! -e "$2" ]' sh "$old" "$new"; then
         if as_svc python3 -I -c 'import os, shutil, sqlite3, sys
 src, dst = sys.argv[1:3]
@@ -186,9 +205,69 @@ os.chmod(dst, 0o600)' "$old" "$new" 2>/dev/null; then
 done
 # ES: Las sesiones antiguas guardaban el token en claro: se descartan (todos deben iniciar sesión otra vez) y se borran de los respaldos.
 # EN: Old sessions stored the token in clear: they are discarded (everyone logs in again) and removed from the backups.
-as_svc rm -f "$DATA_DIR/sessions.json"
-as_svc rm -f "$DATA_DIR/backup.status"   # old location (the status file now lives in root-owned /var/log/labtower)
+rm -f "$DATA_DIR/backup.status"   # old location (the status file now lives in root-owned /var/log/labtower)
 rm -f /var/backups/labtower/sessions.json.*.bak
+
+# ── 3c. Aislamiento: cada módulo es dueño SOLO de su carpeta; los archivos de autenticación pasan a auth/ (solo labtower-auth) ──
+# EN: Step 3c: isolation: every module owns ONLY its folder; the authentication files move to auth/ (labtower-auth only).
+# ES: Los servicios están detenidos. Root no sigue enlaces plantados: primero se borran todos los enlaces simbólicos de adentro (ningún módulo los usa),
+#     la base de métricas común se parte con un usuario sin privilegios, y luego root solo mueve y cambia dueño (sin seguir enlaces).
+# EN: The services are stopped. Root never follows planted links: first every symbolic link inside is deleted (no module uses any), the shared
+#     metrics database is split by an unprivileged user, and only then does root move files and change owners (never following links).
+MODULE_MAP="wol-console:wol nut-monitor:nut net-monitor:net proxmox-monitor:pve nas-monitor:nas dns-monitor:dns wan-monitor:wan overview:overview"
+if [ -d "$DATA_DIR" ] && [ ! -L "$DATA_DIR" ]; then
+    find "$DATA_DIR" -xdev -type l -delete
+    if [ "$LEGACY_LAYOUT" = true ] && [ -f "$DATA_DIR/metrics.db" ]; then
+        if as_svc python3 -I "$PI_HOME/auth/migrate_layout.py" split-metrics "$DATA_DIR/metrics.db" "$DATA_DIR/.split-metrics" >/dev/null 2>&1; then
+            echo "  metrics.db split per module"
+        else
+            as_svc rm -rf "$DATA_DIR/.split-metrics"
+            echo "  WARNING: could not split metrics.db (kept as $DATA_DIR/metrics.db; the charts start empty)"
+        fi
+    fi
+fi
+install -d -m 750 -o root -g labtower "$DATA_DIR"
+own_tree() {  # own_tree <dir> <user> <dir mode>
+    install -d -m "$3" -o "$2" -g labtower "$1"
+    find "$1" -xdev -type d -exec chmod 700 {} +
+    find "$1" -xdev -type f -exec chmod 600 {} +
+    chown -R -h "$2:labtower" "$1"
+    chmod "$3" "$1"
+}
+install -d -m 700 -o labtower-auth -g labtower "$DATA_DIR/auth"
+for f in "$DATA_DIR"/users.json* "$DATA_DIR"/login-throttle.json* "$DATA_DIR"/events.json* "$DATA_DIR"/.users-initialized "$DATA_DIR"/initial-admin-password; do
+    if [ -f "$f" ] && [ ! -L "$f" ] && [ ! -e "$DATA_DIR/auth/$(basename "$f")" ]; then mv -- "$f" "$DATA_DIR/auth/"; fi
+done
+rm -f "$DATA_DIR"/sessions.json*
+own_tree "$DATA_DIR/auth" labtower-auth 700
+own_tree "$DATA_DIR/teleporter" labtower-auth 700
+for pair in $MODULE_MAP; do
+    d="${pair%%:*}"; u="labtower-${pair##*:}"
+    # wol-console and net-monitor each publish one file for the other (group labtower may enter the folder, not list it); the rest is 700.
+    case "$d" in wol-console|net-monitor) mode=710;; *) mode=700;; esac
+    own_tree "$DATA_DIR/$d" "$u" "$mode"
+    if [ -f "$DATA_DIR/.split-metrics/$d.db" ] && [ ! -e "$DATA_DIR/$d/metrics.db" ]; then
+        mv -- "$DATA_DIR/.split-metrics/$d.db" "$DATA_DIR/$d/metrics.db"
+        chown -h "$u:labtower" "$DATA_DIR/$d/metrics.db"; chmod 600 "$DATA_DIR/$d/metrics.db"
+    fi
+done
+for f in wol-console/devices.json wol-console/devices.json.bak net-monitor/hosts.json net-monitor/hosts.json.bak; do
+    [ -f "$DATA_DIR/$f" ] && chmod 640 "$DATA_DIR/$f"
+done
+if [ -f "$DATA_DIR/manuf" ] && [ ! -e "$DATA_DIR/net-monitor/manuf" ]; then
+    mv -- "$DATA_DIR/manuf" "$DATA_DIR/net-monitor/manuf"; chown -h labtower-net:labtower "$DATA_DIR/net-monitor/manuf"; chmod 600 "$DATA_DIR/net-monitor/manuf"
+fi
+if [ -f "$DATA_DIR/pi-history.json" ] && [ ! -e "$DATA_DIR/overview/pi-history.json" ]; then
+    mv -- "$DATA_DIR/pi-history.json" "$DATA_DIR/overview/pi-history.json"
+    chown -h labtower-overview:labtower "$DATA_DIR/overview/pi-history.json"; chmod 600 "$DATA_DIR/overview/pi-history.json"
+fi
+if [ -f "$DATA_DIR/metrics.db" ] && [ -d "$DATA_DIR/.split-metrics" ]; then
+    # Split done: keep the old shared database as a root-only backup instead of deleting it.
+    install -d -m 700 /var/backups/labtower
+    mv -- "$DATA_DIR/metrics.db" "/var/backups/labtower/metrics.db.pre-isolation.$(date +%Y%m%d_%H%M%S)" && echo "  old metrics.db kept in /var/backups/labtower"
+fi
+rm -f "$DATA_DIR"/metrics.db-wal "$DATA_DIR"/metrics.db-shm
+rm -rf "$DATA_DIR/.split-metrics"
 
 # ── 4. Permisos de directorios de código ─────────────────────────────────────
 # EN: Step 4: the code is root-owned and not writable by the services (a compromised service cannot rewrite its own code).
@@ -207,13 +286,13 @@ python3 -m compileall -q "$PI_HOME" >/dev/null 2>&1 || true
 # ttyUSB0 para NUT (UPS por serial)
 # EN: ttyUSB0 for NUT (serial UPS): the service user needs the dialout group to open the port.
 if getent group dialout >/dev/null 2>&1; then
-    usermod -aG dialout labtower 2>/dev/null || true
+    usermod -aG dialout labtower-nut 2>/dev/null || true
 fi
 
 # Raspberry Pi: leer el estado de la fuente (vcgencmd get_throttled) para el aviso de subtensión
 # EN: Raspberry Pi only: read the power supply state (vcgencmd get_throttled) for the under-voltage warning; needs the video group.
 if grep -qa "Raspberry Pi" /proc/device-tree/model 2>/dev/null && getent group video >/dev/null 2>&1; then
-    usermod -aG video labtower 2>/dev/null || true
+    usermod -aG video labtower-overview 2>/dev/null || true
 fi
 
 # ── 4b. Migracion: el servicio del dashboard se llamaba "nut-monitor", igual que el
@@ -252,31 +331,47 @@ migrate_legacy_nut_unit
 #     wol-console, net-monitor and wan-monitor use "ping" (file capability) and admin-panel uses "sudo" (setuid): no NoNewPrivileges / empty capabilities.
 #     admin-panel has no ProtectSystem either: the teleporter (through sudo) must write to /var/backups, /etc and /var/lib.
 install_service() {
-    name="$1" desc="$2" module="$3" script="$4" level="$5"
+    name="$1" desc="$2" module="$3" script="$4" level="$5" user="$6" datadir="$7"
     case "$level" in
         strict) extra="NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=${DATA_DIR}
+ReadWritePaths=${DATA_DIR}/${datadir}
 CapabilityBoundingSet=
 AmbientCapabilities=";;
         fs)     extra="ProtectSystem=strict
-ReadWritePaths=${DATA_DIR}";;
+ReadWritePaths=${DATA_DIR}/${datadir}";;
         *)      extra="";;
     esac
+    # ES: El panel de administración es el servicio de autenticación (escucha en /run/labtower/auth.sock); los demás módulos le hablan por ese socket.
+    # EN: The admin panel is the authentication service (it listens on /run/labtower/auth.sock); the other modules talk to it through that socket.
+    if [ "$name" = "admin-panel" ]; then
+        auth_env="Environment=LABTOWER_AUTH_LISTEN=/run/labtower/auth.sock"
+        auth_run="RuntimeDirectory=labtower
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=restart"
+        after="After=network.target"
+    else
+        auth_env="Environment=LABTOWER_AUTH_SOCKET=/run/labtower/auth.sock
+Environment=LABTOWER_MODULE=${datadir}"
+        auth_run=""
+        after="After=network.target admin-panel.service"
+    fi
     cat > "/etc/systemd/system/${name}.service" <<EOF
 [Unit]
 Description=LabTower — ${desc}
-After=network.target
+${after}
 Wants=network.target
 
 [Service]
 Type=simple
-User=labtower
+User=${user}
 Group=labtower
 WorkingDirectory=${PI_HOME}/${module}
 # Variables opcionales para todos los servicios (p. ej. LABTOWER_SECURE_COOKIE=1); el archivo puede no existir.
 # EN: Optional variables for all the services (e.g. LABTOWER_SECURE_COOKIE=1); the file may not exist.
 EnvironmentFile=-/etc/default/labtower
+${auth_env}
+${auth_run}
 ExecStart=/usr/bin/python3 ${PI_HOME}/${module}/${script}
 Restart=on-failure
 RestartSec=5
@@ -303,18 +398,18 @@ ${extra}
 [Install]
 WantedBy=multi-user.target
 EOF
-    echo "  service ${name} installed"
+    echo "  service ${name} installed (user ${user})"
 }
 
-install_service "wol-console"     "WOL Console"     "wol-console"     "server.py" fs
-install_service "labtower-ups" "UPS Monitor"      "nut-monitor"     "server.py" strict
-install_service "admin-panel"     "Admin Panel"      "auth"            "admin_panel.py" none
-install_service "net-monitor"     "Net Monitor"      "net-monitor"     "server.py" fs
-install_service "proxmox-monitor" "Proxmox Monitor"  "proxmox-monitor" "server.py" strict
-install_service "nas-monitor"     "NAS Monitor"      "nas-monitor"     "server.py" strict
-install_service "dns-monitor"     "DNS Monitor"      "dns-monitor"     "server.py" strict
-install_service "wan-monitor"     "WAN Monitor"      "wan-monitor"     "server.py" fs
-install_service "labtower-overview" "Overview" "overview" "server.py" strict
+install_service "wol-console"       "WOL Console"     "wol-console"     "server.py"      fs     labtower-wol      wol-console
+install_service "labtower-ups"      "UPS Monitor"     "nut-monitor"     "server.py"      strict labtower-nut      nut-monitor
+install_service "admin-panel"       "Admin Panel"     "auth"            "admin_panel.py" none   labtower-auth     auth
+install_service "net-monitor"       "Net Monitor"     "net-monitor"     "server.py"      fs     labtower-net      net-monitor
+install_service "proxmox-monitor"   "Proxmox Monitor" "proxmox-monitor" "server.py"      strict labtower-pve      proxmox-monitor
+install_service "nas-monitor"       "NAS Monitor"     "nas-monitor"     "server.py"      strict labtower-nas      nas-monitor
+install_service "dns-monitor"       "DNS Monitor"     "dns-monitor"     "server.py"      strict labtower-dns      dns-monitor
+install_service "wan-monitor"       "WAN Monitor"     "wan-monitor"     "server.py"      fs     labtower-wan      wan-monitor
+install_service "labtower-overview" "Overview"        "overview"        "server.py"      strict labtower-overview overview
 
 # ── 6. Nginx ──────────────────────────────────────────────────────────────────
 # EN: Step 6: nginx. The default site is removed (it would take port 80) and the LabTower one is enabled.
@@ -335,12 +430,22 @@ mkdir -p /var/log/labtower; chmod 755 /var/log/labtower
 BACKUP_DIR="/var/backups/labtower"
 # Escribe stdin en un archivo NUEVO de la carpeta de datos, con el usuario del servicio (nunca sobrescribe ni sigue enlaces).
 # EN: Write stdin to a NEW file in the data folder as the service user (never overwrites, never follows links).
-svc_put() { as_svc sh -c 'umask 077; [ ! -e "$1" ] && [ ! -L "$1" ] && cat > "$1"' sh "$1"; }
+# ES: Quién es dueño de cada carpeta de datos (un usuario del sistema por módulo). Antes de actualizar, los datos pueden seguir siendo de «labtower».
+# EN: Who owns each data folder (one system user per module). Before upgrading, the data may still belong to "labtower".
+user_of() {
+    case "$(basename "$(dirname "$1")")" in
+        auth|teleporter) echo labtower-auth;; wol-console) echo labtower-wol;; nut-monitor) echo labtower-nut;;
+        net-monitor) echo labtower-net;; proxmox-monitor) echo labtower-pve;; nas-monitor) echo labtower-nas;;
+        dns-monitor) echo labtower-dns;; wan-monitor) echo labtower-wan;; overview) echo labtower-overview;; *) echo labtower;;
+    esac
+}
+svc_put() { runuser -u "$(user_of "$1")" -- sh -c 'umask 077; [ ! -e "$1" ] && [ ! -L "$1" ] && cat > "$1"' sh "$1"; }
+svc_has() { runuser -u "$(user_of "$1")" -- test -e "$1"; }
 
-if ! as_svc test -e "$DATA_DIR/users.json"; then
+if ! svc_has "$DATA_DIR/auth/users.json"; then
     latest_users=$(ls -t "$BACKUP_DIR/users.json".*.bak 2>/dev/null | head -1)
     if [ -n "$latest_users" ]; then
-        svc_put "$DATA_DIR/users.json" < "$latest_users"
+        svc_put "$DATA_DIR/auth/users.json" < "$latest_users"
         echo "  users migrated from backup: $latest_users"
     fi
 else
@@ -367,13 +472,15 @@ wan-monitor/state.json:state.json
 "
     printf '%s\n' "$MODULE_FILES" | grep -v '^$' | while IFS=: read -r rel_path base; do
         dest="$DATA_DIR/$rel_path"
-        as_svc test -e "$dest" && continue
+        svc_has "$dest" && continue
         if [ "$base" = "history.db" ]; then
             src=$(ls -S "$BACKUP_DIR/${base}".*.bak 2>/dev/null | head -1)
         else
             src=$(ls -t "$BACKUP_DIR/${base}".*.bak 2>/dev/null | head -1)
         fi
         if [ -n "$src" ] && svc_put "$dest" < "$src"; then
+            # The two files the other module reads are group-readable (see step 3c).
+            case "$rel_path" in wol-console/devices.json|net-monitor/hosts.json) runuser -u "$(user_of "$dest")" -- chmod 640 "$dest";; esac
             echo "  restored: $rel_path (from $src)"
         fi
     done
@@ -408,11 +515,11 @@ fi
 # EN: Initial password: created by the service on first start; wait a few seconds and show it once.
 INIT_PW=""
 for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-    INIT_PW=$(as_svc sh -c '[ -f "$1" ] && [ ! -L "$1" ] && cat -- "$1"' sh "$DATA_DIR/initial-admin-password" 2>/dev/null | head -1) || INIT_PW=""
+    INIT_PW=$(runuser -u labtower-auth -- sh -c '[ -f "$1" ] && [ ! -L "$1" ] && cat -- "$1"' sh "$DATA_DIR/auth/initial-admin-password" 2>/dev/null | head -1) || INIT_PW=""
     [ -n "$INIT_PW" ] && break
     # Instalación con usuarios ya existentes: no hay contraseña inicial que esperar.
     # EN: Install with existing users: there is no initial password to wait for.
-    if as_svc test -e "$DATA_DIR/users.json" && [ "$i" -ge 3 ]; then break; fi
+    if runuser -u labtower-auth -- test -e "$DATA_DIR/auth/users.json" && [ "$i" -ge 3 ]; then break; fi
     sleep 1
 done
 
@@ -422,6 +529,6 @@ echo "  URL: http://$(hostname -I | awk '{print $1}')"
 if [ -n "$INIT_PW" ]; then
     echo "  Initial user:     admin"
     echo "  Initial password: $INIT_PW"
-    echo "  (random; you must change it at the first login; also in $DATA_DIR/initial-admin-password until then)"
+    echo "  (random; you must change it at the first login; also in $DATA_DIR/auth/initial-admin-password until then)"
 fi
 echo "  HTTPS (recommended, encrypts password and session): sudo labtower-https enable --redirect"

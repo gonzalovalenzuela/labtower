@@ -45,7 +45,7 @@ file, fsync and rename) so no data is lost or corrupted by power cuts.
 #
 #     Convention: comments are written in Spanish first and then in English (marked "EN:"). The
 #     English docstrings describe what each function does; the comments explain why.
-import copy, json, os, re, hashlib, hmac, secrets, time, logging, threading, glob, shutil, subprocess, sqlite3
+import copy, functools, json, os, re, hashlib, hmac, secrets, time, logging, threading, glob, stat, shutil, subprocess, sqlite3
 from pathlib import Path
 
 try:
@@ -57,16 +57,45 @@ except ImportError:          # pragma: no cover - solo Linux/macOS
 # EN: Message log; each service decides the format and destination (journalctl).
 log = logging.getLogger("auth")
 
+# ─── Dos modos de funcionamiento / Two operating modes ──────────────────────────────────────────────────
+# ES: Este archivo lo importan todos los servicios, pero NO todos pueden tocar usuarios y sesiones:
+#   · Panel de administración (servicio de autenticación, usuario «labtower-auth»): modo LOCAL. Lee y escribe users.json, sessions.json y los
+#     contadores de intentos, y atiende por un socket Unix (authrpc.py) a los demás.
+#   · Cada uno de los otros módulos (usuario propio, sin acceso a esos archivos): modo REMOTO, activado por LABTOWER_AUTH_SOCKET. get_session,
+#     login_session, delete_session, record_event, read_events y check_common hablan con el servicio; las funciones que tocan usuarios o sesiones
+#     (load_users, create_session, authenticate…) fallan si se llaman desde un módulo.
+#   Sin LABTOWER_AUTH_SOCKET (pruebas, desarrollo) todo es local, como antes.
+# EN: Every service imports this file, but NOT every service may touch users and sessions:
+#   · Admin Panel (the authentication service, user "labtower-auth"): LOCAL mode. It reads and writes users.json, sessions.json and the attempt
+#     counters, and serves the others through a Unix socket (authrpc.py).
+#   · Each of the other modules (own user, no access to those files): REMOTE mode, turned on by LABTOWER_AUTH_SOCKET. get_session, login_session,
+#     delete_session, record_event, read_events and check_common talk to the service; the functions that touch users or sessions (load_users,
+#     create_session, authenticate…) fail when called from a module.
+#   Without LABTOWER_AUTH_SOCKET (tests, development) everything is local, as before.
+AUTH_SOCKET = os.environ.get("LABTOWER_AUTH_SOCKET", "").strip()
+REMOTE = bool(AUTH_SOCKET)
+
+def _local(fn):
+    """Mark a function that only the authentication service may run: in a module (remote mode) it raises instead of touching files."""
+    @functools.wraps(fn)
+    def wrapper(*a, **k):
+        if REMOTE: raise RuntimeError(f"auth.{fn.__name__}() is only available in the authentication service")
+        return fn(*a, **k)
+    return wrapper
+
 # Rutas de los archivos compartidos. Las variables LABTOWER_* permiten cambiarlas en las pruebas
 # sin tocar /var/lib/labtower.
 # EN: Paths of the shared files. The LABTOWER_* variables let tests move them
 #     without touching /var/lib/labtower.
-USERS_FILE    = Path(os.environ.get("LABTOWER_USERS",    "/var/lib/labtower/users.json"))
+USERS_FILE    = Path(os.environ.get("LABTOWER_USERS",    "/var/lib/labtower/auth/users.json"))
 # Carpeta de datos de la instalación y subcarpeta de cada módulo (/var/lib/labtower/<módulo>). El código en /opt/labtower es de solo
 # lectura para los servicios: todo lo que escriben vive aquí.
 # EN: Data folder of the installation and the sub-folder of each module (/var/lib/labtower/<module>). The code in /opt/labtower is
 #     read-only for the services: everything they write lives here.
-DATA_ROOT = USERS_FILE.parent
+# Los archivos de autenticación viven en /var/lib/labtower/auth (solo del usuario labtower-auth); cada módulo tiene la suya junto a ella.
+# EN: The authentication files live in /var/lib/labtower/auth (readable only by user labtower-auth); each module has its own folder beside it.
+DATA_ROOT = (Path(os.environ["LABTOWER_DATA"]) if os.environ.get("LABTOWER_DATA")
+             else USERS_FILE.parent.parent if USERS_FILE.parent.name == "auth" else USERS_FILE.parent)
 def module_dir(name: str) -> Path:
     """Data folder of a module. Only computes the path: nothing is created (so importing a module has no side effects)."""
     return DATA_ROOT / name
@@ -111,8 +140,11 @@ def adopt_legacy(old_dir, new_dir, names):
 # Duración de una sesión sin actividad.
 # EN: How long a session lasts without activity.
 SESSION_TTL = 24 * 3600   # 24 horas
-# «Recordarme» en el login: duraciones permitidas (ventana deslizante: cada uso la renueva). El servidor solo acepta estos valores. «forever» son 400 días porque los navegadores limitan la vida de una cookie a ~400 días; mientras se use, no vence.
-# EN: "Remember me" at login: allowed durations (sliding window: every use renews it). The server accepts only these values. "forever" is 400 days because browsers cap a cookie's lifetime at ~400 days; as long as it is used, it does not expire.
+# Vida máxima de una sesión desde su creación, aunque se siga usando (la ventana deslizante no la alarga): un token robado no vale para siempre.
+# EN: Maximum life of a session since its creation, even if it keeps being used (the sliding window does not extend it): a stolen token is not good forever.
+ABSOLUTE_MAX = {24 * 3600: 14 * 24 * 3600, 7 * 24 * 3600: 30 * 24 * 3600, 30 * 24 * 3600: 90 * 24 * 3600, 400 * 24 * 3600: 400 * 24 * 3600}
+# «Recordarme» en el login: duraciones permitidas (ventana deslizante: cada uso la renueva). El servidor solo acepta estos valores. «forever» son 400 días porque los navegadores limitan la vida de una cookie a ~400 días; mientras se use, no vence hasta ese tope.
+# EN: "Remember me" at login: allowed durations (sliding window: every use renews it). The server accepts only these values. "forever" is 400 days because browsers cap a cookie's lifetime at ~400 days; as long as it is used, it does not expire until that cap.
 REMEMBER = {"day": 24 * 3600, "week": 7 * 24 * 3600, "month": 30 * 24 * 3600, "forever": 400 * 24 * 3600}
 def remember_ttl(value) -> int:
     return REMEMBER.get(value, SESSION_TTL) if isinstance(value, str) else SESSION_TTL
@@ -125,7 +157,7 @@ def session_cookie(token: str, ttl: int = SESSION_TTL) -> str:
 # La ventana deslizante se renueva como máximo cada RENEW_EVERY segundos: renovar en
 # cada request reescribiría sessions.json (y la SD) varias veces por segundo.
 RENEW_EVERY = 600
-SESSIONS_FILE = Path(os.environ.get("LABTOWER_SESSIONS", "/var/lib/labtower/sessions.json"))
+SESSIONS_FILE = Path(os.environ.get("LABTOWER_SESSIONS", str(USERS_FILE.with_name("sessions.json"))))
 
 
 # ─── Escritura atómica y bloqueo entre procesos ───────────────────────────────
@@ -193,6 +225,27 @@ def read_json(path, default, kind=None):
 
 # Guardar un JSON de datos conservando la versión anterior buena como .bak (solo si era JSON válido).
 # EN: Save a JSON data file keeping the previous good version as .bak (only if it was valid JSON).
+PUBLISHED_MAX = 4 * 1024 * 1024
+def read_published(path, default, typ):
+    """Read a JSON file that ANOTHER module publishes (e.g. WOL Console reads Net Monitor's hosts). Treated as untrusted input: symlinks are
+    not followed, it must be a regular file, and it is size-capped so a compromised publisher cannot exhaust this process's memory."""
+    try:
+        fd = os.open(str(path), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0))
+    except OSError:
+        return default
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_size > PUBLISHED_MAX: return default
+        with os.fdopen(fd, "rb", closefd=False) as f: raw = f.read(PUBLISHED_MAX + 1)
+        if len(raw) > PUBLISHED_MAX: return default
+        v = json.loads(raw)
+        return v if isinstance(v, typ) else default
+    except (OSError, ValueError):
+        return default
+    finally:
+        os.close(fd)
+
+
 def write_json(path, obj, indent=2, mode=0o600):
     """Atomically write a JSON data file, keeping the previous good version as <name>.bak."""
     path = Path(path)
@@ -255,6 +308,7 @@ _sessions_lock = FileLock(SESSIONS_FILE.with_name(SESSIONS_FILE.name + ".lock"))
 
 # Uso: «with auth.users_lock():» alrededor de cargar → modificar → guardar usuarios, para no pisar cambios ajenos.
 # EN: Usage: "with auth.users_lock():" around load → modify → save of users, so other changes are not overwritten.
+@_local
 def users_lock():
     """Hold this around any load_users() → modify → save_users() sequence."""
     return _users_lock
@@ -348,11 +402,13 @@ def _burn_time(password: str):
 #     The password is kept in initial-admin-password (mode 600) until it is changed, and shown at install time (never in the journal).
 INITIAL_PW_FILE = USERS_FILE.with_name("initial-admin-password")
 
+@_local
 def clear_initial_password():
     """Delete the initial-password file (called once the administrator has set their own password)."""
     try: INITIAL_PW_FILE.unlink()
     except OSError: pass
 
+@_local
 def ensure_initial_user() -> bool:
     """Create the initial administrator on a fresh install (idempotent, safe across processes). Returns True if created."""
     with users_lock():
@@ -418,6 +474,22 @@ def _file_sig(p: Path):
 #       2. users.json is missing but the install was already used → use the .bak copy, or nobody gets in.
 #       3. users.json exists → use it (from the cache if unchanged); if corrupt, the .bak copy.
 #     It never falls back to a default account because of a damaged or deleted file.
+# Normaliza lo leído de users.json (que puede venir de un respaldo restaurado o de una edición a mano): descarta entradas sin forma de usuario y deja cada nivel
+# de permiso en un valor conocido. Así nada raro llega a la interfaz (donde los niveles se usan como nombre de clase) ni a las comprobaciones de permisos.
+# EN: Normalise what was read from users.json (it may come from a restored backup or a hand edit): drop entries that are not shaped like a user and leave every
+#     permission level at a known value. So nothing odd reaches the UI (where levels are used as a class name) or the permission checks.
+_KNOWN_LEVELS = ("none", "readonly", "execute", "admin")
+def _sanitize_users(data: dict) -> dict:
+    out = {}
+    for name, u in data.items():
+        if not isinstance(name, str) or not isinstance(u, dict): continue
+        u = dict(u)
+        perms = u.get("permissions")
+        u["permissions"] = ({k: (v if v in _KNOWN_LEVELS else "none") for k, v in perms.items() if isinstance(k, str)}
+                            if isinstance(perms, dict) else {})
+        out[name] = u
+    return out
+
 def _users_cached() -> dict:
     """Parsed users.json (shared object: do not mutate). Re-read only when the file changes.
 
@@ -445,6 +517,7 @@ def _users_cached() -> dict:
         try:
             data = json.loads(p.read_text())
             if isinstance(data, dict):
+                data = _sanitize_users(data)
                 if p is not USERS_FILE:
                     log.error(f"{USERS_FILE} is unreadable; using {p.name}")
                 _ucache["sig"], _ucache["data"] = sig, data
@@ -467,7 +540,9 @@ def ensure_permissions(modules=("net", "pve", "nas", "dns", "wan")) -> bool:
 
     Users that predate a module get "admin" if they administer WOL, else "readonly" (what the
     old runtime fallback granted). After this a missing permission means no access: levels are
-    never derived from another module at request time. Returns True if users.json changed."""
+    never derived from another module at request time. Returns True if users.json changed.
+    Only the authentication service owns users.json: in a module (remote mode) it does nothing."""
+    if REMOTE: return False
     with users_lock():
         users = load_users()
         changed = False
@@ -483,6 +558,7 @@ def ensure_permissions(modules=("net", "pve", "nas", "dns", "wan")) -> bool:
 
 # Devuelve una COPIA de los usuarios, segura de modificar antes de pasarla a save_users.
 # EN: Return a COPY of the users, safe to modify before passing it to save_users.
+@_local
 def load_users() -> dict:
     """A private copy of the users table, safe to modify and pass to save_users()."""
     return copy.deepcopy(_users_cached())
@@ -491,6 +567,7 @@ def load_users() -> dict:
 # y refresco de la caché. Debe llamarse dentro de «with users_lock()».
 # EN: Save the users table: .bak copy of the previous version, atomic write, "already used" marker and cache
 #     refresh. It must be called inside "with users_lock()".
+@_local
 def save_users(users: dict):
     with _users_lock:
         if USERS_FILE.exists():                      # keep the previous good version
@@ -540,6 +617,7 @@ def _tkey(token: str) -> str:
 # vencimiento. Aprovecha para purgar las sesiones vencidas.
 # EN: Open a session: random 256-bit token. Stores the user, the permissions at login time and the expiry.
 #     It takes the chance to purge expired sessions.
+@_local
 def create_session(username: str, permissions: dict, ttl: int = SESSION_TTL, handler=None) -> str:
     if ttl != SESSION_TTL and ttl not in REMEMBER.values(): ttl = SESSION_TTL
     token = secrets.token_hex(32)
@@ -578,13 +656,19 @@ def create_session(username: str, permissions: dict, ttl: int = SESSION_TTL, han
 # EN: Return the session of the token (or None). If the account has must_change_password (first login with the initial password, or flagged by an admin), the session is NOT valid for anything except changing the password (allow_pending=True): no module grants access until it is changed.
 def get_session(token: str, allow_pending: bool = False) -> dict | None:
     if not token: return None
+    if REMOTE: return _remote_session(token, allow_pending)
+    return _get_session_local(token, allow_pending)
+
+def _get_session_local(token: str, allow_pending: bool = False) -> dict | None:
     key = _tkey(token)
     with _sessions_lock:
         sessions = _load_sessions()
         s = sessions.get(key)
         if not s: return None
         now = time.time()
-        if now > s.get("expires", 0):
+        ttl0 = s.get("ttl", SESSION_TTL)
+        cap  = ABSOLUTE_MAX.get(ttl0, 14 * 24 * 3600)
+        if now > s.get("expires", 0) or now - s.get("created", now) > cap:
             sessions.pop(key, None); _save_sessions(sessions); return None
         # The account must still exist, and the permissions are always the current ones:
         # deleting or demoting a user takes effect immediately instead of when the session expires.
@@ -607,6 +691,12 @@ def get_session(token: str, allow_pending: bool = False) -> dict | None:
 # Cierre de sesión (logout).
 # EN: Logout.
 def delete_session(token: str):
+    if REMOTE:
+        with _remote_cache_lock:                      # drop the cached answer first: a closed session must not survive for the cache's second
+            for pending in (False, True): _remote_cache.pop((_tkey(token), pending), None)
+        try: _rpc("logout", token=token)
+        except Exception as e: log.warning(f"logout: {e}")
+        return
     with _sessions_lock:
         sessions = _load_sessions()
         if sessions.pop(_tkey(token), None) is not None:
@@ -614,6 +704,7 @@ def delete_session(token: str):
 
 # Cierra todas las sesiones de un usuario (cambio de contraseña o eliminación), dejando opcionalmente una.
 # EN: Close all the sessions of a user (password change or removal), optionally keeping one.
+@_local
 def delete_user_sessions(username: str, keep: str | None = None):
     """Log a user out everywhere (password change, account removal), optionally keeping one session."""
     keep_key = _tkey(keep) if keep else None
@@ -627,6 +718,7 @@ def delete_user_sessions(username: str, keep: str | None = None):
 # «last» es la última renovación (se persiste como máximo cada RENEW_EVERY s), así que es aproximada.
 # EN: Active sessions for the Admin panel. The id is a prefix of the token's SHA-256 (useless to use the session).
 #     "last" is the last renewal (persisted at most every RENEW_EVERY s), so it is approximate.
+@_local
 def list_sessions(current_token: str | None = None) -> list:
     cur = _tkey(current_token)[:16] if current_token else None
     now = time.time()
@@ -645,6 +737,7 @@ def list_sessions(current_token: str | None = None) -> list:
 
 # Cierra una sesión por su id; devuelve el nombre de usuario o None. `allow(username)` decide si se puede cerrar.
 # EN: Close a session by its id; returns the username or None. `allow(username)` decides whether it may be closed.
+@_local
 def revoke_session_id(sid: str, allow=None, keep: str | None = None):
     if not re.fullmatch(r"[0-9a-f]{16}", sid or ""): return None
     keep_id = _tkey(keep)[:16] if keep else None
@@ -665,6 +758,51 @@ def _purge(sessions: dict):
         del sessions[t]
 
 
+# ─── Cliente del servicio de autenticación (modo remoto) ─────────────────────────────────────────────
+# ES: En un módulo, la sesión de un token la valida el servicio. El resultado se recuerda un segundo por token (una petición HTTP consulta los
+#     permisos varias veces): borrar o degradar a un usuario sigue surtiendo efecto casi al instante. Si el servicio no responde, la sesión se
+#     considera no válida (falla cerrado).
+# EN: In a module, a token's session is validated by the service. The result is remembered for one second per token (one HTTP request checks
+#     the permissions several times): deleting or demoting a user still takes effect almost at once. If the service does not answer, the
+#     session counts as invalid (fails closed).
+_remote_cache: dict = {}
+_remote_cache_lock = threading.Lock()
+REMOTE_CACHE_SECONDS = 1.0
+
+# Cortacircuito: si el servicio no responde, durante 1 s las demás peticiones fallan al instante en vez de esperar cada una (hilos bloqueados) y se anota UN aviso.
+# EN: Circuit breaker: if the service does not answer, for 1 s the other requests fail at once instead of each waiting (blocked threads), and ONE warning is logged.
+_rpc_down_until = 0.0
+
+def _rpc(op, retries=6, **fields):
+    global _rpc_down_until
+    import authrpc
+    if time.monotonic() < _rpc_down_until: raise authrpc.AuthUnavailable("authentication service unavailable")
+    try:
+        return authrpc.call(AUTH_SOCKET, op, retries=retries, **fields)
+    except authrpc.AuthUnavailable as e:
+        if retries > 1 or time.monotonic() >= _rpc_down_until:
+            _rpc_down_until = time.monotonic() + 1.0
+            log.warning(f"authentication service unavailable: {e}")
+        raise
+
+def _remote_session(token: str, allow_pending: bool):
+    key = (_tkey(token), bool(allow_pending))
+    now = time.monotonic()
+    with _remote_cache_lock:
+        hit = _remote_cache.get(key)
+        if hit and now - hit[0] < REMOTE_CACHE_SECONDS: return copy.deepcopy(hit[1])
+    try:
+        r = _rpc("session", token=token, allow_pending=bool(allow_pending))
+    except Exception:                                  # _rpc already logged it (once per second)
+        return None
+    sess = r.get("session") if isinstance(r.get("session"), dict) else None
+    with _remote_cache_lock:
+        if len(_remote_cache) > 512:
+            for k in [k for k, v in _remote_cache.items() if now - v[0] >= REMOTE_CACHE_SECONDS]: del _remote_cache[k]
+            if len(_remote_cache) > 2048: _remote_cache.clear()     # hard cap: a flood of bogus tokens cannot grow memory
+        _remote_cache[key] = (now, sess)
+    return copy.deepcopy(sess)
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 # Niveles de permiso ordenados: un nivel mayor incluye a los menores (admin puede lo que puede execute y readonly).
 # EN: Permission levels in order: a higher level includes the lower ones (admin can do what execute and readonly can).
@@ -674,6 +812,7 @@ LEVELS = {"readonly": 1, "execute": 2, "admin": 3}
 # Si la contraseña es correcta pero el hash es del formato antiguo, lo reemplaza por scrypt en ese momento.
 # EN: Check username and password and return a copy of the user, or None.
 #     If the password is right but the hash is in the old format, it is replaced by scrypt right then.
+@_local
 def authenticate(username: str, password: str) -> dict | None:
     user = _users_cached().get(username) if isinstance(username, str) else None
     if not user or not isinstance(password, str):
@@ -723,6 +862,7 @@ def _th_read():
         log.warning(f"{THROTTLE_FILE}: {e}")
         return {}
 
+@_local
 def throttle_wait(key: str) -> int:
     """Seconds the caller must still wait for `key` (an IP, account or other string); 0 when it may proceed."""
     now = time.time()
@@ -744,6 +884,7 @@ def _th_bump(d: dict, key: str, now: float, max_fails: int, window: int, lockout
         return True
     return False
 
+@_local
 def throttle_fail(key: str, max_fails: int = MAX_FAILS, window: int = WINDOW, lockout: int = LOCKOUT) -> bool:
     """Count one failure for `key`; returns True when it has just been locked."""
     now = time.time()
@@ -758,6 +899,7 @@ def throttle_fail(key: str, max_fails: int = MAX_FAILS, window: int = WINDOW, lo
         with _mem_lock:
             return _th_bump(_mem_fails, key, now, max_fails, window, lockout)
 
+@_local
 def throttle_clear(key: str):
     try:
         with _throttle_lock:
@@ -801,8 +943,37 @@ def valid_host(h) -> bool:
     except ValueError:
         return False
 
+# Destino al que el servidor se conectará por orden de un administrador de módulo (Proxmox, NAS, DNS, Pi-hole, switches): además de ser un host válido, no puede
+# ser la propia máquina (loopback, 0.0.0.0) ni una dirección de enlace local (169.254.x.x, p. ej. el servicio de metadatos de una nube), ni un nombre que resuelva
+# a una de ellas. Evita usar a LabTower como «puente» hacia sus propios servicios internos o hacia los metadatos (SSRF). No se aplica a NUT ni a los objetivos
+# de ping/TCP, donde mirar la propia máquina es legítimo.
+# EN: Destination the server will connect to on a module administrator's order (Proxmox, NAS, DNS, Pi-hole, switches): besides being a valid host, it cannot be
+#     the machine itself (loopback, 0.0.0.0) nor a link-local address (169.254.x.x, e.g. a cloud metadata service), nor a name resolving to one of them. It keeps
+#     LabTower from being used as a "bridge" to its own internal services or to metadata (SSRF). Not applied to NUT or to ping/TCP targets, where looking at the
+#     own machine is legitimate.
+def valid_target(h) -> bool:
+    import ipaddress, socket
+    if not valid_host(h): return False
+    name = h.strip("[]").lower()
+    if name == "localhost" or name.endswith(".localhost"): return False
+    def bad(a):
+        try: ip = ipaddress.ip_address(a.split("%")[0])
+        except ValueError: return True
+        if getattr(ip, "ipv4_mapped", None): ip = ip.ipv4_mapped
+        return ip.is_loopback or ip.is_unspecified or ip.is_link_local or ip.is_multicast
+    try:
+        ipaddress.ip_address(name); return not bad(name)
+    except ValueError:
+        pass
+    try:
+        infos = socket.getaddrinfo(name, None, proto=socket.IPPROTO_TCP)
+    except OSError:
+        return True            # does not resolve (yet): the connection will simply fail; nothing to protect against
+    return not any(bad(i[4][0]) for i in infos)
+
 # Registra un inicio de sesión fallido (por IP y por cuenta).
 # EN: Record a failed login (per IP and per account).
+@_local
 def login_failed(handler, username):
     ip = client_ip(handler)
     uname = username.strip().lower()[:64] if isinstance(username, str) else ""
@@ -815,6 +986,7 @@ def login_failed(handler, username):
 # 429 si la IP o la cuenta están bloqueadas, 401 si las credenciales son inválidas (con una pausa de 0,3 s).
 # EN: Login with attempt limiting. Returns (user, None) on success, or (None, (code, message)):
 #     429 if the IP or the account is locked, 401 for invalid credentials (with a 0.3 s pause).
+@_local
 def login(handler, username, password):
     """Throttled login: returns (user, None) or (None, (http_status, message))."""
     ip = client_ip(handler)
@@ -824,19 +996,50 @@ def login(handler, username, password):
         return None, (429, f"Too many failed attempts. Try again in {wait} s")
     u = authenticate(username, password)
     if u:
-        throttle_clear("ip:" + ip)
+        # Solo se limpia el contador de la CUENTA. El de la IP NO: si no, quien conoce una cuenta propia (p. ej. un invitado) podría entrar entre
+        # intentos y reiniciar la cuenta para adivinar otras contraseñas sin límite. El contador de la IP caduca solo con su ventana.
+        # EN: Only the ACCOUNT counter is cleared. The IP counter is NOT: otherwise someone who owns an account (a guest, say) could log in between
+        #     attempts and reset the count to guess other passwords without limit. The IP counter expires by itself with its window.
         if uname: throttle_clear("u:" + uname)
         return u, None
     login_failed(handler, username)
     time.sleep(0.3)
     return None, (401, "Invalid credentials")
 
+# Inicio de sesión completo: verifica usuario y contraseña (con límite de intentos) y abre la sesión. Es lo que usan TODOS los módulos. Devuelve
+# ({"token", "ttl", "username", "permissions", "must_change_password"}, None) o (None, (código, mensaje)). En un módulo (modo remoto) lo hace el servicio de
+# autenticación: el módulo manda la contraseña una vez y recibe solo el token; no hay forma de abrir una sesión sin contraseña.
+# EN: Complete login: checks username and password (with attempt limiting) and opens the session. It is what EVERY module uses. Returns
+#     ({"token", "ttl", "username", "permissions", "must_change_password"}, None) or (None, (code, message)). In a module (remote mode) the
+#     authentication service does it: the module sends the password once and gets back only the token; there is no way to open a session without a password.
+def login_session(handler, username, password, remember=None):
+    ttl = remember_ttl(remember)
+    if not isinstance(username, str) or not isinstance(password, str):
+        return None, (400, "Invalid request body")
+    if REMOTE:
+        try:
+            ua = re.sub(r"[\x00-\x1f\x7f]", "", handler.headers.get("User-Agent") or "")[:200]
+            r = _rpc("login", ip=client_ip(handler), ua=ua, username=username, password=password, remember=remember)
+        except Exception:
+            return None, (503, "Authentication service unavailable")
+        if isinstance(r.get("login"), dict): return r["login"], None
+        code = r.get("status") if isinstance(r.get("status"), int) else 500
+        return None, (code, str(r.get("error") or "Login failed")[:200])
+    u, err = login(handler, username, password)
+    if not u: return None, err
+    token = create_session(username, u["permissions"], ttl, handler)
+    return {"token": token, "ttl": ttl, "username": username, "permissions": u["permissions"],
+            "must_change_password": bool(u.get("must_change_password", False))}, None
+
 # Freno para operaciones que verifican una contraseña con la sesión ya abierta (cambio de contraseña): 5 fallos en 10 min bloquean 5 min.
 # EN: Brake for operations that verify a password with a session already open (password change): 5 failures in 10 min lock for 5 min.
+@_local
 def password_guard_wait(username) -> int:
     return throttle_wait("pw:" + str(username))
+@_local
 def password_guard_fail(username):
     throttle_fail("pw:" + str(username))
+@_local
 def password_guard_ok(username):
     throttle_clear("pw:" + str(username))
 
@@ -960,7 +1163,12 @@ _state_seen: dict = {}                  # last state seen per key, in THIS proce
 # EN: Record an event. level: "info", "warn" or "crit". Never raises: a failure to record must not affect the module.
 def record_event(module, level, text, k=None, **params):
     """Append an event {t, m, lv, tx[, k, p]} to events.json (best effort). `text` is the English message; `k` + `params`
-    let the page translate it (it falls back to `text` for unknown keys)."""
+    let the page translate it (it falls back to `text` for unknown keys). In a module the authentication service writes it,
+    and records it under the module's own name (taken from the operating-system user, not from `module`)."""
+    if REMOTE:
+        try: _rpc("event", retries=1, level=level, text=str(text)[:200], k=k, params={a: b for a, b in params.items() if isinstance(b, (int, float, str))})
+        except Exception as e: log.debug(f"record_event: {e}")
+        return
     try:
         now = int(time.time())
         with _events_lock:
@@ -990,6 +1198,11 @@ def state_changed(key, state):
 # Lee los eventos (más recientes primero), solo de los módulos pedidos.
 # EN: Read the events (newest first), only for the requested modules.
 def read_events(modules=None, limit=100):
+    if REMOTE:
+        try: return _rpc("events", retries=2, modules=list(modules) if modules is not None else None, limit=limit).get("events") or []
+        except Exception as e:
+            log.warning(f"events unavailable: {e}")
+            return []
     ev = read_json(EVENTS_FILE, [], list)
     out = [e for e in ev if isinstance(e, dict) and (modules is None or e.get("m") in modules)]
     return list(reversed(out))[:limit]
@@ -1333,7 +1546,12 @@ def system_detail(full=False):
 #     One shared SQLite database (metrics.db, next to users.json) holding the Pi temperature and under-voltage
 #     history (written by the Overview service) and the CPU and memory history of the Proxmox nodes (written by
 #     Proxmox Monitor). Each sample is committed at once (WAL), so a power cut loses nothing; Teleporter backs it up.
-METRICS_DB = Path(os.environ.get("LABTOWER_METRICS", str(USERS_FILE.with_name("metrics.db"))))
+# ES: Cada módulo guarda su historial en SU carpeta (metrics.db dentro de /var/lib/labtower/<módulo>; el servicio fija LABTOWER_MODULE): un módulo
+#     no puede leer ni borrar el historial de otro. Sin LABTOWER_MODULE (pruebas, desarrollo) hay una sola base junto a users.json.
+# EN: Each module keeps its history in ITS folder (metrics.db inside /var/lib/labtower/<module>; the service sets LABTOWER_MODULE): a module
+#     can neither read nor delete another one's history. Without LABTOWER_MODULE (tests, development) there is one database next to users.json.
+MODULE = os.environ.get("LABTOWER_MODULE", "").strip()
+METRICS_DB = Path(os.environ.get("LABTOWER_METRICS") or (str(module_dir(MODULE) / "metrics.db") if MODULE else str(USERS_FILE.with_name("metrics.db"))))
 _METRICS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS pi_samples  (ts INTEGER PRIMARY KEY, temp REAL, flags INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS pve_samples (cid TEXT NOT NULL, node TEXT NOT NULL, ts INTEGER NOT NULL, cpu REAL, mem REAL,
@@ -1402,17 +1620,46 @@ def check_file(path, writable_dir=True, must_exist=False):
 # Chequeos que comparten todos los módulos: usuarios, sesiones y espacio libre en disco.
 # EN: Checks shared by every module: users, sessions and free disk space.
 def check_common():
-    """Checks every module shares: users file, sessions file, disk space."""
+    """Checks every module shares: users file, sessions file, disk space. A module asks the authentication service for the first two."""
+    if not REMOTE: return check_common_local()
+    out = {}
+    try:
+        r = _rpc("health", retries=2).get("checks")
+        for k in ("users", "sessions"):
+            v = r.get(k) if isinstance(r, dict) else None
+            out[k] = v if isinstance(v, dict) and v.get("level") in (OK, WARN, FAIL) else chk(FAIL, "no answer from the authentication service")
+    except Exception as e:
+        out["users"] = chk(FAIL, f"authentication service unavailable: {str(e)[:80]}")
+        out["sessions"] = chk(FAIL, "authentication service unavailable")
+    out["disk"] = _check_disk(DATA_ROOT)
+    return out
+
+def _check_disk(where):
+    try:
+        st = os.statvfs(str(where if Path(where).exists() else "/"))
+        mb = st.f_bavail * st.f_frsize // (1024 * 1024)
+        return chk(FAIL if mb < 5 else WARN if mb < 100 else OK, f"{mb} MB free")
+    except OSError as e:
+        return chk(WARN, str(e))
+
+# Chequeo del archivo de eventos (lo guarda el servicio de autenticación; un módulo se lo pregunta).
+# EN: Check of the events file (kept by the authentication service; a module asks it).
+def events_check():
+    if not REMOTE: return check_file(EVENTS_FILE)
+    try:
+        v = _rpc("health", retries=2).get("checks", {}).get("events")
+        if isinstance(v, dict) and v.get("level") in (OK, WARN, FAIL): return v
+    except Exception as e:
+        return chk(FAIL, f"authentication service unavailable: {str(e)[:80]}")
+    return chk(FAIL, "no answer from the authentication service")
+
+def check_common_local():
+    """The checks run by the authentication service itself."""
     out = {}
     users = _users_cached()
     out["users"] = chk(OK) if users else chk(FAIL, "no usable users.json")
     out["sessions"] = check_file(SESSIONS_FILE)
-    try:
-        st = os.statvfs(str(SESSIONS_FILE.parent if SESSIONS_FILE.parent.exists() else "/"))
-        mb = st.f_bavail * st.f_frsize // (1024 * 1024)
-        out["disk"] = chk(FAIL if mb < 5 else WARN if mb < 100 else OK, f"{mb} MB free")
-    except OSError as e:
-        out["disk"] = chk(WARN, str(e))
+    out["disk"] = _check_disk(SESSIONS_FILE.parent)
     return out
 
 # Detecta si el equipo es una Raspberry Pi leyendo el modelo del device-tree (no existe en VM ni en otros PC).

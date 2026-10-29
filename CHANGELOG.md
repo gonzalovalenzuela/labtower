@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.1.3 — 2026-10-29
+
+Correcciones de la revisión de seguridad del código.
+
+**Seguridad**
+- **Inicio de sesión:** un ingreso correcto ya no reinicia el contador de intentos de la IP (antes, quien tenía una cuenta propia podía entrar entre intentos y adivinar otras claves sin límite). nginx aplica ahora el límite de intentos de login (10/min por IP) a **todos** los módulos, no solo al panel.
+- **Sesiones:** cada sesión tiene un tope absoluto de vida desde su creación (14 días la normal, 30 «una semana», 90 «un mes», 400 «siempre»), aunque se siga usando.
+- **Contraseña en acciones críticas:** crear un usuario, restablecer la clave de otro y restaurar o descargar un respaldo piden de nuevo la contraseña de la cuenta (con el mismo freno de intentos del login).
+- **Respaldos del panel:** la descarga ahora sale **cifrada** (gpg, AES-256, el mismo formato del respaldo SFTP) con una frase de 12 o más caracteres que eliges; se puede subir un `.gpg` indicando la frase. Descargar sin cifrar exige marcarlo expresamente y queda en el registro. Crear un respaldo ya no lo descarga solo, y se elimina la ruta de descarga sin contraseña.
+- **Teleporter:** el archivo de un respaldo (que puede venir de fuera) ya no lo abre root: `tar` y los validadores (JSON, SQLite) corren como el usuario sin privilegios, en una carpeta que ningún otro proceso de ese usuario puede alcanzar. `users.json` se valida también por su estructura (nombres, hashes y niveles) antes de restaurar, y al leerse cualquier nivel desconocido se trata como «none».
+- **Interfaz:** los atributos `data-on-*` solo pueden invocar funciones registradas por cada módulo (lista cerrada) y no cualquier función global; los valores que se usan como nombre de clase (nivel de permiso, tipo de VM, etiqueta, bandera de puerto) se filtran.
+- **Servidores DNS con «Verificar el certificado TLS» desactivado:** ya no se acepta cualquier certificado; se fija la huella en la primera conexión y un cambio se rechaza (guardar el servidor otra vez la borra).
+- **Destinos de conexión:** Proxmox, NAS, DNS, Pi-hole y switches rechazan la propia máquina (loopback) y las direcciones de enlace local, también si un nombre resuelve a ellas, para que LabTower no sirva de puente hacia sus servicios internos.
+- **Entradas:** las APIs rechazan con 400 (antes 500) un cuerpo JSON que no sea un objeto, JSON anidado en exceso o campos de tipo equivocado.
+- **nginx:** el límite de 200 MB y la subida sin búfer valen solo para la ruta de subida de respaldos (el resto del panel mantiene 1 MB). La CSP ya no permite fuentes de Google (no se usaban).
+- **Aislamiento entre módulos (rediseño):** cada servicio corre con su propio usuario del sistema (`labtower-<módulo>`), con su carpeta de datos privada (700) y su propio `metrics.db`; systemd solo le deja escribir esa carpeta. Los usuarios, sesiones, contadores y eventos pasan a `/var/lib/labtower/auth/`, que solo lee el servicio de autenticación (el Panel de administración, `labtower-auth`). Los demás módulos le consultan por un socket Unix (`/run/labtower/auth.sock`): comprobar una sesión, iniciar o cerrar sesión y anotar eventos, identificando a quien llama con el kernel (`SO_PEERCRED`). No hay ninguna operación que cree sesiones sin contraseña ni que lea usuarios, así que un módulo comprometido ya no puede falsificar sesiones, llevarse los hashes ni tocar los datos de otro módulo. El servicio limita conexiones simultáneas (64) y la duración de cada una (5 s); el cliente tiene un caché de sesiones acotado y un cortacircuito de 1 s si el servicio no responde (falla cerrado). `wol-console/devices.json` y `net-monitor/hosts.json` (que se leen entre sí) pasan a modo 640 de grupo, se leen como entrada no confiable (sin seguir enlaces, solo archivos regulares, máx. 4 MiB) y ya no hay una carpeta compartida.
+- **Actualización a 2.1.3:** el instalador crea los usuarios, borra los enlaces simbólicos que hubiera dentro de `/var/lib/labtower` (root no los sigue), reparte los archivos (`auth/`, cada módulo), parte el `metrics.db` común en uno por módulo (con un usuario sin privilegios; el original queda en `/var/backups/labtower/metrics.db.pre-isolation.*`) y reescribe las unidades systemd. Es idempotente. El usuario `labtower` queda solo como usuario sin datos con el que Teleporter abre respaldos no confiables. Los respaldos anteriores (con un solo `metrics.db`) se restauran partiéndolo por módulo.
+- **Teleporter:** cada archivo restaurado queda a nombre del usuario de su módulo (modos 700/710 las carpetas, 600/640 los archivos); la instantánea de las bases SQLite la toma el dueño del archivo, no root; la regla `sudo` ahora es para `labtower-auth`.
+- **Documentación:** el README explica que las credenciales de los equipos se guardan legibles (permisos 600; usar cuentas de solo lectura), los destinos permitidos y el aislamiento entre módulos.
+
+**Correcciones**
+- Entradas con tipo equivocado: `POST /api/hosts/delete`, `/api/hosts/update` y `/api/scan` (Net Monitor), `/api/clusters` (Proxmox) y `/api/ping` (WOL) cortaban la conexión sin responder si el campo `ip` o `name` llegaba como lista, objeto o número; ahora contestan 400 como el resto.
+- Limpieza de código muerto: importaciones y variables sin uso en varios módulos, `${OLD:?}` en el `rm -rf` del instalador.
+- Switch Monitor: «Actualizado hace …» muestra segundos enteros (antes salía, p. ej., «23.33152723312378 s»).
+- Switch Monitor: el encabezado de la tabla de puertos dice «MBIT/S rx / tx» (antes, por las mayúsculas, se leía «MB/S» aunque los valores son megabits).
+- Switch Monitor: las tarjetas de resumen pasan a otra fila cuando no caben (antes la etiqueta «Temperatura máx. (switch)» se salía de la tarjeta y los valores se partían), y la columna «Conectado a» de la tabla de puertos tiene un ancho mínimo mayor para que las filas no queden altísimas en pantallas angostas.
+
 ## 2.1.2 — 2026-10-28
 
 **Nuevo**

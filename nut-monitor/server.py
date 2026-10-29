@@ -33,8 +33,6 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
 from urllib.parse import urlparse, parse_qs
 from pathlib import Path
-from collections import deque
-from contextlib import contextmanager
 
 # Auth compartido
 # Módulo compartido de autenticación (carpeta hermana /auth).
@@ -780,8 +778,9 @@ class H(BaseHTTPRequestHandler):
         try:
             n = int(self.headers.get("Content-Length", 0))
             if n < 0 or n > 8192: return None
-            return json.loads(self.rfile.read(n))
-        except (ValueError, TypeError, OSError): return None
+            d = json.loads(self.rfile.read(n))
+            return d if isinstance(d, dict) else None      # EN: a list/number would crash the handlers (500); reject it (400)
+        except (ValueError, TypeError, OSError, RecursionError): return None
 
     def _token(self):
         return auth.token_from_request(dict(self.headers),
@@ -908,19 +907,14 @@ class H(BaseHTTPRequestHandler):
         # Login con límite de intentos (auth.login); la cookie es HttpOnly y SameSite=Strict.
         # EN: Login with attempt limiting (auth.login); the cookie is HttpOnly and SameSite=Strict.
         if path == "/api/login":
-            u, err = auth.login(self, body.get("username",""), body.get("password",""))
-            if not u: return self._json(err[0], {"error": err[1]})
-            ttl = auth.remember_ttl(body.get("remember"))     # «Recordarme»: solo valores de la lista blanca / EN: only whitelisted values
-            token = auth.create_session(body["username"], u["permissions"], ttl, self)
-            users = auth.load_users()
-            must  = users.get(body["username"], {}).get("must_change_password", False)
+            r, err = auth.login_session(self, body.get("username", ""), body.get("password", ""), body.get("remember"))   # the service checks the password and opens the session
+            if not r: return self._json(err[0], {"error": err[1]})
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
-            self.send_header("Set-Cookie",
-                auth.session_cookie(token, ttl))
-            body_resp = json.dumps({"ok": True, "username": body["username"],
-                                    "permissions": u["permissions"],
-                                    "must_change_password": must}).encode()
+            self.send_header("Set-Cookie", auth.session_cookie(r["token"], r["ttl"]))
+            body_resp = json.dumps({"ok": True, "username": r["username"],
+                                    "permissions": r["permissions"],
+                                    "must_change_password": r["must_change_password"]}).encode()
             self.send_header("Content-Length", str(len(body_resp)))
             self.end_headers(); self.wfile.write(body_resp); return
 

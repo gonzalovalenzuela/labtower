@@ -51,7 +51,7 @@ const LANG={
  "fieldUser": "Username",
  "fieldPassPihole": "Password or token",
  "fieldPassAdguard": "Password",
- "fieldTls": "Verify the TLS certificate",
+ "fieldTls": "Verify the TLS certificate (if off, the certificate is pinned on first connection and a change is refused)",
  "fieldTimeout": "Timeout (s)",
  "secretKept": "Saved. Leave empty to keep it.",
  "added": "{0} added",
@@ -169,7 +169,7 @@ const LANG={
  "fieldUser": "Usuario",
  "fieldPassPihole": "Contraseña o token",
  "fieldPassAdguard": "Contraseña",
- "fieldTls": "Verificar el certificado TLS",
+ "fieldTls": "Verificar el certificado TLS (si se desactiva, se fija la huella en la primera conexión y un cambio se rechaza)",
  "fieldTimeout": "Tiempo de espera (s)",
  "secretKept": "Guardada. Déjala vacía para conservarla.",
  "added": "{0} agregado",
@@ -727,3 +727,7 @@ _i18nReady=true;
   const ok=await checkSession();
   if(ok){applyPermissions();await initApp();const ls=document.getElementById('login-screen');ls.style.opacity='0';setTimeout(()=>ls.style.display='none',150);}else{document.getElementById('login-screen').style.display='flex';}
 })();
+
+// Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
+// EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
+if (window.cspRegister) cspRegister({ closeModals, confirmDelete, doLogin, logout, openForm, openPause, resumeBlocking, saveServer, setLang, setRange, setTheme, testServer, toggleNav, toggleServer, typeChanged });

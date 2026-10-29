@@ -3,9 +3,9 @@ set -e
 
 # Antes de instalar o actualizar se copian los datos del usuario; si algo sale mal, siempre queda una copia con fecha en /var/backups/labtower.
 # EN: Before installing or upgrading, the user's data is copied; if anything goes wrong, there is always a dated copy in /var/backups/labtower.
-# ES: Las carpetas de datos las controlan los servicios (usuario labtower): root NUNCA lee ahí por su cuenta (un enlace simbólico plantado
+# ES: Las carpetas de datos las controlan los servicios (usuarios labtower-*): root NUNCA lee ahí por su cuenta (un enlace simbólico plantado
 #     le haría copiar archivos de root al respaldo). Cada archivo se lee con el usuario del servicio y root solo escribe en su propia carpeta.
-# EN: The data folders are controlled by the services (user labtower): root NEVER reads there on its own (a planted symlink would make it copy
+# EN: The data folders are controlled by the services (users labtower-*): root NEVER reads there on its own (a planted symlink would make it copy
 #     root files into the backup). Every file is read as the service user and root only writes into its own folder.
 BACKUP_DIR="/var/backups/labtower"
 STAMP=$(date +%Y%m%d_%H%M%S)
@@ -15,8 +15,18 @@ BACKED_UP=false
 # sessions.json NO se respalda: contiene sesiones activas y un respaldo no debe guardar inicios de sesión utilizables.
 # EN: Data files: new paths (/var/lib/labtower/<module>/, since 1.2.0u) and old ones (inside /opt/labtower, to migrate).
 #     sessions.json is NOT backed up: it holds live sessions and a backup must not keep usable logins.
-if id -u labtower >/dev/null 2>&1 && command -v runuser >/dev/null 2>&1; then
+# ES: Quién es dueño de cada carpeta de datos (un usuario del sistema por módulo). Antes de actualizar, los datos pueden seguir siendo de «labtower».
+# EN: Who owns each data folder (one system user per module). Before upgrading, the data may still belong to "labtower".
+user_of() {
+    case "$(basename "$(dirname "$1")")" in
+        auth|teleporter) echo labtower-auth;; wol-console) echo labtower-wol;; nut-monitor) echo labtower-nut;;
+        net-monitor) echo labtower-net;; proxmox-monitor) echo labtower-pve;; nas-monitor) echo labtower-nas;;
+        dns-monitor) echo labtower-dns;; wan-monitor) echo labtower-wan;; overview) echo labtower-overview;; *) echo labtower;;
+    esac
+}
+if command -v runuser >/dev/null 2>&1; then
     for f in \
+        /var/lib/labtower/auth/users.json \
         /var/lib/labtower/users.json \
         /var/lib/labtower/wol-console/devices.json \
         /var/lib/labtower/nut-monitor/servers.json \
@@ -37,10 +47,11 @@ if id -u labtower >/dev/null 2>&1 && command -v runuser >/dev/null 2>&1; then
         /opt/labtower/net-monitor/config.json \
         /opt/labtower/proxmox-monitor/clusters.json
     do
-        if runuser -u labtower -- test -f "$f" 2>/dev/null && ! runuser -u labtower -- test -L "$f" 2>/dev/null; then
+        u=$(user_of "$f"); id -u "$u" >/dev/null 2>&1 || continue
+        if runuser -u "$u" -- test -f "$f" 2>/dev/null && ! runuser -u "$u" -- test -L "$f" 2>/dev/null; then
             mkdir -p "$BACKUP_DIR"; chmod 700 "$BACKUP_DIR"
             out="$BACKUP_DIR/$(basename "$f").${STAMP}.bak"
-            if (umask 077; runuser -u labtower -- cat -- "$f" > "$out") 2>/dev/null; then
+            if (umask 077; runuser -u "$u" -- cat -- "$f" > "$out") 2>/dev/null; then
                 BACKED_UP=true
                 echo "  backup: $(basename "$f")"
             else

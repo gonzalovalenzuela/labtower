@@ -73,7 +73,7 @@ def solid(name, dark):
 
 def svg(name, accent):
     """Modern family icon: slate tile, a two-slab platform in the module colour (the brand mark's slabs) and a bold symbol standing on it."""
-    N = BRAND["night"]; W = "#ffffff"; uid = "s" + name
+    N = BRAND["night"]; W = "#ffffff"
     dark = mix(accent, N, .62)
     defs = (f'<defs><linearGradient id="gf" gradientUnits="userSpaceOnUse" x1="0" y1="80" x2="0" y2="340"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="{mix(accent, W, .72)}"/></linearGradient>'
             f'<linearGradient id="gs" gradientUnits="userSpaceOnUse" x1="0" y1="80" x2="0" y2="340"><stop offset="0" stop-color="{mix(accent, W, .55)}"/><stop offset="1" stop-color="{mix(accent, W, .3)}"/></linearGradient>'

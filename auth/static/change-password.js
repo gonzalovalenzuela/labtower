@@ -74,3 +74,7 @@ async function logout() {
   try { await fetch('api/logout', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'}); } catch(e) {}
   location.replace(next);
 }
+
+// Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
+// EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
+if (window.cspRegister) cspRegister({ logout, save });

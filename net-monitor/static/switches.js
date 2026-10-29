@@ -22,7 +22,7 @@ Object.assign(LANG.en, {
   swHistNote: 'Cumulative data, not affected by restarts: LabTower adds up how much each counter advances between reads, so the totals do not drop when a switch reboots or its counters are cleared. They start from the value the switch already had when it was added, and the traffic of the few seconds around a restart is lost.',
   swHistSince: d => 'Counting since ' + d, swHistResets: n => n ? n + ' counter reset' + (n > 1 ? 's' : '') + ' detected' : 'no counter resets detected',
   swHistEmpty: 'No totals yet: they appear after the first reading.', swColRx: 'Received', swColTx: 'Sent', swColSum: 'Total', swColPkRx: 'Packets received', swColPkTx: 'Packets sent', swHistTotal: 'All ports',
-  swHistPktOnly: 'This model does not report bytes, only packets.', swPort: 'Port', swState: 'State', swSpeed: 'Speed', swRxPps: 'Rx pkt/s', swTxPps: 'Tx pkt/s', swMbps: 'Mb/s rx / tx', swErrors: 'Errors', swStp: 'STP', swConn: 'Connected to',
+  swHistPktOnly: 'This model does not report bytes, only packets.', swPort: 'Port', swState: 'State', swSpeed: 'Speed', swRxPps: 'Rx pkt/s', swTxPps: 'Tx pkt/s', swMbps: 'Mbit/s rx / tx', swErrors: 'Errors', swStp: 'STP', swConn: 'Connected to',
   swStUp: 'Up', swStDown: 'Down', swStOff: 'Disabled', swStLoop: 'Loop', swStUplink: 'Uplink', swStWarn: 'Errors',
   swShowAll: n => 'Show all ' + n + ' ports', swShowActive: 'Show only active ports',
   swOnline: 'Online', swOffline: 'Unreachable', swWaiting: 'Waiting for the first reading…', swTempHigh: 'High temperature', swTempCrit: 'Critical temperature',
@@ -56,7 +56,7 @@ Object.assign(LANG.es, {
   swHistNote: 'Datos acumulados, sin tomar en cuenta los reinicios: LabTower suma cuánto avanza cada contador entre lecturas, así que el total no baja cuando el switch se reinicia o se borran sus contadores. Parte del valor que el switch ya traía al agregarlo, y se pierde el tráfico de los pocos segundos alrededor de un reinicio.',
   swHistSince: d => 'Contando desde ' + d, swHistResets: n => n ? n + ' reinicio' + (n > 1 ? 's' : '') + ' de contadores detectado' + (n > 1 ? 's' : '') : 'sin reinicios de contadores detectados',
   swHistEmpty: 'Aún no hay totales: aparecen tras la primera lectura.', swColRx: 'Recibido', swColTx: 'Enviado', swColSum: 'Total', swColPkRx: 'Paquetes recibidos', swColPkTx: 'Paquetes enviados', swHistTotal: 'Todos los puertos',
-  swHistPktOnly: 'Este modelo no informa bytes, solo paquetes.', swPort: 'Puerto', swState: 'Estado', swSpeed: 'Velocidad', swRxPps: 'Rx pkt/s', swTxPps: 'Tx pkt/s', swMbps: 'Mb/s rx / tx', swErrors: 'Errores', swStp: 'STP', swConn: 'Conectado a',
+  swHistPktOnly: 'Este modelo no informa bytes, solo paquetes.', swPort: 'Puerto', swState: 'Estado', swSpeed: 'Velocidad', swRxPps: 'Rx pkt/s', swTxPps: 'Tx pkt/s', swMbps: 'Mbit/s rx / tx', swErrors: 'Errores', swStp: 'STP', swConn: 'Conectado a',
   swStUp: 'Arriba', swStDown: 'Abajo', swStOff: 'Deshabilitado', swStLoop: 'Loop', swStUplink: 'Uplink', swStWarn: 'Errores',
   swShowAll: n => 'Mostrar los ' + n + ' puertos', swShowActive: 'Mostrar solo puertos activos',
   swOnline: 'En línea', swOffline: 'Sin conexión', swWaiting: 'Esperando la primera lectura…', swTempHigh: 'Temperatura alta', swTempCrit: 'Temperatura crítica',
@@ -103,7 +103,7 @@ function bytesFmt(v) {
 }
 const num = v => v == null ? '—' : Number(v).toLocaleString(_lang === 'es' ? 'es-CL' : 'en-GB');
 const dateOf = ts => new Date(ts * 1000).toLocaleDateString(_lang === 'es' ? 'es-CL' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-function ago(sec) { return sec == null ? '—' : sec < 60 ? sec + ' ' + t('swSec') : Math.floor(sec / 60) + ' ' + t('swMin'); }
+function ago(sec) { return sec == null ? '—' : sec < 60 ? Math.round(sec) + ' ' + t('swSec') : Math.floor(sec / 60) + ' ' + t('swMin'); }
 function clock(ts, secs) { const d = new Date(ts * 1000); return typeof PCT !== 'undefined' ? PCT.time(d, secs) : d.toLocaleTimeString(); }
 function dayTime(ts) {
   const d = new Date(ts * 1000), day = d.toLocaleDateString(_lang === 'es' ? 'es-CL' : 'en-GB', { day: '2-digit', month: '2-digit' });
@@ -249,7 +249,7 @@ function tile(s, p) {
   const tip = [t('swPortTitle', s.name, p.port), p.link_up ? spdLong(p.speed_mbps) : t('swStDown'), p.label, p.link_to ? '↔ ' + p.link_to : '',
     p.rx_pps != null ? 'rx ' + pps(p.rx_pps) + ' / tx ' + pps(p.tx_pps) + ' pkt/s' : '', (p.rx_err || p.tx_err) ? t('swErrors') + ': ' + (p.rx_err || 0) + ' / ' + (p.tx_err || 0) : ''].filter(Boolean).join(' · ');
   const on = SW.sel && SW.sel.sid === s.id && SW.sel.port === p.port;
-  return `<button type="button" class="sw-port sw-p-${p.flag}${on ? ' sel' : ''}" data-act="port" data-id="${esc(s.id)}" data-port="${p.port}" title="${esc(tip)}"><span class="n">${esc(num)}</span><span class="s">${p.link_up ? esc(spd(p.speed_mbps)) : '—'}</span><span class="x">${esc(sub)}</span></button>`;
+  return `<button type="button" class="sw-port sw-p-${String(p.flag).replace(/[^a-z0-9_-]/g, '')}${on ? ' sel' : ''}" data-act="port" data-id="${esc(s.id)}" data-port="${p.port}" title="${esc(tip)}"><span class="n">${esc(num)}</span><span class="s">${p.link_up ? esc(spd(p.speed_mbps)) : '—'}</span><span class="x">${esc(sub)}</span></button>`;
 }
 
 function stPill(p) {

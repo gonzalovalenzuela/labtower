@@ -522,7 +522,7 @@ function renderTypeFilters(){
     <span class="os-count">${counts.ALL}</span></div>`;
   DEVICE_TYPES.forEach(k=>{
     if(!counts[k])return;
-    html+=`<div class="os-filter${filterType===k?' active':''}" data-type="${k}" data-on-click="setTypeFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]">
+    html+=`<div class="os-filter${filterType===k?' active':''}" data-type="${esc(k)}" data-on-click="setTypeFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]">
       <span class="os-dot" style="background:${TYPE_META[k].color}"></span><span class="os-filter-name">${esc(tType(k))}</span>
       <span class="os-count">${counts[k]}</span></div>`;
   });
@@ -1124,3 +1124,7 @@ function toggleNav(force){
 // EN: Returns the chosen duration ("day","week","month","forever") or "" if unchecked. Remembers the last choice in this browser.
 function remValue(){const c=document.getElementById('l-rem'),s=document.getElementById('l-remsel');const v=c&&c.checked&&s?s.value:'';try{localStorage.setItem('pi-remember',v)}catch(e){}return v}
 (function remInit(){try{const v=localStorage.getItem('pi-remember')||'';const c=document.getElementById('l-rem'),s=document.getElementById('l-remsel');if(c&&s&&['day','week','month','forever'].includes(v)){c.checked=true;s.disabled=false;s.value=v}}catch(e){}})();
+
+// Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
+// EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
+if (window.cspRegister) cspRegister({ applyInterval, deleteHost, doLogin, editAlias, editOs, logout, rescanHost, saveOuiAuto, savePiholeConfig, saveSnmp, setLang, setOsFilter, setSort, setStatusFilter, setTheme, setTypeFilter, sortKey, startScan, testSnmp, toggleNav, togglePiholePanel, toggleSnmpPanel, updateOui });

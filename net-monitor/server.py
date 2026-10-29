@@ -38,7 +38,6 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 try:
     from urllib.request import urlopen, Request
-    from urllib.error import URLError
 except ImportError:
     pass
 
@@ -204,6 +203,8 @@ def _pihole_request(host: str, path: str, method: str = "GET",
     if not PIHOLE_HOST_RE.match(host or ""):
         raise ValueError("invalid Pi-hole host")
     name, _, port = host.partition(":")
+    if not auth.valid_target(name):
+        raise ValueError("invalid Pi-hole host (this machine and link-local addresses are not allowed)")
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode    = ssl.CERT_NONE
@@ -487,7 +488,7 @@ DEVICE_TYPES = ["computer", "phone", "router", "switch", "ap", "storage", "tv", 
 _OUI_PATHS = ["/usr/share/ieee-data/oui.txt", "/var/lib/ieee-data/oui.txt",
               "/usr/share/misc/oui.txt"]
 OUI_URL   = os.environ.get("OUI_URL", "https://www.wireshark.org/download/automated/data/manuf.gz")
-OUI_FILE  = Path(os.environ.get("LABTOWER_OUI", "/var/lib/labtower/manuf"))
+OUI_FILE  = Path(os.environ.get("LABTOWER_OUI", str(auth.module_dir("net-monitor") / "manuf")))
 OUI_MAX_AGE = 7 * 24 * 3600
 _oui_db: dict | None = None            # { 24-bit prefix hex: vendor }
 _oui_ext: dict = {28: {}, 36: {}}      # longer prefixes (MA-M / MA-S blocks)
@@ -905,7 +906,6 @@ def scan_host(ip: str) -> dict | None:
 
     ports_info = [{"port": p, "service": PORT_NAMES.get(p, "unknown")} for p in open_ports]
 
-    ts_now = int(time.time())
     return {
         "ip":         ip_str,
         "hostname":   hostname,
@@ -938,9 +938,9 @@ def _mac_key(raw) -> str:
 # EN: Set of MACs registered in WOL Console.
 def _wol_macs() -> set:
     """MACs registered in WOL Console (shared info, read-only)."""
+    d = auth.read_published(WOL_DEVICES_FILE, [], list)        # published by WOL Console: untrusted input
     try:
-        d = json.loads(WOL_DEVICES_FILE.read_text())
-        return {k for k in (_mac_key(x.get("mac")) for x in d if isinstance(x, dict)) if k}
+        return {k for k in (_mac_key(x.get("mac")) for x in d[:5000] if isinstance(x, dict)) if k}
     except Exception:
         return set()
 
@@ -954,11 +954,11 @@ def load_hosts() -> dict:
 _hosts_lock = threading.RLock()
 _live_hosts = None   # the scan's in-memory table while a scan runs, so manual edits are not overwritten
 
-# Guarda hosts.json con permisos 0644, porque WOL Console (otro proceso) también lo lee.
-# EN: Save hosts.json with 0644 permissions, because WOL Console (another process) also reads it.
+# Guarda hosts.json con permisos 0640 (grupo labtower), porque WOL Console (otro proceso) también lo lee.
+# EN: Save hosts.json with 0640 permissions (group labtower), because WOL Console (another process) also reads it.
 def save_hosts(hosts: dict):
     with _hosts_lock:
-        auth.write_json(DATA_FILE, hosts, mode=0o644)   # WOL Console reads this file
+        auth.write_json(DATA_FILE, hosts, mode=0o640)   # group labtower: WOL Console reads this file
 
 # ─── Switch Monitor ───────────────────────────────────────────────
 # El gestor se crea la primera vez que se usa (importar este archivo no lanza hilos) y se arranca en __main__.
@@ -1045,7 +1045,7 @@ def _record_scan_events(changes, first_inventory, online, single_ip=None):
         log.debug(f"scan events: {e}")
 
 def run_scan(network: str = None, single_ip: str = None):
-    global _scan_timer, _live_hosts
+    global _live_hosts
     with _scan_lock:                      # reserve the scan atomically: two triggers can't both start
         if _scan_status["running"]:
             return
@@ -1254,8 +1254,9 @@ class H(BaseHTTPRequestHandler):
         try:
             n = int(self.headers.get("Content-Length", 0))
             if n < 0 or n > 8192: return None
-            return json.loads(self.rfile.read(n))
-        except (ValueError, TypeError, OSError): return None
+            d = json.loads(self.rfile.read(n))
+            return d if isinstance(d, dict) else None      # EN: a list/number would crash the handlers (500); reject it (400)
+        except (ValueError, TypeError, OSError, RecursionError): return None
 
     def _tok(self):
         return auth.token_from_request(dict(self.headers), self.headers.get("Cookie", ""))
@@ -1383,19 +1384,15 @@ class H(BaseHTTPRequestHandler):
         # Login con límite de intentos (auth.login); la cookie es HttpOnly y SameSite=Strict.
         # EN: Login with attempt limiting (auth.login); the cookie is HttpOnly and SameSite=Strict.
         if path == "/api/login":
-            u, err = auth.login(self, body.get("username",""), body.get("password",""))
-            if not u: return self._json(err[0], {"error": err[1]})
-            ttl = auth.remember_ttl(body.get("remember"))     # «Recordarme»: solo valores de la lista blanca / EN: only whitelisted values
-            token = auth.create_session(body["username"], u["permissions"], ttl, self)
-            users = auth.load_users()
-            must  = users.get(body["username"], {}).get("must_change_password", False)
+            r, err = auth.login_session(self, body.get("username", ""), body.get("password", ""), body.get("remember"))   # the service checks the password and opens the session
+            if not r: return self._json(err[0], {"error": err[1]})
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Set-Cookie",
-                auth.session_cookie(token, ttl))
-            br = json.dumps({"ok": True, "username": body["username"],
-                             "permissions": u["permissions"],
-                             "must_change_password": must}).encode()
+                auth.session_cookie(r["token"], r["ttl"]))
+            br = json.dumps({"ok": True, "username": r["username"],
+                             "permissions": r["permissions"],
+                             "must_change_password": r["must_change_password"]}).encode()
             self.send_header("Content-Length", str(len(br)))
             self.end_headers(); self.wfile.write(br); return
 
@@ -1412,7 +1409,7 @@ class H(BaseHTTPRequestHandler):
                 return self._json(403, {"error": "Execute permission required"})
             if _scan_status["running"]:
                 return self._json(409, {"error": "Scan already running"})
-            single = (body.get("ip") or "").strip() or None
+            single = str(body.get("ip") or "").strip() or None
             if single:
                 try: ip_obj = ipaddress.ip_address(single)
                 except ValueError: return self._json(400, {"error": "Invalid IP"})
@@ -1533,7 +1530,7 @@ class H(BaseHTTPRequestHandler):
         elif path == "/api/hosts/update":
             if not auth.check_permission(tok, "net", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
-            ip = (body.get("ip") or "").strip()
+            ip = str(body.get("ip") or "").strip()
             if not ip: return self._json(400, {"error": "IP required"})
             dt = None
             if "device_type" in body:
@@ -1571,7 +1568,7 @@ class H(BaseHTTPRequestHandler):
         elif path == "/api/scan/interval":
             if not auth.check_permission(tok, "net", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
-            global _current_interval, _scan_timer
+            global _current_interval
             try: interval = int(body.get("interval", 3600))
             except (TypeError, ValueError): return self._json(400, {"error": "Invalid interval"})
             if interval < 0 or (interval > 0 and interval < 60):
@@ -1588,7 +1585,7 @@ class H(BaseHTTPRequestHandler):
         elif path == "/api/hosts/delete":
             if not auth.check_permission(tok, "net", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
-            ip = (body.get("ip") or "").strip()
+            ip = str(body.get("ip") or "").strip()
             with _hosts_lock:
                 hosts = _live_hosts if _live_hosts is not None else load_hosts()
                 if ip in hosts: del hosts[ip]; save_hosts(hosts)

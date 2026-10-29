@@ -158,7 +158,7 @@ def validate(body: dict, current=None) -> dict:
     cfg["name"] = str(cfg.get("name") or "").strip()
     if not cfg["name"] or len(cfg["name"]) > 60 or re.search(r"[\x00-\x1f\x7f]", cfg["name"]): raise ValueError("Invalid name")
     cfg["host"] = str(cfg.get("host") or "").strip()
-    if not auth.valid_host(cfg["host"]): raise ValueError("Invalid host")
+    if not auth.valid_target(cfg["host"]): raise ValueError("Invalid host (this machine and link-local addresses are not allowed)")
     try:    cfg["port"] = int(cfg["port"])
     except (TypeError, ValueError): raise ValueError("Invalid port")
     if not 1 <= cfg["port"] <= 65535: raise ValueError("Invalid port")
@@ -562,8 +562,9 @@ class H(BaseHTTPRequestHandler):
         try:
             n = int(self.headers.get("Content-Length", 0))
             if n < 0 or n > 8192: return None
-            return json.loads(self.rfile.read(n))
-        except (ValueError, TypeError, OSError): return None
+            d = json.loads(self.rfile.read(n))
+            return d if isinstance(d, dict) else None      # EN: a list/number would crash the handlers (500); reject it (400)
+        except (ValueError, TypeError, OSError, RecursionError): return None
     def _tok(self):
         return auth.token_from_request(dict(self.headers), self.headers.get("Cookie", ""))
     def _file(self, path, mime):
@@ -633,15 +634,12 @@ class H(BaseHTTPRequestHandler):
         body = self._body()
         if body is None: return self._json(400, {"error": "Invalid request body"})
         if path == "/api/login":
-            u, err = auth.login(self, body.get("username", ""), body.get("password", ""))
-            if not u: return self._json(err[0], {"error": err[1]})
-            ttl = auth.remember_ttl(body.get("remember"))
-            token = auth.create_session(body["username"], u["permissions"], ttl, self)
-            must = auth.load_users().get(body["username"], {}).get("must_change_password", False)
+            r, err = auth.login_session(self, body.get("username", ""), body.get("password", ""), body.get("remember"))   # the service checks the password and opens the session
+            if not r: return self._json(err[0], {"error": err[1]})
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
-            self.send_header("Set-Cookie", auth.session_cookie(token, ttl))
-            br = json.dumps({"ok": True, "username": body["username"], "permissions": u["permissions"], "must_change_password": must}).encode()
+            self.send_header("Set-Cookie", auth.session_cookie(r["token"], r["ttl"]))
+            br = json.dumps({"ok": True, "username": r["username"], "permissions": r["permissions"], "must_change_password": r["must_change_password"]}).encode()
             self.send_header("Content-Length", str(len(br)))
             self.end_headers(); self.wfile.write(br); return
         if path == "/api/logout":
