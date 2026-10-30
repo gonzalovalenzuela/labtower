@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.3p — 2026-10-30
+
+**Correcciones**
+- **UPS Monitor, «Último resultado» del autotest:** algunos UPS (APC Back-UPS) vuelven a informar «No test initiated» justo después de terminar una prueba, y ese era el único texto que se veía. Ahora, en ese caso, se muestra el último resultado real (por ejemplo «Done and passed · 30/10 16:56»).
+
 ## 2.1.3o — 2026-10-30
 
 **Nuevo**

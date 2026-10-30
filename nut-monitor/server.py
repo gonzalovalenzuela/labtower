@@ -231,6 +231,12 @@ def battery_info(sid, ups, vars_):
         # EN: time of the latest change to this result (newest log row with the same text); None if LabTower has not seen it change yet.
         for x in out["tests"]:
             if x["result"].strip() == tn.strip(): out["test_now"]["ts"] = x["ts"]; break
+        # ES: algunos UPS (Back-UPS) vuelven a «No test initiated» justo después de terminar: se muestra la última prueba con resultado.
+        # EN: some UPSs (Back-UPS) go back to "No test initiated" right after finishing: the latest test with a result is shown.
+        if out["test_now"]["kind"] == "none":
+            for x in out["tests"]:
+                if x["kind"] in ("passed", "failed"):
+                    out["test_now"] = {"result": x["result"], "kind": x["kind"], "ts": x["ts"]}; break
     return out
 
 # ─── Cortes de energía y disponibilidad ───────────────────────────────────────

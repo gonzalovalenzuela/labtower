@@ -159,6 +159,14 @@ class Db(unittest.TestCase):
         i = m.battery_info("sd", "u", {"ups.test.result": "Done and passed"}); self.assertEqual(i["test_now"]["ts"], 1060)
         self.assertIsNone(m.battery_info("sd", "u", {"ups.test.result": "Never seen"})["test_now"]["ts"])
 
+    def test_idle_status_shows_the_last_real_result(self):
+        m = self.m; m._test_last.pop(("sx", "u"), None)
+        m.selftest_track("sx", "u", {"ups.test.result": "In progress"}, 2000); m.selftest_track("sx", "u", {"ups.test.result": "Done and passed"}, 2050)
+        m.selftest_track("sx", "u", {"ups.test.result": "No test initiated"}, 2200)
+        t = m.battery_info("sx", "u", {"ups.test.result": "No test initiated"})["test_now"]
+        self.assertEqual((t["result"], t["kind"], t["ts"]), ("Done and passed", "passed", 2050))
+        t = m.battery_info("sx", "none-yet", {"ups.test.result": "No test initiated"})["test_now"]; self.assertEqual((t["result"], t["kind"]), ("No test initiated", "none"))
+
     def test_battery_info_and_stats_integration(self):
         m = self.m
         info = m.battery_info("s", "u", {"battery.runtime": "900", "battery.charge": "100", "ups.load": "20", "battery.date": "2024/01/01", "ups.test.result": "Done and passed"})
