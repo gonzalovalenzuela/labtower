@@ -42,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
 sys.path.insert(0, str(Path(__file__).parent))
 import diag
+import backups
 
 # Solo loopback; el acceso desde la red pasa por nginx.
 # EN: Loopback only; network access goes through nginx.
@@ -71,6 +72,9 @@ HIST_EVERY  = 30                                              # node history sam
 # Cada cuántos segundos se lee el SMART de los discos de cada nodo (smartctl es pesado: no hace falta más seguido).
 # EN: How often, in seconds, the SMART data of each node's disks is read (smartctl is heavy: no need to do it more often).
 SMART_EVERY = float(os.environ.get("PVE_SMART_EVERY", 900))
+# Cada cuántos segundos se revisan los respaldos (contenido de los storages de backup y tareas vzdump).
+# EN: How often, in seconds, the backups are checked (content of the backup storages and vzdump tasks).
+BACKUP_EVERY = float(os.environ.get("PVE_BACKUP_EVERY", 600))
 # Instante de la última petición de un navegador (decide el ritmo de consulta).
 # EN: Time of the last browser request (decides the polling rate).
 _last_view  = 0.0                                             # last time a browser asked for data
@@ -503,6 +507,85 @@ def _smart_loop(cluster, cache):
     if client: client.close()
     _smart.pop(cid, None)
 
+# ─── Respaldos ────────────────────────────────────────────────────────────────
+# Para cada VM/CT: su respaldo más reciente (leído del contenido de los storages que admiten «backup») y si es demasiado
+# viejo. Además, las tareas vzdump de los últimos 7 días. Se lee en un hilo aparte cada PVE_BACKUP_EVERY segundos.
+# EN: ─── Backups ───────────────────────────────────────────────────────────────
+#     For each VM/CT: its newest backup (read from the content of the storages that allow "backup") and whether it is too
+#     old. Plus the vzdump tasks of the last 7 days. Read in a separate thread every PVE_BACKUP_EVERY seconds.
+_backups: dict = {}           # { cluster_id: {"ts", "max_age_h", "ignore", "rows", "tasks", "storages"} }
+_backup_threads: dict = {}
+_bk_seen: dict = {}           # { cluster_id: set of failed task ids already reported (None before the first reading) }
+
+def _backup_round(cluster, client, cache):
+    from urllib.parse import quote
+    cid, cname = cluster["id"], cluster["name"]
+    cfg = cluster.get("backup") if isinstance(cluster.get("backup"), dict) else {}
+    try:    cfg = backups.clean_config(cfg) if cfg else {"max_age_h": backups.DEFAULT_MAX_AGE_H, "ignore": []}
+    except ValueError: cfg = {"max_age_h": backups.DEFAULT_MAX_AGE_H, "ignore": []}
+    nodes = cache.snap().get("data", {}).get("nodes") or []
+    guests, targets, seen_shared = [], [], set()
+    for n in nodes:
+        if n.get("status") != "online": continue
+        guests += [dict(g, type="qemu", node=n["name"]) for g in n.get("vms") or []]
+        guests += [dict(g, type="lxc", node=n["name"]) for g in n.get("cts") or []]
+        for st in n.get("storage") or []:
+            if "backup" not in str(st.get("content", "")) or not st.get("active"): continue
+            if st.get("shared"):
+                if st["storage"] in seen_shared: continue
+                seen_shared.add(st["storage"])
+            targets.append((n["name"], st["storage"]))
+    contents, storages = [], []
+    for node, sto in targets[:40]:
+        try:
+            items = client.get(f"/nodes/{quote(node, safe='')}/storage/{quote(sto, safe='')}/content?content=backup").get("data") or []
+            contents.append({"storage": sto, "node": node, "items": items}); storages.append({"storage": sto, "node": node, "count": len(items), "error": None})
+        except Exception as e:
+            storages.append({"storage": sto, "node": node, "count": 0, "error": str(e)[:120]})
+    try:    tasks = backups.parse_tasks(client.get("/cluster/tasks").get("data"), time.time())
+    except Exception: tasks = []
+    now = time.time()
+    rows = backups.evaluate(guests, backups.newest_by_vmid(contents), cfg["max_age_h"], cfg["ignore"], now)
+    # Un storage que no se pudo leer no debe hacer pasar por «sin respaldo» a las VMs: se anota y no se evalúa nada.
+    unreadable = any(s["error"] for s in storages)
+    for r in rows:
+        if unreadable and r["status"] in ("never", "old"): r["status"] = "unknown"
+        if r["status"] == "unknown": continue
+        ch = auth.state_changed(f"pve-bk:{cid}:{r['vmid']}", r["status"])
+        if ch and ch[1] in ("old", "never"):
+            h = int(r["age"] // 3600) if r["age"] is not None else -1
+            auth.record_event("pve", "warn", f"{cname}/{r['name'] or r['vmid']}: " + ("no backup found" if ch[1] == "never" else f"last backup {h} h ago"),
+                              "pve_backup_old" if ch[1] == "old" else "pve_backup_never", c=cname, n=r["name"] or str(r["vmid"]), v=r["vmid"], h=h)
+        elif ch and ch[0] in ("old", "never") and ch[1] == "ok":
+            auth.record_event("pve", "info", f"{cname}/{r['name'] or r['vmid']}: backup up to date again", "pve_backup_ok", c=cname, n=r["name"] or str(r["vmid"]), v=r["vmid"])
+    _bk_seen[cid], failed = backups.new_failures(_bk_seen.get(cid), tasks)
+    for t in failed:
+        who = f"VM {t['vmid']}" if t["vmid"] else "job"
+        auth.record_event("pve", "crit", f"{cname}/{t['node']}: backup {who} failed ({t['status'][:60]})", "pve_backup_fail", c=cname, n=t["node"], w=who, e=t["status"][:60])
+    _backups[cid] = {"ts": int(now), "max_age_h": cfg["max_age_h"], "ignore": cfg["ignore"], "rows": rows, "tasks": tasks, "storages": storages}
+
+def _backup_loop(cluster, cache):
+    cid = cluster["id"]
+    client = None
+    time.sleep(min(20, BACKUP_EVERY))
+    while _cache.get(cid) is cache:
+        try:
+            cur = next((c for c in load_clusters() if c["id"] == cid), None)
+            if cur is None: break
+            if client is None:
+                client = PVEClient(host=cur["host"], port=cur.get("port", 8006), user=cur["user"], token_name=cur["token_name"],
+                                   token_value=cur["token_value"], verify_ssl=cur.get("verify_ssl", False), fingerprint=cur.get("fingerprint"))
+            else:
+                fp = _fp_norm(cur.get("fingerprint"))
+                if fp != client.fingerprint: client.fingerprint = fp; client.close()
+            _backup_round(cur, client, cache)
+        except Exception as e:
+            log.warning(f"[{cluster['name']}] backup round: {e}")
+            if client: client.close()
+        time.sleep(BACKUP_EVERY)
+    if client: client.close()
+    _backups.pop(cid, None); _bk_seen.pop(cid, None)
+
 # Orden «natural» (pve2 antes que pve10) para que el orden de los nodos no cambie entre consultas.
 # EN: "Natural" order (pve2 before pve10) so the node order does not change between queries.
 def _natural(s: str):
@@ -607,6 +690,8 @@ def _poll_cluster(cluster):
     use_resources = True
     if SMART_EVERY > 0 and not (_smart_threads.get(cid) and _smart_threads[cid].is_alive()):
         _smart_threads[cid] = threading.Thread(target=_smart_loop, args=(cluster, cache), daemon=True); _smart_threads[cid].start()
+    if BACKUP_EVERY > 0 and not (_backup_threads.get(cid) and _backup_threads[cid].is_alive()):
+        _backup_threads[cid] = threading.Thread(target=_backup_loop, args=(cluster, cache), daemon=True); _backup_threads[cid].start()
 
     while True:
         try:
@@ -828,7 +913,7 @@ class H(BaseHTTPRequestHandler):
             if not any(c["id"] == cid for c in load_clusters()): return self._json(404, {"error": "Not found"})
             with _diag_lock:
                 rb = diag.with_waves([r for r in _diag_load()["reboots"] if r.get("cid") == cid])
-            self._json(200, {"reboots": rb[:100], "smart": _smart.get(cid), "smart_every": SMART_EVERY})
+            self._json(200, {"reboots": rb[:100], "smart": _smart.get(cid), "smart_every": SMART_EVERY, "backups": _backups.get(cid)})
 
         # Resumen técnico del estado de cada cluster, útil para diagnosticar.
         # EN: Technical summary of each cluster's state, useful for diagnosis.
@@ -909,6 +994,23 @@ class H(BaseHTTPRequestHandler):
                         c["layout"] = {"order": list(dict.fromkeys(order)), "pinned": list(dict.fromkeys(pinned))}
                         save_clusters(clusters)
                         return self._json(200, {"ok": True})
+            return self._json(404, {"error": "Not found"})
+
+        # Ajustes de respaldos de un cluster: antigüedad máxima (horas) y VMs/CTs que se ignoran.
+        # EN: A cluster's backup settings: maximum age (hours) and the VMs/CTs that are ignored.
+        m = re.match(r"^/api/clusters/([a-zA-Z0-9\-]+)/backup$", path)
+        if m:
+            if not auth.check_permission(tok, "pve", "admin"):
+                return self._json(403, {"error": "Admin permission required"})
+            try:    cfg = backups.clean_config(body)
+            except ValueError as e: return self._json(400, {"error": str(e)})
+            with _cl_lock:
+                clusters = load_clusters()
+                for c in clusters:
+                    if c["id"] == m.group(1):
+                        c["backup"] = cfg
+                        save_clusters(clusters)
+                        return self._json(200, {"ok": True, **cfg})
             return self._json(404, {"error": "Not found"})
 
         if not auth.check_permission(tok, "pve", "readonly"):

@@ -26,6 +26,20 @@ class BackupStatus(unittest.TestCase):
         pathlib.Path(self.st).write_text('{"time": 1700000000, "ok": false, "file": "", "size": 0, "message": "SSH key not found"}')
         r = auth.backup_status(); self.assertEqual((r["state"], r["message"]), ("fail", "SSH key not found"))
 
+    def test_verify_result_is_attached_when_present(self):
+        vf = os.path.join(self.d, "verify"); os.environ["LABTOWER_BACKUP_VERIFY"] = vf
+        self.addCleanup(os.environ.pop, "LABTOWER_BACKUP_VERIFY", None)
+        pathlib.Path(self.st).write_text('{"time": 1700000000, "ok": true, "file": "a.gpg", "size": 5, "message": "ok"}')
+        self.assertNotIn("verify", auth.backup_status())
+        pathlib.Path(vf).write_text('{"time": 1700000100, "ok": true, "file": "a.gpg", "size": 5, "age_h": 7, "count": 4, "message": "ok"}')
+        v = auth.backup_status()["verify"]; self.assertEqual((v["state"], v["age_h"], v["count"]), ("ok", 7, 4))
+        pathlib.Path(vf).write_text('{"time": 1700000100, "ok": false, "message": "no copy found"}')
+        v = auth.backup_status()["verify"]; self.assertEqual((v["state"], v["message"]), ("fail", "no copy found"))
+        for txt in ("", "{", "[1]", '{"time": "x", "age_h": "y", "count": "z"}'):
+            pathlib.Path(vf).write_text(txt)
+            r = auth.backup_status()
+            self.assertTrue("verify" not in r or r["verify"]["time"] is None)
+
     def test_empty_or_corrupt_file_is_not_an_error(self):
         for txt in ("", "{", "[1]"):
             pathlib.Path(self.st).write_text(txt)

@@ -168,6 +168,7 @@ labtower-health
 - Node order and pinned nodes are saved per cluster (admin only).
 - When adding a cluster you must confirm its certificate SHA-256 fingerprint, which is then pinned. If the certificate changes, the token is not sent.
 - **Cluster diagnostics** (panel below the nodes): node reboots with a common timeline (those less than 10 minutes apart are flagged as *simultaneous*, and they are detected even if LabTower was stopped), corosync quorum state, down OSDs and Ceph warnings, and the SMART data of each node's disks (health, wear, temperature, errors, sectors and, on NVMe, *Unsafe Shutdowns*) read every 15 minutes (`PVE_SMART_EVERY`, in seconds; 0 disables it). Everything creates events on the Overview timeline. The API token needs the `Sys.Audit` privilege on `/nodes` (role `PVEAuditor`) to read the disks.
+- **Backups (vzdump):** for each VM and CT, its last backup, read from the content of the storages that allow *backup* (a shared storage is queried once; on Proxmox Backup Server its verification state is shown), with its age, size and number of copies. It flags **No backup** or **Too old** (over 36 h by default; change it with the `/api/clusters/<id>/backup` API) and records an Overview event when a guest enters that state, and another when it is back to normal. Failed `vzdump` tasks of the last 7 days are listed and raise a critical event. Test VMs can be **ignored** from the panel (admins only). If a storage cannot be read, the VMs are not accused of having no backup. Read every 10 minutes (`PVE_BACKUP_EVERY`, in seconds; 0 disables it). The token needs `Datastore.Audit` on the storages (role `PVEAuditor`).
 
 ### NAS Monitor
 - Works like UPS Monitor: a **NAS Summary** table with every NAS (status, model, CPU, RAM, temperature, disks and fullest volume). Each row opens and shows its detail right below; the first one opens by default. You can also pick one from the side menu.
@@ -247,6 +248,7 @@ sudo labtower-sftp-backup status      # result of the last run
 - **Restore:** download the `.tar.gz.gpg`, run `sudo labtower-sftp-backup decrypt file.tar.gz.gpg`, then `sudo teleporter restore file.tar.gz`.
 - **Safe:** uploaded as `.part` and renamed; the remote size is compared; the server's host key is pinned on first connection.
 - **Retention:** 30 copies on the storage (`KEEP_REMOTE`) and 7 on the LabTower server (`KEEP_LOCAL`). Only files named `labtower-auto-<host>-<date>_<time>.tar.gz` are deleted.
+- **Verification:** `sudo labtower-sftp-backup verify` (also a daily cron at 09:43, `/etc/cron.d/labtower-sftp-verify`) lists the storage and checks that the newest copy exists, is not empty and is less than `VERIFY_MAX_AGE` hours old (36 by default, in `backup.conf`). It notices a stopped cron, a deleted copy or a storage that stopped answering. The result (`/var/log/labtower/backup.verify`) shows on the Overview card as *Copy on storage*.
 - Result in `/var/log/labtower/backup.status`; errors with `journalctl -t labtower-sftp-backup`. Change the schedule in `/etc/cron.d/labtower-sftp-backup`.
 - Use a dedicated SFTP user with access to that folder only.
 

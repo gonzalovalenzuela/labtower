@@ -1,3 +1,4 @@
 /etc/nginx/sites-available/labtower.conf
 /etc/labtower/backup.conf
 /etc/cron.d/labtower-sftp-backup
+/etc/cron.d/labtower-sftp-verify

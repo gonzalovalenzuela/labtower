@@ -1227,6 +1227,20 @@ def _cpu_percent():
     except Exception:
         return None
 
+# Resultado de `labtower-sftp-backup verify` (comprobación en el storage); None si nunca corrió o el archivo no sirve.
+# EN: Result of `labtower-sftp-backup verify` (check on the storage); None if it never ran or the file is unusable.
+def _backup_verify():
+    f = os.environ.get("LABTOWER_BACKUP_VERIFY", "/var/log/labtower/backup.verify")
+    try:
+        d = json.loads(Path(f).read_text())
+        if not isinstance(d, dict): return None
+        t = d.get("time")
+        return {"state": "ok" if d.get("ok") is True else "fail", "time": t if isinstance(t, (int, float)) and not isinstance(t, bool) else None,
+                "file": str(d.get("file") or "")[:120], "age_h": d.get("age_h") if isinstance(d.get("age_h"), (int, float)) else None,
+                "count": d.get("count") if isinstance(d.get("count"), int) else None, "message": str(d.get("message") or "")[:220]}
+    except Exception:
+        return None
+
 def backup_status():
     """State of the automatic SFTP backup for the Overview card: off (not configured), pending (configured, no run yet), ok, fail or unknown.
     ES: Estado del respaldo SFTP: lee el archivo que escribe labtower-sftp-backup (root, 644) y, si no existe, si hay SFTP_USER en la configuración."""
@@ -1235,8 +1249,11 @@ def backup_status():
     try:
         d = json.loads(Path(f).read_text())
         if not isinstance(d, dict): raise ValueError("not an object")
-        return {"state": "ok" if d.get("ok") is True else "fail", "time": d.get("time"), "file": d.get("file") or "",
-                "size": d.get("size"), "message": str(d.get("message") or "")[:220]}
+        out = {"state": "ok" if d.get("ok") is True else "fail", "time": d.get("time"), "file": d.get("file") or "",
+               "size": d.get("size"), "message": str(d.get("message") or "")[:220]}
+        v = _backup_verify()
+        if v: out["verify"] = v
+        return out
     except FileNotFoundError:
         pass
     except Exception:
