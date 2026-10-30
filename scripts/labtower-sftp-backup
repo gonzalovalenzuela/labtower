@@ -5,6 +5,7 @@
 #   labtower-sftp-backup setup    create the SSH key and show the public key to authorize on the storage
 #   labtower-sftp-backup test     check the SFTP connection, the remote folder and write access
 #   labtower-sftp-backup status   show the result of the last run
+#   labtower-sftp-backup verify   check on the storage that a recent copy is really there (cron runs it daily)
 #   labtower-sftp-backup decrypt <file.tar.gz.gpg> [out.tar.gz]   decrypt a copy downloaded from the storage
 #
 # Installed as /usr/local/bin/labtower-sftp-backup. Settings: /etc/labtower/backup.conf.
@@ -17,7 +18,9 @@
 #     password hashes and API tokens. It is uploaded as <name>.gpg.part and renamed when complete, and the remote size is compared.
 #  4. Old copies are pruned (KEEP_LOCAL here, KEEP_REMOTE on the storage). Only files named
 #     labtower-auto-<this host>-<date>_<time>.tar.gz are ever deleted, nothing else.
-#  5. The result is written to /var/log/labtower/backup.status and to the system log
+#  5. `verify` (daily, independent of the backup) lists the storage and checks the newest copy exists, is not empty and is recent,
+#     so a job that stopped running, or a copy that was lost on the storage, is noticed. Result: /var/log/labtower/backup.verify.
+#  6. The result is written to /var/log/labtower/backup.status and to the system log
 #     (journalctl -t labtower-sftp-backup).
 # ES: Respaldo automático de LabTower por SFTP. `teleporter backup` crea el archivo, `teleporter check` lo verifica antes de
 #     subirlo, se sube con nombre temporal (.part) y se renombra al terminar, se compara el tamaño remoto con el local y se borran
@@ -41,6 +44,8 @@ LOCAL_DIR="/var/backups/labtower"
 STATUS_FILE="/var/log/labtower/backup.status"   # root-owned dir: never write as root inside a folder the service user controls
 TELEPORTER="/usr/local/bin/teleporter.sh"
 LOCK_FILE="/run/lock/labtower-sftp-backup.lock"
+VERIFY_FILE="/var/log/labtower/backup.verify"   # result of `verify`
+VERIFY_MAX_AGE=36                              # hours: a newer copy than this must exist on the storage / horas
 ENCRYPT="yes"                                  # yes | no — encrypt the copy that is uploaded / cifrar la copia que se sube
 PASSPHRASE_FILE="/etc/labtower/backup_passphrase"
 
@@ -58,7 +63,7 @@ load_conf() {
     elif [[ "$v" =~ ^\'([^\']*)\'([[:space:]]*#.*)?[[:space:]]*$ ]]; then v="${BASH_REMATCH[1]}"
     else v="${v%%[[:space:]]#*}"; v="${v%"${v##*[![:space:]]}"}"; fi   # drop trailing comment and spaces
     case "$k" in
-      SFTP_HOST|SFTP_PORT|SFTP_USER|SFTP_DIR|SFTP_KEY|KNOWN_HOSTS|KEEP_LOCAL|KEEP_REMOTE|LOCAL_DIR|STATUS_FILE|TELEPORTER|LOCK_FILE|ENCRYPT|PASSPHRASE_FILE)
+      SFTP_HOST|SFTP_PORT|SFTP_USER|SFTP_DIR|SFTP_KEY|KNOWN_HOSTS|KEEP_LOCAL|KEEP_REMOTE|LOCAL_DIR|STATUS_FILE|TELEPORTER|LOCK_FILE|ENCRYPT|PASSPHRASE_FILE|VERIFY_FILE|VERIFY_MAX_AGE)
         printf -v "$k" '%s' "$v";;
     esac
   done < "$CONF"
@@ -80,6 +85,7 @@ valid_conf() {
   [[ "$KEEP_LOCAL" =~ ^[0-9]+$ && "$KEEP_LOCAL" -ge 1 ]] || { echo "KEEP_LOCAL must be a number >= 1"; return 1; }
   [[ "$KEEP_REMOTE" =~ ^[0-9]+$ && "$KEEP_REMOTE" -ge 1 ]] || { echo "KEEP_REMOTE must be a number >= 1"; return 1; }
   [[ "$ENCRYPT" =~ ^(yes|no)$ ]] || { echo "ENCRYPT must be yes or no"; return 1; }
+  [[ "$VERIFY_MAX_AGE" =~ ^[0-9]{1,4}$ && "$VERIFY_MAX_AGE" -ge 1 ]] || { echo "VERIFY_MAX_AGE must be a number of hours >= 1"; return 1; }
   return 0
 }
 
@@ -264,6 +270,50 @@ cmd_test() {
   fi
 }
 
+# ── verify ─────────────────────────────────────────────────────────────────────
+# ES: Comprueba EN EL STORAGE que existe una copia reciente y no vacía (no depende de que el respaldo haya corrido bien: detecta un
+#     cron detenido, una copia borrada o un storage que dejó de responder). No necesita la contraseña de cifrado.
+# EN: Check ON THE STORAGE that a recent, non-empty copy exists (it does not depend on the backup job having run: it notices a stopped
+#     cron, a deleted copy or a storage that stopped answering). It does not need the encryption passphrase.
+# write_verify <ok 0|1> <file> <size> <age_hours|-1> <count> <message>
+write_verify() {
+  local ok="$1" file="$2" size="$3" age="$4" count="$5" msg; msg="$(clean "${6:-}")"
+  mkdir -p "$(dirname "$VERIFY_FILE")" 2>/dev/null || return 0
+  local tmp="$VERIFY_FILE.tmp.$$"
+  printf '{"time": %s, "ok": %s, "file": "%s", "size": %s, "age_h": %s, "count": %s, "remote": "%s@%s:%s", "message": "%s"}\n' \
+    "$(date +%s)" "$([ "$ok" = 1 ] && echo true || echo false)" "$(clean "$file")" "${size:-0}" "${age:--1}" "${count:-0}" \
+    "$(clean "$SFTP_USER")" "$(clean "$SFTP_HOST")" "$(clean "$SFTP_DIR")" "$msg" > "$tmp" 2>/dev/null \
+    && chmod 644 "$tmp" && mv -f "$tmp" "$VERIFY_FILE" 2>/dev/null || rm -f "$tmp" 2>/dev/null
+  return 0
+}
+vfail() { log "VERIFY FAILED: $*"; write_verify 0 "" 0 -1 0 "$*"; exit 1; }
+cmd_verify() {
+  [ "$(id -u)" -eq 0 ] || { echo "this command needs root: sudo labtower-sftp-backup verify" >&2; exit 1; }
+  [ -n "$SFTP_USER" ] || { log "backup is not configured (SFTP_USER is empty in $CONF): nothing to verify"; exit 0; }
+  local why; why="$(valid_conf)" || vfail "configuration: $why"
+  command -v sftp >/dev/null 2>&1 || vfail "sftp is not installed"
+  [ -r "$SFTP_KEY" ] || vfail "SSH key not found: $SFTP_KEY"
+  mkdir -p "$(dirname "$KNOWN_HOSTS")" 2>/dev/null || true
+  build_opts
+  local out line n size best="" bsize=0 count=0
+  out="$(printf '%s\n' "ls -l $SFTP_DIR" | sftp_batch)" || vfail "cannot list the storage: $(echo "$out" | grep -v '^sftp>' | tail -2 | tr '\n' ' ')"
+  while IFS= read -r line; do
+    n="${line##* }"; n="${n##*/}"
+    [[ "$n" =~ $NAME_RE ]] || continue
+    size="$(echo "$line" | awk '{print $5}')"; [[ "$size" =~ ^[0-9]+$ ]] || size=0
+    count=$((count+1))
+    if [[ -z "$best" || "$n" > "$best" ]]; then best="$n"; bsize="$size"; fi
+  done < <(echo "$out" | grep -v '^sftp>')
+  [ -n "$best" ] || vfail "no copy named ${PREFIX}*.tar.gz[.gpg] found on the storage"
+  local ts="${best#"$PREFIX"}" epoch age
+  epoch="$(date -d "${ts:0:4}-${ts:4:2}-${ts:6:2} ${ts:9:2}:${ts:11:2}:${ts:13:2}" +%s 2>/dev/null)" || vfail "cannot read the date of $best"
+  age=$(( ( $(date +%s) - epoch ) / 3600 )); [ "$age" -ge 0 ] || age=0
+  [ "$bsize" -gt 0 ] || vfail "the newest copy $best is empty"
+  [ "$age" -le "$VERIFY_MAX_AGE" ] || vfail "the newest copy on the storage is $age h old ($best); expected at most $VERIFY_MAX_AGE h"
+  write_verify 1 "$best" "$bsize" "$age" "$count" "ok"
+  log "verified: $best ($bsize bytes, $age h old, $count copies on the storage)"
+}
+
 # ── decrypt ────────────────────────────────────────────────────────────────────
 # ES: Descifra una copia bajada del storage; luego se restaura con «sudo teleporter restore <out.tar.gz>». La integridad la comprueba gpg.
 # EN: Decrypt a copy downloaded from the storage; then restore it with "sudo teleporter restore <out.tar.gz>". gpg checks its integrity.
@@ -299,13 +349,14 @@ if d.get("message") and not d.get("ok"): print("Detail:    %s" % d["message"])
 PY
 }
 
-usage() { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; }
 
 case "${1:-run}" in
   run)    cmd_run;;
   setup)  cmd_setup;;
   test)   cmd_test;;
   status) cmd_status;;
+  verify) cmd_verify;;
   decrypt) shift; cmd_decrypt "$@";;
   -h|--help|help) usage;;
   *) echo "Unknown command: $1" >&2; usage; exit 1;;

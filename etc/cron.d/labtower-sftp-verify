@@ -1,0 +1,6 @@
+# LabTower — daily check that a recent copy of the automatic backup is really on the SFTP storage, at 09:43.
+# It does nothing until SFTP_USER is set in /etc/labtower/backup.conf. Result: /var/log/labtower/backup.verify
+# ES: Comprueba todos los días que hay una copia reciente del respaldo automático en el storage SFTP. No hace nada hasta que se complete SFTP_USER.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+43 9 * * * root [ -x /usr/local/bin/labtower-sftp-backup ] && /usr/local/bin/labtower-sftp-backup verify

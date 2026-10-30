@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.3d — 2026-10-30
+
+**Nuevo**
+- **Proxmox Monitor: respaldos.** En el panel de diagnóstico, para cada VM y CT: su último respaldo (leído del contenido de los storages de backup, con la verificación si es Proxmox Backup Server), antigüedad, tamaño y copias. Marca *Sin respaldo* o *Muy viejo* (36 h por defecto) y lo anota en la línea de tiempo del Resumen; las tareas `vzdump` fallidas de los últimos 7 días se listan y generan un evento crítico. Las VMs de prueba se pueden ignorar desde el panel. Si un storage no responde, no se acusa a las VMs. El token necesita `Datastore.Audit` (rol `PVEAuditor`).
+- **Verificación del respaldo SFTP.** Nuevo comando `labtower-sftp-backup verify` y cron diario (`/etc/cron.d/labtower-sftp-verify`, 09:43): comprueba en el propio storage que la copia más reciente existe, no está vacía y es reciente (`VERIFY_MAX_AGE`, 36 h). Aparece en la tarjeta del Resumen como *Copia en el storage* y avisa si falla; así se detecta un cron detenido o una copia perdida, no solo un respaldo que falló.
+
 ## 2.1.3c — 2026-10-30
 
 **Nuevo**
