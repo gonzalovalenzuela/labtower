@@ -17,7 +17,7 @@
 import json, os, sys, time, logging, re
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 from pathlib import Path
 
 # El módulo auth vive en la misma carpeta; se agrega al path para poder importarlo al ejecutar el script directamente.
@@ -270,11 +270,19 @@ class H(BaseHTTPRequestHandler):
             users = auth.load_users()
             out   = [{"username": u, "permissions": d["permissions"],
                       "must_change_password": d.get("must_change_password", False),
-                      "created": d.get("created")}
+                      "created": d.get("created"), "totp": bool(d.get("totp"))}
                      for u, d in users.items()]
             self._json(200, {"users": out})
         elif path == "/api/sessions":
             self._json(200, {"sessions": auth.list_sessions(tok)})
+        elif path == "/api/2fa":
+            sess = auth.get_session(tok)
+            self._json(200, auth.totp_status(sess["username"]) if sess else {})
+        elif path == "/api/audit":
+            q = parse_qs(urlparse(self.path).query)
+            try: lim = max(1, min(1000, int((q.get("limit") or ["200"])[0])))
+            except ValueError: lim = 200
+            self._json(200, {"audit": auth.read_audit(lim, (q.get("actor") or [None])[0], (q.get("action") or [None])[0])})
         elif path == "/api/me":
             sess = auth.get_session(tok)
             self._json(200, {"username": sess["username"],
@@ -303,7 +311,7 @@ class H(BaseHTTPRequestHandler):
         # EN: Login: goes through auth.login (with attempt limiting). Only admins are accepted. The cookie is HttpOnly and
         #     SameSite=Strict so the page's JavaScript and other sites can neither read nor send the token.
         if path == "/api/login":
-            u, err = auth.login(self, body.get("username",""), body.get("password",""))
+            u, err = auth.login(self, body.get("username",""), body.get("password",""), body.get("code"))
             if not u: return self._json(err[0], {"error": err[1]})
             # Solo admins pueden acceder al panel
             # Un usuario válido que no es admin recibe la MISMA respuesta que una contraseña incorrecta (y cuenta como intento fallido): así este
@@ -362,6 +370,7 @@ class H(BaseHTTPRequestHandler):
             auth.delete_user_sessions(me_, keep=tok)
             if me_ == "admin": auth.clear_initial_password()
             log.info(f"Password changed by the user themselves: {me_}")
+            auth.audit(me_, "password_changed", me_, "", auth.client_ip(self))
             return self._json(200, {"ok": True})
 
         if not auth.check_permission(tok, "wol", "admin") and \
@@ -386,6 +395,7 @@ class H(BaseHTTPRequestHandler):
             if action == "backup":
                 ok, name, out = tp.create_backup()
                 log.info(f"Backup created by {me}: {name if ok else 'FAILED'}")
+                auth.audit(me, "backup_created" if ok else "backup_failed", name or "", "", auth.client_ip(self))
                 return self._json(200 if ok else 500, {"ok": ok, "name": name, "output": out,
                                   **({} if ok else {"error": "Backup failed"})})
             name = body.get("name")
@@ -397,10 +407,12 @@ class H(BaseHTTPRequestHandler):
                 if not tp.valid_name(name): return self._json(404, {"error": "Backup not found"})
                 if body.get("plain") is True:
                     log.warning(f"Backup downloaded UNENCRYPTED: {name} by {me}")
+                    auth.audit(me, "backup_downloaded", name, "UNENCRYPTED", auth.client_ip(self))
                     return self._tp_download(name)
                 out, err = tp.encrypt_backup(name, body.get("passphrase"))
                 if err: return self._json(400 if "passphrase" in err.lower() else 500, {"error": err})
                 log.info(f"Backup downloaded encrypted: {name} by {me}")
+                auth.audit(me, "backup_downloaded", name, "encrypted", auth.client_ip(self))
                 try: return self._tp_download(name + ".gpg", path=out, ctype="application/octet-stream")
                 finally: out.unlink(missing_ok=True)
             if action == "check":
@@ -411,8 +423,49 @@ class H(BaseHTTPRequestHandler):
                     return self._json(400, {"error": "Confirmation required"})
                 ok, out = tp.start_restore(name)
                 log.warning(f"Restore started by {me}: {name} -> {'ok' if ok else 'FAILED'}")
+                auth.audit(me, "restore_started" if ok else "restore_failed", name, "", auth.client_ip(self))
                 return self._json(200 if ok else 500, {"ok": ok, "output": out,
                                   **({} if ok else {"error": "Could not start the restore"})})
+            return self._json(404, {"error": "Not found"})
+
+        # Segundo factor (TOTP) de la propia cuenta: empezar (pide la contraseña), confirmar con un código, desactivar (contraseña) o restablecer el de otro usuario (un admin, contraseña).
+        # EN: Second factor (TOTP) of one's own account: begin (asks for the password), confirm with a code, turn off (password) or reset another user's (an admin, password).
+        if path.startswith("/api/2fa/"):
+            action = path.rsplit("/", 1)[1]
+            ip = auth.client_ip(self)
+            if action == "begin":
+                e = self._reauth(me, body)
+                if e: return self._json(e[0], {"error": e[1]})
+                r = auth.totp_begin(me)
+                if not r: return self._json(409, {"error": "Two-factor authentication is already on"})
+                return self._json(200, r)
+            if action == "enable":
+                wait = auth.password_guard_wait(me)
+                if wait: return self._json(429, {"error": f"Too many failed attempts. Try again in {wait} s"})
+                rec, err = auth.totp_enable(me, body.get("code"))
+                if err:
+                    auth.password_guard_fail(me)
+                    return self._json(400, {"error": err})
+                auth.password_guard_ok(me)
+                auth.audit(me, "2fa_enabled", me, "", ip)
+                return self._json(200, {"ok": True, "recovery": rec})
+            if action == "disable":
+                e = self._reauth(me, body)
+                if e: return self._json(e[0], {"error": e[1]})
+                if not auth.totp_disable(me): return self._json(404, {"error": "Two-factor authentication is not on"})
+                auth.audit(me, "2fa_disabled", me, "", ip)
+                return self._json(200, {"ok": True})
+            if action == "reset":
+                e = self._reauth(me, body)
+                if e: return self._json(e[0], {"error": e[1]})
+                target = body.get("username")
+                users = auth.load_users()
+                if not isinstance(target, str) or target not in users: return self._json(404, {"error": "User not found"})
+                if target != me and _outranks(sess["permissions"], users[target].get("permissions")):
+                    return self._json(403, {"error": "You cannot change a user with higher permissions than yours"})
+                if not auth.totp_disable(target): return self._json(404, {"error": "Two-factor authentication is not on"})
+                auth.audit(me, "2fa_reset", target, "", ip)
+                return self._json(200, {"ok": True})
             return self._json(404, {"error": "Not found"})
 
         # Alta de usuario: valida nombre (2-32 caracteres seguros) y niveles; por defecto WOL/UPS de solo lectura
@@ -458,6 +511,7 @@ class H(BaseHTTPRequestHandler):
                 }
                 auth.save_users(users)
             log.info(f"Usuario creado: {uname} por {me}")
+            auth.audit(me, "user_created", uname, ", ".join(f"{k}={v}" for k, v in perms.items()), auth.client_ip(self))
             self._json(201, {"ok": True})
 
         # Cambio de contraseña: cada usuario cambia la suya y solo un admin de WOL cambia la de otros. Al cambiarla
@@ -505,6 +559,7 @@ class H(BaseHTTPRequestHandler):
             auth.delete_user_sessions(target, keep=tok if target == me else None)
             if target == "admin": auth.clear_initial_password()
             log.info(f"Password changed: {target} by {me}")
+            auth.audit(me, "password_changed" if target == me else "password_reset", target, "", auth.client_ip(self))
             self._json(200, {"ok": True})
 
         else:
@@ -551,6 +606,7 @@ class H(BaseHTTPRequestHandler):
                 users[uname].setdefault("permissions", {}).update(new)
                 auth.save_users(users)
             log.info(f"Permissions updated: {uname} by {me}")
+            auth.audit(me, "permissions_changed", uname, ", ".join(f"{k}={v}" for k, v in new.items()), auth.client_ip(self))
             self._json(200, {"ok": True})
         else:
             self._json(404, {"error": "Not found"})
@@ -572,6 +628,7 @@ class H(BaseHTTPRequestHandler):
         if mt:
             if tp.delete(mt.group(1)):
                 log.info(f"Backup deleted: {mt.group(1)} by {me}")
+                auth.audit(me, "backup_deleted", mt.group(1), "", auth.client_ip(self))
                 return self._json(200, {"ok": True})
             return self._json(404, {"error": "Backup not found"})
         # Sesiones activas: cerrar una (por id) o todas las demás. No se puede cerrar la propia (para eso está «Salir») ni la de un usuario con más permisos.
@@ -582,6 +639,7 @@ class H(BaseHTTPRequestHandler):
                 if s2["current"] or s2["username"] != me: continue
                 if auth.revoke_session_id(s2["id"], None, tok): n += 1
             log.info(f"Sessions closed: {n} (others of {me})")
+            auth.audit(me, "sessions_revoked", me, f"{n} others", auth.client_ip(self))
             return self._json(200, {"ok": True, "closed": n})
         ms = re.match(r'^/api/sessions/([0-9a-f]{16})$', path)
         if ms:
@@ -589,6 +647,7 @@ class H(BaseHTTPRequestHandler):
             if r is False: return self._json(403, {"error": "You cannot close the session of a user with higher permissions than yours"})
             if r is None: return self._json(404, {"error": "Session not found (or it is your current session)"})
             log.info(f"Session closed: {r} by {me}")
+            auth.audit(me, "session_revoked", r, "", auth.client_ip(self))
             return self._json(200, {"ok": True})
         m = re.match(r'^/api/users/([a-zA-Z0-9_\-]+)$', path)
         if not m: return self._json(400, {"error": "Invalid user"})
@@ -602,6 +661,7 @@ class H(BaseHTTPRequestHandler):
             del users[uname]; auth.save_users(users)
         auth.delete_user_sessions(uname)
         log.info(f"Usuario eliminado: {uname} por {me}")
+        auth.audit(me, "user_deleted", uname, "", auth.client_ip(self))
         self._json(200, {"ok": True})
 
 # Arranque: crea la carpeta estática, completa los permisos net/pve de usuarios antiguos (una sola vez)

@@ -79,7 +79,8 @@ class Service:
         if not isinstance(user, str) or not isinstance(pw, str) or len(user) > 256 or len(pw) > 1024:
             return {"status": 400, "error": "Invalid request body"}
         peer = _Peer(_clean_ip(r.get("ip")), (r.get("ua") if isinstance(r.get("ua"), str) else "")[:200])
-        res, err = a.login_session(peer, user, pw, r.get("remember"))
+        code = r.get("code") if isinstance(r.get("code"), str) and len(r["code"]) <= 32 else None
+        res, err = a.login_session(peer, user, pw, r.get("remember"), code)
         if err: return {"status": err[0], "error": err[1]}
         return {"login": res}
 
@@ -97,6 +98,13 @@ class Service:
         params = r.get("params") if isinstance(r.get("params"), dict) else {}
         self.auth.record_event(caller, level, text, k, **{str(a)[:32]: b for a, b in list(params.items())[:16]
                                                           if isinstance(b, (int, float, str)) and str(a) not in RESERVED})
+        return {"ok": True}
+
+    def op_audit(self, caller, r):
+        # The module recorded is the caller's own (taken from the operating-system user), like events.
+        if caller not in CALLERS: return {"error": "forbidden"}
+        f = lambda k, n: r.get(k)[:n] if isinstance(r.get(k), str) else ""
+        self.auth.audit(f("actor", 64), f("action", 48), f("target", 128), f("detail", 200), f("ip", 64), module=caller)
         return {"ok": True}
 
     def op_events(self, caller, r):

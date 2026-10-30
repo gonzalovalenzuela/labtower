@@ -145,6 +145,25 @@
       </table></div>
     </div>
 
+    <div class="card" id="sf-card" style="margin-top:16px">
+      <div class="card-hd"><span class="card-title" data-i18n="sfTitle">Security: two-factor authentication</span></div>
+      <div id="sf-body"></div>
+    </div>
+
+    <div class="card" id="au-card" style="margin-top:16px">
+      <div class="card-hd">
+        <span class="card-title" data-i18n="auTitle">Audit log</span>
+        <button class="btn-sec" data-on-click="auLoad" data-i18n="auRefresh">Refresh</button>
+      </div>
+      <div class="tp-hint" data-i18n="auHint">Who changed what.</div>
+      <div class="tbl-wrap"><table id="au-table">
+        <thead><tr>
+          <th data-i18n="auWhen">When</th><th data-i18n="auActor">Who</th><th data-i18n="auAction">Action</th><th data-i18n="auTarget">Target</th><th data-i18n="auDetail">Detail</th>
+        </tr></thead>
+        <tbody id="au-tbody"></tbody>
+      </table></div>
+    </div>
+
     <div class="card" id="tp-card" style="margin-top:16px">
       <div class="card-hd">
         <span class="card-title" data-i18n="tpTitle">Backup &amp; restore</span>

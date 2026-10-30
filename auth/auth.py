@@ -45,7 +45,7 @@ file, fsync and rename) so no data is lost or corrupted by power cuts.
 #
 #     Convention: comments are written in Spanish first and then in English (marked "EN:"). The
 #     English docstrings describe what each function does; the comments explain why.
-import copy, functools, json, os, re, hashlib, hmac, secrets, time, logging, threading, glob, stat, shutil, subprocess, sqlite3
+import base64, copy, functools, json, os, re, hashlib, hmac, secrets, struct, time, logging, threading, glob, stat, shutil, subprocess, sqlite3
 from pathlib import Path
 
 try:
@@ -971,6 +971,105 @@ def valid_target(h) -> bool:
         return True            # does not resolve (yet): the connection will simply fail; nothing to protect against
     return not any(bad(i[4][0]) for i in infos)
 
+# ─── Segundo factor (TOTP, RFC 6238) ─────────────────────────────────────────────────────────────────
+# ES: Código de 6 dígitos cada 30 s (compatible con Google Authenticator, Aegis, 1Password…). El secreto vive en users.json (0600, solo labtower-auth).
+#     Cada código se acepta UNA vez (se recuerda el último intervalo usado) y hay 10 códigos de recuperación de un solo uso, guardados como SHA-256.
+# EN: 6-digit code every 30 s (works with Google Authenticator, Aegis, 1Password…). The secret lives in users.json (0600, labtower-auth only).
+#     Every code is accepted ONCE (the last used time step is remembered) and there are 10 single-use recovery codes, stored as SHA-256.
+NEED_CODE = "2FA code required"
+TOTP_ISSUER = "LabTower"
+
+def totp_new_secret() -> str:
+    return base64.b32encode(secrets.token_bytes(20)).decode().rstrip("=")
+
+def totp_at(secret: str, step: int) -> str:
+    key = base64.b32decode(secret + "=" * (-len(secret) % 8), casefold=True)
+    h = hmac.new(key, struct.pack(">Q", step), "sha1").digest()
+    o = h[-1] & 15
+    return "%06d" % ((int.from_bytes(h[o:o + 4], "big") & 0x7fffffff) % 1000000)
+
+def totp_check(secret: str, code, last: int = 0, now: float | None = None) -> int | None:
+    """Return the time step of a valid code (±1 step of tolerance, never one already used), or None."""
+    code = re.sub(r"\s", "", code) if isinstance(code, str) else ""
+    if not re.fullmatch(r"\d{6}", code): return None
+    step = int((time.time() if now is None else now) // 30)
+    ok = None
+    for s in (step - 1, step, step + 1):
+        if hmac.compare_digest(totp_at(secret, s), code) and s > last: ok = s
+    return ok
+
+def totp_uri(username: str, secret: str) -> str:
+    from urllib.parse import quote
+    return f"otpauth://totp/{quote(TOTP_ISSUER)}:{quote(username)}?secret={secret}&issuer={quote(TOTP_ISSUER)}&algorithm=SHA1&digits=6&period=30"
+
+def _rkey(code: str) -> str:
+    return hashlib.sha256(re.sub(r"[^0-9a-z]", "", str(code).lower()).encode()).hexdigest()
+
+def _new_recovery() -> list:
+    return ["%s-%s" % (secrets.token_hex(2), secrets.token_hex(2)) for _ in range(10)]
+
+@_local
+def totp_status(username: str) -> dict:
+    t = (_users_cached().get(username) or {}).get("totp")
+    return {"enabled": bool(t), "recovery_left": len(t.get("recovery", [])) if t else 0, "since": t.get("since") if t else None}
+
+# Genera un secreto nuevo (pendiente hasta confirmar con un código). / EN: Generate a new secret (pending until confirmed with a code).
+@_local
+def totp_begin(username: str):
+    with users_lock():
+        users = load_users()
+        if username not in users: return None
+        if users[username].get("totp"): return None
+        sec = totp_new_secret()
+        users[username]["totp_pending"] = sec
+        save_users(users)
+    return {"secret": sec, "uri": totp_uri(username, sec)}
+
+# Confirma con un código del autenticador, activa el 2FA y devuelve los códigos de recuperación (única vez que se ven).
+# EN: Confirm with a code from the authenticator, turn 2FA on and return the recovery codes (the only time they are shown).
+@_local
+def totp_enable(username: str, code):
+    with users_lock():
+        users = load_users()
+        u = users.get(username)
+        if not u or not u.get("totp_pending"): return None, "Start the setup first"
+        step = totp_check(u["totp_pending"], code)
+        if step is None: return None, "Invalid code"
+        rec = _new_recovery()
+        u["totp"] = {"secret": u.pop("totp_pending"), "last": step, "since": int(time.time()), "recovery": [_rkey(c) for c in rec]}
+        save_users(users)
+    return rec, None
+
+@_local
+def totp_disable(username: str) -> bool:
+    with users_lock():
+        users = load_users()
+        u = users.get(username)
+        if not u or not (u.get("totp") or u.get("totp_pending")): return False
+        u.pop("totp", None); u.pop("totp_pending", None)
+        save_users(users)
+    return True
+
+# Comprueba el segundo factor de un usuario con contraseña ya verificada: "ok" (sin 2FA o código válido), "need" (falta el código) o "bad".
+# EN: Check the second factor of a user whose password is already verified: "ok" (no 2FA or valid code), "need" (code missing) or "bad".
+def _second_factor(username: str, code) -> str:
+    if not (_users_cached().get(username) or {}).get("totp"): return "ok"
+    if not isinstance(code, str) or not code.strip(): return "need"
+    with users_lock():
+        users = load_users()
+        t = (users.get(username) or {}).get("totp")
+        if not t: return "ok"
+        step = totp_check(t["secret"], code, int(t.get("last", 0)))
+        if step is not None:
+            t["last"] = step; save_users(users); return "ok"
+        k = _rkey(code)
+        if k in t.get("recovery", []):
+            t["recovery"].remove(k); save_users(users)
+            audit(username, "2fa_recovery_used", username, f"{len(t['recovery'])} left")
+            return "ok"
+    return "bad"
+
+
 # Registra un inicio de sesión fallido (por IP y por cuenta).
 # EN: Record a failed login (per IP and per account).
 @_local
@@ -979,16 +1078,18 @@ def login_failed(handler, username):
     uname = username.strip().lower()[:64] if isinstance(username, str) else ""
     if throttle_fail("ip:" + ip):
         log.warning(f"login locked for {ip} after {MAX_FAILS} failed attempts")
+        audit(uname or "?", "lockout_ip", ip, f"{MAX_FAILS} failed attempts", ip)
     if uname and throttle_fail("u:" + uname, ACCOUNT_FAILS):
         log.warning(f"account {uname!r} locked after {ACCOUNT_FAILS} failed attempts")
+        audit(uname, "lockout_account", uname, f"{ACCOUNT_FAILS} failed attempts", ip)
 
 # Inicio de sesión con límite de intentos. Devuelve (usuario, None) si entra, o (None, (código, mensaje)):
 # 429 si la IP o la cuenta están bloqueadas, 401 si las credenciales son inválidas (con una pausa de 0,3 s).
 # EN: Login with attempt limiting. Returns (user, None) on success, or (None, (code, message)):
 #     429 if the IP or the account is locked, 401 for invalid credentials (with a 0.3 s pause).
 @_local
-def login(handler, username, password):
-    """Throttled login: returns (user, None) or (None, (http_status, message))."""
+def login(handler, username, password, code=None):
+    """Throttled login: returns (user, None) or (None, (http_status, message)). With 2FA on, the message is NEED_CODE when the code is missing."""
     ip = client_ip(handler)
     uname = username.strip().lower()[:64] if isinstance(username, str) else ""
     wait = max(throttle_wait("ip:" + ip), throttle_wait("u:" + uname) if uname else 0)
@@ -996,11 +1097,19 @@ def login(handler, username, password):
         return None, (429, f"Too many failed attempts. Try again in {wait} s")
     u = authenticate(username, password)
     if u:
+        sf = _second_factor(username, code)
+        if sf == "need": return None, (401, NEED_CODE)
+        if sf == "bad":
+            login_failed(handler, username)
+            audit(username, "2fa_failed", username, "", client_ip(handler))
+            time.sleep(0.3)
+            return None, (401, "Invalid code")
         # Solo se limpia el contador de la CUENTA. El de la IP NO: si no, quien conoce una cuenta propia (p. ej. un invitado) podría entrar entre
         # intentos y reiniciar la cuenta para adivinar otras contraseñas sin límite. El contador de la IP caduca solo con su ventana.
         # EN: Only the ACCOUNT counter is cleared. The IP counter is NOT: otherwise someone who owns an account (a guest, say) could log in between
         #     attempts and reset the count to guess other passwords without limit. The IP counter expires by itself with its window.
         if uname: throttle_clear("u:" + uname)
+        audit(username, "login", username, "2fa" if (u.get("totp")) else "", ip)
         return u, None
     login_failed(handler, username)
     time.sleep(0.3)
@@ -1012,20 +1121,21 @@ def login(handler, username, password):
 # EN: Complete login: checks username and password (with attempt limiting) and opens the session. It is what EVERY module uses. Returns
 #     ({"token", "ttl", "username", "permissions", "must_change_password"}, None) or (None, (code, message)). In a module (remote mode) the
 #     authentication service does it: the module sends the password once and gets back only the token; there is no way to open a session without a password.
-def login_session(handler, username, password, remember=None):
+def login_session(handler, username, password, remember=None, code=None):
     ttl = remember_ttl(remember)
+    if code is not None and not isinstance(code, str): code = None
     if not isinstance(username, str) or not isinstance(password, str):
         return None, (400, "Invalid request body")
     if REMOTE:
         try:
             ua = re.sub(r"[\x00-\x1f\x7f]", "", handler.headers.get("User-Agent") or "")[:200]
-            r = _rpc("login", ip=client_ip(handler), ua=ua, username=username, password=password, remember=remember)
+            r = _rpc("login", ip=client_ip(handler), ua=ua, username=username, password=password, remember=remember, code=(code or "")[:32])
         except Exception:
             return None, (503, "Authentication service unavailable")
         if isinstance(r.get("login"), dict): return r["login"], None
         code = r.get("status") if isinstance(r.get("status"), int) else 500
         return None, (code, str(r.get("error") or "Login failed")[:200])
-    u, err = login(handler, username, password)
+    u, err = login(handler, username, password, code)
     if not u: return None, err
     token = create_session(username, u["permissions"], ttl, handler)
     return {"token": token, "ttl": ttl, "username": username, "permissions": u["permissions"],
@@ -1182,6 +1292,54 @@ def record_event(module, level, text, k=None, **params):
             write_json(EVENTS_FILE, ev[-EVENTS_MAX:], indent=None)
     except Exception as e:
         log.debug(f"record_event: {e}")
+
+# ─── Registro de auditoría ───────────────────────────────────────────────────────────────────────────
+# ES: Quién cambió qué y cuándo (usuarios, permisos, contraseñas, 2FA, sesiones, respaldos, bloqueos). Es un archivo de líneas JSON que solo escribe el servicio de
+#     autenticación; se conservan las últimas AUDIT_MAX entradas. Nunca guarda contraseñas, códigos ni tokens.
+# EN: Who changed what and when (users, permissions, passwords, 2FA, sessions, backups, lockouts). A JSON-lines file written only by the authentication service;
+#     the last AUDIT_MAX entries are kept. It never stores passwords, codes or tokens.
+AUDIT_FILE = Path(os.environ.get("LABTOWER_AUDIT", str(USERS_FILE.with_name("audit.log"))))
+AUDIT_MAX  = 5000
+_audit_lock = FileLock(AUDIT_FILE.with_name(AUDIT_FILE.name + ".lock"))
+_audit_lines = [0]
+
+def audit(actor, action, target="", detail="", ip="", module="auth"):
+    """Append {t, a (actor), x (action), g (target), d (detail), ip, m} to the audit log. Never raises. In a module the service writes it as the module."""
+    clean = lambda v, n: re.sub(r"[\x00-\x1f\x7f]", " ", str(v or ""))[:n]
+    if REMOTE:
+        try: _rpc("audit", retries=1, actor=clean(actor, 64), action=clean(action, 48), target=clean(target, 128), detail=clean(detail, 200), ip=clean(ip, 64))
+        except Exception as e: log.debug(f"audit: {e}")
+        return
+    try:
+        rec = json.dumps({"t": int(time.time()), "a": clean(actor, 64), "x": clean(action, 48), "g": clean(target, 128),
+                          "d": clean(detail, 200), "ip": clean(ip, 64), "m": clean(module, 24)}, separators=(",", ":"))
+        with _audit_lock:
+            fd = os.open(str(AUDIT_FILE), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+            try: os.write(fd, (rec + "\n").encode())
+            finally: os.close(fd)
+            _audit_lines[0] += 1
+            if _audit_lines[0] % 200 == 1:                 # trim from time to time (and on the first write after a restart)
+                lines = AUDIT_FILE.read_text().splitlines()
+                if len(lines) > AUDIT_MAX + 200:
+                    atomic_write(AUDIT_FILE, "\n".join(lines[-AUDIT_MAX:]) + "\n")
+    except Exception as e:
+        log.debug(f"audit: {e}")
+
+@_local
+def read_audit(limit=200, actor=None, action=None) -> list:
+    """Newest first; optionally filtered by actor or action."""
+    try: lines = AUDIT_FILE.read_text().splitlines()
+    except OSError: return []
+    out = []
+    for ln in reversed(lines):
+        try: e = json.loads(ln)
+        except ValueError: continue
+        if not isinstance(e, dict): continue
+        if actor and e.get("a") != actor: continue
+        if action and e.get("x") != action: continue
+        out.append(e)
+        if len(out) >= limit: break
+    return out
 
 # Detecta un CAMBIO de estado: la primera vez que ve una clave solo la memoriza (así reiniciar el servicio no
 # genera eventos falsos); cuando el estado cambia devuelve (anterior, nuevo), si no devuelve None.
