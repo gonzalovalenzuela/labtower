@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.3n — 2026-10-30
+
+**Correcciones**
+- **WAN Monitor:** el texto de «Cortes en el período» (comparación con el router) era largo y se partía en dos líneas; ahora es corto («2 aquí · 0 WAN»).
+
 ## 2.1.3m — 2026-10-30
 
 **Correcciones**
