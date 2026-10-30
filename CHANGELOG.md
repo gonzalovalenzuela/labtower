@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.3m — 2026-10-30
+
+**Correcciones**
+- **UPS Monitor:** el botón ✎ de «Edad de la batería» se veía grande y descuadraba la celda; ahora es un ícono pequeño junto a la edad (la fecha indicada aparece al pasar el cursor).
+
 ## 2.1.3l — 2026-10-30
 
 **Nuevo**

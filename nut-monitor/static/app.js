@@ -1268,8 +1268,8 @@ function batHtml(st,sid,upsName){
     cells.push(cell(t('batFull'),'≈ '+fmtDur(R.full_s)));
     if(R.plus50_s)cells.push(cell(t('batPlus50'),'≈ '+fmtDur(R.plus50_s)));
   }
-  const btn=canAdmin()?` <button class="btn-ghost-sm" data-on-click="setBatteryDate" data-on-click-args="${jsargs([sid,upsName,b.age_manual||''])}" title="${esc(t('batSetDateTip'))}">✎</button>`:'';
-  if(b.age_years!=null)cells.push(cell(t('batAge'),esc(t('batYears',b.age_years))+(b.age_manual?` <span style="opacity:.6;font-size:11px">(${esc(t('batSince',b.age_manual))})</span>`:'')+btn,b.age_years>=4?'var(--orange)':''));
+  const btn=canAdmin()?` <button type="button" class="bat-edit" data-on-click="setBatteryDate" data-on-click-args="${jsargs([sid,upsName,b.age_manual||''])}" title="${esc(b.age_manual?t('batSince',b.age_manual)+' · '+t('batSetDateTip'):t('batSetDateTip'))}">✎</button>`:'';
+  if(b.age_years!=null)cells.push(cell(t('batAge'),esc(t('batYears',b.age_years))+btn,b.age_years>=4?'var(--orange)':''));
   else if(canAdmin())cells.push(cell(t('batAge'),'<span style="opacity:.55">'+esc(t('batUnknown'))+'</span>'+btn));
   const A=b.aging;
   cells.push(cell(t('batAging'),A?esc(t('batAgingFmt',A.change_pct,A.weeks)):'<span style="opacity:.55">'+esc(t('batCollecting'))+'</span>',A&&A.warn?'var(--orange)':''));
