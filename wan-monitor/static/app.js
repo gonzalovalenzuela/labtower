@@ -290,7 +290,7 @@ const LANG={
  "histLoss": "Pérdida de paquetes y jitter",
  "histSpeed": "Pruebas de velocidad",
  "sRtt": "internet",
- "sGw": "gateway",
+ "sGw": "puerta de enlace",
  "sDns": "DNS",
  "sLoss": "pérdida",
  "sJitter": "jitter",
@@ -356,7 +356,7 @@ function applyTheme(t){const p=t==='system'?(window.matchMedia('(prefers-color-s
 function canAdmin(){return ME&&ME.permissions?.wan==='admin';}
 function canExec(){return ME&&['execute','admin'].includes(ME.permissions?.wan);}
 const _NAV_ITEMS=[
-  {id:'overview', href:'/overview/', label:'Overview', svg:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>'},
+  {id:'overview', href:'/overview/', get label(){return _lang==='es'?'Resumen':'Overview'}, svg:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>'},
   {id:'nut',  href:'/nut/',   label:'UPS Monitor', svg:'<path d="M5 9V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><rect x="3" y="9" width="18" height="11" rx="2"/><line x1="12" y1="13" x2="12" y2="16"/>'},
   {id:'net',  href:'/net/',   label:'Net Monitor', svg:'<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>'},
   {id:'pve',  href:'/pve/',   label:'Proxmox',     svg:'<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>'},

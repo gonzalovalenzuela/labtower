@@ -13,84 +13,84 @@
 <body>
 <!-- Portada de LabTower: una tarjeta por módulo (WOL, Proxmox, Net, UPS, Admin). Es una página estática; nginx la sirve en «/». -->
 <!-- EN: LabTower home page: one card per module (WOL, Proxmox, NAS, Net, UPS, Admin). It is a static page; nginx serves it at "/". -->
-<div style="position:fixed;top:14px;right:14px;display:flex;align-items:center;gap:6px"><button class="theme-toggle" data-theme-toggle title="Tema / Theme" aria-label="Theme"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/></svg></button></div>
+<div style="position:fixed;top:14px;right:14px;display:flex;align-items:center;gap:6px"><button class="theme-toggle" data-theme-toggle title="Theme" aria-label="Theme"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/></svg></button></div>
 <div class="container">
   <div class="hero">
     <div class="hero-icon"><img src="logo.png" width="88" height="88" alt=""></div>
     <h1>LabTower</h1>
-    <p>Panel de administración para tu homelab.<br>UPS, red, Proxmox, NAS, Wake-on-LAN y administración</p>
+    <p data-h="hero">Panel de administración para tu homelab.<br>UPS, red, Proxmox, NAS, Wake-on-LAN y administración</p>
   </div>
 
   <div class="apps">
     <a class="app-card" href="/overview/">
       <div class="app-ico app-ico-img"><img src="/icons/overview.png" alt="" width="44" height="44"></div>
       <div class="app-body">
-        <div class="app-name">Resumen</div>
-        <div class="app-desc">Estado general — UPS, Proxmox, red y el servidor en una pantalla</div>
+        <div class="app-name" data-h="ovN">Resumen</div>
+        <div class="app-desc" data-h="ovD">Estado general — UPS, Proxmox, red y el servidor en una pantalla</div>
       </div>
       <span class="app-arrow">→</span>
     </a>
     <a class="app-card" href="/nut/">
       <div class="app-ico app-ico-img"><img src="/icons/ups.png" alt="" width="44" height="44"></div>
       <div class="app-body">
-        <div class="app-name">UPS Monitor</div>
-        <div class="app-desc">UPS — batería, carga y autonomía en tiempo real</div>
+        <div class="app-name" data-h="nutN">UPS Monitor</div>
+        <div class="app-desc" data-h="nutD">UPS — batería, carga y autonomía en tiempo real</div>
       </div>
       <span class="app-arrow">→</span>
     </a>
     <a class="app-card" href="/net/">
       <div class="app-ico app-ico-img"><img src="/icons/net.png" alt="" width="44" height="44"></div>
       <div class="app-body">
-        <div class="app-name">Net Monitor</div>
-        <div class="app-desc">Escaneo de red — hosts, OS y puertos abiertos</div>
+        <div class="app-name" data-h="netN">Net Monitor</div>
+        <div class="app-desc" data-h="netD">Escaneo de red — hosts, OS y puertos abiertos</div>
       </div>
       <span class="app-arrow">→</span>
     </a>
     <a class="app-card" href="/pve/">
       <div class="app-ico app-ico-img"><img src="/icons/proxmox.png" alt="" width="44" height="44"></div>
       <div class="app-body">
-        <div class="app-name">Proxmox Monitor</div>
-        <div class="app-desc">Dashboard de nodos, VMs , contenedores PVE y CEPH</div>
+        <div class="app-name" data-h="pveN">Proxmox Monitor</div>
+        <div class="app-desc" data-h="pveD">Dashboard de nodos, VMs , contenedores PVE y CEPH</div>
       </div>
       <span class="app-arrow">→</span>
     </a>
     <a class="app-card" href="/nas/">
       <div class="app-ico app-ico-img"><img src="/icons/nas.png" alt="" width="44" height="44"></div>
       <div class="app-body">
-        <div class="app-name">NAS Monitor</div>
-        <div class="app-desc">NAS Synology por SNMP — discos, volúmenes, temperatura y red</div>
+        <div class="app-name" data-h="nasN">NAS Monitor</div>
+        <div class="app-desc" data-h="nasD">NAS Synology por SNMP — discos, volúmenes, temperatura y red</div>
       </div>
       <span class="app-arrow">→</span>
     </a>
     <a class="app-card" href="/dns/">
       <div class="app-ico app-ico-img"><img src="/icons/dns.png" alt="" width="44" height="44"></div>
       <div class="app-body">
-        <div class="app-name">DNS Monitor</div>
-        <div class="app-desc">Pi-hole y AdGuard Home — consultas, bloqueo y servidores DNS</div>
+        <div class="app-name" data-h="dnsN">DNS Monitor</div>
+        <div class="app-desc" data-h="dnsD">Pi-hole y AdGuard Home — consultas, bloqueo y servidores DNS</div>
       </div>
       <span class="app-arrow">→</span>
     </a>
     <a class="app-card" href="/wan/">
       <div class="app-ico app-ico-img"><img src="/icons/wan.png" alt="" width="44" height="44"></div>
       <div class="app-body">
-        <div class="app-name">WAN Monitor</div>
-        <div class="app-desc">Salida a internet — latencia, cortes, IP pública y velocidad</div>
+        <div class="app-name" data-h="wanN">WAN Monitor</div>
+        <div class="app-desc" data-h="wanD">Salida a internet — latencia, cortes, IP pública y velocidad</div>
       </div>
       <span class="app-arrow">→</span>
     </a>
     <a class="app-card" href="/wol/">
       <div class="app-ico app-ico-img"><img src="/icons/wol.png" alt="" width="44" height="44"></div>
       <div class="app-body">
-        <div class="app-name">WOL Console</div>
-        <div class="app-desc">Wake-on-LAN — enciende equipos remotamente</div>
+        <div class="app-name" data-h="wolN">WOL Console</div>
+        <div class="app-desc" data-h="wolD">Wake-on-LAN — enciende equipos remotamente</div>
       </div>
       <span class="app-arrow">→</span>
     </a>
     <a class="app-card" href="/admin/">
       <div class="app-ico app-ico-img"><img src="/icons/admin.png" alt="" width="44" height="44"></div>
       <div class="app-body">
-        <div class="app-name">Admin Panel</div>
-        <div class="app-desc">Usuarios y permisos, respaldos y salud del sistema</div>
+        <div class="app-name" data-h="admN">Admin Panel</div>
+        <div class="app-desc" data-h="admD">Usuarios y permisos, respaldos y salud del sistema</div>
       </div>
       <span class="app-arrow">→</span>
     </a>
@@ -100,8 +100,8 @@
   <!-- EN: WOL and UPS status indicators (filled in by the script below). -->
   <div class="footer">
     <div class="status-row" id="status-row">
-      <div class="status-item"><span class="dot gray" id="dot-wol"></span><span id="lbl-wol">WOL comprobando...</span></div>
-      <div class="status-item"><span class="dot gray" id="dot-nut"></span><span id="lbl-nut">NUT comprobando...</span></div>
+      <div class="status-item"><span class="dot gray" id="dot-wol"></span><span id="lbl-wol" data-h="chk" data-n="WOL">WOL comprobando...</span></div>
+      <div class="status-item"><span class="dot gray" id="dot-nut"></span><span id="lbl-nut" data-h="chk" data-n="NUT">NUT comprobando...</span></div>
     </div>
   </div>
 </div>

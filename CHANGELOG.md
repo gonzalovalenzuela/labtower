@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.1.3r — 2026-10-30
+
+**Correcciones (textos y traducciones)**
+- **Página de inicio:** ahora está en inglés y español (antes solo español) y sigue el idioma elegido en los módulos; la descripción del NAS Monitor ya menciona TrueNAS y OpenMediaVault.
+- **Barra lateral:** «Overview» ahora dice «Resumen» en español.
+- **Admin Panel:** los botones de tema («Light», «Dark») ahora se traducen.
+- **Net Monitor:** «Auto-scan», «Offline», «Online», «Timeout», «Community», «Access point» y «Storage / NAS» ahora están en español; el inicio de sesión mostraba «Entrar» y «Completa todos los campos» en español aunque la interfaz estuviera en inglés; los mensajes del alias y del escaneo automático también se traducen.
+- **Proxmox Monitor:** el inicio de sesión también mostraba textos en español con la interfaz en inglés; «Online/Offline» → «En línea/Sin conexión», «Nodos online» → «Nodos en línea», «VMs corriendo» → «VMs en ejecución».
+- **WOL Console:** «Wake All», «Server» y «Other» se traducen; el error de campos vacíos en el inicio de sesión también.
+- **WAN Monitor:** «gateway» en los gráficos → «puerta de enlace» en español.
+- **NAS Monitor:** el mensaje de «Sin NAS configurados» ya no dice que solo sirve Synology.
+- **Resumen:** el aviso «falló el autotest de la batería» ahora traduce el resultado que informa el UPS.
+- Nueva prueba automática que revisa que cada módulo tenga las mismas claves en inglés y español.
+
 ## 2.1.3q — 2026-10-30
 
 **Correcciones**

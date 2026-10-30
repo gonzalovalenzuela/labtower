@@ -46,7 +46,7 @@
   </div>
   <div class="sb-sec">
     <div class="sb-lbl" data-i18n="actionsSection">Actions</div>
-    <div class="nav-item" data-on-click="openWakeAll"><svg viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/></svg>Wake All</div>
+    <div class="nav-item" data-on-click="openWakeAll"><svg viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/></svg><span data-i18n="wakeAll">Wake All</span></div>
     <div class="nav-item" data-on-click="exportJSON"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span data-i18n="exportJSON">Export JSON</span></div>
     <div class="nav-item" data-on-click="showWakeLog"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><span data-i18n="wakeHistory">Wake History</span></div>
   </div>
@@ -63,14 +63,14 @@
       <div class="pills">
         <button class="pill active" data-filter="ALL"    data-on-click="setFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]" data-i18n="filterAll">All</button>
         <button class="pill"        data-filter="PC"     data-on-click="setFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]">PC</button>
-        <button class="pill"        data-filter="SERVER" data-on-click="setFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]">Server</button>
+        <button class="pill"        data-filter="SERVER" data-on-click="setFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]" data-i18n="typeServer">Server</button>
         <button class="pill"        data-filter="NAS"    data-on-click="setFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]">NAS</button>
         <button class="pill"        data-filter="VM"     data-on-click="setFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]">VM</button>
-        <button class="pill"        data-filter="OTHER"  data-on-click="setFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]">Other</button>
+        <button class="pill"        data-filter="OTHER"  data-on-click="setFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]" data-i18n="typeOther">Other</button>
       </div>
     </div>
     <div class="tb-right">
-      <button class="btn-ghost" data-on-click="openWakeAll"><svg viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/></svg>Wake All</button>
+      <button class="btn-ghost" data-on-click="openWakeAll"><svg viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/></svg><span data-i18n="wakeAll">Wake All</span></button>
       <div class="lang-btns">
         <button class="lang-btn" id="lang-en" data-on-click="setLang" data-on-click-args="[&quot;en&quot;]">EN</button>
         <button class="lang-btn" id="lang-es" data-on-click="setLang" data-on-click-args="[&quot;es&quot;]">ES</button>
@@ -161,7 +161,7 @@
   <div class="modal-acts"><button class="btn-mc" data-on-click="closeModals" data-i18n="cancel">Cancel</button><button class="btn-mok" id="del-btn" data-i18n="delete">Delete</button></div></div>
 </div>
 <div class="overlay" id="wakeall-overlay">
-  <div class="modal"><div class="modal-ico info">⚡</div><h3>Wake All</h3><p data-i18n="wakeAllMsg">A magic packet will be sent to the following devices:</p>
+  <div class="modal"><div class="modal-ico info">⚡</div><h3 data-i18n="wakeAll">Wake All</h3><p data-i18n="wakeAllMsg">A magic packet will be sent to the following devices:</p>
   <div id="wakeall-list"></div>
   <div class="modal-acts"><button class="btn-mc" data-on-click="closeModals" data-i18n="cancel">Cancel</button><button class="btn-mok blue" id="wakeall-btn" data-i18n="sendAll">Send to all</button></div></div>
 </div>

@@ -5,7 +5,7 @@ const LANG={
     username:'Username',password:'Password',loginBtn:'Sign in',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',
     navSection:'Navigation',navNAS:'NAS devices',addNas:'Add NAS',themeLight:'Light',themeDark:'Dark',
     statNasOnline:'NAS online',statAvgCPU:'Avg CPU',statAvgRAM:'Avg RAM',statDisks:'Healthy disks',statVols:'Volume usage',
-    noNas:'No NAS configured',noNasHint:'Add a Synology NAS to get started. SNMP must be enabled on it.',
+    noNas:'No NAS configured',noNasHint:'Add a Synology, TrueNAS or OpenMediaVault NAS to get started.',
     fieldType:'Type',typeSynology:'Synology (SNMP)',fieldApiUser:'User',fieldApiKey:'API key',fieldPassword:'Password',fieldHttps:'Use HTTPS',fieldVerifyTls:'Verify the TLS certificate',
     tlsNote:'If off, the certificate is pinned on the first connection and a later change is refused (edit and save the NAS to accept a new one).',
     hint_synology:'Enable SNMP on the NAS: Control Panel → Terminal & SNMP → SNMP. SNMPv3 is recommended.',
@@ -35,7 +35,7 @@ const LANG={
     username:'Usuario',password:'Contraseña',loginBtn:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',
     navSection:'Navegación',navNAS:'Equipos NAS',addNas:'Agregar NAS',themeLight:'Claro',themeDark:'Oscuro',
     statNasOnline:'NAS en línea',statAvgCPU:'CPU promedio',statAvgRAM:'RAM promedio',statDisks:'Discos sanos',statVols:'Uso de volúmenes',
-    noNas:'Sin NAS configurados',noNasHint:'Agrega un NAS Synology para empezar. Debe tener SNMP activado.',
+    noNas:'Sin NAS configurados',noNasHint:'Agrega un NAS Synology, TrueNAS u OpenMediaVault para empezar.',
     fieldType:'Tipo',typeSynology:'Synology (SNMP)',fieldApiUser:'Usuario',fieldApiKey:'Clave de API',fieldPassword:'Contraseña',fieldHttps:'Usar HTTPS',fieldVerifyTls:'Verificar el certificado TLS',
     tlsNote:'Si está desactivado, el certificado se fija en la primera conexión y un cambio posterior se rechaza (edita y guarda el NAS para aceptar uno nuevo).',
     hint_synology:'Activa SNMP en el NAS: Panel de control → Terminal y SNMP → SNMP. Se recomienda SNMPv3.',
@@ -88,7 +88,7 @@ function applyTheme(t){const p=t==='system'?(window.matchMedia('(prefers-color-s
 // ── Menú lateral común (reordenable; el orden se guarda en el navegador, clave pi-nav-order) ──
 function canAdmin(){return ME&&ME.permissions?.nas==='admin';}
 const _NAV_ITEMS=[
-  {id:'overview', href:'/overview/', label:'Overview', svg:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>'},
+  {id:'overview', href:'/overview/', get label(){return _lang==='es'?'Resumen':'Overview'}, svg:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>'},
   {id:'nut',  href:'/nut/',   label:'UPS Monitor', svg:'<path d="M5 9V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><rect x="3" y="9" width="18" height="11" rx="2"/><line x1="12" y1="13" x2="12" y2="16"/>'},
   {id:'net',  href:'/net/',   label:'Net Monitor', svg:'<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>'},
   {id:'pve',  href:'/pve/',   label:'Proxmox',     svg:'<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>'},

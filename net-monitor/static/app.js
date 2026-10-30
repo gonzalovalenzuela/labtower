@@ -1,6 +1,6 @@
 const LANG={
   en:{loginTitle:'Sign in',loginSub:'Enter your credentials to continue.',
-    username:'Username',password:'Password',loginBtn:'Sign in',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',
+    username:'Username',password:'Password',loginBtn:'Sign in',loginFill:'Fill in all fields',aliasPrompt:(ip)=>'Alias for '+ip+':',aliasSaved:'Alias updated',autoScanToast:'Auto-scan: ',autoScanLbl:'Auto-scan:',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',
     navSection:'Navigation',osDetected:'Detected OS',
     netTitle:'Network Monitor',themeLight:'Light',themeDark:'Dark',
     apply:'Apply',scanNet:'Scan network',
@@ -31,13 +31,13 @@ const LANG={
     newDeviceMsg:(n,names,more)=>`${n} new device${n>1?'s':''} detected: ${names}${more?' and more':''}`,
     osEditTitle:'Edit OS',unitSec:'sec',titleSeconds:'Seconds',titleMinutes:'Minutes',titleLogout:'Sign out',titleDrag:'Drag',every:'every',manual:'manual',autoOff:'disabled (manual)',detailInfo:'Information',seen:'Seen',discovered:'Discovered',noOpenPortsDetected:'No open ports detected',ago:x=>x+' ago',},
   es:{loginTitle:'Iniciar sesión',loginSub:'Ingresa tus credenciales para continuar.',
-    username:'Usuario',password:'Contraseña',loginBtn:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',
+    username:'Usuario',password:'Contraseña',loginBtn:'Entrar',loginFill:'Completa todos los campos',aliasPrompt:(ip)=>'Alias para '+ip+':',aliasSaved:'Alias actualizado',autoScanToast:'Escaneo automático: ',autoScanLbl:'Escaneo automático:',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',
     navSection:'Navegación',osDetected:'OS detectado',
     netTitle:'Monitoreo de red',themeLight:'Claro',themeDark:'Oscuro',
     apply:'Aplicar',scanNet:'Escanear red',
-    statDiscovered:'Hosts descubiertos',statOnline:'En línea',statOffline:'Offline',
+    statDiscovered:'Hosts descubiertos',statOnline:'En línea',statOffline:'Sin conexión',
     statOpenPorts:'Puertos abiertos',statLastScan:'Último escaneo',
-    filterAll:'Todos',filterOnline:'Online',filterOffline:'Offline',
+    filterAll:'Todos',filterOnline:'En línea',filterOffline:'Sin conexión',
     hostsTitle:'Hosts en la red',
     colOpenPorts:'Puertos abiertos',colLastSeen:'Último contacto',colLatency:'Latencia',colStatus:'Estado',
     cancel:'Cancelar',save:'Guardar',saveConnect:'Guardar y conectar',
@@ -58,7 +58,7 @@ const LANG={
     uptimeEmpty:'Sin eventos registrados aún',uptimeStats:(h,d)=>`${h} monitoreado · ${d} caída${d!==1?'s':''}`,
     availHistory:'Historial de disponibilidad',
     chartMonitoring:'Monitoreando — los datos aparecerán tras varios escaneos',
-    snmpTitle:'Fuente SNMP',snmpDesc:'Lee la tabla ARP de un switch o router para obtener MAC (y vendor) de equipos que el servidor no ve directamente. Requiere el paquete snmp en el servidor.',snmpMissing:'snmpwalk no está instalado — ejecuta: apt install snmp',snmpEnable:'Usar SNMP en los escaneos',snmpHost:'IP del switch / router',snmpPort:'Puerto',snmpVersion:'Versión',snmpTimeout:'Timeout (s)',snmpCommunity:'Community',snmpUser:'Usuario',snmpLevel:'Nivel de seguridad',snmpAuthProto:'Auth',snmpAuthPass:'Password auth',snmpPrivProto:'Privacidad',snmpPrivPass:'Password privacidad',snmpTest:'Probar',snmpTesting:'Probando…',snmpSaved:'Configuración SNMP guardada',snmpEntries:'entradas ARP encontradas',snmpKeep:'sin cambios',snmpLast:'Último escaneo',ouiTitle:'Base de datos de vendors MAC',ouiDesc:'Lista manuf de Wireshark, descargada cada semana (ieee-data como respaldo).',ouiAuto:'Actualizar cada semana',ouiUpdate:'Actualizar ahora',ouiUpdating:'Descargando…',ouiPrefixes:'prefijos',ouiNever:'aún no descargada',ouiDone:'Base de vendors actualizada',osUnknown:'Desconocido',colType:'Tipo',deviceTypes:'Tipo de dispositivo',editDevice:'Editar dispositivo',fieldType:'Tipo de dispositivo',fieldOs:'Sistema operativo',autoDetect:'Detección automática',saved:'Dispositivo actualizado',tComputer:'Equipo',tRouter:'Router',tSwitch:'Switch',tAp:'Access point',tStorage:'Storage / NAS',tPhone:'Teléfono',tTv:'TV',tCamera:'Cámara',tAppliance:'Electrodoméstico',tPrinter:'Impresora',tTablet:'Tablet',tConsole:'Consola de juegos',tServer:'Servidor',tVoip:'Teléfono IP',tUps:'UPS',tSpeaker:'Altavoz inteligente',tOther:'Otro',newDevice:'NUEVO',delHost:'Eliminar equipo',delConfirm:(n,ip)=>`¿Eliminar "${n}" (${ip}) de Net Monitor?\n\nSi sigue conectado, el próximo escaneo lo volverá a descubrir.`,delDone:'Equipo eliminado',
+    snmpTitle:'Fuente SNMP',snmpDesc:'Lee la tabla ARP de un switch o router para obtener MAC (y fabricante) de equipos que el servidor no ve directamente. Requiere el paquete snmp en el servidor.',snmpMissing:'snmpwalk no está instalado — ejecuta: apt install snmp',snmpEnable:'Usar SNMP en los escaneos',snmpHost:'IP del switch / router',snmpPort:'Puerto',snmpVersion:'Versión',snmpTimeout:'Tiempo de espera (s)',snmpCommunity:'Comunidad',snmpUser:'Usuario',snmpLevel:'Nivel de seguridad',snmpAuthProto:'Auth',snmpAuthPass:'Password auth',snmpPrivProto:'Privacidad',snmpPrivPass:'Password privacidad',snmpTest:'Probar',snmpTesting:'Probando…',snmpSaved:'Configuración SNMP guardada',snmpEntries:'entradas ARP encontradas',snmpKeep:'sin cambios',snmpLast:'Último escaneo',ouiTitle:'Base de datos de vendors MAC',ouiDesc:'Lista manuf de Wireshark, descargada cada semana (ieee-data como respaldo).',ouiAuto:'Actualizar cada semana',ouiUpdate:'Actualizar ahora',ouiUpdating:'Descargando…',ouiPrefixes:'prefijos',ouiNever:'aún no descargada',ouiDone:'Base de vendors actualizada',osUnknown:'Desconocido',colType:'Tipo',deviceTypes:'Tipo de dispositivo',editDevice:'Editar dispositivo',fieldType:'Tipo de dispositivo',fieldOs:'Sistema operativo',autoDetect:'Detección automática',saved:'Dispositivo actualizado',tComputer:'Equipo',tRouter:'Router',tSwitch:'Switch',tAp:'Punto de acceso',tStorage:'Almacenamiento / NAS',tPhone:'Teléfono',tTv:'TV',tCamera:'Cámara',tAppliance:'Electrodoméstico',tPrinter:'Impresora',tTablet:'Tablet',tConsole:'Consola de juegos',tServer:'Servidor',tVoip:'Teléfono IP',tUps:'UPS',tSpeaker:'Altavoz inteligente',tOther:'Otro',newDevice:'NUEVO',delHost:'Eliminar equipo',delConfirm:(n,ip)=>`¿Eliminar "${n}" (${ip}) de Net Monitor?\n\nSi sigue conectado, el próximo escaneo lo volverá a descubrir.`,delDone:'Equipo eliminado',
     newDeviceMsg:(n,names,more)=>`${n} nuevo${n>1?'s dispositivos':'dispositivo'} detectado${n>1?'s':''}: ${names}${more?' y más':''}`,
     osEditTitle:'Editar OS',unitSec:'seg',titleSeconds:'Segundos',titleMinutes:'Minutos',titleLogout:'Cerrar sesión',titleDrag:'Arrastrar',every:'cada',manual:'manual',autoOff:'desactivado (manual)',detailInfo:'Información',seen:'Visto',discovered:'Descubierto',noOpenPortsDetected:'Sin puertos abiertos detectados',ago:x=>'hace '+x,}
 };
@@ -129,7 +129,7 @@ function canScan(){const l=ME&&ME.permissions?.net;return l==='execute'||l==='ad
 // Barra lateral común: los mismos accesos en todas las páginas. El usuario puede reordenarlos arrastrando (el orden se guarda en el navegador, clave pi-nav-order). «Admin» solo se muestra a administradores.
 // EN: Common sidebar: the same links on every page. The user can reorder them by dragging (the order is stored in the browser, key pi-nav-order). "Admin" is shown to administrators only.
 const _NAV_ITEMS=[
-  {id:'overview', href:'/overview/', label:'Overview', svg:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>'},
+  {id:'overview', href:'/overview/', get label(){return _lang==='es'?'Resumen':'Overview'}, svg:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>'},
   {id:'nut',  href:'/nut/',   label:'UPS Monitor', svg:'<path d="M5 9V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><rect x="3" y="9" width="18" height="11" rx="2"/><line x1="12" y1="13" x2="12" y2="16"/>'},
   {id:'net',  href:'/net/',   label:'Net Monitor', svg:'<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>'},
   {id:'pve',  href:'/pve/',   label:'Proxmox',     svg:'<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>'},
@@ -192,7 +192,7 @@ async function doLogin(){
   const btn=document.getElementById('btn-l'),err=document.getElementById('login-err');
   const u=document.getElementById('l-user').value.trim(),p=document.getElementById('l-pass').value;
   err.className='login-err';
-  if(!u||!p){err.textContent='Completa todos los campos';err.className='login-err show';return;}
+  if(!u||!p){err.textContent=t('loginFill');err.className='login-err show';return;}
   btn.disabled=true;btn.innerHTML='<span class="spin">⟳</span>';
   try{
     const r=await fetch('api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p,remember:remValue()})});
@@ -204,7 +204,7 @@ async function doLogin(){
     ME=d;applyPermissions();await initApp();
     const ls=document.getElementById('login-screen');ls.style.opacity='0';setTimeout(()=>ls.style.display='none',150);
   }catch(e){err.textContent='Error: '+e.message;err.className='login-err show';}
-  finally{btn.disabled=false;btn.textContent='Entrar';}
+  finally{btn.disabled=false;btn.textContent=t('loginBtn');}
 }
 // Pregunta al servidor quién es el usuario; sin sesión o sin acceso a Net devuelve false y se muestra el login.
 // EN: Ask the server who the user is; without a session or without Net access it returns false and the login is shown.
@@ -297,7 +297,7 @@ async function applyInterval(){
     const d = await r.json();
     if(!r.ok) throw new Error(d.error);
     const label = secs===0 ? t('autoOff') : t('every')+' '+fmtInterval(secs);
-    toast('Auto-scan: '+label);
+    toast(t('autoScanToast')+label);
     updateNextScan();
   }catch(e){ toast(e.message, true); }
 }
@@ -1070,13 +1070,13 @@ async function editOs(ip){
 async function editAlias(ip){
   const host=hosts.find(h=>h.ip===ip);
   if(!host)return;
-  const alias=prompt('Alias para '+ip+':', host.alias||'');
+  const alias=prompt(t('aliasPrompt',ip), host.alias||'');
   if(alias===null)return;
   try{
     const r=await fetch('api/hosts/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip,alias})});
     const d=await r.json();
     if(!r.ok)throw new Error(d.error);
-    toast('Alias actualizado');await fetchData();
+    toast(t('aliasSaved'));await fetchData();
   }catch(e){toast(e.message,true);}
 }
 

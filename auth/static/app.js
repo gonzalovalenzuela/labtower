@@ -9,7 +9,7 @@ const LANG = {
   en: {
     loginTitle:'Admin access', loginSub:'Only administrators can access.',
     loginUser:'Username', loginPass:'Password', loginBtn:'Sign in',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',
-    loginFill:'Fill in all fields', loginErr:'Invalid credentials', loginEntering:'Signing in…',
+    loginFill:'Fill in all fields', themeLight:'Light', themeDark:'Dark', loginErr:'Invalid credentials', loginEntering:'Signing in…',
     navLabel:'Navigation', dragHandle:'Drag',
     userRole:'Administrator',
     logoutTitle:'Sign out',
@@ -79,7 +79,7 @@ const LANG = {
   es: {
     loginTitle:'Acceso de administrador', loginSub:'Solo administradores pueden acceder.',
     loginUser:'Usuario', loginPass:'Contraseña', loginBtn:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',
-    loginFill:'Completa todos los campos', loginErr:'Credenciales incorrectas', loginEntering:'Entrando…',
+    loginFill:'Completa todos los campos', themeLight:'Claro', themeDark:'Oscuro', loginErr:'Credenciales incorrectas', loginEntering:'Entrando…',
     navLabel:'Navegación', dragHandle:'Arrastrar',
     userRole:'Administrador',
     logoutTitle:'Cerrar sesión',
@@ -209,7 +209,7 @@ function updatePermHelpBox(){
 // Barra lateral común: los mismos accesos en todas las páginas. El usuario puede reordenarlos arrastrando (el orden se guarda en el navegador, clave pi-nav-order). «Admin» solo se muestra a administradores.
 // EN: Common sidebar: the same links on every page. The user can reorder them by dragging (the order is stored in the browser, key pi-nav-order). "Admin" is shown to administrators only.
 const _NAV_ITEMS=[
-  {id:'overview', href:'/overview/', label:'Overview', svg:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>'},
+  {id:'overview', href:'/overview/', get label(){return _lang==='es'?'Resumen':'Overview'}, svg:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>'},
   {id:'nut',   href:'/nut/',   label:'UPS Monitor', svg:'<path d="M5 9V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><rect x="3" y="9" width="18" height="11" rx="2"/><line x1="12" y1="13" x2="12" y2="16"/>'},
   {id:'net',   href:'/net/',   label:'Net Monitor', svg:'<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>'},
   {id:'pve',   href:'/pve/',   label:'Proxmox',     svg:'<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>'},

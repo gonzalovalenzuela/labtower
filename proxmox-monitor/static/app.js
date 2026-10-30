@@ -41,7 +41,7 @@ const LANG={
     username:'Usuario',password:'Contraseña',loginBtn:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',
     navSection:'Navegación',clustersPVE:'Clusters PVE',addCluster:'Agregar cluster',
     themeLight:'Claro',themeDark:'Oscuro',
-    statNodesOnline:'Nodos online',statVMsRunning:'VMs corriendo',
+    statNodesOnline:'Nodos en línea',statVMsRunning:'VMs en ejecución',
     statCTsRunning:'CTs corriendo',statAvgCPU:'CPU promedio',statAvgRAM:'RAM promedio',
     noClusters:'Sin clusters configurados',noClustersHint:'Agrega un cluster Proxmox para comenzar.',
     addClusterTitle:'Agregar cluster Proxmox',
@@ -51,7 +51,7 @@ const LANG={
     deleteCluster:'Eliminar cluster',
     permReadonly:'Solo lectura',permExecute:'Ejecución',permAdmin:'Administrador',
     sessionExpired:'Sesión expirada',
-    nodeOnline:'Online',nodeOffline:'Offline',
+    nodeOnline:'En línea',nodeOffline:'Sin conexión',
     vmsRunning:'VMs',ctsRunning:'CTs',
     cpu:'CPU',memory:'Memoria',disk:'Disco',
     historyChart:'Historial CPU/RAM (últimas muestras)',
@@ -117,7 +117,7 @@ function canAdmin(){return ME&&ME.permissions?.pve==='admin';}
 // Barra lateral común: los mismos accesos en todas las páginas. El usuario puede reordenarlos arrastrando (el orden se guarda en el navegador, clave pi-nav-order). «Admin» solo se muestra a administradores.
 // EN: Common sidebar: the same links on every page. The user can reorder them by dragging (the order is stored in the browser, key pi-nav-order). "Admin" is shown to administrators only.
 const _NAV_ITEMS=[
-  {id:'overview', href:'/overview/', label:'Overview', svg:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>'},
+  {id:'overview', href:'/overview/', get label(){return _lang==='es'?'Resumen':'Overview'}, svg:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>'},
   {id:'nut',  href:'/nut/',   label:'UPS Monitor', svg:'<path d="M5 9V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><rect x="3" y="9" width="18" height="11" rx="2"/><line x1="12" y1="13" x2="12" y2="16"/>'},
   {id:'net',  href:'/net/',   label:'Net Monitor', svg:'<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>'},
   {id:'pve',  href:'/pve/',   label:'Proxmox',     svg:'<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>'},
@@ -180,7 +180,7 @@ async function doLogin(){
   const btn=document.getElementById('btn-l'),err=document.getElementById('login-err');
   const u=document.getElementById('l-user').value.trim(),p=document.getElementById('l-pass').value;
   err.className='login-err';
-  if(!u||!p){err.textContent='Completa todos los campos';err.className='login-err show';return;}
+  if(!u||!p){err.textContent=t('testFillAll');err.className='login-err show';return;}
   btn.disabled=true;btn.innerHTML='<span class="spin">⟳</span>';
   try{
     const r=await fetch('api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p,remember:remValue()})});
@@ -192,7 +192,7 @@ async function doLogin(){
     ME=d;applyPermissions();await initApp();
     const ls=document.getElementById('login-screen');ls.style.opacity='0';setTimeout(()=>ls.style.display='none',150);
   }catch(e){err.textContent='Error: '+e.message;err.className='login-err show';}
-  finally{btn.disabled=false;btn.textContent='Entrar';}
+  finally{btn.disabled=false;btn.textContent=t('loginBtn');}
 }
 // Pregunta al servidor quién es el usuario; sin sesión o sin acceso a Proxmox devuelve false y se muestra el login.
 // EN: Ask the server who the user is; without a session or without Proxmox access it returns false and the login is shown.

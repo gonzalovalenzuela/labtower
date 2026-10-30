@@ -335,7 +335,11 @@ const EVT={
   sw_down:'{n}: switch sin conexión',sw_up:'{n}: switch otra vez disponible',sw_temp:'{n}: temperatura {t} °C',sw_temp_ok:'{n}: la temperatura volvió a la normalidad ({t} °C)',sw_err:'{n}/puerto {p}: {d} errores nuevos',sw_crc:'{n}/puerto {p}: {d} errores CRC nuevos (cable o tarjeta de red)',sw_flap:'{n}/puerto {p}: enlace rebotando ({c} cambios en {m} min)',sw_link:'{n}/puerto {p}: enlace {st}',sw_loop:'{n}/puerto {p}: loop detectado'}
 };
 // Texto de un evento en el idioma actual; si la clave no se conoce, el texto en inglés guardado / Event text in the current language; unknown key → stored English text
-function evText(e){const t=e.k&&EVT[lang][e.k];return t?t.replace(/\{(\w+)\}/g,(_,k)=>(e.p&&e.p[k]!=null?e.p[k]:'')).replace(/\s+/g,' ').trim():e.tx}
+// Resultados de autotest de NUT en español (el texto de los eventos «ups_test_fail» trae el resultado tal como lo informa el UPS).
+// EN: NUT self-test results in Spanish (the "ups_test_fail" event text carries the result as the UPS reports it).
+const TEST_ES={'done and passed':'Aprobado','done and warning':'Terminó con advertencia','done and error':'Terminó con error','aborted':'Cancelado','in progress':'En curso','no test initiated':'Sin prueba'};
+function evParam(e,k){const v=e.p&&e.p[k]!=null?e.p[k]:'';return lang==='es'&&e.k==='ups_test_fail'&&k==='r'?(TEST_ES[String(v).trim().toLowerCase()]||v):v}
+function evText(e){const t=e.k&&EVT[lang][e.k];return t?t.replace(/\{(\w+)\}/g,(_,k)=>evParam(e,k)).replace(/\s+/g,' ').trim():e.tx}
 // Texto del evento con la IP (si la trae) marcada para la tarjeta de Net Monitor. Todo va escapado; el span lo crea este código.
 // EN: Event text with the IP (if any) marked for the Net Monitor card. Everything is escaped; the span is created by this code.
 function evHtml(e){const s=esc(evText(e)),ip=e.m==='net'&&e.p&&/^\d{1,3}(\.\d{1,3}){3}$/.test(String(e.p.ip||''))?String(e.p.ip):'';return ip&&s.includes(ip)?s.replace(ip,`<span data-nethost="${ip}" data-nethost-click="1">${ip}</span>`):s}
