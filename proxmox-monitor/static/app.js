@@ -30,7 +30,7 @@ const LANG={
     clusterAdded:(name)=>`${name} added`,
     deleteClusterConfirm:(name)=>`Delete cluster "${name}"?`,
     cpuAlert:(pct)=>`CPU at ${pct}%`,ramAlert:(pct)=>`RAM at ${pct}%`,
-    bkTitle:'Backups (vzdump)',bkWait:'Reading backups… (first read takes a minute)',bkNone:'No backup storage found. The API token needs Datastore.Audit on the storages.',bkOk:'Up to date',bkOld:'Too old',bkNever:'No backup',bkIgnored:'Ignored',bkUnknown:'Unknown',bkAge:(h)=>h<48?`${h} h ago`:`${Math.floor(h/24)} d ago`,bkProblems:(n)=>`${n} without a recent backup`,bkAllOk:'Backups up to date',bkMax:(h)=>`Alert after ${h} h`,bkIgnore:'Ignore',bkUnignore:'Stop ignoring',bkFailedTasks:'Failed backup tasks',bkVerified:'verified',bkVerFail:'verification failed',bkSaved:'Saved',bkStorageErr:'Could not read storage',bkCopies:(n)=>`${n} copies`,
+    bkSelAll:'Select all',bkSelNone:'Clear selection',bkSelPending:'Select those without backup or too old',bkIgnoreSel:n=>`Ignore selected (${n})`,bkUnignoreSel:n=>`Stop ignoring selected (${n})`,bkTitle:'Backups (vzdump)',bkWait:'Reading backups… (first read takes a minute)',bkNone:'No backup storage found. The API token needs Datastore.Audit on the storages.',bkOk:'Up to date',bkOld:'Too old',bkNever:'No backup',bkIgnored:'Ignored',bkUnknown:'Unknown',bkAge:(h)=>h<48?`${h} h ago`:`${Math.floor(h/24)} d ago`,bkProblems:(n)=>`${n} without a recent backup`,bkAllOk:'Backups up to date',bkMax:(h)=>`Alert after ${h} h`,bkIgnore:'Ignore',bkUnignore:'Stop ignoring',bkFailedTasks:'Failed backup tasks',bkVerified:'verified',bkVerFail:'verification failed',bkSaved:'Saved',bkStorageErr:'Could not read storage',bkCopies:(n)=>`${n} copies`,
     diagTitle:'Cluster diagnostics',quorum:'Quorum',quorumOk:'Quorum OK',quorumLost:'NO QUORUM',membersOnline:(a,b)=>`${a}/${b} nodes in corosync`,
     cephOsdDown:(n)=>`${n} OSD down`,cephOsdOut:(n)=>`${n} OSD out`,cephChecks:'Ceph warnings',
     rebootsTitle:'Node reboots',noReboots:'No reboots recorded since this was enabled.',rebootAt:'booted',rebootWave:'simultaneous',
@@ -68,7 +68,7 @@ const LANG={
     clusterAdded:(name)=>`${name} agregado`,
     deleteClusterConfirm:(name)=>`¿Eliminar el cluster "${name}"?`,
     cpuAlert:(pct)=>`CPU al ${pct}%`,ramAlert:(pct)=>`RAM al ${pct}%`,
-    bkTitle:'Respaldos (vzdump)',bkWait:'Leyendo respaldos… (la primera lectura tarda un minuto)',bkNone:'No hay storages de respaldo. El token de la API necesita Datastore.Audit en los storages.',bkOk:'Al día',bkOld:'Muy viejo',bkNever:'Sin respaldo',bkIgnored:'Ignorado',bkUnknown:'Desconocido',bkAge:(h)=>h<48?`hace ${h} h`:`hace ${Math.floor(h/24)} d`,bkProblems:(n)=>`${n} sin respaldo reciente`,bkAllOk:'Respaldos al día',bkMax:(h)=>`Avisar tras ${h} h`,bkIgnore:'Ignorar',bkUnignore:'Dejar de ignorar',bkFailedTasks:'Tareas de respaldo fallidas',bkVerified:'verificado',bkVerFail:'verificación fallida',bkSaved:'Guardado',bkStorageErr:'No se pudo leer el storage',bkCopies:(n)=>`${n} copias`,
+    bkSelAll:'Seleccionar todas',bkSelNone:'Limpiar selección',bkSelPending:'Seleccionar las sin respaldo o muy viejas',bkIgnoreSel:n=>`Ignorar seleccionadas (${n})`,bkUnignoreSel:n=>`Dejar de ignorar seleccionadas (${n})`,bkTitle:'Respaldos (vzdump)',bkWait:'Leyendo respaldos… (la primera lectura tarda un minuto)',bkNone:'No hay storages de respaldo. El token de la API necesita Datastore.Audit en los storages.',bkOk:'Al día',bkOld:'Muy viejo',bkNever:'Sin respaldo',bkIgnored:'Ignorado',bkUnknown:'Desconocido',bkAge:(h)=>h<48?`hace ${h} h`:`hace ${Math.floor(h/24)} d`,bkProblems:(n)=>`${n} sin respaldo reciente`,bkAllOk:'Respaldos al día',bkMax:(h)=>`Avisar tras ${h} h`,bkIgnore:'Ignorar',bkUnignore:'Dejar de ignorar',bkFailedTasks:'Tareas de respaldo fallidas',bkVerified:'verificado',bkVerFail:'verificación fallida',bkSaved:'Guardado',bkStorageErr:'No se pudo leer el storage',bkCopies:(n)=>`${n} copias`,
     diagTitle:'Diagnóstico del cluster',quorum:'Quórum',quorumOk:'Quórum OK',quorumLost:'SIN QUÓRUM',membersOnline:(a,b)=>`${a}/${b} nodos en corosync`,
     cephOsdDown:(n)=>`${n} OSD caído${n!==1?'s':''}`,cephOsdOut:(n)=>`${n} OSD fuera`,cephChecks:'Avisos de Ceph',
     rebootsTitle:'Reinicios de nodos',noReboots:'Sin reinicios registrados desde que se activó.',rebootAt:'arrancó',rebootWave:'simultáneo',
@@ -397,6 +397,24 @@ async function fetchDiag(cid){
   _diagTs[cid]=Date.now();
   try{const r=await fetch('api/diag?id='+encodeURIComponent(cid));if(r.ok){_diag[cid]=await r.json();if(activeId===cid&&!_dragging)renderDashboard();}}catch(e){}
 }
+const _bkSel={};
+function bkSelSet(cid){return _bkSel[cid]||(_bkSel[cid]=new Set());}
+function bkSelToggle(cid,vmid){const q=bkSelSet(cid);if(q.has(vmid))q.delete(vmid);else q.add(vmid);renderDashboard();}
+function bkSelMode(cid,mode){
+  const bk=_diag[cid]&&_diag[cid].backups;if(!bk)return;const q=bkSelSet(cid);q.clear();
+  if(mode!=='none')bk.rows.forEach(r=>{if(r.status==='unknown')return;if(mode==='all'||r.status==='never'||r.status==='old')q.add(r.vmid);});
+  renderDashboard();
+}
+async function bkBulk(cid,ignore){
+  const bk=_diag[cid]&&_diag[cid].backups;if(!bk)return;const q=bkSelSet(cid);if(!q.size)return;
+  const set=new Set(bk.ignore||[]);q.forEach(v=>{if(ignore)set.add(v);else set.delete(v);});
+  try{
+    const r=await fetch('api/clusters/'+encodeURIComponent(cid)+'/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({max_age_h:bk.max_age_h,ignore:[...set]})});
+    if(!r.ok)throw new Error((await r.json()).error||'Error');
+    bk.ignore=[...set];bk.rows.forEach(x=>{if(q.has(x.vmid))x.status=set.has(x.vmid)?'ignored':(x.last==null?'never':(x.age>bk.max_age_h*3600?'old':'ok'));});
+    q.clear();_diagTs[cid]=0;renderDashboard();toast(t('bkSaved'));
+  }catch(e){toast(e.message,true);}
+}
 async function toggleBkIgnore(cid,vmid){
   const bk=_diag[cid]&&_diag[cid].backups;if(!bk)return;
   const set=new Set(bk.ignore||[]);if(set.has(vmid))set.delete(vmid);else set.add(vmid);
@@ -463,8 +481,21 @@ function buildDiag(cluster){
     meta.textContent=t('bkMax',bk.max_age_h)+' · '+(bk.storages||[]).map(s=>s.storage+' ('+s.node+')'+(s.error?' ⚠':'')).join(', ');b.appendChild(meta);
     (bk.storages||[]).filter(s=>s.error).forEach(s=>{const e=document.createElement('div');e.style.cssText='color:var(--red);font-size:11px';e.textContent=t('bkStorageErr')+': '+s.storage+' — '+s.error;b.appendChild(e);});
     const ST={ok:['bkOk','var(--green)'],old:['bkOld','var(--orange)'],never:['bkNever','var(--red)'],ignored:['bkIgnored','var(--text-dim)'],unknown:['bkUnknown','var(--text-dim)']};
+    const sel=bkSelSet(cluster.id);
+    if(isPveAdmin()&&bk.rows.length){
+      const tb=document.createElement('div');tb.style.cssText='display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:4px 0 6px;font-size:11px';
+      const lk=(txt,fn,args)=>{const a=document.createElement('span');a.style.cssText='cursor:pointer;color:var(--blue)';a.textContent=txt;a.setAttribute('data-on-click',fn);a.setAttribute('data-on-click-args',JSON.stringify(args));tb.appendChild(a);};
+      lk(t('bkSelAll'),'bkSelMode',[cluster.id,'all']);lk(t('bkSelPending'),'bkSelMode',[cluster.id,'pending']);if(sel.size)lk(t('bkSelNone'),'bkSelMode',[cluster.id,'none']);
+      if(sel.size){
+        const ig=new Set(bk.ignore||[]);const nIgn=[...sel].filter(v=>ig.has(v)).length;
+        if(sel.size-nIgn>0){const x=document.createElement('button');x.className='btn-sec';x.style.cssText='font-size:11px;padding:3px 10px';x.textContent=t('bkIgnoreSel',sel.size-nIgn);x.setAttribute('data-on-click','bkBulk');x.setAttribute('data-on-click-args',JSON.stringify([cluster.id,true]));tb.appendChild(x);}
+        if(nIgn>0){const x=document.createElement('button');x.className='btn-sec';x.style.cssText='font-size:11px;padding:3px 10px';x.textContent=t('bkUnignoreSel',nIgn);x.setAttribute('data-on-click','bkBulk');x.setAttribute('data-on-click-args',JSON.stringify([cluster.id,false]));tb.appendChild(x);}
+      }
+      b.appendChild(tb);
+    }
     bk.rows.forEach(r=>{
       const l=document.createElement('div');l.style.cssText='display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:2px 0;font-size:11px';
+      if(isPveAdmin()&&r.status!=='unknown'){const cb=document.createElement('input');cb.type='checkbox';cb.checked=sel.has(r.vmid);cb.setAttribute('data-on-click','bkSelToggle');cb.setAttribute('data-on-click-args',JSON.stringify([cluster.id,r.vmid]));l.appendChild(cb);}
       const id=document.createElement('span');id.style.cssText='font-family:var(--mono);min-width:48px';id.textContent=(r.type==='ct'?'CT ':'VM ')+r.vmid;l.appendChild(id);
       const nm=document.createElement('span');nm.style.cssText='min-width:140px';nm.textContent=r.name||'';l.appendChild(nm);
       const s=ST[r.status]||ST.unknown;l.appendChild(pill(t(s[0]),s[1]));
@@ -883,4 +914,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ closeModals, confirmDelete, doLogin, logout, moveNode, openAddCluster, pinCluster, resetLayout, saveCluster, toggleBkIgnore, toggleDiag, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection });
+if (window.cspRegister) cspRegister({ closeModals, confirmDelete, doLogin, logout, moveNode, openAddCluster, pinCluster, resetLayout, saveCluster, toggleBkIgnore, bkSelToggle, bkSelMode, bkBulk, toggleDiag, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection });

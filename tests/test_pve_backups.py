@@ -161,6 +161,17 @@ class Api(unittest.TestCase):
             m._diag_state = {"boots": {}, "reboots": [], "unsafe": {}}
             code, j = srv.call("GET", "/api/diag?id=c1", token=ro)
             self.assertEqual(code, 200); self.assertEqual(j["backups"]["max_age_h"], 24)
+            # saving new settings updates what the page reads back right away (no waiting for the next storage read)
+            rows = [{"vmid": 101, "last": None, "age": None, "status": "never"}, {"vmid": 102, "last": 1, "age": 100 * 3600, "status": "old"},
+                    {"vmid": 103, "last": 1, "age": 3600, "status": "ok"}, {"vmid": 104, "last": None, "age": None, "status": "unknown"}]
+            m._backups["c1"] = {"ts": 1, "rows": rows, "tasks": [], "storages": [], "max_age_h": 24, "ignore": []}
+            self.assertEqual(srv.call("POST", url, {"max_age_h": 24, "ignore": [101, 102, 104]}, token=admin)[0], 200)
+            got = {r["vmid"]: r["status"] for r in srv.call("GET", "/api/diag?id=c1", token=ro)[1]["backups"]["rows"]}
+            self.assertEqual(got, {101: "ignored", 102: "ignored", 103: "ok", 104: "unknown"})
+            srv.call("POST", url, {"max_age_h": 24, "ignore": [103]}, token=admin)
+            j = srv.call("GET", "/api/diag?id=c1", token=ro)[1]["backups"]
+            self.assertEqual({r["vmid"]: r["status"] for r in j["rows"]}, {101: "never", 102: "old", 103: "ignored", 104: "unknown"})
+            self.assertEqual(j["ignore"], [103])
         finally:
             m.load_clusters, m.save_clusters = orig_load, orig_save; m._backups.clear(); m._diag_state = None; srv.close()
 

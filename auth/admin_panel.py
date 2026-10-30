@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import auth
 import authrpc
 import teleporter_api as tp
+import qrsvg
 
 # Solo escucha en loopback: el acceso desde la red pasa por nginx (puerto 80), que es quien aplica cabeceras de seguridad.
 # EN: Listens on loopback only: network access goes through nginx (port 80), which applies the security headers.
@@ -443,6 +444,8 @@ class H(BaseHTTPRequestHandler):
                 if e: return self._json(e[0], {"error": e[1]})
                 r = auth.totp_begin(me)
                 if not r: return self._json(409, {"error": "Two-factor authentication is already on"})
+                try: r["qr"] = qrsvg.svg(r["uri"])
+                except ValueError: r["qr"] = ""
                 return self._json(200, r)
             if action == "enable":
                 wait = auth.password_guard_wait(me)

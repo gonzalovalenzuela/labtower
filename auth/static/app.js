@@ -42,7 +42,7 @@ const LANG = {
     upTitle:'Updates', upBanner:(n,c)=>`New LabTower version ${n} is available (installed: ${c}).`, upSee:'See release notes', upInstalled:'Installed', upLatest:'Latest published', upChecked:'Last checked', upCheck:'Check now',
     upOk:'You are up to date.', upOff:'Update check is turned off (LABTOWER_UPDATE_CHECK=0).', upErr:'Could not reach GitHub:', upNever:'not yet', upHow:'To update: download the .deb from the release page and run sudo apt install ./labtower_VERSION_all.deb',
     sfTitle:'Security: two-factor authentication', sfOff:'Two-factor authentication is OFF for your account.', sfOn:(n)=>`Two-factor authentication is ON for your account (${n} recovery codes left).`,
-    sfEnable:'Turn on 2FA', sfDisable:'Turn off 2FA', sfStep1:'1. In your authenticator app (Google Authenticator, Aegis, 1Password…) add an account with this key (type: time based):',
+    sfEnable:'Turn on 2FA', sfDisable:'Turn off 2FA', sfStep1:'1. In your authenticator app (Google Authenticator, Aegis, 1Password…) choose «Scan QR code» and scan this:', sfManual:'Can’t scan it? Add the account by typing this key (type: time based):',
     sfOpen:'Open in authenticator', sfStep2:'2. Type the 6-digit code it shows:', sfConfirm:'Confirm', sfCode:'6-digit code', sfRecTitle:'Save these recovery codes now. Each works once if you lose your phone. They will not be shown again:',
     sfDone:'Done, I saved them', sfEnabled:'2FA is on', sfDisabled:'2FA is off', sfDisablePrompt:'Turn off two-factor authentication? You will need your password.', sfBadCode:'That code is not valid',
     sfReset:'Reset 2FA', sfResetConfirm:u=>`Reset two-factor authentication for "${u}"? They will sign in with the password only until they set it up again.`, sfResetDone:'2FA reset', sf2fa:'2FA',
@@ -112,7 +112,7 @@ const LANG = {
     upTitle:'Actualizaciones', upBanner:(n,c)=>`Hay una versión nueva de LabTower: ${n} (instalada: ${c}).`, upSee:'Ver notas de la versión', upInstalled:'Instalada', upLatest:'Última publicada', upChecked:'Última consulta', upCheck:'Consultar ahora',
     upOk:'Estás al día.', upOff:'La consulta de versiones está desactivada (LABTOWER_UPDATE_CHECK=0).', upErr:'No se pudo consultar GitHub:', upNever:'aún no', upHow:'Para actualizar: descarga el .deb de la página de la versión y ejecuta sudo apt install ./labtower_VERSION_all.deb',
     sfTitle:'Seguridad: autenticación en dos pasos', sfOff:'La autenticación en dos pasos está DESACTIVADA en tu cuenta.', sfOn:(n)=>`La autenticación en dos pasos está ACTIVA en tu cuenta (te quedan ${n} códigos de recuperación).`,
-    sfEnable:'Activar 2FA', sfDisable:'Desactivar 2FA', sfStep1:'1. En tu app de autenticación (Google Authenticator, Aegis, 1Password…) agrega una cuenta con esta clave (tipo: basada en tiempo):',
+    sfEnable:'Activar 2FA', sfDisable:'Desactivar 2FA', sfStep1:'1. En tu app de autenticación (Google Authenticator, Aegis, 1Password…) elige «Escanear código QR» y escanea este:', sfManual:'¿No puedes escanearlo? Agrega la cuenta escribiendo esta clave (tipo: basada en tiempo):',
     sfOpen:'Abrir en la app', sfStep2:'2. Escribe el código de 6 dígitos que muestra:', sfConfirm:'Confirmar', sfCode:'Código de 6 dígitos', sfRecTitle:'Guarda estos códigos de recuperación ahora. Cada uno sirve una vez si pierdes el teléfono. No se vuelven a mostrar:',
     sfDone:'Listo, ya los guardé', sfEnabled:'2FA activado', sfDisabled:'2FA desactivado', sfDisablePrompt:'¿Desactivar la autenticación en dos pasos? Necesitarás tu contraseña.', sfBadCode:'Ese código no es válido',
     sfReset:'Restablecer 2FA', sfResetConfirm:u=>`¿Restablecer la autenticación en dos pasos de "${u}"? Entrará solo con la contraseña hasta que la configure otra vez.`, sfResetDone:'2FA restablecido', sf2fa:'2FA',
@@ -935,7 +935,10 @@ function sfRender() {
       <button class="btn-primary" data-on-click="sfRecDone">${esc(t('sfDone'))}</button>`;
   } else if (_sfSetup) {
     const k = _sfSetup.secret.replace(/(.{4})/g, '$1 ').trim();
+    const qr = /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"[^<]*><rect[^<]*\/><path d="[MhvzL0-9,\- .]*" fill="#000"\/><\/svg>$/.test(_sfSetup.qr || '') ? _sfSetup.qr : '';
     h += `<p style="font-size:12px;color:var(--text-mid)">${esc(t('sfStep1'))}</p>
+      ${qr ? `<div style="width:200px;height:200px;margin:8px 0;border-radius:8px;overflow:hidden">${qr}</div>` : ''}
+      <p style="font-size:12px;color:var(--text-mid)">${esc(t('sfManual'))}</p>
       <pre class="tp-out" style="display:block;font-size:15px;letter-spacing:1px">${esc(k)}</pre>
       <p style="font-size:12px"><a href="${esc(_sfSetup.uri)}">${esc(t('sfOpen'))}</a></p>
       <p style="font-size:12px;color:var(--text-mid)">${esc(t('sfStep2'))}</p>

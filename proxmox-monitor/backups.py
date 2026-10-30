@@ -61,6 +61,22 @@ def evaluate(guests, newest, max_age_h, ignore, now):
     rows.sort(key=lambda r: (order[r["status"]], r["vmid"]))
     return rows
 
+# Aplica al instante nuevos ajustes (antigüedad máxima / ignoradas) a lo ya leído, sin esperar la próxima lectura de los storages (cada 10 min).
+# Las filas «unknown» (storage ilegible) siguen igual. / EN: Apply new settings (maximum age / ignored) at once to what was already read, without waiting for the next
+# read of the storages (every 10 min). "unknown" rows (unreadable storage) stay as they are.
+def apply_config(cache, cfg):
+    if not isinstance(cache, dict) or not isinstance(cache.get("rows"), list): return
+    ign, limit = {_i(v) for v in cfg["ignore"]}, max(_i(cfg["max_age_h"], DEFAULT_MAX_AGE_H), 1) * 3600
+    for r in cache["rows"]:
+        if r.get("status") == "unknown": continue
+        if r["vmid"] in ign:         r["status"] = "ignored"
+        elif r.get("last") is None:  r["status"] = "never"
+        elif (r.get("age") or 0) > limit: r["status"] = "old"
+        else:                        r["status"] = "ok"
+    order = {"never": 0, "old": 1, "ok": 2, "ignored": 3, "unknown": 4}
+    cache["rows"].sort(key=lambda r: (order.get(r["status"], 4), r["vmid"]))
+    cache["max_age_h"], cache["ignore"] = cfg["max_age_h"], cfg["ignore"]
+
 # Compacta las tareas de /cluster/tasks: solo vzdump de los últimos `days` días. ok = None mientras sigue corriendo.
 # EN: Compact the /cluster/tasks list: only vzdump of the last `days` days. ok = None while it is still running.
 def parse_tasks(tasks, now, days=7):
