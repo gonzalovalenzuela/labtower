@@ -2,7 +2,7 @@
 
 # LabTower
 
-**Homelab dashboard** (Raspberry Pi, VM or x86 machine): UPS, network, Proxmox, Synology NAS, Wake-on-LAN and administration in one place. No external dependencies: standard-library Python + nginx.
+**Homelab dashboard** (Raspberry Pi, VM or x86 machine): UPS, network, Proxmox, NAS (Synology, TrueNAS, OpenMediaVault), Wake-on-LAN and administration in one place. No external dependencies: standard-library Python + nginx.
 
 [Español → README.md](README.md)
 
@@ -20,7 +20,7 @@
 | **UPS Monitor** | `/nut/` | 8081 | Reads UPS units through NUT: battery, load, runtime, power, voltages, temperature, history and CSV |
 | **Net Monitor** | `/net/` | 8083 | Scans the network: hosts, type, OS, ports, MAC and vendor |
 | **Proxmox Monitor** | `/pve/` | 8084 | Proxmox VE clusters: nodes, VMs, CTs and Ceph |
-| **NAS Monitor** | `/nas/` | 8086 | One or more Synology NAS over SNMP: disks, volumes, temperature, CPU, memory and network |
+| **NAS Monitor** | `/nas/` | 8086 | One or more NAS (Synology over SNMP, TrueNAS and OpenMediaVault over their API): disks, volumes, temperature, CPU, memory and network |
 | **DNS Monitor** | `/dns/` | 8087 | Pi-hole (v5 and v6) and AdGuard Home: queries, % blocked, top lists, upstream DNS and pausing the blocking |
 | **WAN Monitor** | `/wan/` | 8088 | Internet uplink: latency, loss, outages, public IP and a scheduled speed test |
 | **WOL Console** | `/wol/` | 8080 | Powers on machines with Wake-on-LAN |
@@ -167,13 +167,17 @@ labtower-health
 
 ### NAS Monitor
 - Works like UPS Monitor: a **NAS Summary** table with every NAS (status, model, CPU, RAM, temperature, disks and fullest volume). Each row opens and shows its detail right below; the first one opens by default. You can also pick one from the side menu.
-- Add as many NAS as you like (like Proxmox clusters or UPS servers). Each one is polled over **SNMP v3** (user, level `authPriv`/`authNoPriv`/`noAuthNoPriv`, auth and privacy keys) or v2c. *Test connection* checks the data before saving.
+- Add as many NAS as you like (like Proxmox clusters or UPS servers). When adding one you pick its **type**: **Synology** (over **SNMP v3** —user, level `authPriv`/`authNoPriv`/`noAuthNoPriv`, auth and privacy keys— or v2c), **TrueNAS** (API key) or **OpenMediaVault** (user and password). The type cannot be changed later. *Test connection* checks the data before saving.
 - **Detail of each NAS:** gauges (CPU, RAM, volume, temperature, disks and uptime), system, volumes with their space, disks with status and temperature, network, attached UPS and disk activity.
 - **Charts** for CPU/RAM, temperature and network with **1h / 1d / 1mo / All** ranges; hovering shows the value at each moment. History is stored in `metrics.db` (`NAS_KEEP_DAYS`, 7 days by default).
-- **Alerts** (also on the Overview timeline): failed disk, degraded or nearly full volume (90 %), high temperature and an available DSM update. A full *Storage Pool* does not alert, because it is normal for it to be full when its volumes use all the space.
+- **Alerts** (also on the Overview timeline): failed disk, degraded or nearly full volume (90 %), high temperature and an available system update (TrueNAS also shows the machine's own alerts). A full *Storage Pool* does not alert, because it is normal for it to be full when its volumes use all the space.
 - SNMP keys are stored with 600 permissions and the API never returns them. While polling they live in a private temporary file, never on the command line. When editing, leaving a key blank keeps the stored one.
 - **Enable SNMP on Synology:** *Control Panel → Terminal & SNMP → SNMP → Enable SNMPv3*, set user and passwords (8+ characters) and use `SHA`/`AES`. Other NAS using the standard MIBs (UCD/IF-MIB) show CPU, memory and network, but not disks or volumes.
-- Needs the `snmpget` and `snmpbulkwalk` commands (package `snmp`, already installed by the LabTower package).
+- Needs the `snmpget` and `snmpbulkwalk` commands (package `snmp`, already installed by the LabTower package) only for Synology NAS.
+- **TrueNAS** (25.04 or newer): read over the JSON-RPC 2.0 API on WebSocket (`wss://host/api/current`); the REST API no longer exists in newer versions. Create an **API key** for a dedicated user (the *Read-only Admin* role is enough) and paste it in the form together with that user's name. It shows system, live CPU, memory and network, pools (status and space), disks with temperature and the machine's own alerts. TrueNAS only accepts keys over TLS, so HTTPS is always used.
+- **OpenMediaVault** (7 or newer): read through `rpc.php` with an **administrator** user and password (OpenMediaVault has no read-only role: a dedicated account is recommended). It shows system, CPU, memory, disks with SMART status and temperature, file systems with their space, network interfaces and whether updates are available or a reboot is needed. It does not measure network speed. The session is reused between readings, so OpenMediaVault does not log a login per poll; the "new browser" notice may arrive once after LabTower restarts. Prefer HTTPS: over HTTP the password travels unencrypted.
+- **Certificates:** with "Verify the TLS certificate" on, it is validated against the system CAs. Without it, ANY certificate is **not** accepted: the SHA-256 fingerprint is pinned on the first connection and, if it changes, the connection is dropped before the key is sent. Saving the NAS again clears the fingerprint and it is learned again.
+- Read-only: LabTower never calls a TrueNAS or OpenMediaVault method that changes anything.
 
 ### WOL Console
 - Sends magic packets (at most 10 per minute per IP).
@@ -318,7 +322,7 @@ Designed for a **trusted local network**. Do not expose port 80 to the internet.
 
 - **Critical actions:** creating a user, resetting someone else's password, restoring or downloading a backup ask again for your account password (with the same attempt brake as the login). A stolen session or an unattended browser is not enough.
 - **Session life:** besides the sliding window, every session has an absolute cap since its creation (14 days the normal one, 30 for "one week", 90 for "one month", 400 for "forever"): a stolen token is not good forever.
-- **Device credentials:** to connect to Proxmox, NAS, Pi-hole/AdGuard and switches, LabTower stores their users and passwords **readable** (they cannot be hashed because they are needed to log in) in files under `/var/lib/labtower/` with 600 permissions. Use **read-only** accounts on those devices and, if you can, a management VLAN; whoever reads those files (or an unencrypted backup) gets those credentials.
+- **Device credentials:** to connect to Proxmox, NAS, Pi-hole/AdGuard and switches, LabTower stores their users and passwords **readable** (they cannot be hashed because they are needed to log in) in files under `/var/lib/labtower/` with 600 permissions. Use **read-only** accounts on those devices (the exception is OpenMediaVault, which has no such role: LabTower needs an administrator account, so use a dedicated one) and, if you can, a management VLAN; whoever reads those files (or an unencrypted backup) gets those credentials.
 - **Connection targets:** Proxmox, NAS, DNS, Pi-hole and switches do not accept the machine itself (loopback) or link-local addresses as a target, so LabTower cannot be used as a bridge to its own internal services. If a name is later changed to point there, the check is only repeated when the device is edited.
 - **DNS servers with their own certificate:** if you turn "Verify the TLS certificate" off, the fingerprint is pinned on the first connection and a change is refused (saving the server again clears it).
 - **Isolation between modules:** every service runs as its own system user (`labtower-wol`, `-nut`, `-net`, `-pve`, `-nas`, `-dns`, `-wan`, `-overview`) and can only write its own folder `/var/lib/labtower/<module>/` (mode 700, with its own `metrics.db`); systemd denies it the rest of the disk. Users, sessions, attempt counters and the event timeline belong to the **authentication service** (the Admin Panel, user `labtower-auth`, folder `auth/`), which the other modules query through a Unix socket (`/run/labtower/auth.sock`) that identifies the caller with the kernel (`SO_PEERCRED`). The socket only lets a module check a session, log in or out (the password is verified there, a module never sees a hash) and record events under the caller's own name; there is no operation to create a session without a password or to read users. A compromised module can no longer forge sessions, take password hashes away or read or delete another module's data. The only shared items are two read-only files (`wol-console/devices.json` and `net-monitor/hosts.json`, mode 640 for the `labtower` group) that each module reads from the other as untrusted input. Remaining limits: a compromised module can still **try** passwords against the authentication service (same per-account brake; it can dodge the per-IP brake by claiming another IP), and the Admin Panel keeps the only `sudo` into Teleporter.
@@ -334,7 +338,7 @@ labtower/
 ├── nut-monitor/       # (UPS Monitor)
 ├── net-monitor/
 ├── proxmox-monitor/
-├── nas-monitor/       # NAS Monitor (Synology over SNMP)
+├── nas-monitor/       # NAS Monitor (Synology over SNMP, TrueNAS and OpenMediaVault over API)
 ├── dns-monitor/       # DNS Monitor (Pi-hole / AdGuard Home)
 ├── wan-monitor/       # WAN Monitor (internet)
 ├── overview/          # Overview

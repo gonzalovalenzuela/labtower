@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.1.3a — 2026-10-30
+
+**Nuevo**
+- **NAS Monitor ahora también lee TrueNAS y OpenMediaVault.** Al agregar un NAS se elige el tipo: Synology (SNMP, como siempre), TrueNAS (clave de API) u OpenMediaVault (usuario y contraseña). Todo se ve igual que un Synology: resumen, detalle, gráficos, avisos y la línea de tiempo del Resumen.
+- **TrueNAS (25.04 o más nuevo):** por la API JSON-RPC sobre WebSocket (la API REST ya no existe en las versiones nuevas). Muestra sistema, CPU, memoria y red en vivo, pools (estado y espacio), discos con temperatura y las alertas del propio TrueNAS.
+- **OpenMediaVault (7 o más nuevo):** por `rpc.php`. Muestra sistema, CPU, memoria, discos con estado SMART y temperatura, sistemas de archivos, interfaces de red, actualizaciones pendientes y si falta reiniciar. La sesión se reutiliza entre lecturas, así que no se inicia sesión en cada consulta.
+- Solo lectura: nunca se llama a un método que cambie algo en el NAS.
+- Certificados: con «Verificar el certificado TLS» activo se valida contra las CA del sistema; sin él se fija la huella en la primera conexión y un cambio se rechaza antes de enviar la clave. La clave de API y la contraseña se guardan con permisos 600 y la API nunca las devuelve.
+
+**Correcciones**
+- NAS Monitor: ya no dice «esta Pi» en el aviso de error de conexión (ahora «este servidor»).
+
 ## 2.1.3 — 2026-10-29
 
 Correcciones de la revisión de seguridad del código.

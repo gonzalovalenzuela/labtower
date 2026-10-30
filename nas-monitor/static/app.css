@@ -329,3 +329,7 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
 @media(max-width:1180px){.nas-table .c-spark,.nas-table .c-model{display:none}}
 /* Teléfono: tabla resumen más compacta para que quepan todas las columnas sin cortarse / EN: Phone: compact summary table so every column fits */
 @media(max-width:520px){.nas-table thead th{padding:7px 4px;font-size:9.5px;letter-spacing:.1px}.nas-table tbody td{padding:9px 4px;font-size:12px}.nas-table thead th:first-child,.nas-table tbody td:first-child{padding-left:8px}.nas-table .sum-sub{font-size:10px}.nas-table .pill,.nas-table .badge{font-size:10px;padding:2px 6px}}
+
+.nas-form input[type=checkbox]{width:auto}
+.remember-chk{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;font-size:12.5px}
+.remember-chk input{width:15px;height:15px;margin:0;cursor:pointer}

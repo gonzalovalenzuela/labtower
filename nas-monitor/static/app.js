@@ -6,6 +6,13 @@ const LANG={
     navSection:'Navigation',navNAS:'NAS devices',addNas:'Add NAS',themeLight:'Light',themeDark:'Dark',
     statNasOnline:'NAS online',statAvgCPU:'Avg CPU',statAvgRAM:'Avg RAM',statDisks:'Healthy disks',statVols:'Volume usage',
     noNas:'No NAS configured',noNasHint:'Add a Synology NAS to get started. SNMP must be enabled on it.',
+    fieldType:'Type',typeSynology:'Synology (SNMP)',fieldApiUser:'User',fieldApiKey:'API key',fieldPassword:'Password',fieldHttps:'Use HTTPS',fieldVerifyTls:'Verify the TLS certificate',
+    tlsNote:'If off, the certificate is pinned on the first connection and a later change is refused (edit and save the NAS to accept a new one).',
+    hint_synology:'Enable SNMP on the NAS: Control Panel → Terminal & SNMP → SNMP. SNMPv3 is recommended.',
+    hint_truenas:'Needs TrueNAS 25.04 or newer. Create an API key for a dedicated user (the Read-only Admin role is enough) and paste it here; it stays on this server and is never shown again.',
+    hint_omv:'Use an OpenMediaVault administrator account (OpenMediaVault has no read-only role); a dedicated one is recommended. Prefer HTTPS: over HTTP the password travels unencrypted.',
+    fieldApiUserTn:'User that owns the key',connErrorHintTn:'Check host, port, API key and the user it belongs to. TrueNAS 25.04 or newer is required and this server must be able to reach it.',
+    connErrorHintOmv:'Check host, port, HTTP/HTTPS, user and password. The account must be an OpenMediaVault administrator.',
     addNasTitle:'Add NAS',editNasTitle:'Edit NAS',addNasHint:'Enable SNMP on the NAS: Control Panel → Terminal & SNMP → SNMP. SNMPv3 is recommended.',
     fieldName:'Name',fieldPort:'Port',fieldVersion:'SNMP version',fieldTimeout:'Timeout (s)',fieldCommunity:'Community',fieldUser:'SNMP user',fieldLevel:'Security level',
     fieldAuthProto:'Auth protocol',fieldAuthPass:'Auth password',fieldPrivProto:'Privacy protocol',fieldPrivPass:'Privacy password',
@@ -13,22 +20,29 @@ const LANG={
     edit:'Edit',testFillAll:'Fill in the name, host and credentials.',testOk:(m,d)=>`✓ ${m||'SNMP'}${d?' — '+d:''}`,testNotSyno:'✓ SNMP answers, but this is not a Synology (no Synology MIB).',
     added:n=>`${n} added`,saved:'Saved',deleted:n=>`${n} deleted`,
     permReadonly:'Read-only',permExecute:'Execute',permAdmin:'Administrator',
-    online:'Online',offline:'Unreachable',connError:'Connection error',connErrorHint:'Check host, port, SNMP version and credentials; SNMP must be allowed from this Pi.',
+    online:'Online',offline:'Unreachable',connError:'Connection error',connErrorHint:'Check host, port, SNMP version and credentials; SNMP must be allowed from this server.',
     system:'System',model:'Model',serial:'Serial',dsm:'DSM',uptime:'Uptime',temp:'Temperature',cpu:'CPU',memory:'Memory',load:'Load',swap:'Swap',
-    power:'Power supply',fans:'Fans',normal:'Normal',failed:'Failed',upgradeYes:'Update available',upgradeNo:'Up to date',upgradeUnk:'—',updates:'DSM update',
+    power:'Power supply',fans:'Fans',normal:'Normal',failed:'Failed',upgradeYes:'Update available',upgradeNo:'Up to date',upgradeUnk:'—',updates:'System update',
     volumes:'Volumes',disks:'Disks',network:'Network',ups:'UPS',diskLoad:'Disk activity',diskAllIdle:'All disks idle ({n})',diskIdleN:'Idle disks: {n}',history:'History (last hours)',histCpuMem:'CPU / RAM',histTemp:'Temperature',filterAll:'All',trend:'CPU / RAM',accumulating:'Collecting data…',noDataChart:'No data for this range',summary:'NAS Summary',colNas:'NAS',colModel:'Model',colAlerts:'Alerts',histNet:'Network traffic',
     noVolumes:'No volume data (is this a Synology with the Synology MIB enabled?)',noDisks:'No disk data',noNet:'No network data yet',noHist:'Collecting history…',
     used:'used',free:'free',rx:'In',tx:'Out',model2:'Model',status:'Status',charge:'Battery',loadPct:'Load',
     disk:{1:'Normal',2:'Initialized',3:'Not initialized',4:'System partition failed',5:'Crashed',6:'Disconnected'},
     raid:{1:'Normal',2:'Repairing',3:'Migrating',4:'Expanding',5:'Deleting',6:'Creating',7:'Syncing',8:'Checking parity',9:'Assembling',10:'Canceling',11:'Degraded',12:'Crashed',13:'Scrubbing',14:'Deploying',15:'Undeploying',16:'Mounting cache',17:'Unmounting cache',18:'Expanding (SHR)',19:'Converting (SHR)',20:'Migrating (SHR)',21:'Unknown'},
     al:{system:'System partition failure',power:'Power supply failure',fan:'Fan failure',temp:v=>`High temperature (${v} °C)`,cpu:v=>`High CPU (${v}%)`,mem:v=>`High memory use (${v}%)`,
-        disk:(i,v)=>`${i}: ${LANG.en.disk[v]||v}`,disk_temp:(i,v)=>`${i}: ${v} °C`,raid:(i,v)=>`${i}: ${LANG.en.raid[v]||v}`,vol_full:(i,v)=>`${i} is ${v}% full`,upgrade:'A DSM update is available'},
+        disk:(i,v)=>`${i}: ${LANG.en.disk[v]||v}`,disk_temp:(i,v)=>`${i}: ${v} °C`,raid:(i,v)=>`${i}: ${LANG.en.raid[v]||v}`,vol_full:(i,v)=>`${i} is ${v}% full`,remote:(i,v)=>`${i}: ${v}`,upgrade:'A system update is available'},
     sessionExpired:'Session expired'},
   es:{connecting:'Conectando…',connectingMsg:'Leyendo el NAS por SNMP.',loginTitle:'Iniciar sesión',loginSub:'Ingresa tus credenciales para continuar.',
     username:'Usuario',password:'Contraseña',loginBtn:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',
     navSection:'Navegación',navNAS:'Equipos NAS',addNas:'Agregar NAS',themeLight:'Claro',themeDark:'Oscuro',
     statNasOnline:'NAS en línea',statAvgCPU:'CPU promedio',statAvgRAM:'RAM promedio',statDisks:'Discos sanos',statVols:'Uso de volúmenes',
     noNas:'Sin NAS configurados',noNasHint:'Agrega un NAS Synology para empezar. Debe tener SNMP activado.',
+    fieldType:'Tipo',typeSynology:'Synology (SNMP)',fieldApiUser:'Usuario',fieldApiKey:'Clave de API',fieldPassword:'Contraseña',fieldHttps:'Usar HTTPS',fieldVerifyTls:'Verificar el certificado TLS',
+    tlsNote:'Si está desactivado, el certificado se fija en la primera conexión y un cambio posterior se rechaza (edita y guarda el NAS para aceptar uno nuevo).',
+    hint_synology:'Activa SNMP en el NAS: Panel de control → Terminal y SNMP → SNMP. Se recomienda SNMPv3.',
+    hint_truenas:'Requiere TrueNAS 25.04 o más nuevo. Crea una clave de API para un usuario dedicado (basta el rol Read-only Admin) y pégala aquí; queda en este servidor y no se vuelve a mostrar.',
+    hint_omv:'Usa una cuenta de administrador de OpenMediaVault (no tiene un rol de solo lectura); se recomienda una dedicada. Prefiere HTTPS: con HTTP la contraseña viaja sin cifrar.',
+    fieldApiUserTn:'Usuario dueño de la clave',connErrorHintTn:'Revisa host, puerto, clave de API y el usuario al que pertenece. Se requiere TrueNAS 25.04 o más nuevo y que este servidor pueda alcanzarlo.',
+    connErrorHintOmv:'Revisa host, puerto, HTTP/HTTPS, usuario y contraseña. La cuenta debe ser administrador de OpenMediaVault.',
     addNasTitle:'Agregar NAS',editNasTitle:'Editar NAS',addNasHint:'Activa SNMP en el NAS: Panel de control → Terminal y SNMP → SNMP. Se recomienda SNMPv3.',
     fieldName:'Nombre',fieldPort:'Puerto',fieldVersion:'Versión de SNMP',fieldTimeout:'Tiempo de espera (s)',fieldCommunity:'Comunidad',fieldUser:'Usuario SNMP',fieldLevel:'Nivel de seguridad',
     fieldAuthProto:'Protocolo de autenticación',fieldAuthPass:'Clave de autenticación',fieldPrivProto:'Protocolo de privacidad',fieldPrivPass:'Clave de privacidad',
@@ -36,16 +50,16 @@ const LANG={
     edit:'Editar',testFillAll:'Completa nombre, host y credenciales.',testOk:(m,d)=>`✓ ${m||'SNMP'}${d?' — '+d:''}`,testNotSyno:'✓ SNMP responde, pero no es un Synology (sin la MIB de Synology).',
     added:n=>`${n} agregado`,saved:'Guardado',deleted:n=>`${n} eliminado`,
     permReadonly:'Solo lectura',permExecute:'Ejecutar',permAdmin:'Administrador',
-    online:'En línea',offline:'Sin conexión',connError:'Error de conexión',connErrorHint:'Revisa host, puerto, versión de SNMP y credenciales; SNMP debe permitirse desde esta Pi.',
+    online:'En línea',offline:'Sin conexión',connError:'Error de conexión',connErrorHint:'Revisa host, puerto, versión de SNMP y credenciales; SNMP debe permitirse desde este servidor.',
     system:'Sistema',model:'Modelo',serial:'Serie',dsm:'DSM',uptime:'Tiempo encendido',temp:'Temperatura',cpu:'CPU',memory:'Memoria',load:'Carga',swap:'Swap',
-    power:'Fuente de poder',fans:'Ventiladores',normal:'Normal',failed:'Falla',upgradeYes:'Actualización disponible',upgradeNo:'Al día',upgradeUnk:'—',updates:'Actualización de DSM',
+    power:'Fuente de poder',fans:'Ventiladores',normal:'Normal',failed:'Falla',upgradeYes:'Actualización disponible',upgradeNo:'Al día',upgradeUnk:'—',updates:'Actualización del sistema',
     volumes:'Volúmenes',disks:'Discos',network:'Red',ups:'UPS',diskLoad:'Actividad de disco',diskAllIdle:'Todos los discos en reposo ({n})',diskIdleN:'Discos en reposo: {n}',history:'Historial (últimas horas)',histCpuMem:'CPU / RAM',histTemp:'Temperatura',filterAll:'Todo',trend:'CPU / RAM',accumulating:'Reuniendo datos…',noDataChart:'Sin datos en este rango',summary:'Resumen de NAS',colNas:'NAS',colModel:'Modelo',colAlerts:'Avisos',histNet:'Tráfico de red',
     noVolumes:'Sin datos de volúmenes (¿es un Synology con la MIB de Synology habilitada?)',noDisks:'Sin datos de discos',noNet:'Aún sin datos de red',noHist:'Reuniendo historial…',
     used:'usado',free:'libre',rx:'Entrada',tx:'Salida',model2:'Modelo',status:'Estado',charge:'Batería',loadPct:'Carga',
     disk:{1:'Normal',2:'Inicializado',3:'Sin inicializar',4:'Falla de partición del sistema',5:'Dañado',6:'Desconectado'},
     raid:{1:'Normal',2:'Reparando',3:'Migrando',4:'Expandiendo',5:'Eliminando',6:'Creando',7:'Sincronizando',8:'Verificando paridad',9:'Ensamblando',10:'Cancelando',11:'Degradado',12:'Dañado',13:'Depurando datos',14:'Desplegando',15:'Retirando',16:'Montando caché',17:'Desmontando caché',18:'Expandiendo (SHR)',19:'Convirtiendo (SHR)',20:'Migrando (SHR)',21:'Desconocido'},
     al:{system:'Falla en la partición del sistema',power:'Falla en la fuente de poder',fan:'Falla en un ventilador',temp:v=>`Temperatura alta (${v} °C)`,cpu:v=>`CPU alta (${v}%)`,mem:v=>`Memoria alta (${v}%)`,
-        disk:(i,v)=>`${i}: ${LANG.es.disk[v]||v}`,disk_temp:(i,v)=>`${i}: ${v} °C`,raid:(i,v)=>`${i}: ${LANG.es.raid[v]||v}`,vol_full:(i,v)=>`${i} está al ${v}%`,upgrade:'Hay una actualización de DSM'},
+        disk:(i,v)=>`${i}: ${LANG.es.disk[v]||v}`,disk_temp:(i,v)=>`${i}: ${v} °C`,raid:(i,v)=>`${i}: ${LANG.es.raid[v]||v}`,vol_full:(i,v)=>`${i} está al ${v}%`,remote:(i,v)=>`${i}: ${v}`,upgrade:'Hay una actualización del sistema disponible'},
     sessionExpired:'Sesión vencida'}
 };
 let _lang=localStorage.getItem('pi-lang')||'en';
@@ -58,6 +72,7 @@ function setLang(l){
   document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.getAttribute('data-i18n')));
   ['en','es'].forEach(x=>document.getElementById('lang-'+x)?.classList.toggle('active',x===l));
   if(_i18nReady&&typeof renderAll==='function')renderAll();
+  const ov=document.getElementById('add-overlay');if(ov&&ov.classList.contains('show')&&typeof typeChanged==='function')typeChanged();
 }
 (()=>setLang(_lang))();
 
@@ -264,7 +279,7 @@ function renderDashboard(){
   main.innerHTML=items.length?'':'<div class="state-msg"><strong>'+esc(t('noNas'))+'</strong>'+esc(t('noNasHint'))+'</div>';
   const sub=document.getElementById('tb-sub');sub.textContent='';
   document.getElementById('tb-title').textContent=n?n.name:'NAS Monitor';
-  if(n){const hs=document.createElement('span');hs.textContent=n.host;hs.setAttribute('data-nethost',n.host);hs.setAttribute('data-nethost-click','1');sub.appendChild(hs);sub.appendChild(document.createTextNode(':'+n.port+' · SNMP '+n.version));}
+  if(n){const hs=document.createElement('span');hs.textContent=n.host;hs.setAttribute('data-nethost',n.host);hs.setAttribute('data-nethost-click','1');sub.appendChild(hs);sub.appendChild(document.createTextNode(':'+n.port+' · '+((n.type||'synology')==='synology'?'SNMP '+n.version:n.type==='truenas'?'TrueNAS API':'OpenMediaVault RPC'+(n.https===false?' (HTTP)':''))));}
 }
 
 function buildDetail(n){
@@ -272,7 +287,7 @@ function buildDetail(n){
   const tools=canAdmin()?`<div class="nas-tools"><button class="btn-secondary" data-on-click="openNasForm" data-on-click-args="${jsargs([n.id])}">${esc(t('edit'))}</button><button class="btn-secondary" data-on-click="confirmDelete" data-on-click-args="${jsargs([n.id,n.name])}" style="color:var(--red)">${esc(t('delete'))}</button></div>`:'';
   if(!snap.ts){return '<div class="state-msg"><strong>'+esc(t('connecting'))+'</strong>'+esc(t('connectingMsg'))+'</div>';}
   if(snap.error&&!snap.data?.system){
-    return `<div class="nas-head"><div><h2>${esc(n.name)}</h2></div>${tools}</div><div class="state-msg err"><strong>${esc(t('connError'))}</strong>${esc(snap.error)}<br><br><span style="font-size:12px;font-family:var(--mono)">${esc(t('connErrorHint'))}</span></div>`;
+    return `<div class="nas-head"><div><h2>${esc(n.name)}</h2></div>${tools}</div><div class="state-msg err"><strong>${esc(t('connError'))}</strong>${esc(snap.error)}<br><br><span style="font-size:12px;font-family:var(--mono)">${esc(t(n.type==='truenas'?'connErrorHintTn':n.type==='omv'?'connErrorHintOmv':'connErrorHint'))}</span></div>`;
   }
   const d=snap.data,s=d.system||{};
   const offline=!!snap.error;
@@ -295,16 +310,16 @@ function buildDetail(n){
     ${kv(t('uptime'),esc(fmtUptime(s.uptime)))}
     ${kv(t('temp'),s.temp==null?'—':`${esc(s.temp)} °C`)}
     ${(cpu.load||[]).some(x=>x!=null)?kv(t('load'),esc((cpu.load||[]).map(x=>x==null?'—':x.toFixed(2)).join(' / '))):''}
-    ${kv(t('power'),okFail(s.power))}
-    ${kv(t('fans'),okFail(s.fan_sys===2||s.fan_cpu===2?2:(s.fan_sys==null&&s.fan_cpu==null?null:1)))}
-    ${kv(t('updates'),s.upgrade===1?pill('info',t('upgradeYes')):s.upgrade===2?pill('ok',t('upgradeNo')):esc(t('upgradeUnk')))}
+    ${s.power==null?'':kv(t('power'),okFail(s.power))}
+    ${s.fan_sys==null&&s.fan_cpu==null?'':kv(t('fans'),okFail(s.fan_sys===2||s.fan_cpu===2?2:1))}
+    ${(n.type||'synology')!=='synology'&&s.upgrade==null?'':kv(t('updates'),s.upgrade===1?pill('info',t('upgradeYes')):s.upgrade===2?pill('ok',t('upgradeNo')):esc(t('upgradeUnk')))}
     ${mem&&mem.swap_total>0?kv(t('swap'),esc(fmtBytes(mem.swap_used)+' / '+fmtBytes(mem.swap_total))):''}
   </div>`;
   // Volúmenes
   h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('volumes'))}</div></div>`;
   if(!(d.raids||[]).length)h+=`<div class="nas-empty">${esc(t('noVolumes'))}</div>`;
   (d.raids||[]).forEach(r=>{
-    const st=(LANG[_lang].raid||{})[r.status]||('#'+r.status);
+    const st=r.status_text||(LANG[_lang].raid||{})[r.status]||('#'+r.status);
     h+=`<div class="vol-row"><div class="vol-top"><span class="vol-name">${esc(r.name)}</span>${pill(r.lv,st)}</div>
       ${r.pct!=null?(r.pool?bar(r.pct,101,101):bar(r.pct,VOL_W,VOL_C)):''}
       <div class="vol-size">${r.pct!=null?esc(r.pct)+'% '+esc(t('used'))+' · '+esc(fmtBytes(r.total-r.free))+' / '+esc(fmtBytes(r.total))+' · '+esc(fmtBytes(r.free))+' '+esc(t('free')):'—'}</div></div>`;
@@ -314,7 +329,7 @@ function buildDetail(n){
   h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('disks'))}</div></div>`;
   if(!(d.disks||[]).length)h+=`<div class="nas-empty">${esc(t('noDisks'))}</div>`;
   (d.disks||[]).forEach(x=>{
-    const st=(LANG[_lang].disk||{})[x.status]||('#'+x.status);
+    const st=x.status_text||(LANG[_lang].disk||{})[x.status]||('#'+x.status);
     h+=`<div class="disk-row"><span class="dn">${esc(x.name)}</span><span class="dm">${esc(x.model||'—')}<small>${esc(x.type||'')}</small></span><span class="dt${x.temp>=DISK_HOT?' hot':''}">${x.temp==null?'—':esc(x.temp)+' °C'}</span>${pill(x.lv,st)}</div>`;
   });
   h+='</div>';
@@ -479,27 +494,59 @@ let editingId=null;
 const $=id=>document.getElementById(id);
 function versionChanged(){const v3=$('f-version').value==='3';$('v3-box').style.display=v3?'flex':'none';$('v2-box').style.display=v3?'none':'';levelChanged();}
 function levelChanged(){const l=$('f-level').value;$('auth-box').style.display=l==='noAuthNoPriv'?'none':'';$('priv-box').style.display=l==='authPriv'?'':'none';}
+// Tipos de NAS: Synology (SNMP), TrueNAS (clave de API) y OpenMediaVault (usuario y contraseña). Puerto y tiempo de espera típicos de cada uno.
+// EN: NAS types: Synology (SNMP), TrueNAS (API key) and OpenMediaVault (user and password). Typical port and timeout of each.
+const TYPE_PORT={synology:161,truenas:443,omv:443},TYPE_TIMEOUT={synology:5,truenas:8,omv:8};
+function curType(){return $('f-type').value;}
+function typeChanged(){
+  const ty=curType(),syn=ty==='synology',port=parseInt($('f-port').value);
+  $('snmp-box').style.display=syn?'flex':'none';$('api-box').style.display=syn?'none':'flex';
+  $('add-hint').textContent=t('hint_'+ty);
+  if(syn)versionChanged();
+  else{
+    $('l-api-user').textContent=t(ty==='truenas'?'fieldApiUserTn':'fieldApiUser');
+    $('l-api-secret').textContent=t(ty==='truenas'?'fieldApiKey':'fieldPassword');
+    $('https-field').style.display=ty==='omv'?'':'none';
+    $('f-api-secret').autocomplete='new-password';
+  }
+  if(!editingId&&[161,443,80].includes(port)){$('f-port').value=(ty==='omv'&&!$('f-https').checked)?80:TYPE_PORT[ty];}
+  if(!editingId)$('f-api-timeout').value=TYPE_TIMEOUT[ty];
+}
+function httpsChanged(){const p=parseInt($('f-port').value);if($('f-https').checked&&p===80)$('f-port').value=443;else if(!$('f-https').checked&&p===443)$('f-port').value=80;}
 function openNasForm(id){
   editingId=typeof id==='string'?id:null;
-  const n=editingId?items.find(x=>x.id===editingId):null;
+  const n=editingId?items.find(x=>x.id===editingId):null,ty=n?(n.type||'synology'):'synology';
   $('nas-form-title').textContent=t(n?'editNasTitle':'addNasTitle');
-  $('f-name').value=n?n.name:'';$('f-host').value=n?n.host:'';$('f-port').value=n?n.port:161;
-  $('f-version').value=n?n.version:'3';$('f-timeout').value=n?n.timeout:5;
-  $('f-user').value=n?n.user:'';$('f-level').value=n?n.level:'authPriv';
-  $('f-auth-proto').value=n?n.auth_proto:'SHA';$('f-priv-proto').value=n?n.priv_proto:'AES';
+  $('f-type').value=ty;$('f-type').disabled=!!n;
+  $('f-name').value=n?n.name:'';$('f-host').value=n?n.host:'';$('f-port').value=n?n.port:TYPE_PORT[ty];
+  $('f-version').value=n&&ty==='synology'?n.version:'3';$('f-timeout').value=n&&ty==='synology'?n.timeout:5;
+  $('f-user').value=n&&ty==='synology'?n.user:'';$('f-level').value=n&&ty==='synology'?n.level:'authPriv';
+  $('f-auth-proto').value=n&&ty==='synology'?n.auth_proto:'SHA';$('f-priv-proto').value=n&&ty==='synology'?n.priv_proto:'AES';
   ['community','auth_pass','priv_pass'].forEach(k=>{
     const el=$('f-'+k.replace('_','-'));el.value='';
     $('h-'+k).textContent=n&&n['has_'+k]?t('secretKept'):'';
   });
+  $('f-api-user').value=n&&ty!=='synology'?n.user:(ty==='omv'?'admin':'');$('f-api-secret').value='';
+  const sk=ty==='truenas'?'api_key':'password';
+  $('h-api-secret').textContent=n&&n['has_'+sk]?t('secretKept'):'';
+  $('f-https').checked=n&&ty!=='synology'?n.https!==false:true;$('f-verify').checked=n&&ty!=='synology'?!!n.verify_tls:false;
+  $('f-api-timeout').value=n&&ty!=='synology'?n.timeout:TYPE_TIMEOUT[ty];
   $('test-result').className='test-result';
-  versionChanged();
+  typeChanged();
   $('add-overlay').classList.add('show');$('f-name').focus();
 }
 function formBody(){
-  const b={name:$('f-name').value.trim(),host:$('f-host').value.trim(),port:parseInt($('f-port').value)||161,version:$('f-version').value,
-    timeout:parseInt($('f-timeout').value)||5,user:$('f-user').value.trim(),level:$('f-level').value,
-    auth_proto:$('f-auth-proto').value,priv_proto:$('f-priv-proto').value,
-    community:$('f-community').value,auth_pass:$('f-auth-pass').value,priv_pass:$('f-priv-pass').value};
+  const ty=curType();
+  const b={type:ty,name:$('f-name').value.trim(),host:$('f-host').value.trim(),port:parseInt($('f-port').value)||TYPE_PORT[ty]};
+  if(ty==='synology'){
+    Object.assign(b,{version:$('f-version').value,timeout:parseInt($('f-timeout').value)||5,user:$('f-user').value.trim(),level:$('f-level').value,
+      auth_proto:$('f-auth-proto').value,priv_proto:$('f-priv-proto').value,
+      community:$('f-community').value,auth_pass:$('f-auth-pass').value,priv_pass:$('f-priv-pass').value});
+  }else{
+    Object.assign(b,{user:$('f-api-user').value.trim(),timeout:parseInt($('f-api-timeout').value)||8,verify_tls:$('f-verify').checked});
+    b[ty==='truenas'?'api_key':'password']=$('f-api-secret').value;
+    if(ty==='omv')b.https=$('f-https').checked;
+  }
   if(editingId)b.id=editingId;
   return b;
 }
@@ -579,4 +626,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ closeModals, confirmDelete, doLogin, levelChanged, logout, openNasForm, saveNas, setLang, setRange, setTheme, testNas, toggleNas, toggleNav, versionChanged });
+if (window.cspRegister) cspRegister({ closeModals, confirmDelete, doLogin, httpsChanged, levelChanged, logout, openNasForm, saveNas, setLang, setRange, setTheme, testNas, toggleNas, toggleNav, typeChanged, versionChanged });

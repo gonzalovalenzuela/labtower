@@ -2,7 +2,7 @@
 
 # LabTower
 
-**Panel para homelab** (Raspberry Pi, VM o equipo x86): UPS, red, Proxmox, NAS Synology, Wake-on-LAN y administración en un solo lugar. Sin dependencias externas: Python estándar + nginx.
+**Panel para homelab** (Raspberry Pi, VM o equipo x86): UPS, red, Proxmox, NAS (Synology, TrueNAS, OpenMediaVault), Wake-on-LAN y administración en un solo lugar. Sin dependencias externas: Python estándar + nginx.
 
 [English → README.en.md](README.en.md)
 
@@ -20,7 +20,7 @@
 | **UPS Monitor** | `/nut/` | 8081 | Lee UPS por NUT: batería, carga, autonomía, consumo, voltajes, temperatura, historial y CSV |
 | **Net Monitor** | `/net/` | 8083 | Escanea la red: equipos, tipo, SO, puertos, MAC y fabricante |
 | **Proxmox Monitor** | `/pve/` | 8084 | Clusters Proxmox VE: nodos, VMs, CTs y Ceph |
-| **NAS Monitor** | `/nas/` | 8086 | Uno o varios NAS Synology por SNMP: discos, volúmenes, temperatura, CPU, memoria y red |
+| **NAS Monitor** | `/nas/` | 8086 | Uno o varios NAS (Synology por SNMP, TrueNAS y OpenMediaVault por su API): discos, volúmenes, temperatura, CPU, memoria y red |
 | **DNS Monitor** | `/dns/` | 8087 | Pi-hole (v5 y v6) y AdGuard Home: consultas, % bloqueado, tops, DNS de salida y pausa del bloqueo |
 | **WAN Monitor** | `/wan/` | 8088 | Salida a internet: latencia, pérdida, cortes, IP pública y prueba de velocidad programada |
 | **WOL Console** | `/wol/` | 8080 | Enciende equipos con Wake-on-LAN |
@@ -167,13 +167,17 @@ labtower-health
 
 ### NAS Monitor
 - Funciona como UPS Monitor: una tabla **Resumen de NAS** con todos los NAS (estado, modelo, CPU, RAM, temperatura, discos y volumen más lleno). Cada fila se abre y muestra su detalle debajo; por defecto se abre el primero. También se elige desde el menú lateral.
-- Agrega todos los NAS que quieras (como los clusters de Proxmox o los servidores de UPS). Cada uno se consulta por **SNMP v3** (usuario, nivel `authPriv`/`authNoPriv`/`noAuthNoPriv`, clave de autenticación y de cifrado) o por v2c. El botón *Probar conexión* revisa los datos antes de guardar.
+- Agrega todos los NAS que quieras (como los clusters de Proxmox o los servidores de UPS). Al agregarlo se elige el **tipo**: **Synology** (por **SNMP v3** —usuario, nivel `authPriv`/`authNoPriv`/`noAuthNoPriv`, clave de autenticación y de cifrado— o por v2c), **TrueNAS** (clave de API) u **OpenMediaVault** (usuario y contraseña). El tipo no se puede cambiar después. El botón *Probar conexión* revisa los datos antes de guardar.
 - **Detalle de cada NAS:** medidores (CPU, RAM, volumen, temperatura, discos y tiempo encendido), sistema, volúmenes con su espacio, discos con estado y temperatura, red, UPS conectado y actividad de disco.
 - **Gráficos** de CPU/RAM, temperatura y red con rangos **1h / 1d / 1mo / Todo**; al pasar el cursor muestran el valor de cada momento. El historial se guarda en `metrics.db` (`NAS_KEEP_DAYS`, 7 días por defecto).
-- **Avisos** (también en la línea de tiempo del Resumen): disco con falla, volumen degradado o casi lleno (90 %), temperatura alta y actualización de DSM disponible. Un *Storage Pool* lleno no avisa, porque es normal que lo esté si sus volúmenes usan todo el espacio.
+- **Avisos** (también en la línea de tiempo del Resumen): disco con falla, volumen degradado o casi lleno (90 %), temperatura alta y actualización del sistema disponible (en TrueNAS se muestran además las alertas del propio equipo). Un *Storage Pool* lleno no avisa, porque es normal que lo esté si sus volúmenes usan todo el espacio.
 - Las claves SNMP se guardan con permisos 600 y la API nunca las devuelve. Al leer, van en un archivo temporal privado, nunca en la línea de comandos. Al editar, dejar una clave en blanco conserva la guardada.
 - **Activar SNMP en el Synology:** *Panel de control → Terminal y SNMP → SNMP → Habilitar SNMPv3*, define usuario y contraseñas (mínimo 8 caracteres) y usa `SHA`/`AES`. Otros NAS que usen las MIB estándar (UCD/IF-MIB) muestran CPU, memoria y red, pero no discos ni volúmenes.
-- Necesita los comandos `snmpget` y `snmpbulkwalk` (paquete `snmp`, que ya instala el paquete de LabTower).
+- Necesita los comandos `snmpget` y `snmpbulkwalk` (paquete `snmp`, que ya instala el paquete de LabTower) solo para los NAS Synology.
+- **TrueNAS** (25.04 o más nuevo): se lee por la API JSON-RPC 2.0 sobre WebSocket (`wss://equipo/api/current`); la API REST ya no existe en las versiones nuevas. Crea una **clave de API** para un usuario dedicado (basta el rol *Read-only Admin*) y pégala en el formulario junto con el nombre de ese usuario. Muestra sistema, CPU, memoria y red en vivo, pools (estado y espacio), discos con temperatura y las alertas del equipo. TrueNAS solo acepta claves por TLS, por eso siempre se usa HTTPS.
+- **OpenMediaVault** (7 o más nuevo): se lee por `rpc.php` con un usuario y contraseña de **administrador** (OpenMediaVault no tiene un rol de solo lectura: se recomienda una cuenta dedicada). Muestra sistema, CPU, memoria, discos con estado SMART y temperatura, sistemas de archivos con su espacio, interfaces de red y si hay actualizaciones o falta reiniciar. No mide la velocidad de red. La sesión se reutiliza entre lecturas, así que OpenMediaVault no registra un inicio de sesión por consulta; el aviso de «nuevo navegador» puede llegar una vez tras reiniciar LabTower. Prefiere HTTPS: con HTTP la contraseña viaja sin cifrar.
+- **Certificados:** con «Verificar el certificado TLS» activo se valida contra las CA del sistema. Sin ello **no** se acepta cualquier certificado: se fija la huella SHA-256 en la primera conexión y, si cambia, la conexión se corta antes de enviar la clave. Guardar el NAS otra vez borra la huella y se aprende de nuevo.
+- Solo lectura: LabTower nunca llama a un método de TrueNAS ni de OpenMediaVault que cambie algo.
 
 ### WOL Console
 - Envía paquetes mágicos (máximo 10 por minuto por IP).
@@ -318,7 +322,7 @@ Pensado para una **red local de confianza**. No expongas el puerto 80 a internet
 
 - **Acciones críticas:** crear un usuario, restablecer la clave de otro, restaurar o descargar un respaldo piden de nuevo la contraseña de tu cuenta (con el mismo freno de intentos del login). Una sesión robada o un navegador desatendido no bastan.
 - **Vida de las sesiones:** además de la ventana deslizante, cada sesión tiene un tope absoluto desde su creación (14 días la normal, 30 «una semana», 90 «un mes», 400 «siempre»): un token robado no vale para siempre.
-- **Credenciales de equipos:** para conectarse a Proxmox, NAS, Pi-hole/AdGuard y switches, LabTower guarda sus usuarios y claves **legibles** (no pueden ir con hash porque se necesitan para entrar) en archivos de `/var/lib/labtower/` con permisos 600. Usa cuentas de **solo lectura** en esos equipos y, si puedes, una VLAN de gestión; quien lea esos archivos (o un respaldo sin cifrar) obtiene esas credenciales.
+- **Credenciales de equipos:** para conectarse a Proxmox, NAS, Pi-hole/AdGuard y switches, LabTower guarda sus usuarios y claves **legibles** (no pueden ir con hash porque se necesitan para entrar) en archivos de `/var/lib/labtower/` con permisos 600. Usa cuentas de **solo lectura** en esos equipos (la excepción es OpenMediaVault, que no tiene ese rol: LabTower necesita una cuenta de administrador, así que usa una dedicada) y, si puedes, una VLAN de gestión; quien lea esos archivos (o un respaldo sin cifrar) obtiene esas credenciales.
 - **Destinos de conexión:** Proxmox, NAS, DNS, Pi-hole y switches no aceptan la propia máquina (loopback) ni direcciones de enlace local como destino, para que LabTower no sirva de puente hacia sus servicios internos. Si un nombre cambia después de guardarse para apuntar allí, la comprobación solo se repite al editar el equipo.
 - **Servidores DNS con certificado propio:** si desactivas «Verificar el certificado TLS», la huella se fija en la primera conexión y un cambio se rechaza (guardar el servidor de nuevo la borra).
 - **Aislamiento entre módulos:** cada servicio corre con su propio usuario del sistema (`labtower-wol`, `-nut`, `-net`, `-pve`, `-nas`, `-dns`, `-wan`, `-overview`) y solo puede escribir su carpeta de `/var/lib/labtower/<módulo>/` (modo 700, con su propio `metrics.db`); systemd le niega el resto del disco. Los usuarios, las sesiones, los contadores de intentos y la línea de tiempo de eventos son del **servicio de autenticación** (el Panel de administración, usuario `labtower-auth`, carpeta `auth/`), que los demás módulos consultan por un socket Unix (`/run/labtower/auth.sock`) que identifica quién llama con el kernel (`SO_PEERCRED`). Ese socket solo permite comprobar una sesión, iniciar o cerrar sesión (la contraseña se verifica ahí, un módulo nunca ve un hash) y anotar eventos con el nombre de quien llama; no existe ninguna operación para crear una sesión sin contraseña ni para leer usuarios. Un módulo comprometido ya no puede falsificar sesiones, llevarse los hashes de las contraseñas ni leer o borrar los datos de otro. Lo único compartido son dos archivos de lectura (`wol-console/devices.json` y `net-monitor/hosts.json`, modo 640 para el grupo `labtower`) que cada uno lee del otro como entrada no confiable. Límites que siguen: un módulo comprometido sí puede **intentar** contraseñas contra el servicio de autenticación (con el mismo freno por cuenta; el freno por IP lo puede esquivar declarando otra IP), y el Panel de administración conserva el único `sudo` hacia Teleporter.
@@ -334,7 +338,7 @@ labtower/
 ├── nut-monitor/       # (UPS Monitor)
 ├── net-monitor/
 ├── proxmox-monitor/
-├── nas-monitor/       # NAS Monitor (Synology por SNMP)
+├── nas-monitor/       # NAS Monitor (Synology por SNMP, TrueNAS y OpenMediaVault por API)
 ├── dns-monitor/       # DNS Monitor (Pi-hole / AdGuard Home)
 ├── wan-monitor/       # WAN Monitor (internet)
 ├── overview/          # Resumen

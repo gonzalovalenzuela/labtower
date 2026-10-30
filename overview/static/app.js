@@ -145,13 +145,14 @@ function renderPVE(d){
   return sev;
 }
 // ───────── NAS ─────────
-// Resumen de cada NAS Synology: estado, CPU, memoria, volumen más lleno y discos. Las alertas las calcula nas-monitor; aquí solo se traducen.
-// EN: Summary of every Synology NAS: status, CPU, memory, fullest volume and disks. The alerts are computed by nas-monitor; here they are only translated.
+// Resumen de cada NAS (Synology, TrueNAS, OpenMediaVault): estado, CPU, memoria, volumen más lleno y discos. Las alertas las calcula nas-monitor; aquí solo se traducen.
+// EN: Summary of every NAS (Synology, TrueNAS, OpenMediaVault): status, CPU, memory, fullest volume and disks. The alerts are computed by nas-monitor; here they are only translated.
 const NAS_AL={
- en:{system:'system partition failure',power:'power supply failure',fan:'fan failure',temp:'high temperature',cpu:'high CPU',mem:'high memory',disk:'disk problem',disk_temp:'disk too hot',raid:'volume problem',vol_full:'volume almost full',upgrade:'DSM update available'},
- es:{system:'falla en la partición del sistema',power:'falla en la fuente de poder',fan:'falla en un ventilador',temp:'temperatura alta',cpu:'CPU alta',mem:'memoria alta',disk:'problema en un disco',disk_temp:'disco muy caliente',raid:'problema en un volumen',vol_full:'volumen casi lleno',upgrade:'hay una actualización de DSM'}
+ en:{system:'system partition failure',power:'power supply failure',fan:'fan failure',temp:'high temperature',cpu:'high CPU',mem:'high memory',disk:'disk problem',disk_temp:'disk too hot',raid:'volume problem',vol_full:'volume almost full',upgrade:'system update available'},
+ es:{system:'falla en la partición del sistema',power:'falla en la fuente de poder',fan:'falla en un ventilador',temp:'temperatura alta',cpu:'CPU alta',mem:'memoria alta',disk:'problema en un disco',disk_temp:'disco muy caliente',raid:'problema en un volumen',vol_full:'volumen casi lleno',upgrade:'hay una actualización del sistema'}
 };
 function nasAl(a){
+  if(a.type==='remote')return (a.item?a.item+': ':'')+(a.value==null?'':a.value);       // text written by TrueNAS / OpenMediaVault itself
   const w=(NAS_AL[lang]||NAS_AL.en)[a.type]||a.type;
   const unit={temp:' °C',disk_temp:' °C',cpu:'%',mem:'%',vol_full:'%'}[a.type];
   return (a.item?a.item+': ':'')+w+(unit!==undefined&&a.value!=null?` (${a.value}${unit})`:'');

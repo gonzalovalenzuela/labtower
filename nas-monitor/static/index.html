@@ -18,7 +18,7 @@
   <div class="login-box">
     <div class="login-logo">
       <div class="login-logo-ico"><img src="/icons/nas.png" alt="" width="36" height="36"></div>
-      <div><div style="font-size:15px;font-weight:600">NAS Monitor</div><div style="font-size:10px;color:var(--text-dim);font-family:var(--mono)">Synology / SNMP</div></div>
+      <div><div style="font-size:15px;font-weight:600">NAS Monitor</div><div style="font-size:10px;color:var(--text-dim);font-family:var(--mono)">Synology · TrueNAS · OMV</div></div>
     </div>
     <div style="font-size:18px;font-weight:600;margin-bottom:4px" data-i18n="loginTitle">Sign in</div>
     <div style="font-size:13px;color:var(--text-dim);margin-bottom:22px" data-i18n="loginSub">Enter your credentials to continue.</div>
@@ -34,7 +34,7 @@
 <aside class="sidebar">
   <div class="sb-logo">
     <div class="sb-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="9" x2="17" y2="9"/><line x1="7" y1="14" x2="17" y2="14"/><line x1="16" y1="18" x2="16.01" y2="18"/></svg></div>
-    <div><div class="sb-name">NAS Monitor</div><div class="sb-ver">Synology / SNMP</div></div>
+    <div><div class="sb-name">NAS Monitor</div><div class="sb-ver">Synology · TrueNAS · OMV</div></div>
   </div>
   <div class="sb-sec">
     <div class="sb-lbl" data-i18n="navSection">Navigation</div>
@@ -106,8 +106,10 @@
 <div class="overlay" id="add-overlay">
   <div class="modal" style="max-width:500px;width:95%">
     <h3 id="nas-form-title" data-i18n="addNasTitle">Add NAS</h3>
-    <p data-i18n="addNasHint">Enable SNMP on the NAS: Control Panel → Terminal &amp; SNMP → SNMP. SNMPv3 is recommended.</p>
+    <p id="add-hint" data-i18n="hint_synology">Enable SNMP on the NAS: Control Panel → Terminal &amp; SNMP → SNMP. SNMPv3 is recommended.</p>
     <div class="nas-form">
+      <div class="field"><label data-i18n="fieldType">Type</label>
+        <select id="f-type" data-on-change="typeChanged"><option value="synology" data-i18n="typeSynology">Synology (SNMP)</option><option value="truenas">TrueNAS</option><option value="omv">OpenMediaVault</option></select></div>
       <div class="two-col">
         <div class="field"><label data-i18n="fieldName">Name</label><input type="text" id="f-name" placeholder="NAS" maxlength="60" autocomplete="off"></div>
         <div class="two-col" style="gap:6px">
@@ -115,6 +117,7 @@
           <div class="field"><label data-i18n="fieldPort">Port</label><input type="number" id="f-port" value="161" min="1" max="65535"></div>
         </div>
       </div>
+      <div id="snmp-box" style="display:flex;flex-direction:column;gap:12px">
       <div class="two-col">
         <div class="field"><label data-i18n="fieldVersion">SNMP version</label>
           <select id="f-version" data-on-change="versionChanged"><option value="3">SNMPv3</option><option value="2c">SNMPv2c</option></select></div>
@@ -139,6 +142,18 @@
             <select id="f-priv-proto"><option>AES</option><option>DES</option><option>AES-192</option><option>AES-256</option></select></div>
           <div class="field"><label data-i18n="fieldPrivPass">Privacy password</label><input type="password" id="f-priv-pass" autocomplete="new-password"><span class="secret-hint" id="h-priv_pass"></span></div>
         </div>
+      </div>
+      </div>
+      <div id="api-box" style="display:none;flex-direction:column;gap:12px">
+        <div class="two-col">
+          <div class="field"><label id="l-api-user" data-i18n="fieldApiUser">User</label><input type="text" id="f-api-user" autocomplete="off"></div>
+          <div class="field"><label id="l-api-secret" data-i18n="fieldApiKey">API key</label><input type="password" id="f-api-secret" autocomplete="new-password"><span class="secret-hint" id="h-api-secret"></span></div>
+        </div>
+        <div class="two-col">
+          <div class="field" id="https-field"><label class="remember-chk" style="margin-top:6px"><input type="checkbox" id="f-https" data-on-change="httpsChanged" checked><span data-i18n="fieldHttps">Use HTTPS</span></label></div>
+          <div class="field"><label data-i18n="fieldTimeout">Timeout (s)</label><input type="number" id="f-api-timeout" value="8" min="1" max="30"></div>
+        </div>
+        <div class="field"><label class="remember-chk"><input type="checkbox" id="f-verify"><span data-i18n="fieldVerifyTls">Verify the TLS certificate</span></label><span class="secret-hint" data-i18n="tlsNote">If off, the certificate is pinned on the first connection and a later change is refused (edit and save the NAS to accept a new one).</span></div>
       </div>
       <div class="test-result" id="test-result"></div>
     </div>

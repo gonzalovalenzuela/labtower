@@ -35,6 +35,8 @@ from pathlib import Path
 # EN: Shared authentication module (sibling folder /auth).
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
+sys.path.insert(0, str(Path(__file__).parent))
+import remote          # TrueNAS y OpenMediaVault por API / TrueNAS and OpenMediaVault over their APIs
 
 # Solo loopback; el acceso desde la red pasa por nginx.
 # EN: Loopback only; network access goes through nginx.
@@ -60,6 +62,14 @@ log = logging.getLogger("nas")
 # EN: Credentials: what can be stored per NAS. Secrets never go out to the browser.
 SNMP_FIELDS  = ("host", "port", "version", "community", "user", "level", "auth_proto", "auth_pass", "priv_proto", "priv_pass", "timeout")
 SNMP_SECRETS = ("community", "auth_pass", "priv_pass")
+# Tipos de NAS: «synology» (SNMP, el original), «truenas» (API JSON-RPC por WebSocket, clave de API) y «omv» (OpenMediaVault, rpc.php, usuario y clave).
+# EN: NAS types: "synology" (SNMP, the original), "truenas" (JSON-RPC WebSocket API, API key) and "omv" (OpenMediaVault, rpc.php, user and password).
+TYPES        = ("synology", "truenas", "omv")
+API_FIELDS   = ("host", "port", "https", "verify_tls", "user", "password", "api_key", "timeout")
+API_SECRETS  = ("password", "api_key")
+SECRETS      = SNMP_SECRETS + API_SECRETS
+API_DEFAULTS = {"truenas": {"port": 443, "https": True, "verify_tls": False, "user": "", "api_key": "", "timeout": 8},
+                "omv":     {"port": 443, "https": True, "verify_tls": False, "user": "admin", "password": "", "timeout": 8}}
 DEFAULTS     = {"port": 161, "version": "3", "community": "", "user": "", "level": "authPriv", "auth_proto": "SHA",
                 "auth_pass": "", "priv_proto": "AES", "priv_pass": "", "timeout": 5}
 
@@ -149,7 +159,12 @@ def save_nas(items: list):
 # Combina la petición con lo guardado y valida cada campo. Un secreto vacío significa «conservar el actual».
 # EN: Merge the request with what is stored and validate every field. An empty secret means "keep the current one".
 def validate(body: dict, current=None) -> dict:
+    typ = (current.get("type") or "synology") if current is not None else body.get("type") or "synology"
+    if not isinstance(typ, str) or typ not in TYPES: raise ValueError("Invalid NAS type")
+    if current is not None and body.get("type") not in (None, "", typ): raise ValueError("The NAS type cannot be changed")
+    if typ != "synology": return _validate_api(typ, body, current)
     cfg = dict(DEFAULTS); cfg.update({k: v for k, v in (current or {}).items() if k in SNMP_FIELDS or k in ("name", "id")})
+    cfg["type"] = "synology"
     for k in ("name",) + SNMP_FIELDS:
         if k not in body: continue
         v = body[k]
@@ -181,12 +196,71 @@ def validate(body: dict, current=None) -> dict:
         if cfg["level"] == "authPriv" and len(cfg["priv_pass"]) < 8: raise ValueError("Privacy password must be at least 8 characters")
     return cfg
 
-# Vista para el navegador: sin secretos, solo «has_*».
-# EN: View for the browser: no secrets, only "has_*".
+# TrueNAS y OpenMediaVault: valida la petición mezclada con lo guardado. Un secreto vacío = conservar el actual.
+# La huella TLS fijada (tls_pin) la aprende el servidor y nunca se acepta del formulario; guardar el NAS otra vez la borra
+# (se vuelve a aprender en la siguiente conexión): es la forma de aceptar un certificado nuevo a propósito.
+# EN: TrueNAS and OpenMediaVault: validate the request merged with what is stored. An empty secret = keep the current one.
+#     The pinned TLS fingerprint (tls_pin) is learned by the server and never accepted from the form; saving the NAS again clears it
+#     (it is learned again on the next connection): that is how a new certificate is accepted on purpose.
+def _validate_api(typ: str, body: dict, current=None) -> dict:
+    cfg = dict(API_DEFAULTS[typ]); cfg.update({k: v for k, v in (current or {}).items() if k in API_FIELDS or k in ("name", "id")})
+    cfg["type"] = typ
+    for k in ("name", "host", "user", "password", "api_key"):
+        if body.get(k) is not None and not isinstance(body[k], str): raise ValueError(f"Invalid {k}")
+    for k in ("name",) + API_FIELDS:
+        if k not in body: continue
+        v = body[k]
+        if k in API_SECRETS and (v is None or v == ""): continue
+        cfg[k] = v
+    cfg["name"] = str(cfg.get("name") or "").strip()
+    if not cfg["name"] or len(cfg["name"]) > 60 or re.search(r"[\x00-\x1f\x7f]", cfg["name"]): raise ValueError("Invalid name")
+    cfg["host"] = str(cfg.get("host") or "").strip()
+    if not auth.valid_target(cfg["host"]): raise ValueError("Invalid host (this machine and link-local addresses are not allowed)")
+    if isinstance(cfg["port"], bool): raise ValueError("Invalid port")
+    try:    cfg["port"] = int(cfg["port"])
+    except (TypeError, ValueError): raise ValueError("Invalid port")
+    if not 1 <= cfg["port"] <= 65535: raise ValueError("Invalid port")
+    try:    cfg["timeout"] = int(cfg["timeout"])
+    except (TypeError, ValueError): raise ValueError("Invalid timeout")
+    if not 1 <= cfg["timeout"] <= 30: raise ValueError("Timeout must be 1-30 seconds")
+    cfg["https"] = True if typ == "truenas" else bool(cfg.get("https", True))      # TrueNAS only works over TLS
+    cfg["verify_tls"] = bool(cfg.get("verify_tls", False))
+    cfg["tls_pin"] = ""
+    for k in ("user", "password", "api_key"):
+        cfg[k] = str(cfg.get(k) or "") if k in cfg or k == "user" else ""
+        if re.search(r"[\x00-\x1f\x7f]", cfg[k]) or len(cfg[k]) > 512: raise ValueError(f"Invalid {k}")
+    if not cfg["user"].strip() or len(cfg["user"]) > 128: raise ValueError("Username required")
+    if typ == "truenas":
+        cfg.pop("password", None)
+        if not cfg["api_key"]: raise ValueError("API key required")
+    else:
+        cfg.pop("api_key", None)
+        if not cfg["password"]: raise ValueError("Password required")
+    return cfg
+
+# Vista para el navegador: sin secretos, solo «has_*»; de la huella solo si existe.
+# EN: View for the browser: no secrets, only "has_*"; for the fingerprint only whether it exists.
 def public(n: dict) -> dict:
-    out = {k: v for k, v in n.items() if k not in SNMP_SECRETS}
-    for k in SNMP_SECRETS: out["has_" + k] = bool(n.get(k))
+    out = {k: v for k, v in n.items() if k not in SECRETS and k != "tls_pin"}
+    out.setdefault("type", "synology")
+    for k in SECRETS: out["has_" + k] = bool(n.get(k))
+    out["tls_pinned"] = bool(n.get("tls_pin"))
     return out
+
+# Guarda la huella TLS aprendida de un NAS (TOFU). Solo si todavía no hay una y el host no cambió.
+# EN: Store the learned TLS fingerprint of a NAS (TOFU). Only if there is none yet and the host did not change.
+def _learn_pin(cfg: dict):
+    def learn(fp):
+        sid = cfg.get("id")
+        if not sid: return                      # connection test of an unsaved NAS: kept in memory only
+        with _nas_lock:
+            items = load_nas()
+            for x in items:
+                if x.get("id") == sid and not x.get("tls_pin") and x.get("host") == cfg.get("host") and x.get("port") == cfg.get("port"):
+                    x["tls_pin"] = fp; save_nas(items)
+                    log.info(f"NAS {x.get('name')!r}: certificate fingerprint pinned ({fp[:16]}…)")
+                    break
+    return learn
 
 # ─── Lectura de un NAS ────────────────────────────────────────────────────────
 OID_SYNO = "1.3.6.1.4.1.6574"
@@ -229,6 +303,13 @@ def _idx_key(i): return [int(t) if t.isdigit() else 0 for t in str(i).split(".")
 _POOL_RE = re.compile(r"storage\s*pool|pool de almacenamiento|grupo de almacenamiento|reserva de almacenamiento", re.I)
 
 def collect(cfg: dict, prev: dict) -> dict:
+    typ = cfg.get("type") or "synology"
+    if typ == "synology": return collect_synology(cfg, prev)
+    snap = (remote.tn_collect if typ == "truenas" else remote.omv_collect)(cfg, prev, _learn_pin(cfg))
+    snap["alerts"] = compute_alerts(snap) + snap.pop("extra_alerts", [])
+    return snap
+
+def collect_synology(cfg: dict, prev: dict) -> dict:
     now = time.time()
     sc = snmp_get(cfg, SCALARS.values())
     if not sc:
@@ -329,10 +410,10 @@ def compute_alerts(s: dict) -> list:
     if _num(s["cpu"].get("pct")) and s["cpu"]["pct"] >= CPU_WARN: a.append({"lv": "warn", "type": "cpu", "value": s["cpu"]["pct"]})
     if s["mem"] and s["mem"]["pct"] >= MEM_WARN: a.append({"lv": "warn", "type": "mem", "value": s["mem"]["pct"]})
     for d in s["disks"]:
-        if d["lv"] in ("warn", "crit"): a.append({"lv": d["lv"], "type": "disk", "item": d["name"], "value": d["status"]})
+        if d["lv"] in ("warn", "crit"): a.append({"lv": d["lv"], "type": "disk", "item": d["name"], "value": d.get("status_text") or d["status"]})
         if _num(d.get("temp")) and d["temp"] >= T_DISK_WARN: a.append({"lv": "warn", "type": "disk_temp", "item": d["name"], "value": d["temp"]})
     for r in s["raids"]:
-        if r["lv"] in ("warn", "crit"): a.append({"lv": r["lv"], "type": "raid", "item": r["name"], "value": r["status"]})
+        if r["lv"] in ("warn", "crit"): a.append({"lv": r["lv"], "type": "raid", "item": r["name"], "value": r.get("status_text") or r["status"]})
         if r["pct"] is not None and r["pct"] >= VOL_WARN and not r.get("pool"):
             a.append({"lv": "crit" if r["pct"] >= VOL_CRIT else "warn", "type": "vol_full", "item": r["name"], "value": r["pct"]})
     if s["system"].get("upgrade") == 1: a.append({"lv": "info", "type": "upgrade"})
@@ -341,6 +422,9 @@ def compute_alerts(s: dict) -> list:
 # Prueba de conexión con credenciales sin guardar: modelo, DSM y nombre.
 # EN: Connection test with credentials, nothing saved: model, DSM and name.
 def test_connection(cfg: dict) -> dict:
+    typ = cfg.get("type") or "synology"
+    if typ != "synology":
+        return (remote.tn_test if typ == "truenas" else remote.omv_test)(cfg, _learn_pin(cfg))
     sc = snmp_get(cfg, [SCALARS["name"], SCALARS["descr"], f"{OID_SYNO}.1.5.1.0", f"{OID_SYNO}.1.5.3.0"])
     if not sc: raise SnmpError("No SNMP answer")
     return {"name": sc.get(SCALARS["name"], ""), "descr": sc.get(SCALARS["descr"], ""),
@@ -468,9 +552,9 @@ def _events(n: dict, snap: dict):
         if kind == "system":
             if lv == "crit": auth.record_event("nas", "crit", f"{name}: system or power failure", "nas_sys", n=name)
         elif kind == "raid":
-            auth.record_event("nas", {"ok": "info", "info": "info"}.get(lv, lv), f"{name}/{obj['name']}: volume status {obj['status']}", "nas_raid", n=name, v=obj["name"], st=obj["status"] if obj["status"] is not None else "?")
+            auth.record_event("nas", {"ok": "info", "info": "info"}.get(lv, lv), f"{name}/{obj['name']}: volume status {obj.get('status_text') or obj['status']}", "nas_raid", n=name, v=obj["name"], st=obj.get("status_text") or (obj["status"] if obj["status"] is not None else "?"))
         else:
-            auth.record_event("nas", {"ok": "info", "info": "info"}.get(lv, lv), f"{name}/{obj['name']}: disk status {obj['status']}", "nas_disk", n=name, d=obj["name"], st=obj["status"] if obj["status"] is not None else "?")
+            auth.record_event("nas", {"ok": "info", "info": "info"}.get(lv, lv), f"{name}/{obj['name']}: disk status {obj.get('status_text') or obj['status']}", "nas_disk", n=name, d=obj["name"], st=obj.get("status_text") or (obj["status"] if obj["status"] is not None else "?"))
 
 # Bucle del hilo de consulta de un NAS: vuelve a leer su configuración (si se borró, termina; si cambió, la adopta), consulta, guarda
 # la lectura y duerme según haya o no alguien mirando. Un error se anota y se reintenta: el hilo nunca muere por un fallo de red.
@@ -497,7 +581,9 @@ def _poll(nid: str):
                     auth.record_event("nas", "info", f"{n['name']}: reachable again", "nas_up", n=n["name"])
                 log.debug(f"[{n['name']}] read in {time.time() - t0:.2f}s")
             except Exception as e:
-                cache.set_error(str(e)[:200]); prev.clear()
+                cache.set_error(str(e)[:200])
+                keep = prev.get("omv"); prev.clear()
+                if keep: prev["omv"] = keep
                 log.error(f"[{n['name']}] poll error: {e}")
                 if auth.state_changed(f"nas-dn:{nid}", "down"):
                     auth.record_event("nas", "crit", f"{n['name']}: unreachable", "nas_down", n=n["name"])
@@ -527,9 +613,10 @@ def start_all():
 def health_report(detailed=False):
     c = auth.check_common()
     c["nas_file"] = auth.check_file(DATA_FILE)
-    c["snmp_tools"] = auth.chk(auth.OK, "snmpget / snmpbulkwalk found") if shutil.which("snmpget") and (shutil.which("snmpbulkwalk") or shutil.which("snmpwalk")) \
-        else auth.chk(auth.FAIL, "net-snmp tools not installed (apt install snmp)")
     now = time.time(); items = load_nas(); dead, bad = [], []
+    snmp_ok = bool(shutil.which("snmpget") and (shutil.which("snmpbulkwalk") or shutil.which("snmpwalk")))
+    c["snmp_tools"] = auth.chk(auth.OK, "snmpget / snmpbulkwalk found") if snmp_ok \
+        else auth.chk(auth.FAIL if any((x.get("type") or "synology") == "synology" for x in items) else auth.WARN, "net-snmp tools not installed (apt install snmp)")
     for n in items:
         t = _pollers.get(n["id"])
         if t is None or not t.is_alive(): dead.append(n["name"]); continue
@@ -669,6 +756,8 @@ class H(BaseHTTPRequestHandler):
             cur = next((x for x in load_nas() if x["id"] == body.get("id")), None) if body.get("id") else None
             try: cfg = validate(body, cur)
             except ValueError as e: return self._json(400, {"error": str(e)})
+            if cur and cur.get("tls_pin") and cur.get("host") == cfg["host"] and cur.get("port") == cfg["port"]:
+                cfg["tls_pin"] = cur["tls_pin"]          # a test keeps the pinned certificate of the saved NAS
             if not _test_gate.acquire(blocking=False): return self._json(429, {"error": "Too many tests at once"})
             try:
                 return self._json(200, {"ok": True, **test_connection(cfg)})
