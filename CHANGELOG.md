@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.3k — 2026-10-30
+
+**Correcciones**
+- **UPS Monitor, edad de la batería.** Algunos UPS (APC Back-UPS) guardan la fecha de la batería en `battery.mfr.date` y otros en `battery.date`, y las herramientas del fabricante cambian una u otra. Ahora se leen las dos y se usa la más reciente que sea creíble; antes, si la primera estaba vieja, la otra se ignoraba y la edad quedaba «desconocida».
+
 ## 2.1.3j — 2026-10-30
 
 **Nuevo**

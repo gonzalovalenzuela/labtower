@@ -118,6 +118,12 @@ class Db(unittest.TestCase):
         self.m._aging_cache.clear()
         self.assertIsNotNone(self.m.aging("s", "empty"))
 
+    def test_most_recent_credible_date_of_the_two_fields(self):
+        t = datetime.date(2026, 10, 30)
+        self.assertEqual(b.best_battery_age_years({"battery.date": "2001/09/25", "battery.mfr.date": "2026/09/30"}, t), 0.1)
+        self.assertEqual(b.best_battery_age_years({"battery.date": "2024/10/30", "battery.mfr.date": "2017/05/23"}, t), 2.0)
+        self.assertIsNone(b.best_battery_age_years({"battery.date": "2001/09/25"}, t)); self.assertIsNone(b.best_battery_age_years({}, t)); self.assertIsNone(b.best_battery_age_years(None, t))
+
     def test_manual_battery_date(self):
         import tempfile
         from pathlib import Path
