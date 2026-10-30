@@ -43,6 +43,10 @@ const LANG={
  "stDownWan": "No internet (WAN)",
  "scopeWan": "WAN (router)",
  "routerRow": "Router",
+ "rtConnFor": "Router: WAN connected for",
+ "rtCross": "Outages in that period",
+ "rtCrossNone": "none (matches the router)",
+ "rtCrossSome": "{0} recorded here, {1} confirmed by the router as WAN",
  "rtWanUp": "WAN link up",
  "rtWanDown": "WAN link DOWN",
  "rtNoRead": "no reading",
@@ -203,6 +207,10 @@ const LANG={
  "stDownWan": "Sin internet (WAN)",
  "scopeWan": "WAN (router)",
  "routerRow": "Router",
+ "rtConnFor": "Router: WAN conectada hace",
+ "rtCross": "Cortes en ese período",
+ "rtCrossNone": "ninguno (coincide con el router)",
+ "rtCrossSome": "{0} registrados aquí, {1} confirmados por el router como WAN",
  "rtWanUp": "Enlace WAN arriba",
  "rtWanDown": "Enlace WAN CAÍDO",
  "rtNoRead": "sin lectura",
@@ -533,7 +541,12 @@ function routerRow(s){
   const r=s.router;
   if(!r)return kv(t('routerRow'),esc(t('rtNoRead')));
   if(!r.ok)return kv(t('routerRow'),`<span style="color:var(--orange)">${esc(t('rtNoRead'))}: ${esc(r.error||'')}</span>`);
-  return kv(t('routerRow'),r.wan_up?`<span style="color:var(--green)">${esc(t('rtWanUp'))}</span>`:`<span style="color:var(--red)">${esc(t('rtWanDown'))}</span>`)+(r.ip?kv('IP WAN',esc(r.ip)):'');
+  return kv(t('routerRow'),r.wan_up?`<span style="color:var(--green)">${esc(t('rtWanUp'))}</span>`:`<span style="color:var(--red)">${esc(t('rtWanDown'))}</span>`)+(r.ip?kv('IP WAN',esc(r.ip)):'')+(r.uptime?kv(t('rtConnFor'),esc(fmtDur(r.uptime))):'')+crossRow(s.router_check);
+}
+function crossRow(x){
+  if(!x)return '';
+  const same=x.outages===0;
+  return kv(t('rtCross'),`<span style="color:var(--${same?'green':'orange'})">${esc(same?t('rtCrossNone'):t('rtCrossSome',x.outages,x.wan_outages))}</span>`);
 }
 // Gráficos: latencia (con los cortes sombreados), pérdida y jitter, y las pruebas de velocidad (puntos).
 // EN: Charts: latency (outages shaded), loss and jitter, and the speed tests (points).

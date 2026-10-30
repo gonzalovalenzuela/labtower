@@ -202,6 +202,20 @@ class Outages(unittest.TestCase):
         self.assertEqual(m.S.scope, "wan"); self.assertEqual(m.recent_outages()[0]["scope"], "wan")
 
 
+class Crosscheck(unittest.TestCase):
+    def setUp(self):
+        c = support.auth.metrics_conn(); c.execute("DELETE FROM wan_outages"); c.commit(); c.close()
+    def test_counts_only_outages_inside_the_routers_connection_time(self):
+        now = int(time.time()); r = {"ok": True, "wan_up": True, "uptime": 20 * 86400}
+        self.assertEqual(m.router_crosscheck(r)["outages"], 0)
+        c = support.auth.metrics_conn()
+        c.execute("INSERT INTO wan_outages(start,end,scope) VALUES (?,?,?)", (now - 30 * 86400, now - 29 * 86400, "internet"))     # before the router connected
+        c.execute("INSERT INTO wan_outages(start,end,scope) VALUES (?,?,?)", (now - 5 * 86400, now - 5 * 86400 + 600, "internet"))
+        c.execute("INSERT INTO wan_outages(start,end,scope) VALUES (?,?,?)", (now - 2 * 86400, now - 2 * 86400 + 600, "wan")); c.commit(); c.close()
+        x = m.router_crosscheck(r); self.assertEqual((x["outages"], x["wan_outages"], x["uptime"]), (2, 1, 20 * 86400))
+        for bad in (None, {"ok": False}, {"ok": True, "wan_up": False, "uptime": 5}, {"ok": True, "wan_up": True, "uptime": None}): self.assertIsNone(m.router_crosscheck(bad))
+
+
 class Endpoints(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

@@ -547,7 +547,19 @@ def snapshot(cfg):
              "dns_fail": bool(cfg["dns_name"]) and r["dns"] is None, "targets": r["targets"], "gateway": r["gateway"], "gateway_ip": S.gw,
              "down_since": S.down_since, "scope": S.scope, "public_ip": S.ip, "ip_changed": S.ip_changed, "router": S.router}
     s["alerts"] = compute_alerts(s)
+    s["router_check"] = router_crosscheck(s.get("router"))
     return s
+
+# Compara lo que dice el router («conectado hace X») con los cortes que registró este monitor en ese mismo período.
+# EN: Compares what the router says ("connected for X") with the outages this monitor recorded in that same period.
+def router_crosscheck(r):
+    try:
+        up = r.get("uptime") if isinstance(r, dict) and r.get("ok") and r.get("wan_up") else None
+        if not isinstance(up, int) or up <= 0: return None
+        since = int(time.time()) - up
+        n, wan = _db("SELECT COUNT(*), COALESCE(SUM(scope = 'wan'), 0) FROM wan_outages WHERE COALESCE(end, ?) >= ?", (int(time.time()), since), fetch=True)[0]
+        return {"since": since, "uptime": up, "outages": int(n), "wan_outages": int(wan)}
+    except Exception: return None
 
 # ─── Hilos ────────────────────────────────────────────────────────────────────
 _stop = threading.Event()

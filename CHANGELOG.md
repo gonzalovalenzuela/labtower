@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.3l — 2026-10-30
+
+**Nuevo**
+- **WAN Monitor: comparación con el router.** En la tarjeta «Conexión» se muestra cuánto tiempo lleva conectada la WAN según el router («Router: WAN conectada hace 20d 3h») y, debajo, cuántos cortes registró LabTower en ese mismo período y cuántos confirmó el router como caída de WAN. Si el router lleva 20 días conectado y LabTower registró cortes, esos cortes no fueron de la línea.
+
 ## 2.1.3k — 2026-10-30
 
 **Correcciones**
