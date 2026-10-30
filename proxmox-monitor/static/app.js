@@ -29,7 +29,13 @@ const LANG={
     unpinnedWarn:'This cluster\'s certificate is not verified.',unpinnedDesc:'The connection does not check the identity of the server before sending the API token, so someone on the network could impersonate it.',unpinned:'Certificate not verified',pinCert:'Pin certificate',pinPrompt:(fp)=>`Trust this certificate for this cluster?\n\nSHA-256:\n${fp}`,pinned:'Certificate pinned',
     clusterAdded:(name)=>`${name} added`,
     deleteClusterConfirm:(name)=>`Delete cluster "${name}"?`,
-    cpuAlert:(pct)=>`CPU at ${pct}%`,ramAlert:(pct)=>`RAM at ${pct}%`},
+    cpuAlert:(pct)=>`CPU at ${pct}%`,ramAlert:(pct)=>`RAM at ${pct}%`,
+    diagTitle:'Cluster diagnostics',quorum:'Quorum',quorumOk:'Quorum OK',quorumLost:'NO QUORUM',membersOnline:(a,b)=>`${a}/${b} nodes in corosync`,
+    cephOsdDown:(n)=>`${n} OSD down`,cephOsdOut:(n)=>`${n} OSD out`,cephChecks:'Ceph warnings',
+    rebootsTitle:'Node reboots',noReboots:'No reboots recorded since this was enabled.',rebootAt:'booted',rebootWave:'simultaneous',
+    smartTitle:'Disks (SMART)',smartWait:'Reading SMART data… (first read takes up to a minute)',smartNone:'No disk data. The API token needs the Sys.Audit privilege on /nodes.',
+    smartHealth:'Health',smartWear:'Wear',smartTemp:'Temp',smartUnsafe:'Unsafe shutdowns',smartErrs:'Media errors',smartAge:(m)=>`read ${m} min ago`,
+    wHealth:'SMART failed',wMedia:'media errors',wCritwarn:'critical warning',wSectors:'bad sectors',wRealloc:'reallocated sectors',wWear:'worn out',wSpare:'low spare',nodeErr:'unavailable'},
   es:{connecting:'Conectando…',connectingMsg:'Obteniendo datos de Proxmox.',noNodes:'Sin nodos',noNodesMsg:'No se encontraron nodos en este cluster.',loginTitle:'Iniciar sesión',loginSub:'Ingresa tus credenciales para continuar.',
     username:'Usuario',password:'Contraseña',loginBtn:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',
     navSection:'Navegación',clustersPVE:'Clusters PVE',addCluster:'Agregar cluster',
@@ -60,7 +66,13 @@ const LANG={
     unpinnedWarn:'El certificado de este cluster no está verificado.',unpinnedDesc:'La conexión no comprueba la identidad del servidor antes de enviar el token de la API, así que alguien en la red podría suplantarlo.',unpinned:'Certificado sin verificar',pinCert:'Fijar certificado',pinPrompt:(fp)=>`¿Confiar en este certificado para este cluster?\n\nSHA-256:\n${fp}`,pinned:'Certificado fijado',
     clusterAdded:(name)=>`${name} agregado`,
     deleteClusterConfirm:(name)=>`¿Eliminar el cluster "${name}"?`,
-    cpuAlert:(pct)=>`CPU al ${pct}%`,ramAlert:(pct)=>`RAM al ${pct}%`}
+    cpuAlert:(pct)=>`CPU al ${pct}%`,ramAlert:(pct)=>`RAM al ${pct}%`,
+    diagTitle:'Diagnóstico del cluster',quorum:'Quórum',quorumOk:'Quórum OK',quorumLost:'SIN QUÓRUM',membersOnline:(a,b)=>`${a}/${b} nodos en corosync`,
+    cephOsdDown:(n)=>`${n} OSD caído${n!==1?'s':''}`,cephOsdOut:(n)=>`${n} OSD fuera`,cephChecks:'Avisos de Ceph',
+    rebootsTitle:'Reinicios de nodos',noReboots:'Sin reinicios registrados desde que se activó.',rebootAt:'arrancó',rebootWave:'simultáneo',
+    smartTitle:'Discos (SMART)',smartWait:'Leyendo SMART… (la primera lectura tarda hasta un minuto)',smartNone:'Sin datos de discos. El token de la API necesita el privilegio Sys.Audit en /nodes.',
+    smartHealth:'Salud',smartWear:'Desgaste',smartTemp:'Temp',smartUnsafe:'Apagados inseguros',smartErrs:'Errores de medio',smartAge:(m)=>`leído hace ${m} min`,
+    wHealth:'SMART falló',wMedia:'errores de medio',wCritwarn:'aviso crítico',wSectors:'sectores dañados',wRealloc:'sectores reasignados',wWear:'desgastado',wSpare:'poca reserva',nodeErr:'no disponible'}
 };
 let _lang=localStorage.getItem('pi-lang')||'en';
 var _i18nReady=false;
@@ -367,9 +379,92 @@ function renderDashboard(){
       </div>`;
     main.appendChild(cephDiv);
   }
+  const dg=buildDiag(cluster);
+  if(dg)main.appendChild(dg);
 
   // Dibujar sparklines después de que el DOM esté pintado
   renderSparklines(nodes);
+}
+
+// ── Cluster diagnostics: corosync, Ceph warnings, reboots, SMART ──────────────────
+// Diagnóstico: quórum de corosync, avisos de Ceph (vienen en la lectura del cluster) y, pedidos aparte cada minuto a /api/diag, reinicios y SMART.
+// EN: Diagnostics: corosync quorum, Ceph warnings (they come with the cluster reading) and, requested separately every minute from /api/diag, reboots and SMART.
+let _diag={}, _diagTs={}, _diagShown=new Set();
+async function fetchDiag(cid){
+  if(Date.now()-(_diagTs[cid]||0)<60000)return;
+  _diagTs[cid]=Date.now();
+  try{const r=await fetch('api/diag?id='+encodeURIComponent(cid));if(r.ok){_diag[cid]=await r.json();if(activeId===cid&&!_dragging)renderDashboard();}}catch(e){}
+}
+function toggleDiag(k){if(_diagShown.has(k))_diagShown.delete(k);else _diagShown.add(k);renderDashboard();}
+function pill(txt,col){const e=document.createElement('span');e.textContent=txt;e.style.cssText='font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;color:'+col+';background:color-mix(in srgb,'+col+' 14%,transparent);white-space:nowrap';return e;}
+function dtFmt(ts){const d=new Date(Number(ts)*1000);return isNaN(d)?'—':d.toLocaleDateString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'short'})+' '+PCT.time(d,false);}
+function buildDiag(cluster){
+  const data=cluster.snap?.data||{}, cs=data.corosync, cp=data.ceph_sum;
+  fetchDiag(cluster.id);
+  const dg=_diag[cluster.id];
+  const box=document.createElement('div');
+  box.style.cssText='margin-top:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px';
+  const hd=document.createElement('div');hd.style.cssText='font-size:13px;font-weight:600;margin-bottom:10px';hd.textContent=t('diagTitle');box.appendChild(hd);
+  const row=document.createElement('div');row.style.cssText='display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;color:var(--text-mid)';
+  if(cs){
+    row.appendChild(pill(cs.quorate?t('quorumOk'):t('quorumLost'),cs.quorate?'var(--green)':'var(--red)'));
+    row.appendChild(pill(t('membersOnline',Number(cs.online)||0,Number(cs.expected)||0),(cs.online>=cs.expected)?'var(--green)':'var(--orange)'));
+  }
+  if(cp){
+    if(cp.down>0)row.appendChild(pill(t('cephOsdDown',Number(cp.down)),'var(--red)'));
+    if(cp.out>0)row.appendChild(pill(t('cephOsdOut',Number(cp.out)),'var(--orange)'));
+  }
+  box.appendChild(row);
+  if(cp&&cp.checks&&cp.checks.length){
+    const ul=document.createElement('div');ul.style.cssText='margin-top:8px;font-size:12px;color:var(--text-mid)';
+    const h=document.createElement('div');h.style.cssText='font-weight:600;margin-bottom:2px';h.textContent=t('cephChecks');ul.appendChild(h);
+    cp.checks.forEach(c=>{const l=document.createElement('div');l.style.cssText='font-family:var(--mono);font-size:11px;color:'+(c.sev==='HEALTH_ERR'?'var(--red)':'var(--orange)');l.textContent=c.code+' — '+c.msg;ul.appendChild(l);});
+    box.appendChild(ul);
+  }
+  const sect=(key,title,fill)=>{
+    const h=document.createElement('div');h.style.cssText='margin-top:12px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text-mid);user-select:none';
+    h.setAttribute('data-on-click','toggleDiag');h.setAttribute('data-on-click-args',JSON.stringify([key]));
+    h.textContent=(_diagShown.has(key)?'▾ ':'▸ ')+title;box.appendChild(h);
+    if(_diagShown.has(key)){const b=document.createElement('div');b.style.cssText='margin-top:6px;font-size:12px';fill(b);box.appendChild(b);}
+  };
+  sect('reboots',t('rebootsTitle')+(dg&&dg.reboots&&dg.reboots.length?' ('+dg.reboots.length+')':''),b=>{
+    const rb=(dg&&dg.reboots)||[];
+    if(!rb.length){b.style.color='var(--text-dim)';b.textContent=t('noReboots');return;}
+    let lastWave=-1;
+    rb.slice(0,30).forEach(r=>{
+      const l=document.createElement('div');l.style.cssText='display:flex;gap:10px;padding:3px 0;font-family:var(--mono);font-size:11px;align-items:center';
+      const d=document.createElement('span');d.style.color='var(--text-dim)';d.textContent=dtFmt(r.boot);l.appendChild(d);
+      const n=document.createElement('strong');n.textContent=String(r.n);l.appendChild(n);
+      if(r.wave){l.appendChild(pill('⚠ '+t('rebootWave'),'var(--red)'));}
+      b.appendChild(l);
+    });
+  });
+  sect('smart',t('smartTitle'),b=>{
+    const sm=dg&&dg.smart;
+    if(!sm){b.style.color='var(--text-dim)';b.textContent=t('smartWait');return;}
+    const nodes=Object.keys(sm.nodes||{}).sort();
+    if(!nodes.some(n=>(sm.nodes[n].disks||[]).length)&&!nodes.some(n=>sm.nodes[n].error)){b.style.color='var(--text-dim)';b.textContent=t('smartNone');return;}
+    const age=document.createElement('div');age.style.cssText='color:var(--text-dim);font-size:11px;margin-bottom:4px';age.textContent=t('smartAge',Math.max(0,Math.round((Date.now()/1000-sm.ts)/60)));b.appendChild(age);
+    const WT={health:'wHealth',media:'wMedia',critwarn:'wCritwarn',sectors:'wSectors',realloc:'wRealloc',wear:'wWear',spare:'wSpare'};
+    nodes.forEach(n=>{
+      const nh=document.createElement('div');nh.style.cssText='font-weight:600;margin:6px 0 2px';nh.textContent=n+(sm.nodes[n].error?' — '+t('nodeErr'):'');b.appendChild(nh);
+      (sm.nodes[n].disks||[]).forEach(d=>{
+        const l=document.createElement('div');l.style.cssText='display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:2px 0;font-size:11px';
+        const nm=document.createElement('span');nm.style.cssText='font-family:var(--mono);min-width:110px';nm.textContent=d.dev;l.appendChild(nm);
+        const md=document.createElement('span');md.style.cssText='color:var(--text-dim);min-width:120px';md.textContent=d.model||'';l.appendChild(md);
+        l.appendChild(pill(d.health||'?',(d.health==='PASSED'||d.health==='OK')?'var(--green)':d.health==='UNKNOWN'?'var(--text-dim)':'var(--red)'));
+        const bits=[];
+        if(d.used_pct!=null)bits.push(t('smartWear')+' '+d.used_pct+'%');else if(d.wearout!=null)bits.push(t('smartWear')+' '+(100-d.wearout)+'%');
+        if(d.temp!=null)bits.push(t('smartTemp')+' '+d.temp+'°');
+        if(d.unsafe!=null)bits.push(t('smartUnsafe')+' '+d.unsafe);
+        if(d.media_err)bits.push(t('smartErrs')+' '+d.media_err);
+        const x=document.createElement('span');x.style.color='var(--text-mid)';x.textContent=bits.join(' · ');l.appendChild(x);
+        (d.warns||[]).forEach(w=>l.appendChild(pill(t(WT[w]||'wHealth'),'var(--orange)')));
+        b.appendChild(l);
+      });
+    });
+  });
+  return box;
 }
 
 // ── Manual node order + pins (saved on the server, shared by all browsers) ────────
@@ -739,4 +834,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ closeModals, confirmDelete, doLogin, logout, moveNode, openAddCluster, pinCluster, resetLayout, saveCluster, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection });
+if (window.cspRegister) cspRegister({ closeModals, confirmDelete, doLogin, logout, moveNode, openAddCluster, pinCluster, resetLayout, saveCluster, toggleDiag, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection });

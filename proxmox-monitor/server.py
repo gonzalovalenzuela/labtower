@@ -40,6 +40,8 @@ from pathlib import Path
 # EN: Shared authentication module (sibling folder /auth).
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
+sys.path.insert(0, str(Path(__file__).parent))
+import diag
 
 # Solo loopback; el acceso desde la red pasa por nginx.
 # EN: Loopback only; network access goes through nginx.
@@ -66,6 +68,9 @@ SLOW_EVERY  = 60                                              # version / ceph r
 # Cada cuántos segundos se guarda una muestra de CPU/RAM por nodo para los gráficos.
 # EN: How often, in seconds, a CPU/RAM sample per node is stored for the charts.
 HIST_EVERY  = 30                                              # node history sampling period
+# Cada cuántos segundos se lee el SMART de los discos de cada nodo (smartctl es pesado: no hace falta más seguido).
+# EN: How often, in seconds, the SMART data of each node's disks is read (smartctl is heavy: no need to do it more often).
+SMART_EVERY = float(os.environ.get("PVE_SMART_EVERY", 900))
 # Instante de la última petición de un navegador (decide el ritmo de consulta).
 # EN: Time of the last browser request (decides the polling rate).
 _last_view  = 0.0                                             # last time a browser asked for data
@@ -361,6 +366,143 @@ class ClusterCache:
             return {"id": self.id, "data": dict(self._data),
                     "error": self._err, "ts": self._ts}
 
+# ─── Diagnóstico: reinicios, SMART ────────────────────────────────────────────
+# diag.json guarda la hora de arranque conocida de cada nodo, el registro de reinicios y los «unsafe shutdowns» vistos,
+# para detectar reinicios ocurridos mientras este módulo estaba parado.
+# EN: ─── Diagnostics: reboots, SMART ───────────────────────────────────────────
+#     diag.json keeps each node's last known boot time, the reboot log and the "unsafe shutdowns" seen, so reboots that
+#     happened while this module was stopped are detected too.
+DIAG_FILE   = DATA_DIR / "diag.json"
+_diag_lock  = threading.Lock()
+_diag_state = None            # loaded on first use
+_diag_dump  = ""              # last text written, to save only on change
+_smart: dict = {}             # { cluster_id: {"ts": .., "nodes": {node: {"disks": [...], "error": str|None}}} }
+_smart_threads: dict = {}
+_waves_sent: set = set()
+
+def _diag_load():
+    global _diag_state, _diag_dump
+    if _diag_state is None:
+        d = auth.read_json(DIAG_FILE, {}, dict)
+        _diag_state = {"boots": d.get("boots") if isinstance(d.get("boots"), dict) else {},
+                       "reboots": [r for r in d.get("reboots", []) if isinstance(r, dict)] if isinstance(d.get("reboots"), list) else [],
+                       "unsafe": d.get("unsafe") if isinstance(d.get("unsafe"), dict) else {}}
+        _diag_dump = json.dumps(_diag_state, sort_keys=True)
+    return _diag_state
+
+def _diag_save():
+    global _diag_dump
+    txt = json.dumps(_diag_state, sort_keys=True)
+    if txt == _diag_dump: return
+    try:
+        auth.write_json(DIAG_FILE, _diag_state, indent=None)
+        _diag_dump = txt
+    except Exception as e:
+        log.warning(f"could not save the diagnostics state: {e}")
+
+# Detecta reinicios de nodos y los anota en la línea de tiempo; si varios nodos se reinician casi a la vez, lo marca aparte.
+# EN: Detect node reboots and put them on the timeline; if several nodes reboot at about the same time, it is flagged separately.
+def _observe_reboots(cluster, nodes_data):
+    cid, cname = cluster["id"], cluster["name"]
+    with _diag_lock:
+        st = _diag_load()
+        new = diag.observe_boots(st, cid, cname, nodes_data, time.time())
+        waves = diag.with_waves([r for r in st["reboots"] if r.get("cid") == cid]) if new else []
+        _diag_save()
+    for r in new:
+        hm = time.strftime("%H:%M", time.localtime(r["boot"]))
+        auth.record_event("pve", "warn", f"{cname}/{r['n']}: node rebooted (boot {hm})", "pve_reboot", c=cname, n=r["n"], b=hm)
+    for r in new:
+        w = next((x for x in waves if x["boot"] == r["boot"] and x["n"] == r["n"]), None)
+        if not w or not w.get("wave"): continue
+        grp = [x for x in waves if x.get("wave") == w["wave"]]
+        members = {x["n"] for x in grp}
+        key = (cid, min(x["boot"] for x in grp), len(members))
+        if key in _waves_sent: continue
+        _waves_sent.add(key)
+        if len(_waves_sent) > 500: _waves_sent.clear()
+        names = ", ".join(sorted(members))
+        auth.record_event("pve", "crit", f"{cname}: {len(members)} nodes rebooted within {diag.GROUP_WINDOW // 60} min ({names})",
+                          "pve_reboot_multi", c=cname, cnt=len(members), mins=diag.GROUP_WINDOW // 60, ns=names)
+
+# Quórum de corosync y OSD de Ceph: anota cuando cambian.
+# EN: Corosync quorum and Ceph OSDs: record when they change.
+def _diag_events(cluster, cs, cp):
+    cid, cname = cluster["id"], cluster["name"]
+    if cs:
+        ch = auth.state_changed(f"pve-quorum:{cid}", "ok" if cs["quorate"] else "lost")
+        if ch:
+            if ch[1] == "lost": auth.record_event("pve", "crit", f"{cname}: cluster lost quorum", "pve_quorum_lost", c=cname)
+            else:               auth.record_event("pve", "info", f"{cname}: quorum recovered", "pve_quorum_ok", c=cname)
+    if cp:
+        ch = auth.state_changed(f"pve-osd:{cid}", cp["down"])
+        if ch and ch[1] > ch[0]:
+            auth.record_event("pve", "crit", f"{cname}: Ceph has {cp['down']} OSD down ({cp['up']}/{cp['osds']} up)", "pve_osd_down", c=cname, d=cp["down"], u=cp["up"], t=cp["osds"])
+        elif ch and ch[1] == 0:
+            auth.record_event("pve", "info", f"{cname}: all Ceph OSDs up again", "pve_osd_ok", c=cname)
+
+# Lee la lista de discos y el SMART de un nodo. Un disco que falle no impide leer los demás.
+# EN: Read the disk list and the SMART data of a node. A disk that fails does not stop the others being read.
+_DEV_RE = re.compile(r"^/dev/[A-Za-z0-9_./-]{1,40}$")
+def _read_node_smart(client, node):
+    from urllib.parse import quote
+    rows = client.get(f"/nodes/{quote(node, safe='')}/disks/list").get("data") or []
+    out = []
+    for row in rows[:64]:
+        if not isinstance(row, dict) or not _DEV_RE.match(str(row.get("devpath", ""))): continue
+        try:    sm = client.get(f"/nodes/{quote(node, safe='')}/disks/smart?disk={quote(row['devpath'], safe='/')}").get("data")
+        except Exception: sm = None
+        out.append(diag.summarize_disk(row, sm))
+    return out
+
+def _smart_round(cluster, client, cache):
+    cid, cname = cluster["id"], cluster["name"]
+    names = [n["name"] for n in (cache.snap().get("data", {}).get("nodes") or []) if n.get("status") == "online"]
+    res = {}
+    for node in names:
+        try:
+            disks = _read_node_smart(client, node)
+            res[node] = {"disks": disks, "error": None}
+        except Exception as e:
+            res[node] = {"disks": [], "error": str(e)[:160]}
+            continue
+        for d in disks:
+            ch = auth.state_changed(f"pve-smart:{cid}:{node}:{d['serial'] or d['dev']}", "bad" if d["warns"] else "ok")
+            if ch and ch[1] == "bad":
+                auth.record_event("pve", "warn", f"{cname}/{node}: disk {d['dev']} SMART warning ({', '.join(d['warns'])})",
+                                  "pve_smart", c=cname, n=node, d=d["dev"], w=", ".join(d["warns"]))
+        with _diag_lock:
+            up = diag.unsafe_increases(_diag_load(), cid, node, disks)
+            _diag_save()
+        for u in up:
+            auth.record_event("pve", "warn", f"{cname}/{node}: {u['dev']} unsafe shutdowns {u['was']} → {u['now']} (power loss or unclean reboot)",
+                              "pve_unsafe", c=cname, n=node, d=u["dev"], a=u["was"], b=u["now"])
+    _smart[cid] = {"ts": int(time.time()), "nodes": res}
+
+# Hilo del SMART de un cluster: termina cuando el cluster se elimina.
+# EN: A cluster's SMART thread: it ends when the cluster is deleted.
+def _smart_loop(cluster, cache):
+    cid = cluster["id"]
+    client = None
+    time.sleep(min(30, SMART_EVERY))
+    while _cache.get(cid) is cache:
+        try:
+            cur = next((c for c in load_clusters() if c["id"] == cid), None)
+            if cur is None: break
+            if client is None:
+                client = PVEClient(host=cur["host"], port=cur.get("port", 8006), user=cur["user"], token_name=cur["token_name"],
+                                   token_value=cur["token_value"], verify_ssl=cur.get("verify_ssl", False), fingerprint=cur.get("fingerprint"))
+            else:
+                fp = _fp_norm(cur.get("fingerprint"))
+                if fp != client.fingerprint: client.fingerprint = fp; client.close()
+            _smart_round(cur, client, cache)
+        except Exception as e:
+            log.warning(f"[{cluster['name']}] SMART round: {e}")
+            if client: client.close()
+        time.sleep(SMART_EVERY)
+    if client: client.close()
+    _smart.pop(cid, None)
+
 # Orden «natural» (pve2 antes que pve10) para que el orden de los nodos no cambie entre consultas.
 # EN: "Natural" order (pve2 before pve10) so the node order does not change between queries.
 def _natural(s: str):
@@ -461,7 +603,10 @@ def _poll_cluster(cluster):
         fingerprint=cluster.get("fingerprint")
     )
     version, ceph, slow_ts = "", None, 0.0
+    corosync, cephsum = None, None
     use_resources = True
+    if SMART_EVERY > 0 and not (_smart_threads.get(cid) and _smart_threads[cid].is_alive()):
+        _smart_threads[cid] = threading.Thread(target=_smart_loop, args=(cluster, cache), daemon=True); _smart_threads[cid].start()
 
     while True:
         try:
@@ -496,6 +641,8 @@ def _poll_cluster(cluster):
                 if v: version = v
                 try:    ceph = client.get("/cluster/ceph/status").get("data")
                 except Exception: ceph = None
+                cephsum = diag.ceph_summary(ceph)
+                corosync = diag.corosync_summary(client.cluster_status())
                 slow_ts = t0
 
             for nd in nodes_data:
@@ -503,8 +650,10 @@ def _poll_cluster(cluster):
                     push_node_history(cid, nd["name"], nd.get("cpu", 0), nd.get("mem", 0), nd.get("maxmem", 0))
 
             cache.update({"nodes": nodes_data, "version": version,
-                          "name": cluster["name"], "ceph": ceph})
+                          "name": cluster["name"], "ceph": ceph, "ceph_sum": cephsum, "corosync": corosync})
             _cluster_events(cluster, nodes_data, ceph)
+            _observe_reboots(cluster, nodes_data)
+            _diag_events(cluster, corosync, cephsum)
             log.debug(f"[{cluster['name']}] {len(nodes_data)} nodes in {time.time()-t0:.2f}s")
 
         except Exception as e:
@@ -671,6 +820,15 @@ class H(BaseHTTPRequestHandler):
                 pub.setdefault("layout", {"order": [], "pinned": []})
                 out.append({**pub, "snap": snap, "alerts": alerts})
             self._json(200, {"clusters": out})
+
+        # Diagnóstico de un cluster: reinicios (con «oleadas») y SMART de los discos. Parámetro: ?id=<cluster>.
+        # EN: Diagnostics of a cluster: reboots (with "waves") and disk SMART. Parameter: ?id=<cluster>.
+        elif path == "/api/diag":
+            cid = parse_qs(urlparse(self.path).query).get("id", [""])[0]
+            if not any(c["id"] == cid for c in load_clusters()): return self._json(404, {"error": "Not found"})
+            with _diag_lock:
+                rb = diag.with_waves([r for r in _diag_load()["reboots"] if r.get("cid") == cid])
+            self._json(200, {"reboots": rb[:100], "smart": _smart.get(cid), "smart_every": SMART_EVERY})
 
         # Resumen técnico del estado de cada cluster, útil para diagnosticar.
         # EN: Technical summary of each cluster's state, useful for diagnosis.
