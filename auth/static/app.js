@@ -39,6 +39,15 @@ const LANG = {
     ssTitle:'Active sessions', ssCloseOthers:'Close my other sessions', ssHint:'Devices signed in right now. Closing a session signs that device out immediately. Times are approximate.',
     ssDevice:'Device', ssIp:'IP', ssLast:'Last activity', ssExpires:'Expires', ssThis:'This session', ssClose:'Close session', ssOld:'Unknown', ssNone:'No active sessions.',
     ssConfirm:(u,d)=>`Close the session of "${u}" on ${d}?`, ssConfirmOthers:'Close all your other sessions?', ssClosed:'Session closed', ssClosedN:n=>`${n} session(s) closed`, ssNow:'now',
+    sfTitle:'Security: two-factor authentication', sfOff:'Two-factor authentication is OFF for your account.', sfOn:(n)=>`Two-factor authentication is ON for your account (${n} recovery codes left).`,
+    sfEnable:'Turn on 2FA', sfDisable:'Turn off 2FA', sfStep1:'1. In your authenticator app (Google Authenticator, Aegis, 1Password…) add an account with this key (type: time based):',
+    sfOpen:'Open in authenticator', sfStep2:'2. Type the 6-digit code it shows:', sfConfirm:'Confirm', sfCode:'6-digit code', sfRecTitle:'Save these recovery codes now. Each works once if you lose your phone. They will not be shown again:',
+    sfDone:'Done, I saved them', sfEnabled:'2FA is on', sfDisabled:'2FA is off', sfDisablePrompt:'Turn off two-factor authentication? You will need your password.', sfBadCode:'That code is not valid',
+    sfReset:'Reset 2FA', sfResetConfirm:u=>`Reset two-factor authentication for "${u}"? They will sign in with the password only until they set it up again.`, sfResetDone:'2FA reset', sf2fa:'2FA',
+    auTitle:'Audit log', auHint:'Who changed what: users, permissions, passwords, 2FA, sessions, backups and lockouts. The last 5,000 entries are kept.', auWhen:'When', auActor:'Who', auAction:'Action', auTarget:'Target', auDetail:'Detail', auNone:'No entries yet.', auRefresh:'Refresh',
+    au_login:'Signed in', au_user_created:'User created', au_user_deleted:'User deleted', au_permissions_changed:'Permissions changed', au_password_changed:'Password changed', au_password_reset:'Password reset by admin',
+    au_session_revoked:'Session closed', au_sessions_revoked:'Other sessions closed', au_2fa_enabled:'2FA turned on', au_2fa_disabled:'2FA turned off', au_2fa_reset:'2FA reset', au_2fa_failed:'Wrong 2FA code', au_2fa_recovery_used:'Recovery code used',
+    au_lockout_ip:'IP locked out', au_lockout_account:'Account locked out', au_backup_created:'Backup created', au_backup_failed:'Backup failed', au_backup_downloaded:'Backup downloaded', au_backup_deleted:'Backup deleted', au_restore_started:'Restore started', au_restore_failed:'Restore failed',
     tpTitle:'Backup & restore', tpUpload:'Upload backup', tpCreate:'Create backup',
     tpHint:'Back up users, WOL devices, UPS servers and history, Net Monitor, Proxmox and the NUT configuration. To move to a new installation: install the package, sign in with the default user, upload the backup here and press Restore.',
     tpColName:'Backup', tpColType:'Type', tpColSize:'Size', tpColDate:'Date', tpEmpty:'No backups yet.',
@@ -98,6 +107,15 @@ const LANG = {
     ssTitle:'Sesiones activas', ssCloseOthers:'Cerrar mis otras sesiones', ssHint:'Dispositivos con sesión iniciada ahora. Cerrar una sesión desconecta ese dispositivo de inmediato. Las horas son aproximadas.',
     ssDevice:'Dispositivo', ssIp:'IP', ssLast:'Última actividad', ssExpires:'Vence', ssThis:'Esta sesión', ssClose:'Cerrar sesión', ssOld:'Desconocido', ssNone:'No hay sesiones activas.',
     ssConfirm:(u,d)=>`¿Cerrar la sesión de "${u}" en ${d}?`, ssConfirmOthers:'¿Cerrar todas tus otras sesiones?', ssClosed:'Sesión cerrada', ssClosedN:n=>`${n} sesión(es) cerrada(s)`, ssNow:'ahora',
+    sfTitle:'Seguridad: autenticación en dos pasos', sfOff:'La autenticación en dos pasos está DESACTIVADA en tu cuenta.', sfOn:(n)=>`La autenticación en dos pasos está ACTIVA en tu cuenta (te quedan ${n} códigos de recuperación).`,
+    sfEnable:'Activar 2FA', sfDisable:'Desactivar 2FA', sfStep1:'1. En tu app de autenticación (Google Authenticator, Aegis, 1Password…) agrega una cuenta con esta clave (tipo: basada en tiempo):',
+    sfOpen:'Abrir en la app', sfStep2:'2. Escribe el código de 6 dígitos que muestra:', sfConfirm:'Confirmar', sfCode:'Código de 6 dígitos', sfRecTitle:'Guarda estos códigos de recuperación ahora. Cada uno sirve una vez si pierdes el teléfono. No se vuelven a mostrar:',
+    sfDone:'Listo, ya los guardé', sfEnabled:'2FA activado', sfDisabled:'2FA desactivado', sfDisablePrompt:'¿Desactivar la autenticación en dos pasos? Necesitarás tu contraseña.', sfBadCode:'Ese código no es válido',
+    sfReset:'Restablecer 2FA', sfResetConfirm:u=>`¿Restablecer la autenticación en dos pasos de "${u}"? Entrará solo con la contraseña hasta que la configure otra vez.`, sfResetDone:'2FA restablecido', sf2fa:'2FA',
+    auTitle:'Registro de auditoría', auHint:'Quién cambió qué: usuarios, permisos, contraseñas, 2FA, sesiones, respaldos y bloqueos. Se conservan las últimas 5.000 entradas.', auWhen:'Cuándo', auActor:'Quién', auAction:'Acción', auTarget:'Objetivo', auDetail:'Detalle', auNone:'Aún no hay entradas.', auRefresh:'Actualizar',
+    au_login:'Inicio de sesión', au_user_created:'Usuario creado', au_user_deleted:'Usuario eliminado', au_permissions_changed:'Permisos cambiados', au_password_changed:'Contraseña cambiada', au_password_reset:'Contraseña restablecida por un admin',
+    au_session_revoked:'Sesión cerrada', au_sessions_revoked:'Otras sesiones cerradas', au_2fa_enabled:'2FA activado', au_2fa_disabled:'2FA desactivado', au_2fa_reset:'2FA restablecido', au_2fa_failed:'Código 2FA incorrecto', au_2fa_recovery_used:'Código de recuperación usado',
+    au_lockout_ip:'IP bloqueada', au_lockout_account:'Cuenta bloqueada', au_backup_created:'Respaldo creado', au_backup_failed:'Respaldo fallido', au_backup_downloaded:'Respaldo descargado', au_backup_deleted:'Respaldo eliminado', au_restore_started:'Restauración iniciada', au_restore_failed:'Restauración fallida',
     tpTitle:'Respaldo y restauración', tpUpload:'Subir respaldo', tpCreate:'Crear respaldo',
     tpHint:'Respalda usuarios, dispositivos WOL, servidores UPS e historial, Net Monitor, Proxmox y la configuración de NUT. Para migrar a una instalación nueva: instala el paquete, entra con el usuario por defecto, sube el respaldo aquí y pulsa Restaurar.',
     tpColName:'Respaldo', tpColType:'Tipo', tpColSize:'Tamaño', tpColDate:'Fecha', tpEmpty:'Aún no hay respaldos.',
@@ -142,6 +160,7 @@ function setLang(l){
   document.getElementById('btn-logout').title = t('logoutTitle');
   try{tpRender();}catch(e){}
   try{ssRender();}catch(e){}
+  try{sfRender();auRender();}catch(e){}
   // Update new-pw placeholder
   const npw = document.getElementById('d-new-pw');
   if(npw) npw.placeholder = t('fieldNewPwPlaceholder');
@@ -312,7 +331,7 @@ async function loadUsers() {
   const users = d.users || [];
   renderUsers(users);
   updateStats(users);
-  tpLoad(); ssLoad();
+  tpLoad(); ssLoad(); sfLoad(); auLoad();
   hlLoad(); if (!window._hlTimer) window._hlTimer = setInterval(hlLoad, 30000);
 }
 
@@ -399,7 +418,7 @@ function renderUsers(users) {
   users.forEach(u => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><span class="uname">${esc(u.username)}</span></td>
+      <td><span class="uname">${esc(u.username)}</span>${u.totp ? ` <span class="tp-kind" title="${esc(t('sfTitle'))}">${esc(t('sf2fa'))}</span>` : ''}</td>
       <td data-label="${esc(t('colWOL'))}">${permBadge(u.permissions.wol)}</td>
       <td data-label="${esc(t('colUPS'))}">${permBadge(u.permissions.nut)}</td>
       <td data-label="${esc(t('colNET'))}">${permBadge(u.permissions.net)}</td>
@@ -411,6 +430,7 @@ function renderUsers(users) {
       <td data-label="${esc(t('colCreated'))}"><span class="ucreated">${u.created ? new Date(u.created*1000).toLocaleDateString(locale) : '—'}</span></td>
       <td class="col-actions">
         <button class="btn-ri edit" data-on-click="editUser" data-on-click-args="${jsargs([u])}" title="Edit">✎</button>
+        ${u.totp && u.username !== me?.username ? `<button class="btn-ri" data-on-click="sfResetUser" data-on-click-args="${jsargs([u.username])}" title="${esc(t('sfReset'))}">🔑</button>` : ''}
         ${u.username !== me?.username
           ? `<button class="btn-ri del" data-on-click="confirmDelete" data-on-click-args="${jsargs([u.username])}" title="Delete">✕</button>`
           : '<span style="width:30px;display:inline-block"></span>'}
@@ -897,6 +917,79 @@ async function ssCloseOthers() {
   ssLoad();
 }
 
+// ── Seguridad: 2FA (TOTP) y registro de auditoría ──────
+// EN: Security: 2FA (TOTP) and the audit log.
+let _sf = {enabled:false, recovery_left:0}, _au = [], _sfSetup = null, _sfRec = null;
+async function sfLoad() {
+  try { const r = await fetch('api/2fa'); if (r.ok) { _sf = await r.json(); sfRender(); } } catch(e) {}
+}
+function sfRender() {
+  const box = document.getElementById('sf-body'); if (!box) return;
+  let h = `<div class="tp-hint" style="border:0">${esc(_sf.enabled ? t('sfOn', _sf.recovery_left) : t('sfOff'))}</div><div style="padding:0 18px 14px">`;
+  if (_sfRec) {
+    h += `<p style="font-size:12px;color:var(--text-mid)">${esc(t('sfRecTitle'))}</p><pre class="tp-out" style="display:block">${esc(_sfRec.join('\n'))}</pre>
+      <button class="btn-primary" data-on-click="sfRecDone">${esc(t('sfDone'))}</button>`;
+  } else if (_sfSetup) {
+    const k = _sfSetup.secret.replace(/(.{4})/g, '$1 ').trim();
+    h += `<p style="font-size:12px;color:var(--text-mid)">${esc(t('sfStep1'))}</p>
+      <pre class="tp-out" style="display:block;font-size:15px;letter-spacing:1px">${esc(k)}</pre>
+      <p style="font-size:12px"><a href="${esc(_sfSetup.uri)}">${esc(t('sfOpen'))}</a></p>
+      <p style="font-size:12px;color:var(--text-mid)">${esc(t('sfStep2'))}</p>
+      <input id="sf-code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="${esc(t('sfCode'))}" style="width:160px;margin-right:8px">
+      <button class="btn-primary" data-on-click="sfConfirm">${esc(t('sfConfirm'))}</button>`;
+  } else {
+    h += _sf.enabled ? `<button class="btn-sec" data-on-click="sfDisable">${esc(t('sfDisable'))}</button>`
+                     : `<button class="btn-primary" data-on-click="sfBegin">${esc(t('sfEnable'))}</button>`;
+  }
+  box.innerHTML = h + '</div>';
+}
+async function sfBegin() {
+  const pw = await askPassword(); if (!pw) return;
+  const r = await fetch('api/2fa/begin', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({current_password:pw})});
+  const d = await r.json().catch(()=>({}));
+  if (!r.ok) return toast(d.error || t('tpFailed'), true);
+  _sfSetup = d; sfRender();
+}
+async function sfConfirm() {
+  const c = (document.getElementById('sf-code') || {}).value || '';
+  const r = await fetch('api/2fa/enable', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({code:c})});
+  const d = await r.json().catch(()=>({}));
+  if (!r.ok) return toast(r.status === 400 ? t('sfBadCode') : (d.error || t('tpFailed')), true);
+  _sfSetup = null; _sfRec = d.recovery || []; toast(t('sfEnabled'));
+  await sfLoad(); sfRender(); loadUsers(); auLoad();
+}
+function sfRecDone() { _sfRec = null; sfRender(); }
+async function sfDisable() {
+  if (!confirm(t('sfDisablePrompt'))) return;
+  const pw = await askPassword(); if (!pw) return;
+  const r = await fetch('api/2fa/disable', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({current_password:pw})});
+  const d = await r.json().catch(()=>({}));
+  if (!r.ok) return toast(d.error || t('tpFailed'), true);
+  toast(t('sfDisabled')); await sfLoad(); loadUsers(); auLoad();
+}
+async function sfResetUser(user) {
+  if (!confirm(t('sfResetConfirm', user))) return;
+  const pw = await askPassword(); if (!pw) return;
+  const r = await fetch('api/2fa/reset', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({current_password:pw, username:user})});
+  const d = await r.json().catch(()=>({}));
+  if (!r.ok) return toast(d.error || t('tpFailed'), true);
+  toast(t('sfResetDone')); loadUsers(); auLoad();
+}
+async function auLoad() {
+  try { const r = await fetch('api/audit?limit=150'); if (r.ok) { _au = (await r.json()).audit || []; auRender(); } } catch(e) {}
+}
+function auRender() {
+  const tb = document.getElementById('au-tbody'); if (!tb) return;
+  const locale = _lang === 'es' ? 'es-CL' : 'en-US';
+  if (!_au.length) { tb.innerHTML = `<tr><td colspan="5" class="tp-empty">${esc(t('auNone'))}</td></tr>`; return; }
+  tb.innerHTML = _au.map(e => `<tr>
+      <td><span class="ucreated">${esc(new Date(e.t*1000).toLocaleString(locale))}</span></td>
+      <td><b>${esc(e.a||'')}</b></td>
+      <td>${esc(t('au_' + e.x) === 'au_' + e.x ? e.x : t('au_' + e.x))}</td>
+      <td><span class="ucreated">${esc(e.g||'')}</span></td>
+      <td><span class="ucreated" title="${esc(e.ip||'')}">${esc([e.d, e.ip].filter(Boolean).join(' · '))}</span></td></tr>`).join('');
+}
+
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ closeDrawer, closeModals, confirmDelete, doLogin, editUser, exCancel, exGo, exPlainToggle, logout, openDrawer, reauthCancel, reauthOk, saveUser, setLang, setTheme, ssClose, ssCloseOthers, toggleNav, tpCheck, tpCreate, tpDelete, tpDownload, tpRestoreGo, tpRestoreOpen });
+if (window.cspRegister) cspRegister({ closeDrawer, closeModals, confirmDelete, doLogin, editUser, exCancel, exGo, exPlainToggle, logout, openDrawer, reauthCancel, reauthOk, saveUser, setLang, setTheme, sfBegin, sfConfirm, sfDisable, sfRecDone, sfResetUser, auLoad, ssClose, ssCloseOthers, toggleNav, tpCheck, tpCreate, tpDelete, tpDownload, tpRestoreGo, tpRestoreOpen });

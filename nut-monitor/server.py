@@ -995,7 +995,7 @@ class H(BaseHTTPRequestHandler):
         # Login con límite de intentos (auth.login); la cookie es HttpOnly y SameSite=Strict.
         # EN: Login with attempt limiting (auth.login); the cookie is HttpOnly and SameSite=Strict.
         if path == "/api/login":
-            r, err = auth.login_session(self, body.get("username", ""), body.get("password", ""), body.get("remember"))   # the service checks the password and opens the session
+            r, err = auth.login_session(self, body.get("username", ""), body.get("password", ""), body.get("remember"), body.get("code"))   # the service checks the password and opens the session
             if not r: return self._json(err[0], {"error": err[1]})
             self.send_response(200)
             self.send_header("Content-Type", "application/json")

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.3f — 2026-10-30
+
+**Nuevo**
+- **Autenticación en dos pasos (TOTP).** En el Admin Panel, tarjeta «Seguridad»: activar 2FA con cualquier app (Google Authenticator, Aegis, 1Password…) escribiendo la clave y confirmando con un código; se entregan 10 códigos de recuperación de un solo uso. Con 2FA activo, TODOS los formularios de acceso (Resumen, WOL, UPS, Net, Proxmox, NAS, DNS, WAN y Admin) piden el código; cada código sirve una sola vez, y los intentos fallidos cuentan para el bloqueo de la cuenta y la IP. Un admin puede restablecer el 2FA de otro usuario (con su contraseña). Sin código QR por ahora: se escribe la clave o se abre el enlace otpauth.
+- **Registro de auditoría** en el Admin Panel: quién creó o eliminó usuarios, cambió permisos o contraseñas, activó o restableció 2FA, cerró sesiones, creó/descargó/restauró/eliminó respaldos, y bloqueos por intentos fallidos; más los inicios de sesión. Se guardan las últimas 5.000 entradas y nunca contraseñas, códigos ni tokens. Los módulos pueden anotar con `auth.audit()`.
+
+**Sesiones**
+- La lista y el cierre de sesiones ya existían. Se verificó que actualizar el paquete NO cierra las sesiones (viven en `auth/sessions.json`, que el instalador no toca), y se mantiene así.
+
 ## 2.1.3e — 2026-10-30
 
 **Nuevo**

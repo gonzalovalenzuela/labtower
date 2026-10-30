@@ -251,7 +251,7 @@ class H(BaseHTTPRequestHandler):
         body = self._body()
         if body is None: return self._json(400, {"error": "Invalid request body"})
         if path == "/api/login":
-            r, err = auth.login_session(self, body.get("username", ""), body.get("password", ""), body.get("remember"))   # the service checks the password and opens the session
+            r, err = auth.login_session(self, body.get("username", ""), body.get("password", ""), body.get("remember"), body.get("code"))   # the service checks the password and opens the session
             if not r: return self._json(err[0], {"error": err[1]})
             return self._json(200, {"ok": True, "username": r["username"],
                                     "permissions": r["permissions"], "must_change_password": r["must_change_password"]},

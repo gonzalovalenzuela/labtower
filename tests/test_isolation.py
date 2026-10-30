@@ -56,7 +56,7 @@ class ServiceLogic(unittest.TestCase):
             self.assertEqual(self.svc.handle("wol", {"op": op}), {"error": "unknown operation"})
         self.assertEqual(self.svc.handle("wol", ["session"]), {"error": "unknown operation"})
         ops = sorted(n[3:] for n in dir(authrpc.Service) if n.startswith("op_"))
-        self.assertEqual(ops, ["event", "events", "health", "login", "logout", "session"])
+        self.assertEqual(ops, ["audit", "event", "events", "health", "login", "logout", "session"])
 
     def test_login_input_is_validated(self):
         for r in ({"username": 5, "password": "x"}, {"username": "a", "password": None}, {"username": "a" * 300, "password": "x"},
