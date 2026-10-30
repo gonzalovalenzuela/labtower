@@ -153,10 +153,17 @@ class Db(unittest.TestCase):
             self.assertEqual(web.call("POST", "/api/battery-date", {**ok, "date": ""}, adm)[0], 200); self.assertEqual(m.load_battery_dates(), {})
         finally: m.BAT_FILE, m.load_servers = old; web.close()
 
+    def test_last_test_result_carries_its_date(self):
+        m = self.m; m._test_last.pop(("sd", "u"), None)
+        m.selftest_track("sd", "u", {"ups.test.result": "In progress"}, 1000); m.selftest_track("sd", "u", {"ups.test.result": "Done and passed"}, 1060)
+        i = m.battery_info("sd", "u", {"ups.test.result": "Done and passed"}); self.assertEqual(i["test_now"]["ts"], 1060)
+        self.assertIsNone(m.battery_info("sd", "u", {"ups.test.result": "Never seen"})["test_now"]["ts"])
+
     def test_battery_info_and_stats_integration(self):
         m = self.m
         info = m.battery_info("s", "u", {"battery.runtime": "900", "battery.charge": "100", "ups.load": "20", "battery.date": "2024/01/01", "ups.test.result": "Done and passed"})
         self.assertEqual(info["runtime"]["full_s"], 900); self.assertEqual(info["test_now"]["kind"], "passed"); self.assertIsNotNone(info["age_years"])
+        self.assertIn("ts", info["test_now"])
         c = m.SCache("s"); c._ups = {"u": {"battery.runtime": "900", "battery.charge": "100"}}
         st = c._stats(c._ups)
         self.assertIn("battery", st["u"]); self.assertIn("avail", st["u"])

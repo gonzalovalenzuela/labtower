@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.3o — 2026-10-30
+
+**Nuevo**
+- **UPS Monitor:** junto al «Último resultado» del autotest ahora se muestra la fecha y hora en que LabTower vio ese resultado (por ejemplo «Done and passed · 30/10 17:23»).
+
 ## 2.1.3n — 2026-10-30
 
 **Correcciones**

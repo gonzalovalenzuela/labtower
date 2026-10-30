@@ -225,7 +225,12 @@ def battery_info(sid, ups, vars_):
     try: out["tests"] = selftest_log(sid, ups)
     except Exception as e: log.debug(f"selftest_log: {e}")
     tn = vars_.get("ups.test.result")
-    if isinstance(tn, str) and tn.strip(): out["test_now"] = {"result": tn.strip()[:80], "kind": battery.classify_test(tn)}
+    if isinstance(tn, str) and tn.strip():
+        out["test_now"] = {"result": tn.strip()[:80], "kind": battery.classify_test(tn), "ts": None}
+        # ES: hora del último cambio a este resultado (la más reciente del registro con el mismo texto); None si LabTower aún no lo vio cambiar.
+        # EN: time of the latest change to this result (newest log row with the same text); None if LabTower has not seen it change yet.
+        for x in out["tests"]:
+            if x["result"].strip() == tn.strip(): out["test_now"]["ts"] = x["ts"]; break
     return out
 
 # ─── Cortes de energía y disponibilidad ───────────────────────────────────────

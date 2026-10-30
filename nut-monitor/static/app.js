@@ -1273,7 +1273,7 @@ function batHtml(st,sid,upsName){
   else if(canAdmin())cells.push(cell(t('batAge'),'<span style="opacity:.55">'+esc(t('batUnknown'))+'</span>'+btn));
   const A=b.aging;
   cells.push(cell(t('batAging'),A?esc(t('batAgingFmt',A.change_pct,A.weeks)):'<span style="opacity:.55">'+esc(t('batCollecting'))+'</span>',A&&A.warn?'var(--orange)':''));
-  if(b.test_now){const kc={passed:'var(--green)',failed:'var(--red)'}[b.test_now.kind]||'';cells.push(cell(t('batTestNow'),esc(b.test_now.result),kc));}
+  if(b.test_now){const kc={passed:'var(--green)',failed:'var(--red)'}[b.test_now.kind]||'';cells.push(cell(t('batTestNow'),esc(b.test_now.result)+(b.test_now.ts?` <span style="opacity:.6;font-size:11px">· ${esc(PCT.ls(new Date(b.test_now.ts*1000)))}</span>`:''),kc));}
   let warn='';
   if(A&&A.warn)warn=`<div style="color:var(--orange);font-size:12px;margin:6px 0 0">⚠ ${esc(t('batAgingWarn'))}</div>`;
   else if(b.age_years!=null&&b.age_years>=4)warn=`<div style="color:var(--orange);font-size:12px;margin:6px 0 0">⚠ ${esc(t('batOldWarn'))}</div>`;
