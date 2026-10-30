@@ -39,6 +39,8 @@ const LANG = {
     ssTitle:'Active sessions', ssCloseOthers:'Close my other sessions', ssHint:'Devices signed in right now. Closing a session signs that device out immediately. Times are approximate.',
     ssDevice:'Device', ssIp:'IP', ssLast:'Last activity', ssExpires:'Expires', ssThis:'This session', ssClose:'Close session', ssOld:'Unknown', ssNone:'No active sessions.',
     ssConfirm:(u,d)=>`Close the session of "${u}" on ${d}?`, ssConfirmOthers:'Close all your other sessions?', ssClosed:'Session closed', ssClosedN:n=>`${n} session(s) closed`, ssNow:'now',
+    upTitle:'Updates', upBanner:(n,c)=>`New LabTower version ${n} is available (installed: ${c}).`, upSee:'See release notes', upInstalled:'Installed', upLatest:'Latest published', upChecked:'Last checked', upCheck:'Check now',
+    upOk:'You are up to date.', upOff:'Update check is turned off (LABTOWER_UPDATE_CHECK=0).', upErr:'Could not reach GitHub:', upNever:'not yet', upHow:'To update: download the .deb from the release page and run sudo apt install ./labtower_VERSION_all.deb',
     sfTitle:'Security: two-factor authentication', sfOff:'Two-factor authentication is OFF for your account.', sfOn:(n)=>`Two-factor authentication is ON for your account (${n} recovery codes left).`,
     sfEnable:'Turn on 2FA', sfDisable:'Turn off 2FA', sfStep1:'1. In your authenticator app (Google Authenticator, Aegis, 1Password…) add an account with this key (type: time based):',
     sfOpen:'Open in authenticator', sfStep2:'2. Type the 6-digit code it shows:', sfConfirm:'Confirm', sfCode:'6-digit code', sfRecTitle:'Save these recovery codes now. Each works once if you lose your phone. They will not be shown again:',
@@ -107,6 +109,8 @@ const LANG = {
     ssTitle:'Sesiones activas', ssCloseOthers:'Cerrar mis otras sesiones', ssHint:'Dispositivos con sesión iniciada ahora. Cerrar una sesión desconecta ese dispositivo de inmediato. Las horas son aproximadas.',
     ssDevice:'Dispositivo', ssIp:'IP', ssLast:'Última actividad', ssExpires:'Vence', ssThis:'Esta sesión', ssClose:'Cerrar sesión', ssOld:'Desconocido', ssNone:'No hay sesiones activas.',
     ssConfirm:(u,d)=>`¿Cerrar la sesión de "${u}" en ${d}?`, ssConfirmOthers:'¿Cerrar todas tus otras sesiones?', ssClosed:'Sesión cerrada', ssClosedN:n=>`${n} sesión(es) cerrada(s)`, ssNow:'ahora',
+    upTitle:'Actualizaciones', upBanner:(n,c)=>`Hay una versión nueva de LabTower: ${n} (instalada: ${c}).`, upSee:'Ver notas de la versión', upInstalled:'Instalada', upLatest:'Última publicada', upChecked:'Última consulta', upCheck:'Consultar ahora',
+    upOk:'Estás al día.', upOff:'La consulta de versiones está desactivada (LABTOWER_UPDATE_CHECK=0).', upErr:'No se pudo consultar GitHub:', upNever:'aún no', upHow:'Para actualizar: descarga el .deb de la página de la versión y ejecuta sudo apt install ./labtower_VERSION_all.deb',
     sfTitle:'Seguridad: autenticación en dos pasos', sfOff:'La autenticación en dos pasos está DESACTIVADA en tu cuenta.', sfOn:(n)=>`La autenticación en dos pasos está ACTIVA en tu cuenta (te quedan ${n} códigos de recuperación).`,
     sfEnable:'Activar 2FA', sfDisable:'Desactivar 2FA', sfStep1:'1. En tu app de autenticación (Google Authenticator, Aegis, 1Password…) agrega una cuenta con esta clave (tipo: basada en tiempo):',
     sfOpen:'Abrir en la app', sfStep2:'2. Escribe el código de 6 dígitos que muestra:', sfConfirm:'Confirmar', sfCode:'Código de 6 dígitos', sfRecTitle:'Guarda estos códigos de recuperación ahora. Cada uno sirve una vez si pierdes el teléfono. No se vuelven a mostrar:',
@@ -160,7 +164,7 @@ function setLang(l){
   document.getElementById('btn-logout').title = t('logoutTitle');
   try{tpRender();}catch(e){}
   try{ssRender();}catch(e){}
-  try{sfRender();auRender();}catch(e){}
+  try{sfRender();auRender();upRender();}catch(e){}
   // Update new-pw placeholder
   const npw = document.getElementById('d-new-pw');
   if(npw) npw.placeholder = t('fieldNewPwPlaceholder');
@@ -331,7 +335,7 @@ async function loadUsers() {
   const users = d.users || [];
   renderUsers(users);
   updateStats(users);
-  tpLoad(); ssLoad(); sfLoad(); auLoad();
+  tpLoad(); ssLoad(); sfLoad(); auLoad(); upLoad();
   hlLoad(); if (!window._hlTimer) window._hlTimer = setInterval(hlLoad, 30000);
 }
 
@@ -990,6 +994,28 @@ function auRender() {
       <td><span class="ucreated" title="${esc(e.ip||'')}">${esc([e.d, e.ip].filter(Boolean).join(' · '))}</span></td></tr>`).join('');
 }
 
+// ── Aviso de versión nueva ─────────────────────────────
+// EN: New-version notice (from the releases published on GitHub; read only).
+let _up = null;
+async function upLoad(force) {
+  try { const r = await fetch(force ? 'api/update/check' : 'api/update', force ? {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'} : undefined);
+        if (r.ok) { _up = await r.json(); upRender(); if (force) setTimeout(() => upLoad(), 3000); } } catch(e) {}
+}
+function upRender() {
+  const u = _up, b = document.getElementById('up-banner'), box = document.getElementById('up-body'); if (!u) return;
+  const safe = /^https:\/\/github\.com\/gonzalovalenzuela\/labtower\//.test(u.url || '');
+  if (b) {
+    b.style.display = u.newer ? 'block' : 'none';
+    b.innerHTML = u.newer ? `${esc(t('upBanner', u.latest, u.current))} ${safe ? `<a href="${esc(u.url)}" target="_blank" rel="noopener noreferrer">${esc(t('upSee'))}</a>` : ''}` : '';
+  }
+  if (!box) return;
+  const when = u.checked ? new Date(u.checked*1000).toLocaleString(_lang === 'es' ? 'es-CL' : 'en-US') : t('upNever');
+  const msg = !u.enabled ? t('upOff') : u.error ? `${t('upErr')} ${u.error}` : u.newer ? t('upHow') : u.latest ? t('upOk') : '';
+  box.innerHTML = `<div class="tp-hint" style="border:0">${esc(t('upInstalled'))}: <b>${esc(u.current)}</b> · ${esc(t('upLatest'))}: <b>${esc(u.latest || '—')}</b> · ${esc(t('upChecked'))}: ${esc(when)}<br>${esc(msg)}</div>
+    <div style="padding:0 18px 14px"><button class="btn-sec" data-on-click="upCheck" ${u.enabled ? '' : 'disabled'}>${esc(t('upCheck'))}</button></div>`;
+}
+function upCheck() { upLoad(true); }
+
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ closeDrawer, closeModals, confirmDelete, doLogin, editUser, exCancel, exGo, exPlainToggle, logout, openDrawer, reauthCancel, reauthOk, saveUser, setLang, setTheme, sfBegin, sfConfirm, sfDisable, sfRecDone, sfResetUser, auLoad, ssClose, ssCloseOthers, toggleNav, tpCheck, tpCreate, tpDelete, tpDownload, tpRestoreGo, tpRestoreOpen });
+if (window.cspRegister) cspRegister({ closeDrawer, closeModals, confirmDelete, doLogin, editUser, exCancel, exGo, exPlainToggle, logout, openDrawer, reauthCancel, reauthOk, saveUser, setLang, setTheme, upCheck, sfBegin, sfConfirm, sfDisable, sfRecDone, sfResetUser, auLoad, ssClose, ssCloseOthers, toggleNav, tpCheck, tpCreate, tpDelete, tpDownload, tpRestoreGo, tpRestoreOpen });
