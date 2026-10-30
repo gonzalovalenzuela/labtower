@@ -27,6 +27,7 @@ const LANG={
     clientsLabel:'Clients',
     alertCritBatt:'Critical battery — connect to power immediately',
     alertOnBatt:'On battery —',alertMinLeft:'min left',
+    batTitle:'Battery',batRuntime:'Runtime now',batFull:'Runtime at full charge',batPlus50:'If the load rises 50 %',batAge:'Battery age',batYears:(y)=>`${y} years`,batAging:'Capacity trend',batAgingFmt:(c,w)=>`${c>0?'+':''}${c} % in ${w} weeks`,batCollecting:'collecting data (needs about a month)',batAgingWarn:'The battery holds noticeably less than before: consider replacing it',batOldWarn:'Battery older than 4 years: consider replacing it',batTests:'Self-tests',batTestNow:'Last result',batNoTests:'No self-test recorded yet (only changes are logged)',batApprox:'estimate',tkpassed:'passed',tkfailed:'failed',tkrunning:'running',tknone:'none',tkother:'other',
     avStreak:'Online streak',avSince:'since monitoring began',avOnBatt:'On battery now',av24:'Availability 24 h',av7:'Availability 7 d',av30:'Availability 30 d',avLast:'Last outage',avNone:'None recorded',avCount:'Outages (30 d)',avMin:'min. charge',
     chartTitle_voltage:'Input vs output voltage',
     chartLegend_input:'Input',chartLegend_output:'Output',chartLegend_watts:'Watts',
@@ -74,6 +75,7 @@ const LANG={
     clientsLabel:'Clientes',
     alertCritBatt:'Batería crítica — conectar a corriente inmediatamente',
     alertOnBatt:'En batería —',alertMinLeft:'min restantes',
+    batTitle:'Batería',batRuntime:'Autonomía ahora',batFull:'Autonomía con batería llena',batPlus50:'Si la carga sube 50 %',batAge:'Edad de la batería',batYears:(y)=>`${y} años`,batAging:'Tendencia de capacidad',batAgingFmt:(c,w)=>`${c>0?'+':''}${c} % en ${w} semanas`,batCollecting:'reuniendo datos (hace falta cerca de un mes)',batAgingWarn:'La batería aguanta bastante menos que antes: conviene cambiarla',batOldWarn:'Batería de más de 4 años: conviene cambiarla',batTests:'Autotests',batTestNow:'Último resultado',batNoTests:'Aún no hay autotests registrados (solo se anotan los cambios)',batApprox:'estimación',tkpassed:'aprobado',tkfailed:'falló',tkrunning:'en curso',tknone:'ninguno',tkother:'otro',
     avStreak:'Tiempo en línea',avSince:'desde que se monitorea',avOnBatt:'En batería ahora',av24:'Disponibilidad 24 h',av7:'Disponibilidad 7 d',av30:'Disponibilidad 30 d',avLast:'Último corte',avNone:'Ninguno registrado',avCount:'Cortes (30 d)',avMin:'carga mín.',
     chartTitle_voltage:'Voltaje entrada vs salida',
     chartLegend_input:'Entrada',chartLegend_output:'Salida',chartLegend_watts:'Watts',
@@ -566,6 +568,7 @@ function renderDashboard(){
           })()}
         </div>
         ${availHtml(row.stats)}
+        ${batHtml(row.stats)}
         <div class="vars-section">
           ${VARS.map(([k,l,u])=>{const val=row.v[k];return`<div class="var-cell"><span class="var-key">${l}</span><span class="var-val">${val?esc(val)+' '+u:'<span style="opacity:.3">—</span>'}</span></div>`;}).join('')}
         </div>
@@ -1245,6 +1248,27 @@ function availHtml(st){
     :cell(t('avStreak'),fmtDur(st.streak)+(L?'':' <span style="opacity:.55;font-size:10px" title="'+esc(t('avSince'))+'">*</span>'));
   const lastTxt=L?`${PCT.ls(new Date(L.start*1000))} · ${fmtDur(L.dur)}${L.min_charge!=null?' · '+t('avMin')+' '+Math.round(L.min_charge)+'%':''}`:t('avNone');
   return `<div class="vars-section avail">${streak}${cell(t('av24'),fmtPct(a['24h']))}${cell(t('av7'),fmtPct(a['7d']))}${cell(t('av30'),fmtPct(a['30d']))}${cell(t('avCount'),st.count30)}${cell(t('avLast'),esc(lastTxt))}</div>`;
+}
+// Batería: autonomía estimada, edad, tendencia de capacidad y registro de autotests / battery: estimated runtime, age, capacity trend and self-test log
+function batHtml(st){
+  const b=st&&st.battery;if(!b)return'';
+  const cell=(k,v,c)=>`<div class="var-cell"><span class="var-key">${esc(k)}</span><span class="var-val"${c?` style="color:${c}"`:''}>${v}</span></div>`;
+  const R=b.runtime,cells=[];
+  if(R){
+    cells.push(cell(t('batRuntime'),fmtDur(R.now_s)));
+    cells.push(cell(t('batFull'),'≈ '+fmtDur(R.full_s)));
+    if(R.plus50_s)cells.push(cell(t('batPlus50'),'≈ '+fmtDur(R.plus50_s)));
+  }
+  if(b.age_years!=null)cells.push(cell(t('batAge'),esc(t('batYears',b.age_years)),b.age_years>=4?'var(--orange)':''));
+  const A=b.aging;
+  cells.push(cell(t('batAging'),A?esc(t('batAgingFmt',A.change_pct,A.weeks)):'<span style="opacity:.55">'+esc(t('batCollecting'))+'</span>',A&&A.warn?'var(--orange)':''));
+  if(b.test_now){const kc={passed:'var(--green)',failed:'var(--red)'}[b.test_now.kind]||'';cells.push(cell(t('batTestNow'),esc(b.test_now.result),kc));}
+  let warn='';
+  if(A&&A.warn)warn=`<div style="color:var(--orange);font-size:12px;margin:6px 0 0">⚠ ${esc(t('batAgingWarn'))}</div>`;
+  else if(b.age_years!=null&&b.age_years>=4)warn=`<div style="color:var(--orange);font-size:12px;margin:6px 0 0">⚠ ${esc(t('batOldWarn'))}</div>`;
+  const tests=(b.tests||[]).length?`<div style="font-size:12px;margin-top:8px"><div style="font-weight:600;margin-bottom:2px">${esc(t('batTests'))}</div>`+
+    b.tests.map(x=>`<div style="font-family:var(--mono);font-size:11px;color:${{passed:'var(--green)',failed:'var(--red)'}[x.kind]||'var(--text-mid)'}">${esc(PCT.ls(new Date(x.ts*1000)))} · ${esc(x.result)}</div>`).join('')+'</div>':'';
+  return `<div style="grid-column:1 / -1"><div class="vars-section bat">${cells.join('')}</div>${warn}${tests}</div>`;
 }
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 // Valor seguro dentro de un handler on*="…": literal JS entre comillas, escapado también para HTML.

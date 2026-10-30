@@ -137,6 +137,8 @@ labtower-health
 - Consulta `upsd` cada 10 s y guarda el historial en SQLite (WAL, 1 año).
 - Gráficos de voltaje, consumo y temperatura (si la UPS la informa). Exporta CSV.
 - Muestra los clientes conectados a cada UPS.
+- **Batería:** bajo cada UPS se ve la **autonomía ahora** (la que informa el UPS), la **autonomía proyectada a batería llena** y una estimación si la carga subiera 50 % (aproximación: la autonomía es inversamente proporcional a la carga), la **edad de la batería** (si el UPS informa `battery.date`; aviso desde los 4 años) y la **tendencia de capacidad**: promedio semanal de la autonomía con batería ≥ 95 % y carga parecida a la habitual, de los últimos 120 días, que avisa si cae 20 % o más (necesita cerca de un mes de historial; se recalcula cada 6 horas).
+- **Registro de autotests:** si el UPS informa `ups.test.result`, cada cambio se anota (hora en que LabTower lo vio) y se muestran los últimos 8. Un test fallido genera un aviso en el Resumen; uno aprobado después de «In progress», un evento informativo. LabTower solo lee: no lanza pruebas en el UPS.
 
 ### Net Monitor
 - **Red:** se detecta sola (la /24 de la Pi) o se fija con `SCAN_NETWORK`.

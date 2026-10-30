@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.3e — 2026-10-30
+
+**Nuevo**
+- **UPS Monitor: salud de la batería.** Bajo cada UPS: autonomía ahora, autonomía proyectada a batería llena y estimada con 50 % más de carga, edad de la batería (si el UPS informa `battery.date`) y **tendencia de capacidad** (autonomía a batería llena comparada semana a semana en 120 días; avisa si cae 20 % o más).
+- **Registro de autotests:** cada cambio de `ups.test.result` queda anotado y se muestran los últimos 8; un test fallido avisa en el Resumen y uno aprobado deja un evento. Solo lectura: LabTower no inicia pruebas.
+
 ## 2.1.3d — 2026-10-30
 
 **Nuevo**

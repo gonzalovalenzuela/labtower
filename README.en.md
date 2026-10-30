@@ -137,6 +137,8 @@ labtower-health
 - Polls `upsd` every 10 s and keeps history in SQLite (WAL, 1 year).
 - Voltage, power and temperature charts (if the UPS reports it). CSV export.
 - Shows the clients connected to each UPS.
+- **Battery:** under each UPS you see the **runtime now** (as reported by the UPS), the **runtime projected to a full battery** and an estimate if the load rose 50 % (an approximation: runtime is inversely proportional to the load), the **battery age** (if the UPS reports `battery.date`; warning from 4 years) and the **capacity trend**: weekly mean of the runtime with battery ≥ 95 % and a load close to the usual one, over the last 120 days, warning if it falls 20 % or more (needs about a month of history; recomputed every 6 hours).
+- **Self-test log:** if the UPS reports `ups.test.result`, every change is logged (time LabTower saw it) and the last 8 are shown. A failed test raises an Overview warning; a passed one after "In progress", an informational event. LabTower only reads: it never starts tests on the UPS.
 
 ### Net Monitor
 - **Network:** detected automatically (the Pi's /24) or set with `SCAN_NETWORK`.

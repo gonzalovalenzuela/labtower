@@ -39,6 +39,8 @@ from pathlib import Path
 # EN: Shared authentication module (sibling folder /auth).
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
+sys.path.insert(0, str(Path(__file__).parent))
+import battery
 
 # Solo loopback; el acceso desde la red pasa por nginx.
 # EN: Loopback only; network access goes through nginx.
@@ -127,10 +129,92 @@ def db_init():
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_out_srv_ups ON outages(srv_id, ups, t_start)")
+        # Registro de autotests: cada cambio de `ups.test.result` que el UPS informa (se anota la hora en que LabTower lo vio).
+        # EN: Self-test log: every change of `ups.test.result` the UPS reports (with the time LabTower saw it).
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS selftests (
+                id     INTEGER PRIMARY KEY AUTOINCREMENT,
+                srv_id TEXT NOT NULL,
+                ups    TEXT NOT NULL,
+                ts     INTEGER NOT NULL,
+                result TEXT NOT NULL
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_test_srv_ups ON selftests(srv_id, ups, ts)")
         conn.commit()
         _outages_backfill(conn)
         conn.close()
     log.info(f"DB: {DB_FILE}")
+
+# ─── Salud de la batería: autotests y envejecimiento ──────────────────────────
+# Autotests: se anota cada cambio del resultado que informa el UPS. La primera lectura solo se memoriza (reiniciar el servicio no
+# inventa pruebas). Un resultado fallido genera un aviso; uno aprobado tras «In progress», un evento informativo.
+# Envejecimiento: promedio semanal de la autonomía con batería ≥ 95 % y carga parecida a la más frecuente, de los últimos 120 días;
+# se recalcula cada 6 horas porque recorre bastante historial.
+# EN: ─── Battery health: self-tests and ageing ───────────────────────────────
+#     Self-tests: every change of the result the UPS reports is logged. The first reading is only remembered (restarting the service
+#     does not invent tests). A failed result raises a warning; a passed one after "In progress", an informational event.
+#     Ageing: weekly mean of the runtime with battery ≥ 95 % and a load close to the usual one, over the last 120 days; recomputed
+#     every 6 hours because it scans a lot of history.
+_test_last = {}              # (srv, ups) → last classified result text seen
+_aging_cache = {}            # (srv, ups) → (time, trend)
+AGING_DAYS, AGING_TTL = 120, 6 * 3600
+
+def selftest_track(sid, ups, vars_, now=None):
+    res = vars_.get("ups.test.result") if isinstance(vars_, dict) else None
+    if not isinstance(res, str) or not res.strip(): return
+    res, now, k = res.strip()[:80], int(now or time.time()), (sid, ups)
+    old = _test_last.get(k); _test_last[k] = res
+    if old is None or old == res: return
+    with _db_lock:
+        conn = db_connect()
+        try:
+            conn.execute("INSERT INTO selftests (srv_id, ups, ts, result) VALUES (?,?,?,?)", (sid, ups, now, res))
+            conn.execute("DELETE FROM selftests WHERE srv_id=? AND ups=? AND id NOT IN (SELECT id FROM selftests WHERE srv_id=? AND ups=? ORDER BY id DESC LIMIT 200)", (sid, ups, sid, ups))
+            conn.commit()
+        finally: conn.close()
+    new_c, old_c = battery.classify_test(res), battery.classify_test(old)
+    if new_c == "failed":
+        auth.record_event("nut", "warn", f"{ups}: battery self-test failed ({res})", "ups_test_fail", n=ups, r=res)
+    elif new_c == "passed" and old_c == "running":
+        auth.record_event("nut", "info", f"{ups}: battery self-test passed", "ups_test_ok", n=ups)
+
+def selftest_log(sid, ups, limit=8):
+    conn = db_connect()
+    try:
+        rows = conn.execute("SELECT ts, result FROM selftests WHERE srv_id=? AND ups=? ORDER BY ts DESC, id DESC LIMIT ?", (sid, ups, limit)).fetchall()
+    finally: conn.close()
+    return [{"ts": r[0], "result": r[1], "kind": battery.classify_test(r[1])} for r in rows]
+
+def aging(sid, ups, now=None):
+    k, now = (sid, ups), int(now or time.time())
+    c = _aging_cache.get(k)
+    if c and now - c[0] < AGING_TTL: return c[1]
+    since = now - AGING_DAYS * 86400
+    conn = db_connect()
+    try:
+        base = "FROM history WHERE srv_id=? AND ups=? AND ts>=? AND charge>=95 AND runtime>0 AND load>=1"
+        top = conn.execute("SELECT CAST(ROUND(load / 5.0) AS INTEGER) * 5 AS b, COUNT(*) AS c " + base + " GROUP BY b ORDER BY c DESC LIMIT 1", (sid, ups, since)).fetchone()
+        weeks = []
+        if top and top[0] is not None:      # the usual load (most frequent 5 % bucket): other loads give other runtimes
+            lo, hi = max(top[0], 1) * 0.8 - 1, max(top[0], 1) * 1.2 + 1
+            weeks = [(r[0], r[1], r[2]) for r in conn.execute(
+                "SELECT ts/604800, AVG(runtime), COUNT(*) " + base + " AND load BETWEEN ? AND ? GROUP BY ts/604800 ORDER BY 1", (sid, ups, since, lo, hi))]
+    finally: conn.close()
+    tr = battery.aging_trend(weeks)
+    _aging_cache[k] = (now, tr)
+    return tr
+
+def battery_info(sid, ups, vars_):
+    out = {"runtime": battery.runtime_estimate(vars_), "age_years": battery.battery_age_years(vars_.get("battery.date") or vars_.get("battery.mfr.date")),
+           "aging": None, "tests": [], "test_now": None}
+    try: out["aging"] = aging(sid, ups)
+    except Exception as e: log.debug(f"aging: {e}")
+    try: out["tests"] = selftest_log(sid, ups)
+    except Exception as e: log.debug(f"selftest_log: {e}")
+    tn = vars_.get("ups.test.result")
+    if isinstance(tn, str) and tn.strip(): out["test_now"] = {"result": tn.strip()[:80], "kind": battery.classify_test(tn)}
+    return out
 
 # ─── Cortes de energía y disponibilidad ───────────────────────────────────────
 # Se deducen del estado del UPS: «OB» o «LB» abre un corte y «OL» lo cierra. Al crear la tabla por primera vez se
@@ -340,6 +424,7 @@ def db_prune():
         try:
             deleted = conn.execute("DELETE FROM history WHERE ts < ?", (cutoff,)).rowcount
             conn.execute("DELETE FROM outages WHERE t_end IS NOT NULL AND t_end < ?", (cutoff,))
+            conn.execute("DELETE FROM selftests WHERE ts < ?", (cutoff,))
             # Un UPS o servidor NUT defectuoso (o malicioso) que alterne OL/OB sin parar no debe hacer crecer la tabla sin límite: se conservan los 2000 cortes más recientes de cada UPS.
             # EN: A faulty (or malicious) UPS or NUT server flapping OL/OB must not grow the table without limit: the 2000 most recent outages of each UPS are kept.
             conn.execute("""DELETE FROM outages WHERE t_end IS NOT NULL AND id NOT IN (
@@ -559,6 +644,7 @@ class SCache:
             status = (vars_.get("ups.status") or "OL").strip()
             db_insert(self.id, name, entry, urgent=not status.startswith("OL"))
             outage_track(self.id, name, status, entry["charge"], entry["ts"])
+            selftest_track(self.id, name, vars_, entry["ts"])
             _status_event(self.id, name, status, entry)
         except Exception as e:
             log.debug(f"db_insert error: {e}")
@@ -575,7 +661,9 @@ class SCache:
     def _stats(self, ups_snap):
         out = {}
         for n in ups_snap:
-            try: out[n] = ups_stats(self.id, n)
+            try:
+                out[n] = dict(ups_stats(self.id, n))        # a copy: the cached one is shared
+                out[n]["battery"] = battery_info(self.id, n, ups_snap[n])
             except Exception as e: log.debug(f"ups_stats: {e}")
         return out
 
