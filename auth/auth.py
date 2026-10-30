@@ -183,6 +183,9 @@ def atomic_write(path, data, mode=0o600):
     tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
     try:
+        # ES: El umask del servicio (077) recortaría `mode`: 0640 quedaría 0600 y el otro módulo no podría leer el archivo. Se fija explícito.
+        # EN: The service umask (077) would trim `mode`: 0640 would end up 0600 and the other module could not read the file. Set it explicitly.
+        os.fchmod(fd, mode)
         with os.fdopen(fd, "wb") as f:
             f.write(data)
             f.flush()
@@ -1000,7 +1003,7 @@ def totp_check(secret: str, code, last: int = 0, now: float | None = None) -> in
 
 def totp_uri(username: str, secret: str) -> str:
     from urllib.parse import quote
-    return f"otpauth://totp/{quote(TOTP_ISSUER)}:{quote(username)}?secret={secret}&issuer={quote(TOTP_ISSUER)}&algorithm=SHA1&digits=6&period=30"
+    return f"otpauth://totp/{quote(TOTP_ISSUER)}:{quote(username)}?secret={secret}&issuer={quote(TOTP_ISSUER)}"
 
 def _rkey(code: str) -> str:
     return hashlib.sha256(re.sub(r"[^0-9a-z]", "", str(code).lower()).encode()).hexdigest()

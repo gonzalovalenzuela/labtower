@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.3i — 2026-10-30
+
+**Nuevo**
+- **2FA con código QR.** Al activar el 2FA en el Admin Panel se muestra un QR para escanear con la app de autenticación (la clave escrita queda como alternativa). El QR se genera dentro de LabTower: no usa librerías ni servicios de internet.
+- **Proxmox: marcar varios respaldos a la vez.** En «Respaldos (vzdump)» cada VM/CT tiene una casilla; además «Seleccionar todas», «Seleccionar las sin respaldo o muy viejas» y los botones «Ignorar seleccionadas» / «Dejar de ignorar seleccionadas».
+
+**Correcciones**
+- **Aviso «Net Monitor hosts file not readable» en WOL Console.** Los servicios corren con umask 077, así que `hosts.json` (y `devices.json`), que deben quedar en modo 640 para que el otro módulo los lea, se guardaban en 600. Ahora el modo se fija explícitamente al guardar.
+- **Proxmox, respaldos ignorados:** después de ignorar o dejar de ignorar una VM, la página podía volver a mostrar el estado anterior hasta por 10 minutos. Ahora el cambio se ve de inmediato.
+
 ## 2.1.3h — 2026-10-30
 
 **Cambios**

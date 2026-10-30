@@ -1010,6 +1010,7 @@ class H(BaseHTTPRequestHandler):
                     if c["id"] == m.group(1):
                         c["backup"] = cfg
                         save_clusters(clusters)
+                        backups.apply_config(_backups.get(c["id"]), cfg)        # the page asks again right away: do not answer with the old settings
                         return self._json(200, {"ok": True, **cfg})
             return self._json(404, {"error": "Not found"})
 
