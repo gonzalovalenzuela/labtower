@@ -30,7 +30,7 @@ Object.assign(LANG.en, {
   swTopo: 'Topology', swTopoHint: 'Worked out from the MAC tables: a port that has another switch\'s MAC behind it is a link between them.', swTopoNone: 'No links between switches detected yet.',
   swTempChart: 'Temperature', swTraffic: 'Traffic', swPackets: 'Packets/s', swErrChart: 'Errors (counter)', swNoData: 'No data in this range yet.',
   swPortTitle: (n, p) => n + ' · Port ' + p, swLabel: 'Label', swLabelPh: 'e.g. NAS, uplink to the office', swUplinkChk: 'Link to another switch (do not alert on loop)', swSavePort: 'Save', swClose: 'Close',
-  swInfoLink: 'Link', swInfoCfg: 'Configured', swInfoFlow: 'Flow control', swInfoDisc: 'Discards rx / tx', swInfoMacs: 'MACs seen', swInfoErr1h: 'New errors (1 h)',
+  swInfoLink: 'Link', swInfoCfg: 'Configured', swInfoFlow: 'Flow control', swInfoDisc: 'Discards rx / tx', swInfoMacs: 'MACs seen', swInfoErr1h: 'New errors (1 h)', swInfoCrc: 'CRC / FCS errors', swInfoAlign: 'Alignment errors', swInfoFlaps: 'Link changes (1 h)', swWatchChk: 'Alert when this port goes down or up',
   swMdlAdd: 'Add switch', swMdlEdit: 'Edit switch', swName: 'Name', swDriver: 'Type', swHost: 'IP or name', swUser: 'User', swPass: 'Password', swKeep: 'leave empty to keep the stored one',
   swCommunity: 'SNMP community (read-only)', swSnmpPort: 'SNMP port', swMacPag: 'Read the whole MAC table (HC; not tried on the real unit)', swEst: 'Estimated bytes per packet (0 = off)', swEstNote: 'Estimated: this model only reports packets, so bytes = packets × the average size set for this switch. Not exact.', swEstTip: 'estimated',
   swDrvZx: 'ZX310S (web interface)', swDrvHc: 'HC-SWTGW218AS (web interface)', swDrvSnmp: 'SNMP v2c (TP-Link and others)',
@@ -64,7 +64,7 @@ Object.assign(LANG.es, {
   swTopo: 'Topología', swTopoHint: 'Se deduce de las tablas MAC: un puerto que tiene detrás la MAC de otro switch es un enlace entre ambos.', swTopoNone: 'Aún no se detectan enlaces entre switches.',
   swTempChart: 'Temperatura', swTraffic: 'Tráfico', swPackets: 'Paquetes/s', swErrChart: 'Errores (contador)', swNoData: 'Aún no hay datos en este rango.',
   swPortTitle: (n, p) => n + ' · Puerto ' + p, swLabel: 'Etiqueta', swLabelPh: 'p. ej. NAS, enlace a la oficina', swUplinkChk: 'Enlace a otro switch (no alertar por loop)', swSavePort: 'Guardar', swClose: 'Cerrar',
-  swInfoLink: 'Enlace', swInfoCfg: 'Configurado', swInfoFlow: 'Control de flujo', swInfoDisc: 'Descartes rx / tx', swInfoMacs: 'MACs vistas', swInfoErr1h: 'Errores nuevos (1 h)',
+  swInfoLink: 'Enlace', swInfoCfg: 'Configurado', swInfoFlow: 'Control de flujo', swInfoDisc: 'Descartes rx / tx', swInfoMacs: 'MACs vistas', swInfoErr1h: 'Errores nuevos (1 h)', swInfoCrc: 'Errores CRC / FCS', swInfoAlign: 'Errores de alineación', swInfoFlaps: 'Cambios de enlace (1 h)', swWatchChk: 'Avisar si este puerto se cae o vuelve',
   swMdlAdd: 'Agregar switch', swMdlEdit: 'Editar switch', swName: 'Nombre', swDriver: 'Tipo', swHost: 'IP o nombre', swUser: 'Usuario', swPass: 'Contraseña', swKeep: 'vacío = conservar la guardada',
   swCommunity: 'Community SNMP (solo lectura)', swSnmpPort: 'Puerto SNMP', swMacPag: 'Leer toda la tabla MAC (HC; no probado en el equipo real)', swEst: 'Bytes estimados por paquete (0 = desactivado)', swEstNote: 'Estimado: este modelo solo informa paquetes, así que los bytes = paquetes × el tamaño medio configurado en este switch. No es exacto.', swEstTip: 'estimado',
   swDrvZx: 'ZX310S (interfaz web)', swDrvHc: 'HC-SWTGW218AS (interfaz web)', swDrvSnmp: 'SNMP v2c (TP-Link y otros)',
@@ -240,7 +240,7 @@ function updateStamp() {
 
 function tile(s, p) {
   let sub = '';
-  if (p.flag === 'warn') sub = p.err_1h + ' err';
+  if (p.flag === 'warn') sub = p.crc_1h ? p.crc_1h + ' CRC' : p.err_1h + ' err';
   else if (p.link_to) sub = '↔ ' + p.link_to;
   else if (p.label) sub = p.label;
   else if (p.neighbors && p.neighbors[0]) sub = p.neighbors[0].name || p.neighbors[0].ip || '';
@@ -284,10 +284,10 @@ function portRow(s, p) {
 function portDetail(s, p) {
   const admin = canAdmin();
   const info = [[t('swInfoLink'), p.link_up ? spdLong(p.speed_mbps) : t('swStDown')], [t('swInfoCfg'), p.speed_cfg || '—'], [t('swInfoFlow'), p.flow_ctrl || '—'], [t('swStp'), p.stp_state || '—'],
-    [t('swErrors'), (p.rx_err || 0) + ' rx / ' + (p.tx_err || 0) + ' tx'], [t('swInfoErr1h'), p.err_1h], ...(p.rx_bytes != null ? [[t('swInfoTotal'), (p.bytes_est ? '≈ ' : '') + bytesFmt(p.rx_bytes) + ' / ' + bytesFmt(p.tx_bytes)]] : []), [t('swInfoDisc'), p.rx_discards != null ? p.rx_discards + ' / ' + p.tx_discards : '—'], [t('swInfoMacs'), p.mac_count]];
+    [t('swErrors'), (p.rx_err || 0) + ' rx / ' + (p.tx_err || 0) + ' tx'], [t('swInfoErr1h'), p.err_1h], ...(p.crc != null ? [[t('swInfoCrc'), p.crc + (p.crc_1h ? ' (+' + p.crc_1h + ' / 1 h)' : '')], [t('swInfoAlign'), p.align != null ? p.align : '—']] : []), [t('swInfoFlaps'), p.flaps_1h || 0], ...(p.rx_bytes != null ? [[t('swInfoTotal'), (p.bytes_est ? '≈ ' : '') + bytesFmt(p.rx_bytes) + ' / ' + bytesFmt(p.tx_bytes)]] : []), [t('swInfoDisc'), p.rx_discards != null ? p.rx_discards + ' / ' + p.tx_discards : '—'], [t('swInfoMacs'), p.mac_count]];
   const macs = (p.neighbors || []).map(n => `<code>${esc(n.mac)}</code> ${n.name || n.ip ? esc(nameOf(n)) + (n.ip ? ' <span class="dim">' + esc(n.ip) + '</span>' : '') : '<span class="dim">—</span>'}${n.vlan != null ? ' <span class="dim">VLAN ' + esc(n.vlan) + '</span>' : ''}`).join('<br>');
   const ctl = admin ? `<div class="sw-portform"><label>${esc(t('swLabel'))}<input id="sw-lbl" maxlength="32" value="${esc(p.label || '')}" placeholder="${esc(t('swLabelPh'))}"></label>` +
-    `<label class="chk"><input type="checkbox" id="sw-upl"${p.uplink_manual ? ' checked' : ''}> ${esc(t('swUplinkChk'))}</label><button type="button" class="sw-btn teal" data-act="saveport" data-id="${esc(s.id)}" data-port="${p.port}">${esc(t('swSavePort'))}</button></div>` : '';
+    `<label class="chk"><input type="checkbox" id="sw-upl"${p.uplink_manual ? ' checked' : ''}> ${esc(t('swUplinkChk'))}</label><label class="chk"><input type="checkbox" id="sw-watch"${p.watch ? ' checked' : ''}> ${esc(t('swWatchChk'))}</label><button type="button" class="sw-btn teal" data-act="saveport" data-id="${esc(s.id)}" data-port="${p.port}">${esc(t('swSavePort'))}</button></div>` : '';
   const ranges = ['1h', '1d', '1w', '1mo', 'all'].map(r => `<button type="button" class="sw-chip${SW.range === r ? ' active' : ''}" data-act="range" data-range="${r}">${r === 'all' ? (_lang === 'es' ? 'Todo' : 'All') : r}</button>`).join('');
   const k = histKey(s.id, p.port);
   return `<div class="sw-detail"><div class="sw-dhead"><b>${esc(t('swPortTitle', s.name, p.port))}</b>${p.label ? ' <span class="dim">' + esc(p.label) + '</span>' : ''}<span class="grow"></span>${ranges}<button type="button" class="sw-btn" data-act="closeport">${esc(t('swClose'))}</button></div>` +
@@ -470,7 +470,7 @@ async function onClick(e) {
     else if (act === 'range') { SW.range = el.dataset.range; render(); loadHistory(true); }
     else if (act === 'showall') { SW.showAll[id] = !SW.showAll[id]; render(); }
     else if (act === 'saveport') {
-      await post('api/switches/port', { id, port: Number(el.dataset.port), label: $('sw-lbl').value, uplink: $('sw-upl').checked });
+      await post('api/switches/port', { id, port: Number(el.dataset.port), label: $('sw-lbl').value, uplink: $('sw-upl').checked, watch: $('sw-watch').checked });
       toast(t('swSaved')); SW.hash = ''; await load();
     }
     else if (act === 'mcancel') closeModal();

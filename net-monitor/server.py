@@ -1455,7 +1455,7 @@ class H(BaseHTTPRequestHandler):
                 if act == "test":
                     return self._json(200, m.test(body))
                 if act == "port":
-                    m.set_port_meta(str(body.get("id") or ""), body.get("port"), body.get("label", ""), bool(body.get("uplink")))
+                    m.set_port_meta(str(body.get("id") or ""), body.get("port"), body.get("label", ""), bool(body.get("uplink")), bool(body.get("watch")))
                     return self._json(200, {"ok": True})
                 if act == "poll":
                     m.set_poll(body.get("seconds"))

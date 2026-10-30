@@ -520,12 +520,14 @@ class SNMPDriver(BaseDriver):
     BASE_PORT_IFINDEX = "1.3.6.1.2.1.17.1.4.1.2"
     Q_FDB_PORT = "1.3.6.1.2.1.17.7.1.2.2.1.2"   # dot1qTpFdbPort (fdbId.mac)
     D_FDB_PORT = "1.3.6.1.2.1.17.4.3.1.2"       # dot1dTpFdbPort (mac)
+    DOT3 = "1.3.6.1.2.1.10.7.2.1"               # EtherLike-MIB dot3StatsTable: .2 AlignmentErrors, .3 FCSErrors (CRC), index = ifIndex
     VIRTUAL = re.compile(r"^(vlan|loopback|null|port-?channel|link.?aggregation|tunnel|lo\d*$)", re.I)
     PORT_NAME = re.compile(r"\d+/\d+/(\d+)")
 
     def __init__(self, name, host, community, port=161, **kw):
         super().__init__(name, host, "", "")
         self.snmp = SNMPClient(host, community, port=port, **kw)
+        self._dot3 = True      # false once the device shows it has no EtherLike-MIB (avoid asking every time)
 
     def login(self):
         self.logged_in = True
@@ -555,6 +557,16 @@ class SNMPDriver(BaseDriver):
             if_speed = col(self.IF, 5)
             x = {c: col(self.IFX, c) for c in (1, 6, 7, 8, 9, 10, 11, 12, 13, 15, 18)}
             bp = {str(v): k for k, v in self.snmp.walk(self.BASE_PORT_IFINDEX).items()}
+            # Errores CRC/FCS y de alineación (EtherLike-MIB): no todos los equipos la tienen; si falta, esos campos quedan en None.
+            # EN: CRC/FCS and alignment errors (EtherLike-MIB): not every device has it; if missing, those fields stay None.
+            fcs, align = {}, {}
+            if self._dot3:
+                try:
+                    fcs, align = col(self.DOT3, 3), col(self.DOT3, 2)
+                except SNMPError:
+                    pass
+                if not fcs:
+                    self._dot3 = False
 
             # puertos físicos: ifType 6 (ethernetCsmacd); numerados por puerto de bridge
             # EN: physical ports: ifType 6 (ethernetCsmacd); numbered by bridge port
@@ -588,6 +600,7 @@ class SNMPDriver(BaseDriver):
                     "tx_good_pkts": sum(g(c) or 0 for c in (11, 12, 13)),
                     "rx_bad_pkts": in_err.get(k, 0), "tx_bad_pkts": out_err.get(k, 0),
                     "rx_discards": in_disc.get(k), "tx_discards": out_disc.get(k),
+                    "crc_errors": fcs.get(k) if fcs else None, "align_errors": align.get(k) if fcs else None,
                     "loop_detected": None, "stp_state": None,
                 })
             bp_to_port = {int(b): port_no.get(int(i), int(b)) for i, b in bp.items()}
@@ -647,6 +660,9 @@ TEMP_WARN = float(os.environ.get("SWITCH_TEMP_WARN", 70))
 TEMP_CRIT = float(os.environ.get("SWITCH_TEMP_CRIT", 80))
 POLL_DEFAULT, POLL_MIN, POLL_MAX = 60, 30, 3600
 MAC_EVERY = 300                    # la tabla MAC pesa más: se lee cada 5 min / the MAC table is heavier: read every 5 min
+FLAP_WINDOW = 600                  # s: un enlace que cambia FLAP_COUNT veces en esta ventana está «rebotando» / a link that changes FLAP_COUNT times in this window is "flapping"
+FLAP_COUNT = 4
+FLAP_EVENT_GAP = 1800              # un aviso de rebote por puerto cada 30 min como máximo / at most one flap notice per port per 30 min
 FAILS_FOR_DOWN = 2                 # fallos seguidos para dar el switch por caído / consecutive failures before "down"
 ERR_EVENT_GAP = 600                # un aviso de errores nuevos por puerto cada 10 min como máximo / at most one new-errors notice per port per 10 min
 RAW_KEEP = 48 * 3600               # muestras de 1 min durante 48 h; después se resumen cada 15 min / 1-min samples for 48 h, then 15-min summaries
@@ -862,7 +878,7 @@ class Manager:
             finally:
                 conn.close()
 
-    def set_port_meta(self, sid, port, label, uplink):
+    def set_port_meta(self, sid, port, label, uplink, watch=False):
         with self.lock:
             cur = self._find(sid)
             if not cur:
@@ -873,8 +889,8 @@ class Manager:
                 raise ValueError("Invalid port")
             label = _clean_text(label, 32)
             meta = cur.setdefault("ports", {})
-            if label or uplink:
-                meta[port] = {"label": label, "uplink": bool(uplink)}
+            if label or uplink or watch:
+                meta[port] = {"label": label, "uplink": bool(uplink), "watch": bool(watch)}
             else:
                 meta.pop(port, None)
             self._save()
@@ -941,7 +957,7 @@ class Manager:
 
     def _new_rec(self):
         return {"snap": None, "macs": [], "macs_ts": 0, "ok_ts": 0, "err": None, "try_ts": 0, "fails": 0,
-                "prev": None, "rates": {}, "errq": {}, "err_ev": {}}
+                "prev": None, "rates": {}, "errq": {}, "err_ev": {}, "crcq": {}, "flaps": {}, "flap_ev": {}, "linkst": {}}
 
     def _loop(self, sid, cfg, w, delay):
         if delay and w.ev.wait(delay) and w.stop:
@@ -1031,11 +1047,30 @@ class Manager:
                 dq = rec["errq"].setdefault(n, [])
                 dq.append((now, total))
                 del dq[:-80]
-                watched = bool((meta.get(str(n)) or {}).get("uplink")) or (sid, n) in links
+                pm = meta.get(str(n)) or {}
+                watched = bool(pm.get("uplink")) or bool(pm.get("watch")) or (sid, n) in links
+                crc = p.get("crc_errors")
+                cq = rec["crcq"].setdefault(n, [])
+                if crc is not None:
+                    cq.append((now, crc)); del cq[:-80]
+                crc_up = len(cq) >= 2 and cq[-1][1] > cq[-2][1]
                 if len(dq) >= 2 and total > dq[-2][1] and now - rec["err_ev"].get(n, 0) >= ERR_EVENT_GAP:
                     rec["err_ev"][n] = now
-                    events.append(("warn", f"{cfg['name']}/{n}: {total - dq[-2][1]} new errors", "sw_err", dict(n=cfg["name"], p=n, d=total - dq[-2][1])))
+                    if crc_up:   # CRC errors point to cable / connector / NIC: say so instead of the generic notice
+                        events.append(("warn", f"{cfg['name']}/{n}: {cq[-1][1] - cq[-2][1]} new CRC errors (cable or network card)", "sw_crc", dict(n=cfg["name"], p=n, d=cq[-1][1] - cq[-2][1])))
+                    else:
+                        events.append(("warn", f"{cfg['name']}/{n}: {total - dq[-2][1]} new errors", "sw_err", dict(n=cfg["name"], p=n, d=total - dq[-2][1])))
                 st = "up" if p["link_up"] else "down"
+                old_st = rec["linkst"].get(n)
+                rec["linkst"][n] = st
+                if old_st is not None and old_st != st:
+                    fl = rec["flaps"].setdefault(n, [])
+                    fl.append(now)
+                    del fl[:-20]
+                    recent = [x for x in fl if now - x <= FLAP_WINDOW]
+                    if len(recent) >= FLAP_COUNT and now - rec["flap_ev"].get(n, 0) >= FLAP_EVENT_GAP:
+                        rec["flap_ev"][n] = now
+                        events.append(("warn", f"{cfg['name']}/{n}: link flapping ({len(recent)} changes in {FLAP_WINDOW // 60} min)", "sw_flap", dict(n=cfg["name"], p=n, c=len(recent), m=FLAP_WINDOW // 60)))
                 ch = self._changed(f"sw-link:{sid}:{n}", st)
                 if ch and watched:
                     events.append(("info" if st == "up" else "warn", f"{cfg['name']}/{n}: link {st}", "sw_link", dict(n=cfg["name"], p=n, st=st)))
@@ -1095,6 +1130,14 @@ class Manager:
         return {"macs": rows, "now": int(time.time())}
 
     # ---- respuesta para la página / page response
+    def _crc_1h(self, rec, n):
+        dq = rec["crcq"].get(n) or []
+        if len(dq) < 2:
+            return None if not dq else 0
+        cutoff = dq[-1][0] - 3600
+        first = next((v for t, v in dq if t >= cutoff), dq[0][1])
+        return max(0, dq[-1][1] - first)
+
     def _err_1h(self, rec, n):
         dq = rec["errq"].get(n) or []
         if len(dq) < 2:
@@ -1135,6 +1178,8 @@ class Manager:
                         h = hosts.get(_mkey(m["mac"])) or {}
                         nb.append({"mac": m["mac"], "vlan": m.get("vlan"), "ip": h.get("ip"), "name": h.get("name")})
                     e1h = self._err_1h(rec, n)
+                    c1h = self._crc_1h(rec, n)
+                    nflap = len([x for x in rec["flaps"].get(n, []) if (rec["ok_ts"] or now) - x <= 3600])
                     loop = bool(p.get("loop_detected"))
                     if not p["admin_up"]:
                         flag = "off"
@@ -1154,6 +1199,7 @@ class Manager:
                         "speed_cfg": p.get("speed_cfg"), "flow_ctrl": p.get("flow_ctrl"), "stp_state": p.get("stp_state"),
                         "loop": loop if p.get("loop_detected") is not None else None,
                         "rx_err": p.get("rx_bad_pkts"), "tx_err": p.get("tx_bad_pkts"), "err_1h": e1h,
+                        "crc": p.get("crc_errors"), "align": p.get("align_errors"), "crc_1h": c1h, "flaps_1h": nflap, "watch": bool(pm.get("watch")),
                         "rx_discards": p.get("rx_discards"), "tx_discards": p.get("tx_discards"),
                         "rx_bytes": p.get("rx_bytes"), "tx_bytes": p.get("tx_bytes"), "bytes_est": p.get("bytes_est") or 0,
                         "rx_pps": r.get("rx_pps"), "tx_pps": r.get("tx_pps"), "rx_bps": r.get("rx_bps"), "tx_bps": r.get("tx_bps"),
@@ -1171,7 +1217,9 @@ class Manager:
                     if p["flag"] == "loop":
                         alerts.append({"lv": "warn", "k": "loop", "p": p["port"]})
                     elif p["flag"] == "warn":
-                        alerts.append({"lv": "warn", "k": "err", "p": p["port"], "d": p["err_1h"]})
+                        alerts.append({"lv": "warn", "k": "crc" if p.get("crc_1h") else "err", "p": p["port"], "d": p.get("crc_1h") or p["err_1h"]})
+                    if p.get("flaps_1h", 0) >= FLAP_COUNT:
+                        alerts.append({"lv": "warn", "k": "flap", "p": p["port"], "d": p["flaps_1h"]})
                 out.append({
                     "id": sid, "name": cfg["name"], "driver": cfg["driver"], "host": cfg["host"], "enabled": cfg.get("enabled", True),
                     "online": online, "error": rec["err"], "updated": rec["ok_ts"] or None,
