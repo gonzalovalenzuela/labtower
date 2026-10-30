@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.3g — 2026-10-30
+
+**Nuevo**
+- **Aviso de versión nueva en el Admin Panel.** Consulta las versiones publicadas en GitHub (solo estables: sin borradores ni pre-versiones) como máximo cada 12 horas, y si hay una más reciente que la instalada muestra un aviso arriba con el enlace a sus notas. La tarjeta «Actualizaciones» muestra la versión instalada, la última publicada, la última consulta y un botón «Consultar ahora». Solo lee: no descarga ni instala nada (se actualiza como siempre con `apt install ./labtower_VERSION_all.deb`). Si GitHub no responde se conserva la última respuesta y se reintenta en una hora. Para desactivarlo: `LABTOWER_UPDATE_CHECK=0` en `/etc/default/labtower` y reiniciar `admin-panel`. Entiende versiones con letra (`2.1.3` < `2.1.3e` < `2.1.3f`).
+
 ## 2.1.3f — 2026-10-30
 
 **Nuevo**

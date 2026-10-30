@@ -275,6 +275,8 @@ class H(BaseHTTPRequestHandler):
             self._json(200, {"users": out})
         elif path == "/api/sessions":
             self._json(200, {"sessions": auth.list_sessions(tok)})
+        elif path == "/api/update":
+            self._json(200, auth.update_info())
         elif path == "/api/2fa":
             sess = auth.get_session(tok)
             self._json(200, auth.totp_status(sess["username"]) if sess else {})
@@ -427,6 +429,9 @@ class H(BaseHTTPRequestHandler):
                 return self._json(200 if ok else 500, {"ok": ok, "output": out,
                                   **({} if ok else {"error": "Could not start the restore"})})
             return self._json(404, {"error": "Not found"})
+
+        if path == "/api/update/check":
+            return self._json(200, auth.update_info(force=True))
 
         # Segundo factor (TOTP) de la propia cuenta: empezar (pide la contraseña), confirmar con un código, desactivar (contraseña) o restablecer el de otro usuario (un admin, contraseña).
         # EN: Second factor (TOTP) of one's own account: begin (asks for the password), confirm with a code, turn off (password) or reset another user's (an admin, password).

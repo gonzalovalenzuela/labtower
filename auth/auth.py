@@ -1256,6 +1256,66 @@ def version() -> str:
         return "dev"
 
 
+# ─── Aviso de versión nueva ──────────────────────────────────────────────────────────────────────────
+# ES: Consulta las versiones PUBLICADAS en GitHub (releases/latest: sin borradores ni pre-versiones) como máximo cada 12 h y recuerda la respuesta en update.json. Solo
+#     lee: nunca descarga ni instala nada. Se desactiva con LABTOWER_UPDATE_CHECK=0 en /etc/default/labtower.
+# EN: Looks at the versions PUBLISHED on GitHub (releases/latest: no drafts or pre-releases) at most every 12 h and remembers the answer in update.json. Read only:
+#     it never downloads or installs anything. Turn it off with LABTOWER_UPDATE_CHECK=0 in /etc/default/labtower.
+UPDATE_URL   = os.environ.get("LABTOWER_UPDATE_URL", "https://api.github.com/repos/gonzalovalenzuela/labtower/releases/latest")
+UPDATE_FILE  = Path(os.environ.get("LABTOWER_UPDATE_FILE", str(USERS_FILE.with_name("update.json"))))
+UPDATE_EVERY, UPDATE_RETRY = 12 * 3600, 3600
+RELEASE_PREFIX = "https://github.com/gonzalovalenzuela/labtower/"
+_update_lock = threading.Lock()
+_update_busy = [False]
+
+def version_key(v):
+    """'2.1.3f' -> ((2,1,3,0), 'f'); '2.1' < '2.1.3' < '2.1.3e' < '2.1.3f'. Unknown shapes -> None."""
+    m = re.fullmatch(r"v?(\d+(?:\.\d+){0,3})([a-z]?)", str(v or "").strip().lower())
+    if not m: return None
+    n = [int(x) for x in m.group(1).split(".")]
+    return (tuple(n + [0] * (4 - len(n))), m.group(2))
+
+def _update_fetch() -> dict:
+    import urllib.request
+    req = urllib.request.Request(UPDATE_URL, headers={"User-Agent": "labtower/" + version(), "Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(req, timeout=8) as r:                       # fixed GitHub URL (tests: a local server)  # nosec B310
+        raw = r.read(262144)
+    d = json.loads(raw)
+    if not isinstance(d, dict) or d.get("draft") or d.get("prerelease"): raise ValueError("no stable release")
+    tag = str(d.get("tag_name") or "")
+    if version_key(tag) is None: raise ValueError("unrecognised tag")
+    url = str(d.get("html_url") or "")
+    if not url.startswith(RELEASE_PREFIX): url = RELEASE_PREFIX + "releases"
+    return {"latest": tag.lstrip("vV"), "url": url, "published": str(d.get("published_at") or "")[:10], "name": str(d.get("name") or "")[:80]}
+
+def _update_refresh():
+    try:
+        try: info = _update_fetch(); err = ""
+        except Exception as e: info, err = {}, f"{type(e).__name__}: {e}"[:160]
+        with _update_lock:
+            cur = read_json(UPDATE_FILE, {}, dict)
+            cur.update(info); cur["checked"] = int(time.time()); cur["error"] = err
+            if not err: cur["ok"] = cur["checked"]
+            write_json(UPDATE_FILE, cur, indent=None)
+    finally:
+        _update_busy[0] = False
+
+@_local
+def update_info(force=False) -> dict:
+    """What the Admin Panel shows: installed version, latest published one and whether it is newer. Refreshes in the background when the answer is old."""
+    cur = read_json(UPDATE_FILE, {}, dict)
+    enabled = os.environ.get("LABTOWER_UPDATE_CHECK", "1").strip() != "0"
+    age = time.time() - int(cur.get("checked", 0) or 0)
+    wait = UPDATE_RETRY if cur.get("error") else UPDATE_EVERY
+    if enabled and (force or age > wait) and not _update_busy[0]:
+        if not force or age > 30:                                        # a manual check at most every 30 s
+            _update_busy[0] = True
+            threading.Thread(target=_update_refresh, daemon=True).start()
+    mine, last = version_key(version()), version_key(cur.get("latest"))
+    return {"enabled": enabled, "current": version(), "latest": cur.get("latest") or "", "url": cur.get("url") or "", "published": cur.get("published") or "",
+            "newer": bool(mine and last and last > mine), "checked": cur.get("checked") or 0, "error": cur.get("error") or ""}
+
+
 # ─── Eventos (línea de tiempo del Resumen) ────────────────────────────────────────────────
 # Los módulos anotan aquí los cambios de estado importantes (UPS a batería, host nuevo, nodo caído…) y la
 # página Resumen los muestra como línea de tiempo. Se guardan pocos y se usa el mismo candado entre procesos
