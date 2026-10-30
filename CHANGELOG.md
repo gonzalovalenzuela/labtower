@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.3q — 2026-10-30
+
+**Correcciones**
+- **UPS Monitor en español:** los resultados del autotest que informa NUT se traducen («Done and passed» → «Aprobado», «No test initiated» → «Sin prueba», «In progress» → «En curso», etc.).
+- **UPS Monitor:** las fechas del autotest y del último corte usaban el formato del navegador (mes/día/año); ahora usan día/mes/año en español.
+
 ## 2.1.3p — 2026-10-30
 
 **Correcciones**

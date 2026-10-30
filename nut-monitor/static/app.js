@@ -1255,10 +1255,16 @@ function availHtml(st){
   const a=st.avail||{},L=st.last;
   const streak=st.on_battery?cell(t('avStreak'),t('avOnBatt'),'var(--red)')
     :cell(t('avStreak'),fmtDur(st.streak)+(L?'':' <span style="opacity:.55;font-size:10px" title="'+esc(t('avSince'))+'">*</span>'));
-  const lastTxt=L?`${PCT.ls(new Date(L.start*1000))} · ${fmtDur(L.dur)}${L.min_charge!=null?' · '+t('avMin')+' '+Math.round(L.min_charge)+'%':''}`:t('avNone');
+  const lastTxt=L?`${fdt(L.start)} · ${fmtDur(L.dur)}${L.min_charge!=null?' · '+t('avMin')+' '+Math.round(L.min_charge)+'%':''}`:t('avNone');
   return `<div class="vars-section avail">${streak}${cell(t('av24'),fmtPct(a['24h']))}${cell(t('av7'),fmtPct(a['7d']))}${cell(t('av30'),fmtPct(a['30d']))}${cell(t('avCount'),st.count30)}${cell(t('avLast'),esc(lastTxt))}</div>`;
 }
 // Batería: autonomía estimada, edad, tendencia de capacidad y registro de autotests / battery: estimated runtime, age, capacity trend and self-test log
+// Resultados de autotest que informa NUT, en español cuando la interfaz está en español; texto desconocido se deja tal cual.
+// EN: Self-test results as NUT reports them, in Spanish when the interface is Spanish; unknown text is left as is.
+const TEST_ES={'done and passed':'Aprobado','done and warning':'Terminó con advertencia','done and error':'Terminó con error','aborted':'Cancelado','in progress':'En curso','no test initiated':'Sin prueba','ok':'Aprobado'};
+function testTxt(r){const k=String(r||'').trim().toLowerCase();return _lang==='es'&&TEST_ES[k]?TEST_ES[k]:r;}
+// Fecha y hora con el formato del idioma (día/mes/año), no el del navegador.
+function fdt(ts){return PCT.ls(new Date(ts*1000),_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});}
 function batHtml(st,sid,upsName){
   const b=st&&st.battery;if(!b)return'';
   const cell=(k,v,c)=>`<div class="var-cell"><span class="var-key">${esc(k)}</span><span class="var-val"${c?` style="color:${c}"`:''}>${v}</span></div>`;
@@ -1273,12 +1279,12 @@ function batHtml(st,sid,upsName){
   else if(canAdmin())cells.push(cell(t('batAge'),'<span style="opacity:.55">'+esc(t('batUnknown'))+'</span>'+btn));
   const A=b.aging;
   cells.push(cell(t('batAging'),A?esc(t('batAgingFmt',A.change_pct,A.weeks)):'<span style="opacity:.55">'+esc(t('batCollecting'))+'</span>',A&&A.warn?'var(--orange)':''));
-  if(b.test_now){const kc={passed:'var(--green)',failed:'var(--red)'}[b.test_now.kind]||'';cells.push(cell(t('batTestNow'),esc(b.test_now.result)+(b.test_now.ts?` <span style="opacity:.6;font-size:11px">· ${esc(PCT.ls(new Date(b.test_now.ts*1000)))}</span>`:''),kc));}
+  if(b.test_now){const kc={passed:'var(--green)',failed:'var(--red)'}[b.test_now.kind]||'';cells.push(cell(t('batTestNow'),esc(testTxt(b.test_now.result))+(b.test_now.ts?` <span style="opacity:.6;font-size:11px">· ${esc(fdt(b.test_now.ts))}</span>`:''),kc));}
   let warn='';
   if(A&&A.warn)warn=`<div style="color:var(--orange);font-size:12px;margin:6px 0 0">⚠ ${esc(t('batAgingWarn'))}</div>`;
   else if(b.age_years!=null&&b.age_years>=4)warn=`<div style="color:var(--orange);font-size:12px;margin:6px 0 0">⚠ ${esc(t('batOldWarn'))}</div>`;
   const tests=(b.tests||[]).length?`<div style="font-size:12px;margin-top:8px"><div style="font-weight:600;margin-bottom:2px">${esc(t('batTests'))}</div>`+
-    b.tests.map(x=>`<div style="font-family:var(--mono);font-size:11px;color:${{passed:'var(--green)',failed:'var(--red)'}[x.kind]||'var(--text-mid)'}">${esc(PCT.ls(new Date(x.ts*1000)))} · ${esc(x.result)}</div>`).join('')+'</div>':'';
+    b.tests.map(x=>`<div style="font-family:var(--mono);font-size:11px;color:${{passed:'var(--green)',failed:'var(--red)'}[x.kind]||'var(--text-mid)'}">${esc(fdt(x.ts))} · ${esc(testTxt(x.result))}</div>`).join('')+'</div>':'';
   return `<div style="grid-column:1 / -1"><div class="vars-section bat">${cells.join('')}</div>${warn}${tests}</div>`;
 }
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
