@@ -1426,9 +1426,9 @@ def read_events(modules=None, limit=100):
     return list(reversed(out))[:limit]
 
 
-# ─── Datos del equipo (widget «Pi» del Resumen) ────────────────────────────────────────────
+# ─── Datos del equipo (widget del servidor en el Resumen) ────────────────────────────────────────────
 # Temperatura, CPU, memoria, disco y tiempo encendido leídos de /proc y /sys; sin comandos externos salvo lo que ya usa check_power.
-# EN: ─── Host data ("Pi" widget of the Overview) ──────────────────────────────────────────────
+# EN: ─── Host data (server widget of the Overview) ──────────────────────────────────────────────
 #     Temperature, CPU, memory, disk and uptime read from /proc and /sys; no external commands beyond what check_power already uses.
 _cpu_prev: list = [None]
 
@@ -1939,7 +1939,7 @@ def check_power():
 
     Returns None on anything that is not a Raspberry Pi (VMs, other hardware), so no check is
     shown there. The 'since boot' bits only clear on reboot, so after replacing the power
-    supply the warning stays until the Pi is restarted."""
+    supply the warning stays until the server is restarted."""
     if not _is_raspberry_pi():
         return None
     bits = _read_throttled()
@@ -1952,7 +1952,7 @@ def check_power():
         except OSError:
             pass
     if bits is None and not have_hwmon:
-        return None                                   # no way to read the power state on this Pi
+        return None                                   # no way to read the power state on this server
     flags = [txt for b, txt in _THROTTLE_BITS if bits and bits & (1 << b)]
     if now and "under-voltage now" not in flags:
         flags.insert(0, "under-voltage now")

@@ -405,8 +405,8 @@ let lastRef=0;
 const riLabel=v=>v===0?T('rman'):v<60?v+' s':(v/60)+' min';
 function riFill(){const s=$('ri');if(!s)return;s.title=T('rint');s.setAttribute('aria-label',T('rint'));s.innerHTML='';RI.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=riLabel(v);if(v===riSec)o.selected=true;s.appendChild(o)});const b=$('rr');if(b){b.title=T('rnow');b.setAttribute('aria-label',T('rnow'))}}
 function riNext(){clearTimeout(timer);timer=null;if(riSec>0)timer=setTimeout(loop,Math.max(0,lastRef+riSec*1000-Date.now()))}
-// Con la pestaña oculta no se consulta nada (ahorra CPU de la Pi); al volver se actualiza si ya tocaba.
-// EN: With the tab hidden nothing is queried (saves the Pi's CPU); on return it refreshes if it was due.
+// Con la pestaña oculta no se consulta nada (ahorra CPU del servidor); al volver se actualiza si ya tocaba.
+// EN: With the tab hidden nothing is queried (saves the server's CPU); on return it refreshes if it was due.
 function loop(){clearTimeout(timer);timer=null;
   if(document.hidden){if(riSec>0)timer=setTimeout(loop,Math.max(riSec,10)*1000);return}
   refresh().catch(()=>{}).finally(()=>{lastRef=Date.now();riNext()})}

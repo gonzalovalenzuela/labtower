@@ -183,7 +183,7 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
 .otool:disabled{opacity:.3;cursor:default}
 .otool.grab{cursor:grab;font-size:.95rem;display:inline-flex;align-items:center;justify-content:center;user-select:none}
 body.kiosk .otools{display:none}
-/* Vista detallada de la Pi / Detailed Pi view */
+/* Vista detallada del servidor / Detailed server view */
 body.pd-open{overflow:hidden}
 .pd-modal{position:fixed;inset:0;z-index:90;background:rgba(10,14,24,.55);display:flex;align-items:flex-start;justify-content:center;padding:4vh 12px;overflow:auto}
 .pd-card{background:var(--bg);border:1px solid var(--border-b);border-radius:var(--r);box-shadow:0 20px 60px rgba(0,0,0,.35);width:min(1100px,100%);max-height:92vh;display:flex;flex-direction:column;min-width:0}

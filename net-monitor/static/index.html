@@ -95,7 +95,7 @@
         </button>
         <div id="snmp-panel" style="display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:200;width:340px;max-height:80vh;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.18);padding:16px">
           <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px" data-i18n="snmpTitle">SNMP source</div>
-          <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;line-height:1.5" data-i18n="snmpDesc">Reads the ARP table of a switch or router to get MAC addresses (and vendor) for hosts the Pi cannot see directly. Requires the snmp package on the Pi.</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;line-height:1.5" data-i18n="snmpDesc">Reads the ARP table of a switch or router to get MAC addresses (and vendor) for hosts the server cannot see directly. Requires the snmp package on the server.</div>
           <div id="snmp-missing" style="display:none;font-size:11px;font-family:var(--mono);padding:6px 8px;border-radius:var(--r-sm);margin-bottom:10px;background:var(--red-dim);color:var(--red)" data-i18n="snmpMissing">snmpwalk is not installed — run: apt install snmp</div>
           <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);margin-bottom:10px;cursor:pointer"><input type="checkbox" id="sn-enabled"> <span data-i18n="snmpEnable">Use SNMP during scans</span></label>
           <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px">

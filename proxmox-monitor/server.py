@@ -9,7 +9,7 @@ API REST de Proxmox VE — sin dependencias externas
 # Flujo de datos:
 #   un hilo «poller» por cluster → PVEClient consulta la API → ClusterCache guarda la última lectura
 #   → la página la pide a /api/clusters. El hilo consulta rápido (5 s) mientras alguien mira la
-#   página y lento (60 s) cuando nadie la tiene abierta, para no gastar CPU en la Pi.
+#   página y lento (60 s) cuando nadie la tiene abierta, para no gastar CPU en el servidor.
 #
 # Seguridad del certificado: Proxmox usa por defecto un certificado propio, así que no se puede
 # validar contra una autoridad pública. En su lugar se «fija» la huella SHA-256 del certificado al
@@ -23,7 +23,7 @@ API REST de Proxmox VE — sin dependencias externas
 #     Data flow:
 #       one "poller" thread per cluster → PVEClient queries the API → ClusterCache keeps the last reading
 #       → the page requests it from /api/clusters. The thread polls fast (5 s) while someone is looking at the
-#       page and slowly (60 s) when nobody has it open, so the Pi does not waste CPU.
+#       page and slowly (60 s) when nobody has it open, so the server does not waste CPU.
 #
 #     Certificate security: Proxmox uses its own certificate by default, so it cannot be validated against a
 #     public authority. Instead the SHA-256 fingerprint of the certificate is "pinned" when the cluster is added

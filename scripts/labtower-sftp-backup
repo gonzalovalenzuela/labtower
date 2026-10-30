@@ -14,7 +14,7 @@
 # How it works:
 #  1. `teleporter backup` creates the archive (module data, NUT and nginx configuration) in LOCAL_DIR.
 #  2. `teleporter check` verifies it BEFORE uploading (a bad archive is never sent).
-#  3. The archive is ENCRYPTED (gpg, AES-256, passphrase in /etc/labtower/backup_passphrase) before leaving the Pi, because it holds
+#  3. The archive is ENCRYPTED (gpg, AES-256, passphrase in /etc/labtower/backup_passphrase) before leaving the server, because it holds
 #     password hashes and API tokens. It is uploaded as <name>.gpg.part and renamed when complete, and the remote size is compared.
 #  4. Old copies are pruned (KEEP_LOCAL here, KEEP_REMOTE on the storage). Only files named
 #     labtower-auto-<this host>-<date>_<time>.tar.gz are ever deleted, nothing else.
@@ -114,14 +114,14 @@ write_status() {
   return 0
 }
 
-# ES: Contraseña de cifrado: se crea sola la primera vez (aleatoria, 0600, solo root). SIN ELLA los respaldos cifrados no se pueden abrir: hay que guardar una copia fuera de la Pi.
-# EN: Encryption passphrase: created automatically the first time (random, 0600, root only). WITHOUT IT the encrypted backups cannot be opened: keep a copy off the Pi.
+# ES: Contraseña de cifrado: se crea sola la primera vez (aleatoria, 0600, solo root). SIN ELLA los respaldos cifrados no se pueden abrir: hay que guardar una copia fuera del servidor.
+# EN: Encryption passphrase: created automatically the first time (random, 0600, root only). WITHOUT IT the encrypted backups cannot be opened: keep a copy off the server.
 ensure_passphrase() {
   [ -s "$PASSPHRASE_FILE" ] && return 0
   mkdir -p "$(dirname "$PASSPHRASE_FILE")"
   ( umask 077; head -c 48 /dev/urandom | base64 -w0 > "$PASSPHRASE_FILE"; echo >> "$PASSPHRASE_FILE" ) || return 1
   chmod 600 "$PASSPHRASE_FILE"
-  log "IMPORTANT: a new encryption passphrase was created in $PASSPHRASE_FILE — copy it somewhere safe off this Pi (sudo cat $PASSPHRASE_FILE); without it the encrypted backups cannot be restored"
+  log "IMPORTANT: a new encryption passphrase was created in $PASSPHRASE_FILE — copy it somewhere safe off this server (sudo cat $PASSPHRASE_FILE); without it the encrypted backups cannot be restored"
 }
 # gpg_encrypt <in> <out> / gpg_decrypt <in> <out>
 gpg_encrypt() { gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-file "$PASSPHRASE_FILE" --symmetric --cipher-algo AES256 -o "$2" "$1"; }
@@ -159,8 +159,8 @@ cmd_run() {
   log "creating backup $name"
   out="$("$TELEPORTER" backup "$file" 2>&1)" || { echo "$out" | tail -5; rm -f -- "$file"; die "teleporter backup failed: $(echo "$out" | tail -1)"; }
   out="$("$TELEPORTER" check "$file" 2>&1)" || { echo "$out" | tail -5; rm -f -- "$file"; die "the archive did not pass the check, it was NOT uploaded: $(echo "$out" | tail -1)"; }
-  # ES: Lo que sale de la Pi va cifrado; la copia local (carpeta de root, modo 600) queda sin cifrar para restaurar rápido.
-  # EN: What leaves the Pi is encrypted; the local copy (root folder, mode 600) stays plain for a quick restore.
+  # ES: Lo que sale del servidor va cifrado; la copia local (carpeta de root, modo 600) queda sin cifrar para restaurar rápido.
+  # EN: What leaves the server is encrypted; the local copy (root folder, mode 600) stays plain for a quick restore.
   local up="$file" upname="$name"
   if [ "$ENCRYPT" = yes ]; then
     up="$file.gpg"; upname="$name.gpg"

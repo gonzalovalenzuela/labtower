@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-Overview — resumen de UPS, Proxmox, red y la Pi / Overview of UPS, Proxmox, network and the Pi
+Overview — resumen de UPS, Proxmox, red y el servidor / Overview of UPS, Proxmox, network and the server
 """
 # Resumen (puerto 8085): una sola página con lo más importante de UPS Monitor, Proxmox Monitor y Net Monitor,
 # más el estado de la Raspberry Pi y una línea de tiempo de eventos. La página consulta directamente las APIs de
 # los otros módulos (con la misma sesión); este servicio solo aporta lo que ellos no tienen:
-#   /api/system  → temperatura, CPU, memoria, disco y tiempo encendido de la Pi
-#   /api/pidetail → detalle completo de la Pi (CPU por núcleo, memoria, discos, red, usuarios, procesos)
+#   /api/system  → temperatura, CPU, memoria, disco y tiempo encendido del servidor
+#   /api/pidetail → detalle completo del servidor (CPU por núcleo, memoria, discos, red, usuarios, procesos)
 #   /api/events  → línea de tiempo (los módulos anotan sus cambios de estado con auth.record_event)
 # Estructura: salud · HTTP (GET/POST) · arranque.
 # EN: Overview (port 8085): a single page with the key points of UPS Monitor, Proxmox Monitor and Net Monitor,
 #     plus the Raspberry Pi status and an event timeline. The page queries the other modules' APIs directly (with
 #     the same session); this service only adds what they do not have:
-#       /api/system  → temperature, CPU, memory, disk and uptime of the Pi
-#       /api/pidetail → full Pi detail (per-core CPU, memory, disks, network, users, processes)
+#       /api/system  → temperature, CPU, memory, disk and uptime of the server
+#       /api/pidetail → full server detail (per-core CPU, memory, disks, network, users, processes)
 #       /api/events  → timeline (modules record their state changes with auth.record_event)
 #     Structure: health · HTTP (GET/POST) · startup.
 import json, os, sys, logging, threading, time
@@ -133,8 +133,8 @@ def pi_history(hours=24):
     return {"pi": True, "every": PI_EVERY, "samples": rows}
 
 
-# El detalle lee /proc dos veces con una pausa de 0,4 s: se comparte el resultado 2 s entre todas las sesiones y solo un hilo lo calcula a la vez, para que muchas peticiones no carguen la Pi.
-# EN: The detail reads /proc twice with a 0.4 s pause: the result is shared for 2 s among all sessions and only one thread computes it at a time, so many requests cannot load the Pi.
+# El detalle lee /proc dos veces con una pausa de 0,4 s: se comparte el resultado 2 s entre todas las sesiones y solo un hilo lo calcula a la vez, para que muchas peticiones no carguen el servidor.
+# EN: The detail reads /proc twice with a 0.4 s pause: the result is shared for 2 s among all sessions and only one thread computes it at a time, so many requests cannot load the server.
 _pd_lock = threading.Lock(); _pd_cache = {}
 def pi_detail_cached(full):
     with _pd_lock:

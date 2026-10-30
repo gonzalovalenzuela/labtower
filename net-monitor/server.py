@@ -334,10 +334,10 @@ def mdns_hint(hostname: str) -> str:
         return "apple"
     return ""
 
-# ─── SNMP: ARP table from a switch/router (MAC for hosts the Pi cannot see) ───
+# ─── SNMP: ARP table from a switch/router (MAC for hosts the server cannot see) ───
 import shutil, tempfile
-# SNMP: pregunta la tabla ARP de un switch/router para conocer la MAC de equipos que la Pi no ve directamente (otras subredes o VLAN). Los secretos (comunidad, claves) nunca se devuelven al navegador.
-# EN: SNMP: asks a switch/router for its ARP table to learn the MAC of devices the Pi cannot see directly (other subnets or VLANs). Secrets (community, keys) are never returned to the browser.
+# SNMP: pregunta la tabla ARP de un switch/router para conocer la MAC de equipos que el servidor no ve directamente (otras subredes o VLAN). Los secretos (comunidad, claves) nunca se devuelven al navegador.
+# EN: SNMP: asks a switch/router for its ARP table to learn the MAC of devices the server cannot see directly (other subnets or VLANs). Secrets (community, keys) are never returned to the browser.
 SNMP_DEFAULT = {"enabled": False, "host": "", "port": 161, "version": "2c", "community": "",
                 "user": "", "level": "authPriv", "auth_proto": "SHA", "auth_pass": "",
                 "priv_proto": "AES", "priv_pass": "", "timeout": 5}
@@ -1413,8 +1413,8 @@ class H(BaseHTTPRequestHandler):
             if single:
                 try: ip_obj = ipaddress.ip_address(single)
                 except ValueError: return self._json(400, {"error": "Invalid IP"})
-                # Solo equipos de la red escaneada: así la Pi no sirve para sondear Internet ni ella misma (127.0.0.1, 169.254.x).
-                # EN: Only hosts of the scanned network: so the Pi cannot be used to probe the Internet or itself (127.0.0.1, 169.254.x).
+                # Solo equipos de la red escaneada: así el servidor no sirve para sondear Internet ni ella misma (127.0.0.1, 169.254.x).
+                # EN: Only hosts of the scanned network: so the server cannot be used to probe the Internet or itself (127.0.0.1, 169.254.x).
                 if ip_obj.version != ipaddress.ip_network(NETWORK, strict=False).version or ip_obj not in ipaddress.ip_network(NETWORK, strict=False):
                     return self._json(400, {"error": "IP outside the scanned network"})
             threading.Thread(target=run_scan, kwargs={"single_ip": single}, daemon=True).start()
