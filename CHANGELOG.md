@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.3b — 2026-10-30
+
+**Nuevo**
+- **Proxmox Monitor: diagnóstico del cluster.** Un panel nuevo bajo los nodos reúne lo que hacía falta para investigar reinicios y caídas:
+  - **Reinicios de nodos:** se detecta cuándo arrancó cada nodo (hora actual menos su `uptime`) y se compara con la última hora conocida, que se guarda en disco: así se detecta también un reinicio ocurrido mientras LabTower estaba parado. Queda un registro con una **línea de tiempo común**; si varios nodos se reinician con menos de 10 minutos de diferencia se marca como reinicio **simultáneo** y se anota un evento crítico en el Resumen (útil para distinguir un fallo de corosync/HA de un reinicio aislado).
+  - **Corosync:** estado del quórum y cuántos nodos están dentro. Perder el quórum y recuperarlo se anotan en la línea de tiempo del Resumen.
+  - **Ceph:** además de la salud, OSD caídos y fuera, y los avisos activos (`OSD_DOWN`, `PG_DEGRADED`…) con su gravedad. Un OSD que se cae genera un evento.
+  - **Discos (SMART):** cada 15 minutos (`PVE_SMART_EVERY`) se lee el SMART de los discos de cada nodo: salud, desgaste, temperatura, errores de medio, sectores reasignados/pendientes y, en NVMe, **«Unsafe Shutdowns»**. Si ese contador sube se anota un evento (apagado sin cierre limpio o corte de energía), y un disco con aviso SMART genera otro. Se lee en un hilo aparte, así que no frena la actualización de los nodos.
+- Nueva ruta `/api/diag?id=<cluster>` (nivel Proxmox «solo lectura»).
+- Requisito: el token de API necesita el privilegio `Sys.Audit` sobre `/nodes` para leer los discos (el rol `PVEAuditor` lo incluye). Sin él, el panel lo indica y lo demás sigue funcionando.
+
 ## 2.1.3a — 2026-10-30
 
 **Nuevo**

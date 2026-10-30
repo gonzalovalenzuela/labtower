@@ -164,6 +164,7 @@ labtower-health
 - Consulta cada cluster cada 5 s con la página abierta y cada 60 s en reposo.
 - Orden de nodos y nodos fijados por cluster (solo admin).
 - Al agregar un cluster hay que confirmar la huella SHA-256 de su certificado, que queda fijada. Si el certificado cambia, no se envía el token.
+- **Diagnóstico del cluster** (panel bajo los nodos): reinicios de nodos con línea de tiempo común (los que ocurren con menos de 10 minutos de diferencia se marcan como *simultáneos*, y se detectan aunque LabTower estuviera parado), estado del quórum de corosync, OSD caídos y avisos de Ceph, y SMART de los discos de cada nodo (salud, desgaste, temperatura, errores, sectores y, en NVMe, *Unsafe Shutdowns*) leído cada 15 minutos (`PVE_SMART_EVERY`, en segundos; 0 lo desactiva). Todo genera eventos en la línea de tiempo del Resumen. El token de API necesita el privilegio `Sys.Audit` sobre `/nodes` (rol `PVEAuditor`) para leer los discos.
 
 ### NAS Monitor
 - Funciona como UPS Monitor: una tabla **Resumen de NAS** con todos los NAS (estado, modelo, CPU, RAM, temperatura, discos y volumen más lleno). Cada fila se abre y muestra su detalle debajo; por defecto se abre el primero. También se elige desde el menú lateral.
