@@ -17,14 +17,14 @@
 | Module | Path | Port | What it does |
 |---|---|---|---|
 | **Overview** | `/overview/` | 8085 | Status of everything on one screen, event timeline and kiosk mode |
-| **UPS Monitor** | `/nut/` | 8081 | Reads UPS units through NUT: battery, load, runtime, power, voltages, temperature, history and CSV |
+| **UPS Monitor** | `/nut/` | 8081 | Reads UPS units through NUT: battery, load, runtime, battery health, self-tests, voltages, temperature, history and CSV |
 | **Net Monitor** | `/net/` | 8083 | Scans the network: hosts, type, OS, ports, MAC and vendor |
 | **Proxmox Monitor** | `/pve/` | 8084 | Proxmox VE clusters: nodes, VMs, CTs and Ceph |
 | **NAS Monitor** | `/nas/` | 8086 | One or more NAS (Synology over SNMP, TrueNAS and OpenMediaVault over their API): disks, volumes, temperature, CPU, memory and network |
 | **DNS Monitor** | `/dns/` | 8087 | Pi-hole (v5 and v6) and AdGuard Home: queries, % blocked, top lists, upstream DNS and pausing the blocking |
-| **WAN Monitor** | `/wan/` | 8088 | Internet uplink: latency, loss, outages, public IP and a scheduled speed test |
+| **WAN Monitor** | `/wan/` | 8088 | Internet uplink: latency, loss, outages (local or on the line, by asking the router), public IP and a scheduled speed test |
 | **WOL Console** | `/wol/` | 8080 | Powers on machines with Wake-on-LAN |
-| **Admin Panel** | `/admin/` | 8082 | Users, permissions, sessions, backups and system health |
+| **Admin Panel** | `/admin/` | 8082 | Users, permissions, 2FA, sessions, audit log, backups and system health |
 
 Each user can reorder the menu. The home page (`/`) has one card per module.
 
@@ -137,8 +137,8 @@ labtower-health
 - Polls `upsd` every 10 s and keeps history in SQLite (WAL, 1 year).
 - Voltage, power and temperature charts (if the UPS reports it). CSV export.
 - Shows the clients connected to each UPS.
-- **Battery:** under each UPS you see the **runtime now** (as reported by the UPS), the **runtime projected to a full battery** and an estimate if the load rose 50 % (an approximation: runtime is inversely proportional to the load), the **battery age** (if the UPS reports `battery.date`; warning from 4 years) and the **capacity trend**: weekly mean of the runtime with battery ≥ 95 % and a load close to the usual one, over the last 120 days, warning if it falls 20 % or more (needs about a month of history; recomputed every 6 hours).
-- **Self-test log:** if the UPS reports `ups.test.result`, every change is logged (time LabTower saw it) and the last 8 are shown. A failed test raises an Overview warning; a passed one after "In progress", an informational event. LabTower only reads: it never starts tests on the UPS.
+- **Battery:** under each UPS you see the **runtime now** (as reported by the UPS), the **runtime projected to a full battery** and an estimate if the load rose 50 % (an approximation: runtime is inversely proportional to the load), the **battery age** (from `battery.date` or `battery.mfr.date`, whichever is the most recent credible one; an age over 10 years is ignored because some UPSs keep the factory date; warning from 4 years; the ✎ button lets you set the real replacement date, which takes priority) and the **capacity trend**: weekly mean of the runtime with battery ≥ 95 % and a load close to the usual one, over the last 120 days, warning if it falls 20 % or more (needs about a month of history; recomputed every 6 hours).
+- **Self-test log:** if the UPS reports `ups.test.result`, every change is logged (time LabTower saw it) and the last 8 are shown. A failed test raises an Overview warning; a passed one after "In progress", an informational event. "Last result" shows the time LabTower saw it and, if the UPS goes back to "No test initiated", the last real test. LabTower only reads: it never starts tests on the UPS (they are started with `upscmd` if the driver allows it).
 
 ### Net Monitor
 - **Network:** detected automatically (the server's /24) or set with `SCAN_NETWORK`.
@@ -186,6 +186,22 @@ labtower-health
 - **Certificates:** with "Verify the TLS certificate" on, it is validated against the system CAs. Without it, ANY certificate is **not** accepted: the SHA-256 fingerprint is pinned on the first connection and, if it changes, the connection is dropped before the key is sent. Saving the NAS again clears the fingerprint and it is learned again.
 - Read-only: LabTower never calls a TrueNAS or OpenMediaVault method that changes anything.
 
+### WAN Monitor
+- Every 30 s (`interval`) it measures the internet uplink with ping or TCP to the targets you choose, to the gateway and to a DNS name; latency, jitter and loss are stored in SQLite.
+- **Outages:** an outage opens after 2 failed rounds and closes when service returns. Each one is classified as **Local network (LAN)** (the gateway does not answer either), **Line / provider (WAN)** (the router reports its link is down) or **Internet** (the router does not confirm it).
+- **Router check (optional):** in *Settings → Router check*, turn on "Ask the router" and pick the type. It only reads the WAN state; it never changes anything on the router.
+
+  | Type | How it asks | Notes |
+  |---|---|---|
+  | **Huawei** (WiFi AX3, Mesh and other HiLink) | HiLink login and `api/ntwk/wandetect` | the router web user and password |
+  | **OpenWrt** | `ubus` over HTTP | needs `uhttpd-mod-ubus`; the interface is `wan` by default |
+  | **DD-WRT** | `Status_Router.live.asp` pages with HTTP basic | |
+  | **TP-Link** (classic firmware) | `userRpm/StatusRpm.htm` with HTTP basic | newer models with encrypted login (Archer, Deco) cannot be read |
+
+  Leave the address empty to use the gateway. "Test router" shows whether it connected, the WAN state, the IP and the reason if it fails. The password is stored on the server (mode 600) and is never shown or sent to the browser. While an outage is open it asks every 10 s.
+- The **Connection** card shows how long the WAN has been connected according to the router and how many outages LabTower recorded in that period, so you can compare both.
+- Public IP with change alert, scheduled speed test (built-in engine, Ookla or LibreSpeed) and history charts.
+
 ### WOL Console
 - Sends magic packets (at most 10 per minute per IP).
 - Picks hosts found by Net Monitor (name, MAC, IP and category) and uses the latest IP if DHCP changed it.
@@ -194,6 +210,9 @@ labtower-health
 ### Admin Panel
 - Users and per-module permissions (none, read-only, execute, admin).
 - **Active sessions:** signed-in devices (user, browser, IP, last activity); close one or all the others.
+- **Two-factor authentication (2FA):** "Security" card. Turn it on by scanning a QR code with any authenticator app (Google Authenticator, Aegis, 1Password…); the typed key is the fallback. 10 single-use recovery codes are issued. With 2FA on, every sign-in form asks for the code. An admin can reset another user's 2FA.
+- **Audit log:** who created or deleted users, changed permissions or passwords, turned 2FA on or reset it, closed sessions, made backups or restores, and changed WAN Monitor settings or a battery date. It keeps the last 5,000 entries and never passwords or codes.
+- **Updates:** warns when a new stable release is on GitHub (checked at most every 12 h; read only). Turn it off with `LABTOWER_UPDATE_CHECK=0` in `/etc/default/labtower`.
 - **System health** card and **Backups** (Teleporter).
 
 ### All modules
@@ -320,6 +339,7 @@ Designed for a **trusted local network**. Do not expose port 80 to the internet.
 - **Access:** the Python services listen on `127.0.0.1` only; only nginx is visible on the network. To encrypt, see [HTTPS](#https).
 - **Passwords:** minimum 8 characters, stored with scrypt. The initial account uses a random password that must be changed.
 - **Login attempts:** 5 failures from one IP within 10 minutes lock that IP for 5 minutes; each account also has its own limit. The counter is shared by all modules. nginx rate-limits requests and connections per IP.
+- **2FA and audit:** optional two-factor authentication (TOTP) per user, with recovery codes, and an audit log of administrative actions.
 - **Sessions:** `HttpOnly` and `SameSite=Strict` cookie; only the SHA-256 hash of the token is stored on disk. They can be viewed and closed in the Admin Panel.
 - **CSRF:** every request that changes data is rejected (403) unless it comes from the app's own page.
 - **Strict CSP:** no inline scripts or handlers (`script-src 'self'`). Browsers: Chrome 75+, Firefox 105+, Safari 15.4+.
@@ -341,14 +361,14 @@ Designed for a **trusted local network**. Do not expose port 80 to the internet.
 
 ```
 labtower/
-├── auth/              # shared authentication, Admin Panel and panel backups
+├── auth/              # shared authentication, 2FA, audit log, Admin Panel and panel backups
 ├── wol-console/       # each module: server.py + static/
 ├── nut-monitor/       # (UPS Monitor)
 ├── net-monitor/
 ├── proxmox-monitor/
 ├── nas-monitor/       # NAS Monitor (Synology over SNMP, TrueNAS and OpenMediaVault over API)
 ├── dns-monitor/       # DNS Monitor (Pi-hole / AdGuard Home)
-├── wan-monitor/       # WAN Monitor (internet)
+├── wan-monitor/       # WAN Monitor (internet and router check)
 ├── overview/          # Overview
 ├── home/              # home page and icons
 ├── etc/               # nginx, backup.conf, cron

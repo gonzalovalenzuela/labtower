@@ -17,14 +17,14 @@
 | Módulo | Ruta | Puerto | Qué hace |
 |---|---|---|---|
 | **Resumen** | `/overview/` | 8085 | Estado de todo en una pantalla, línea de tiempo de eventos y modo kiosko |
-| **UPS Monitor** | `/nut/` | 8081 | Lee UPS por NUT: batería, carga, autonomía, consumo, voltajes, temperatura, historial y CSV |
+| **UPS Monitor** | `/nut/` | 8081 | Lee UPS por NUT: batería, carga, autonomía, salud de la batería, autotests, voltajes, temperatura, historial y CSV |
 | **Net Monitor** | `/net/` | 8083 | Escanea la red: equipos, tipo, SO, puertos, MAC y fabricante |
 | **Proxmox Monitor** | `/pve/` | 8084 | Clusters Proxmox VE: nodos, VMs, CTs y Ceph |
 | **NAS Monitor** | `/nas/` | 8086 | Uno o varios NAS (Synology por SNMP, TrueNAS y OpenMediaVault por su API): discos, volúmenes, temperatura, CPU, memoria y red |
 | **DNS Monitor** | `/dns/` | 8087 | Pi-hole (v5 y v6) y AdGuard Home: consultas, % bloqueado, tops, DNS de salida y pausa del bloqueo |
-| **WAN Monitor** | `/wan/` | 8088 | Salida a internet: latencia, pérdida, cortes, IP pública y prueba de velocidad programada |
+| **WAN Monitor** | `/wan/` | 8088 | Salida a internet: latencia, pérdida, cortes (local o de la línea, consultando al router), IP pública y prueba de velocidad programada |
 | **WOL Console** | `/wol/` | 8080 | Enciende equipos con Wake-on-LAN |
-| **Admin Panel** | `/admin/` | 8082 | Usuarios, permisos, sesiones, respaldos y salud del sistema |
+| **Admin Panel** | `/admin/` | 8082 | Usuarios, permisos, 2FA, sesiones, auditoría, respaldos y salud del sistema |
 
 El menú se puede reordenar por usuario. La página de inicio (`/`) tiene una tarjeta por módulo.
 
@@ -137,8 +137,8 @@ labtower-health
 - Consulta `upsd` cada 10 s y guarda el historial en SQLite (WAL, 1 año).
 - Gráficos de voltaje, consumo y temperatura (si la UPS la informa). Exporta CSV.
 - Muestra los clientes conectados a cada UPS.
-- **Batería:** bajo cada UPS se ve la **autonomía ahora** (la que informa el UPS), la **autonomía proyectada a batería llena** y una estimación si la carga subiera 50 % (aproximación: la autonomía es inversamente proporcional a la carga), la **edad de la batería** (si el UPS informa `battery.date`; aviso desde los 4 años) y la **tendencia de capacidad**: promedio semanal de la autonomía con batería ≥ 95 % y carga parecida a la habitual, de los últimos 120 días, que avisa si cae 20 % o más (necesita cerca de un mes de historial; se recalcula cada 6 horas).
-- **Registro de autotests:** si el UPS informa `ups.test.result`, cada cambio se anota (hora en que LabTower lo vio) y se muestran los últimos 8. Un test fallido genera un aviso en el Resumen; uno aprobado después de «In progress», un evento informativo. LabTower solo lee: no lanza pruebas en el UPS.
+- **Batería:** bajo cada UPS se ve la **autonomía ahora** (la que informa el UPS), la **autonomía proyectada a batería llena** y una estimación si la carga subiera 50 % (aproximación: la autonomía es inversamente proporcional a la carga), la **edad de la batería** (de `battery.date` o `battery.mfr.date`, la más reciente que sea creíble; una edad de más de 10 años se ignora porque algunos UPS dejan la fecha de fábrica; aviso desde los 4 años; el botón ✎ permite indicar la fecha real del cambio, que tiene prioridad) y la **tendencia de capacidad**: promedio semanal de la autonomía con batería ≥ 95 % y carga parecida a la habitual, de los últimos 120 días, que avisa si cae 20 % o más (necesita cerca de un mes de historial; se recalcula cada 6 horas).
+- **Registro de autotests:** si el UPS informa `ups.test.result`, cada cambio se anota (hora en que LabTower lo vio) y se muestran los últimos 8. Un test fallido genera un aviso en el Resumen; uno aprobado después de «In progress», un evento informativo. «Último resultado» muestra la fecha en que LabTower lo vio y, si el UPS vuelve a «No test initiated», la última prueba real. LabTower solo lee: no lanza pruebas en el UPS (se lanzan con `upscmd` si el driver lo permite).
 
 ### Net Monitor
 - **Red:** se detecta sola (la /24 del servidor) o se fija con `SCAN_NETWORK`.
@@ -186,6 +186,22 @@ labtower-health
 - **Certificados:** con «Verificar el certificado TLS» activo se valida contra las CA del sistema. Sin ello **no** se acepta cualquier certificado: se fija la huella SHA-256 en la primera conexión y, si cambia, la conexión se corta antes de enviar la clave. Guardar el NAS otra vez borra la huella y se aprende de nuevo.
 - Solo lectura: LabTower nunca llama a un método de TrueNAS ni de OpenMediaVault que cambie algo.
 
+### WAN Monitor
+- Mide cada 30 s (`interval`) la salida a internet con ping o TCP a los destinos que elijas, a la puerta de enlace y a un nombre DNS; guarda latencia, jitter y pérdida en SQLite.
+- **Cortes:** se abre un corte tras 2 rondas fallidas y se cierra al volver. Cada corte se clasifica como **Red local (LAN)** (la puerta de enlace tampoco responde), **Línea / proveedor (WAN)** (el router informa que su enlace está caído) o **Internet** (el router no lo confirma).
+- **Chequeo del router (opcional):** en *Ajustes → Chequeo del router*, activa «Consultar el router» y elige el tipo. Solo lee el estado WAN; nunca cambia nada en el router.
+
+  | Tipo | Cómo lo consulta | Notas |
+  |---|---|---|
+  | **Huawei** (WiFi AX3, Mesh y otros HiLink) | inicio de sesión HiLink y `api/ntwk/wandetect` | usuario y clave de la web del router |
+  | **OpenWrt** | `ubus` por HTTP | requiere `uhttpd-mod-ubus`; la interfaz es `wan` por defecto |
+  | **DD-WRT** | páginas `Status_Router.live.asp` con HTTP básico | |
+  | **TP-Link** (firmware clásico) | `userRpm/StatusRpm.htm` con HTTP básico | los modelos nuevos con inicio de sesión cifrado (Archer, Deco) no se pueden consultar |
+
+  Deja la dirección vacía para usar la puerta de enlace. «Probar router» muestra si conectó, el estado WAN, la IP y el motivo si falla. La clave se guarda en el servidor (permisos 600) y nunca se muestra ni se envía al navegador. Mientras hay un corte pregunta cada 10 s.
+- En la tarjeta **Conexión** se ve cuánto tiempo lleva conectada la WAN según el router y cuántos cortes registró LabTower en ese período, para contrastar ambos.
+- IP pública con aviso de cambio, prueba de velocidad programada (motor propio, Ookla o LibreSpeed) y gráficos históricos.
+
 ### WOL Console
 - Envía paquetes mágicos (máximo 10 por minuto por IP).
 - Toma equipos detectados por Net Monitor (nombre, MAC, IP y categoría) y usa la IP más reciente si cambió por DHCP.
@@ -194,6 +210,9 @@ labtower-health
 ### Admin Panel
 - Usuarios y permisos por módulo (ninguno, solo lectura, ejecutar, admin).
 - **Sesiones activas:** dispositivos con sesión (usuario, navegador, IP, última actividad); se puede cerrar una o todas las demás.
+- **Autenticación en dos pasos (2FA):** tarjeta «Seguridad». Se activa escaneando un código QR con cualquier app de autenticación (Google Authenticator, Aegis, 1Password…); la clave escrita queda como alternativa. Se entregan 10 códigos de recuperación de un solo uso. Con 2FA activo, todos los formularios de acceso piden el código. Un admin puede restablecer el 2FA de otro usuario.
+- **Registro de auditoría:** quién creó o eliminó usuarios, cambió permisos o contraseñas, activó o restableció 2FA, cerró sesiones, hizo respaldos o restauraciones y cambió ajustes del WAN Monitor o la fecha de una batería. Guarda las últimas 5.000 entradas y nunca contraseñas ni códigos.
+- **Actualizaciones:** avisa si hay una versión estable nueva en GitHub (consulta cada 12 h como máximo; solo lee). Se desactiva con `LABTOWER_UPDATE_CHECK=0` en `/etc/default/labtower`.
 - Tarjeta de **Salud del sistema** y **Respaldos** (Teleporter).
 
 ### Todos los módulos
@@ -320,6 +339,7 @@ Pensado para una **red local de confianza**. No expongas el puerto 80 a internet
 - **Acceso:** los servicios Python escuchan solo en `127.0.0.1`; solo nginx es visible en la red. Para cifrar, ver [HTTPS](#https).
 - **Contraseñas:** mínimo 8 caracteres, guardadas con scrypt. La cuenta inicial usa una contraseña aleatoria que hay que cambiar.
 - **Intentos de login:** 5 fallos desde una IP en 10 minutos bloquean esa IP por 5 minutos; cada cuenta tiene además su propio límite. El contador es compartido por todos los módulos. nginx limita peticiones y conexiones por IP.
+- **2FA y auditoría:** autenticación en dos pasos (TOTP) opcional por usuario, con códigos de recuperación, y un registro de auditoría de las acciones administrativas.
 - **Sesiones:** cookie `HttpOnly` y `SameSite=Strict`; en disco solo se guarda el hash SHA-256 del token. Se pueden ver y cerrar en el Admin Panel.
 - **CSRF:** toda petición que modifica datos se rechaza (403) si no viene de la propia página.
 - **CSP estricta:** sin scripts ni manejadores en línea (`script-src 'self'`). Navegadores: Chrome 75+, Firefox 105+, Safari 15.4+.
@@ -341,14 +361,14 @@ Pensado para una **red local de confianza**. No expongas el puerto 80 a internet
 
 ```
 labtower/
-├── auth/              # autenticación compartida, Admin Panel y respaldos del panel
+├── auth/              # autenticación compartida, 2FA, auditoría, Admin Panel y respaldos del panel
 ├── wol-console/       # cada módulo: server.py + static/
 ├── nut-monitor/       # (UPS Monitor)
 ├── net-monitor/
 ├── proxmox-monitor/
 ├── nas-monitor/       # NAS Monitor (Synology por SNMP, TrueNAS y OpenMediaVault por API)
 ├── dns-monitor/       # DNS Monitor (Pi-hole / AdGuard Home)
-├── wan-monitor/       # WAN Monitor (internet)
+├── wan-monitor/       # WAN Monitor (internet y chequeo del router)
 ├── overview/          # Resumen
 ├── home/              # página de inicio e iconos
 ├── etc/               # nginx, backup.conf, cron

@@ -1,139 +1,44 @@
 # Changelog
 
-## 2.1.3r — 2026-10-30
+## 2.1.4 — 2026-10-30
 
-**Correcciones (textos y traducciones)**
-- **Página de inicio:** ahora está en inglés y español (antes solo español) y sigue el idioma elegido en los módulos; la descripción del NAS Monitor ya menciona TrueNAS y OpenMediaVault.
-- **Barra lateral:** «Overview» ahora dice «Resumen» en español.
-- **Admin Panel:** los botones de tema («Light», «Dark») ahora se traducen.
-- **Net Monitor:** «Auto-scan», «Offline», «Online», «Timeout», «Community», «Access point» y «Storage / NAS» ahora están en español; el inicio de sesión mostraba «Entrar» y «Completa todos los campos» en español aunque la interfaz estuviera en inglés; los mensajes del alias y del escaneo automático también se traducen.
-- **Proxmox Monitor:** el inicio de sesión también mostraba textos en español con la interfaz en inglés; «Online/Offline» → «En línea/Sin conexión», «Nodos online» → «Nodos en línea», «VMs corriendo» → «VMs en ejecución».
-- **WOL Console:** «Wake All», «Server» y «Other» se traducen; el error de campos vacíos en el inicio de sesión también.
-- **WAN Monitor:** «gateway» en los gráficos → «puerta de enlace» en español.
-- **NAS Monitor:** el mensaje de «Sin NAS configurados» ya no dice que solo sirve Synology.
-- **Resumen:** el aviso «falló el autotest de la batería» ahora traduce el resultado que informa el UPS.
-- Nueva prueba automática que revisa que cada módulo tenga las mismas claves en inglés y español.
+**Seguridad**
+- **Autenticación en dos pasos (2FA).** En Admin Panel → «Seguridad» se activa escaneando un código QR con cualquier app (Google Authenticator, Aegis, 1Password…); la clave escrita queda como alternativa. Se entregan 10 códigos de recuperación de un solo uso. Con 2FA activo, todos los formularios de acceso piden el código; cada código sirve una vez y los intentos fallidos cuentan para el bloqueo. Un admin puede restablecer el 2FA de otro usuario. El QR se genera dentro de LabTower, sin librerías ni internet.
+- **Registro de auditoría** en Admin Panel: quién creó o eliminó usuarios, cambió permisos o contraseñas, activó o restableció 2FA, cerró sesiones, creó/descargó/restauró/eliminó respaldos, cambió la configuración del WAN Monitor o la fecha de una batería, y los bloqueos por intentos fallidos. Guarda las últimas 5.000 entradas y nunca contraseñas ni códigos.
+- **Aviso de versión nueva** en Admin Panel: consulta las versiones publicadas en GitHub (solo estables) cada 12 horas como máximo y avisa con el enlace a las notas. Solo lee; no descarga ni instala. Se desactiva con `LABTOWER_UPDATE_CHECK=0` en `/etc/default/labtower`.
 
-## 2.1.3q — 2026-10-30
+**WAN Monitor**
+- **Chequeo del router.** Pregunta al router si su enlace WAN está arriba, para saber si un corte es de la red local o de la línea. Tipos: Huawei (WiFi AX3, Mesh y otros), OpenWrt, DD-WRT y TP-Link clásico. Los cortes se marcan como «Red local (LAN)», «Línea / proveedor (WAN)» o «Internet». Botón «Probar router» con el motivo exacto si falla. Solo lee; la clave se guarda en el servidor y nunca se muestra. Los TP-Link nuevos con inicio de sesión cifrado no se pueden consultar.
+- **Comparación con el router:** en «Conexión» muestra cuánto tiempo lleva conectada la WAN según el router y cuántos cortes registró LabTower en ese período («2 aquí · 0 WAN»).
 
-**Correcciones**
-- **UPS Monitor en español:** los resultados del autotest que informa NUT se traducen («Done and passed» → «Aprobado», «No test initiated» → «Sin prueba», «In progress» → «En curso», etc.).
-- **UPS Monitor:** las fechas del autotest y del último corte usaban el formato del navegador (mes/día/año); ahora usan día/mes/año en español.
+**UPS Monitor**
+- **Salud de la batería:** autonomía ahora, a batería llena y con 50 % más de carga; edad de la batería y tendencia de capacidad (avisa si cae 20 % o más en 120 días).
+- **Fecha de cambio de la batería:** botón ✎ junto a la edad para indicarla a mano (tiene prioridad sobre la del UPS).
+- **Edad de la batería:** se leen `battery.date` y `battery.mfr.date` y se usa la más reciente creíble; una edad de más de 10 años se ignora (algunos UPS dejan la fecha de fábrica).
+- **Registro de autotests:** los últimos 8; un test fallido avisa en el Resumen. «Último resultado» muestra la fecha y hora en que LabTower lo vio, y si el UPS vuelve a «No test initiated» (APC Back-UPS) se muestra el último resultado real. Los resultados se traducen al español.
 
-## 2.1.3p — 2026-10-30
+**Proxmox Monitor**
+- **Diagnóstico del cluster:** reinicios de nodos con línea de tiempo (marca los simultáneos), quórum de corosync, Ceph (OSD y avisos) y SMART de los discos, incluido «Unsafe Shutdowns» en NVMe.
+- **Respaldos (vzdump):** último respaldo de cada VM/CT, antigüedad, tamaño y verificación; marca «Sin respaldo» o «Muy viejo» y lista las tareas fallidas. Se pueden **ignorar** VMs de prueba o templates, y marcar varias a la vez. El token necesita `Datastore.Audit` y `Sys.Audit` (rol `PVEAuditor`).
 
-**Correcciones**
-- **UPS Monitor, «Último resultado» del autotest:** algunos UPS (APC Back-UPS) vuelven a informar «No test initiated» justo después de terminar una prueba, y ese era el único texto que se veía. Ahora, en ese caso, se muestra el último resultado real (por ejemplo «Done and passed · 30/10 16:56»).
+**NAS Monitor**
+- Ahora también lee **TrueNAS** (25.04 o más nuevo) y **OpenMediaVault** (7 o más nuevo), solo lectura.
 
-## 2.1.3o — 2026-10-30
+**Net Monitor / Switch Monitor**
+- Errores CRC por puerto (cable o tarjeta de red), aviso de enlaces que rebotan y casilla «Avisar por puerto».
 
-**Nuevo**
-- **UPS Monitor:** junto al «Último resultado» del autotest ahora se muestra la fecha y hora en que LabTower vio ese resultado (por ejemplo «Done and passed · 30/10 17:23»).
-
-## 2.1.3n — 2026-10-30
-
-**Correcciones**
-- **WAN Monitor:** el texto de «Cortes en el período» (comparación con el router) era largo y se partía en dos líneas; ahora es corto («2 aquí · 0 WAN»).
-
-## 2.1.3m — 2026-10-30
-
-**Correcciones**
-- **UPS Monitor:** el botón ✎ de «Edad de la batería» se veía grande y descuadraba la celda; ahora es un ícono pequeño junto a la edad (la fecha indicada aparece al pasar el cursor).
-
-## 2.1.3l — 2026-10-30
-
-**Nuevo**
-- **WAN Monitor: comparación con el router.** En la tarjeta «Conexión» se muestra cuánto tiempo lleva conectada la WAN según el router («Router: WAN conectada hace 20d 3h») y, debajo, cuántos cortes registró LabTower en ese mismo período y cuántos confirmó el router como caída de WAN. Si el router lleva 20 días conectado y LabTower registró cortes, esos cortes no fueron de la línea.
-
-## 2.1.3k — 2026-10-30
-
-**Correcciones**
-- **UPS Monitor, edad de la batería.** Algunos UPS (APC Back-UPS) guardan la fecha de la batería en `battery.mfr.date` y otros en `battery.date`, y las herramientas del fabricante cambian una u otra. Ahora se leen las dos y se usa la más reciente que sea creíble; antes, si la primera estaba vieja, la otra se ignoraba y la edad quedaba «desconocida».
-
-## 2.1.3j — 2026-10-30
-
-**Nuevo**
-- **WAN Monitor: chequeo del router para saber si el corte es de la red local o de la línea.** En Ajustes se activa «Consultar el router» y se elige el tipo: **Huawei** (WiFi AX3, Mesh y otros HiLink), **OpenWrt**, **DD-WRT** o **TP-Link** (firmware clásico). LabTower le pregunta al router si su enlace WAN está arriba. Si falla internet pero el router responde y dice que su WAN está caída, el corte se marca como **«Línea / proveedor (WAN)»**; si ni el router responde, sigue siendo «Red local (LAN)».
-- Botón **«Probar router»** en Ajustes: muestra si conectó, el estado WAN, la IP y el motivo si falla (clave incorrecta, demasiadas sesiones abiertas, tipo de router equivocado…).
-- Solo lee: no cambia nada en el router. La clave del router se guarda en el servidor y nunca se muestra de nuevo ni se envía al navegador. Mientras hay un corte pregunta cada 10 s.
-- Eventos nuevos: «el router informa WAN caída/arriba» y «Internet caído (WAN)». Los cambios de ajustes del router quedan en el registro de auditoría y el chequeo aparece en el diagnóstico de salud.
-- Los TP-Link nuevos (Archer/Deco con inicio de sesión cifrado) no se pueden consultar; en ese caso se muestra un mensaje claro.
-- **UPS Monitor: fecha de cambio de la batería.** Junto a «Edad de la batería» hay un botón ✎ para indicar la fecha en que se cambió la batería (queda registrado en la auditoría). Esa fecha tiene prioridad sobre la que informa el UPS.
-
-**Correcciones**
-- **UPS Monitor, «Edad de la batería: 25.1 años».** Algunos UPS (como el APC Easy) conservan en el firmware la fecha de fábrica y no la actualizan al cambiar la batería. Ahora una edad mayor a 10 años se ignora (no se muestra ni genera el aviso de batería vieja) y se puede indicar la fecha real con el botón ✎.
-- **WAN Monitor:** el aviso de corte mostraba la hora como un número largo («desde 1793388959»); ahora muestra fecha y hora.
-
-## 2.1.3i — 2026-10-30
-
-**Nuevo**
-- **2FA con código QR.** Al activar el 2FA en el Admin Panel se muestra un QR para escanear con la app de autenticación (la clave escrita queda como alternativa). El QR se genera dentro de LabTower: no usa librerías ni servicios de internet.
-- **Proxmox: marcar varios respaldos a la vez.** En «Respaldos (vzdump)» cada VM/CT tiene una casilla; además «Seleccionar todas», «Seleccionar las sin respaldo o muy viejas» y los botones «Ignorar seleccionadas» / «Dejar de ignorar seleccionadas».
-
-**Correcciones**
-- **Aviso «Net Monitor hosts file not readable» en WOL Console.** Los servicios corren con umask 077, así que `hosts.json` (y `devices.json`), que deben quedar en modo 640 para que el otro módulo los lea, se guardaban en 600. Ahora el modo se fija explícitamente al guardar.
-- **Proxmox, respaldos ignorados:** después de ignorar o dejar de ignorar una VM, la página podía volver a mostrar el estado anterior hasta por 10 minutos. Ahora el cambio se ve de inmediato.
-
-## 2.1.3h — 2026-10-30
+**Respaldo**
+- `labtower-sftp-backup verify` y cron diario: comprueba en el storage que la copia más reciente existe, no está vacía y es reciente.
 
 **Cambios**
-- Textos, avisos, comentarios, mensajes de los scripts y documentación ya no dicen «la Pi»: ahora dicen «el servidor» (LabTower corre en cualquier VM o equipo, no solo en una Raspberry Pi). Se mantiene «Raspberry Pi» solo donde corresponde: la fuente de poder (subtensión y limitación), la temperatura de 24 h y la lista de equipos compatibles.
-
-## 2.1.3g — 2026-10-30
-
-**Nuevo**
-- **Aviso de versión nueva en el Admin Panel.** Consulta las versiones publicadas en GitHub (solo estables: sin borradores ni pre-versiones) como máximo cada 12 horas, y si hay una más reciente que la instalada muestra un aviso arriba con el enlace a sus notas. La tarjeta «Actualizaciones» muestra la versión instalada, la última publicada, la última consulta y un botón «Consultar ahora». Solo lee: no descarga ni instala nada (se actualiza como siempre con `apt install ./labtower_VERSION_all.deb`). Si GitHub no responde se conserva la última respuesta y se reintenta en una hora. Para desactivarlo: `LABTOWER_UPDATE_CHECK=0` en `/etc/default/labtower` y reiniciar `admin-panel`. Entiende versiones con letra (`2.1.3` < `2.1.3e` < `2.1.3f`).
-
-## 2.1.3f — 2026-10-30
-
-**Nuevo**
-- **Autenticación en dos pasos (TOTP).** En el Admin Panel, tarjeta «Seguridad»: activar 2FA con cualquier app (Google Authenticator, Aegis, 1Password…) escribiendo la clave y confirmando con un código; se entregan 10 códigos de recuperación de un solo uso. Con 2FA activo, TODOS los formularios de acceso (Resumen, WOL, UPS, Net, Proxmox, NAS, DNS, WAN y Admin) piden el código; cada código sirve una sola vez, y los intentos fallidos cuentan para el bloqueo de la cuenta y la IP. Un admin puede restablecer el 2FA de otro usuario (con su contraseña). Sin código QR por ahora: se escribe la clave o se abre el enlace otpauth.
-- **Registro de auditoría** en el Admin Panel: quién creó o eliminó usuarios, cambió permisos o contraseñas, activó o restableció 2FA, cerró sesiones, creó/descargó/restauró/eliminó respaldos, y bloqueos por intentos fallidos; más los inicios de sesión. Se guardan las últimas 5.000 entradas y nunca contraseñas, códigos ni tokens. Los módulos pueden anotar con `auth.audit()`.
-
-**Sesiones**
-- La lista y el cierre de sesiones ya existían. Se verificó que actualizar el paquete NO cierra las sesiones (viven en `auth/sessions.json`, que el instalador no toca), y se mantiene así.
-
-## 2.1.3e — 2026-10-30
-
-**Nuevo**
-- **UPS Monitor: salud de la batería.** Bajo cada UPS: autonomía ahora, autonomía proyectada a batería llena y estimada con 50 % más de carga, edad de la batería (si el UPS informa `battery.date`) y **tendencia de capacidad** (autonomía a batería llena comparada semana a semana en 120 días; avisa si cae 20 % o más).
-- **Registro de autotests:** cada cambio de `ups.test.result` queda anotado y se muestran los últimos 8; un test fallido avisa en el Resumen y uno aprobado deja un evento. Solo lectura: LabTower no inicia pruebas.
-
-## 2.1.3d — 2026-10-30
-
-**Nuevo**
-- **Proxmox Monitor: respaldos.** En el panel de diagnóstico, para cada VM y CT: su último respaldo (leído del contenido de los storages de backup, con la verificación si es Proxmox Backup Server), antigüedad, tamaño y copias. Marca *Sin respaldo* o *Muy viejo* (36 h por defecto) y lo anota en la línea de tiempo del Resumen; las tareas `vzdump` fallidas de los últimos 7 días se listan y generan un evento crítico. Las VMs de prueba se pueden ignorar desde el panel. Si un storage no responde, no se acusa a las VMs. El token necesita `Datastore.Audit` (rol `PVEAuditor`).
-- **Verificación del respaldo SFTP.** Nuevo comando `labtower-sftp-backup verify` y cron diario (`/etc/cron.d/labtower-sftp-verify`, 09:43): comprueba en el propio storage que la copia más reciente existe, no está vacía y es reciente (`VERIFY_MAX_AGE`, 36 h). Aparece en la tarjeta del Resumen como *Copia en el storage* y avisa si falla; así se detecta un cron detenido o una copia perdida, no solo un respaldo que falló.
-
-## 2.1.3c — 2026-10-30
-
-**Nuevo**
-- **Switch Monitor: errores CRC.** Por SNMP se leen los errores CRC/FCS y de alineación de cada puerto (EtherLike-MIB, si el equipo la tiene). Si suben, el aviso (puerto, Resumen y línea de tiempo) habla de **CRC: cable o tarjeta de red** en vez de «errores nuevos», y el detalle del puerto muestra los contadores.
-- **Enlaces que rebotan:** un puerto cuyo enlace cambia 4 veces o más en 10 minutos genera el aviso «enlace rebotando» (máximo uno cada 30 min por puerto), esté vigilado o no.
-- **Avisar por puerto:** casilla nueva en el detalle de cada puerto para anotar en la línea de tiempo toda caída y recuperación de ese puerto (antes solo se vigilaban los uplinks y los enlaces entre switches).
-- Instrucciones para activar SNMP en los TP-Link JetStream (T2600G y similares) en el README.
-## 2.1.3b — 2026-10-30
-
-**Nuevo**
-- **Proxmox Monitor: diagnóstico del cluster.** Un panel nuevo bajo los nodos reúne lo que hacía falta para investigar reinicios y caídas:
-  - **Reinicios de nodos:** se detecta cuándo arrancó cada nodo (hora actual menos su `uptime`) y se compara con la última hora conocida, que se guarda en disco: así se detecta también un reinicio ocurrido mientras LabTower estaba parado. Queda un registro con una **línea de tiempo común**; si varios nodos se reinician con menos de 10 minutos de diferencia se marca como reinicio **simultáneo** y se anota un evento crítico en el Resumen (útil para distinguir un fallo de corosync/HA de un reinicio aislado).
-  - **Corosync:** estado del quórum y cuántos nodos están dentro. Perder el quórum y recuperarlo se anotan en la línea de tiempo del Resumen.
-  - **Ceph:** además de la salud, OSD caídos y fuera, y los avisos activos (`OSD_DOWN`, `PG_DEGRADED`…) con su gravedad. Un OSD que se cae genera un evento.
-  - **Discos (SMART):** cada 15 minutos (`PVE_SMART_EVERY`) se lee el SMART de los discos de cada nodo: salud, desgaste, temperatura, errores de medio, sectores reasignados/pendientes y, en NVMe, **«Unsafe Shutdowns»**. Si ese contador sube se anota un evento (apagado sin cierre limpio o corte de energía), y un disco con aviso SMART genera otro. Se lee en un hilo aparte, así que no frena la actualización de los nodos.
-- Nueva ruta `/api/diag?id=<cluster>` (nivel Proxmox «solo lectura»).
-- Requisito: el token de API necesita el privilegio `Sys.Audit` sobre `/nodes` para leer los discos (el rol `PVEAuditor` lo incluye). Sin él, el panel lo indica y lo demás sigue funcionando.
-
-## 2.1.3a — 2026-10-30
-
-**Nuevo**
-- **NAS Monitor ahora también lee TrueNAS y OpenMediaVault.** Al agregar un NAS se elige el tipo: Synology (SNMP, como siempre), TrueNAS (clave de API) u OpenMediaVault (usuario y contraseña). Todo se ve igual que un Synology: resumen, detalle, gráficos, avisos y la línea de tiempo del Resumen.
-- **TrueNAS (25.04 o más nuevo):** por la API JSON-RPC sobre WebSocket (la API REST ya no existe en las versiones nuevas). Muestra sistema, CPU, memoria y red en vivo, pools (estado y espacio), discos con temperatura y las alertas del propio TrueNAS.
-- **OpenMediaVault (7 o más nuevo):** por `rpc.php`. Muestra sistema, CPU, memoria, discos con estado SMART y temperatura, sistemas de archivos, interfaces de red, actualizaciones pendientes y si falta reiniciar. La sesión se reutiliza entre lecturas, así que no se inicia sesión en cada consulta.
-- Solo lectura: nunca se llama a un método que cambie algo en el NAS.
-- Certificados: con «Verificar el certificado TLS» activo se valida contra las CA del sistema; sin él se fija la huella en la primera conexión y un cambio se rechaza antes de enviar la clave. La clave de API y la contraseña se guardan con permisos 600 y la API nunca las devuelve.
+- Los textos y la documentación ya no dicen «la Pi»: dicen «el servidor». «Raspberry Pi» queda solo en la fuente de poder, la temperatura y la lista de equipos compatibles.
+- La página de inicio ahora está en inglés y español, y la barra lateral dice «Resumen» en español.
 
 **Correcciones**
-- NAS Monitor: ya no dice «esta Pi» en el aviso de error de conexión (ahora «este servidor»).
+- WOL Console: aviso «Net Monitor hosts file not readable» (los archivos compartidos quedaban en modo 600 en vez de 640).
+- Proxmox: después de ignorar o dejar de ignorar una VM, la página podía mostrar el estado anterior hasta por 10 minutos.
+- Textos sin traducir o mezclados entre idiomas en Net Monitor, Proxmox Monitor, WOL Console, NAS Monitor, WAN Monitor, Admin Panel y el Resumen; las fechas del UPS Monitor usan día/mes/año en español.
+- NAS Monitor: el error de conexión ya no dice «esta Pi».
 
 ## 2.1.3 — 2026-10-29
 
