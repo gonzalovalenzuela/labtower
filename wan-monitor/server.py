@@ -35,6 +35,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
+sys.path.insert(0, str(Path(__file__).parent))
+import router as rtr
 
 HOST       = "127.0.0.1"
 PORT       = 8088
@@ -59,6 +61,7 @@ DEFAULTS = {
     "dns_name": "cloudflare.com",         # name resolved with the system resolver ("" = off)
     "interval": 30,                       # seconds between rounds
     "ip_url": "https://api.ipify.org",    # returns the public IP as plain text ("" = off)
+    "router": {"enabled": False, "type": "huawei", "host": "", "port": 80, "https": False, "user": "admin", "password": "", "interface": "wan", "every": 30},
     "speed": {"enabled": True, "every_hours": 12, "down_url": "https://speed.cloudflare.com/__down", "up_url": "https://speed.cloudflare.com/__up",
               "seconds": 8, "streams": 4, "upload": True, "engine": "builtin"},
 }
@@ -84,6 +87,40 @@ def _int(v, lo, hi, what):
     if not lo <= v <= hi: raise ValueError(f"{what} must be {lo}-{hi}")
     return v
 
+# Ajustes del router. La clave solo se cambia si llega una nueva (vacía = conservar la guardada; clear_password = borrarla) y NUNCA se devuelve al navegador.
+# EN: Router settings. The password changes only when a new one arrives (empty = keep the stored one; clear_password = delete it) and is NEVER sent to the browser.
+def _validate_router(new, cur):
+    r = dict(DEFAULTS["router"]); r.update(cur if isinstance(cur, dict) else {})
+    if isinstance(new, dict):
+        for k in ("enabled", "type", "host", "port", "https", "user", "interface", "every"):
+            if k in new: r[k] = new[k]
+        if new.get("clear_password") is True: r["password"] = ""
+        elif isinstance(new.get("password"), str) and new["password"]: r["password"] = new["password"]
+    r["enabled"], r["https"] = bool(r.get("enabled")), bool(r.get("https"))
+    if r.get("type") not in rtr.TYPES: raise ValueError("Unknown router type")
+    host = str(r.get("host") or "").strip()
+    if host and not (auth.valid_host(host) and auth.valid_target(host)): raise ValueError("Invalid router address")
+    r["host"] = host
+    r["port"] = _int(r.get("port", 80), 1, 65535, "Router port")
+    user = str(r.get("user") or "").strip()
+    if len(user) > 64 or re.search(r"[\x00-\x1f\x7f]", user): raise ValueError("Invalid router user")
+    r["user"] = user
+    pw = r.get("password") if isinstance(r.get("password"), str) else ""
+    if len(pw) > 128 or re.search(r"[\x00-\x1f\x7f]", pw): raise ValueError("Invalid router password")
+    r["password"] = pw
+    itf = str(r.get("interface") or "wan").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_.\-]{1,32}", itf): raise ValueError("Invalid interface name")
+    r["interface"] = itf
+    r["every"] = _int(r.get("every", 30), 10, 300, "Router check interval")
+    if r["enabled"] and not r["password"]: raise ValueError("The router needs a password to be checked")
+    return r
+
+# La configuración que ve el navegador: sin la clave del router, con un aviso de si hay una guardada.
+# EN: The configuration the browser sees: without the router password, with a flag telling whether one is stored.
+def public_config(cfg):
+    out = json.loads(json.dumps(cfg)); out["router"].pop("password", None); out["router"]["has_password"] = bool(cfg["router"].get("password"))
+    return out
+
 # Combina lo recibido con lo guardado y valida cada campo.
 # EN: Merge what arrived with what is stored and validate every field.
 def validate(body: dict, current=None) -> dict:
@@ -91,6 +128,7 @@ def validate(body: dict, current=None) -> dict:
     for k in ("targets", "gateway", "dns_name", "interval", "ip_url"):
         if k in body: cfg[k] = body[k]
     if isinstance(body.get("speed"), dict): cfg["speed"].update(body["speed"])
+    cfg["router"] = _validate_router(body.get("router"), cfg.get("router"))
     tg = cfg["targets"]
     if not isinstance(tg, list) or not 1 <= len(tg) <= 6: raise ValueError("Between 1 and 6 targets")
     out = []
@@ -391,6 +429,7 @@ class WanState:
         self.speed_running, self.speed_started, self.speed_last = False, 0, 0
         self.wake = threading.Event()
         self.gw = None
+        self.router, self.router_wake, self.router_test = None, threading.Event(), 0
 
 S = WanState()
 
@@ -475,11 +514,17 @@ def track_outage(r, first_fail_ts):
             return
         S.fails += 1
         if S.fails >= DOWN_AFTER and S.down_since is None:
-            S.down_since, S.scope = first_fail_ts, ("internet" if gw_ok else "lan")
+            S.down_since, S.scope = first_fail_ts, rtr.classify_scope(gw_ok, _router_fresh())
             try: _db("INSERT OR REPLACE INTO wan_outages (start,end,scope) VALUES (?,NULL,?)", (S.down_since, S.scope))
             except Exception as e: log.warning(f"could not store the outage: {e}")
             auth.record_event("wan", "crit", "Internet connection down" + (" (local network too)" if S.scope == "lan" else ""), "wan_down_" + S.scope)
             log.warning(f"connection down ({S.scope})")
+
+# La última lectura del router, solo si es reciente (si el router dejó de responder, su dato viejo no sirve para diagnosticar).
+# EN: The latest router reading, only if recent (if the router stopped answering, its old data is no good for diagnosis).
+def _router_fresh(max_age=120):
+    r = S.router
+    return r if r and time.time() - r.get("ts", 0) <= max_age else None
 
 def compute_alerts(s: dict) -> list:
     a = []
@@ -500,7 +545,7 @@ def snapshot(cfg):
         if not r: return None
         s = {"ts": r["ts"], "up": r["up"], "rtt": r["rtt"], "jitter": r["jitter"], "loss": r["loss"], "gw": r["gw"], "dns": r["dns"],
              "dns_fail": bool(cfg["dns_name"]) and r["dns"] is None, "targets": r["targets"], "gateway": r["gateway"], "gateway_ip": S.gw,
-             "down_since": S.down_since, "scope": S.scope, "public_ip": S.ip, "ip_changed": S.ip_changed}
+             "down_since": S.down_since, "scope": S.scope, "public_ip": S.ip, "ip_changed": S.ip_changed, "router": S.router}
     s["alerts"] = compute_alerts(s)
     return s
 
@@ -525,6 +570,39 @@ def probe_loop():
         track_outage(r, first_fail or r["ts"])
         if r["up"] and cfg["ip_url"] and time.time() - S.ip_checked >= IP_EVERY: check_ip(cfg)
         S.wake.wait(max(1.0, cfg["interval"] - (time.time() - t0))); S.wake.clear()
+
+# Hilo del router: lee el estado WAN que informa el router. Mientras hay fallos de internet pregunta cada 10 s para poder diagnosticar el corte.
+# EN: Router thread: reads the WAN state the router reports. While internet probes are failing it asks every 10 s so the outage can be diagnosed.
+def router_round(cfg):
+    rc = cfg["router"]
+    host = rc["host"] or S.gw or default_gateway() or ""
+    res = rtr.check(rc, host)
+    with S.lock:
+        S.router = res
+        gw = (S.last or {}).get("gateway")
+        gw_ok = gw.get("ok", True) if gw else True
+        down = S.down_since is not None
+    if res["ok"]:
+        ch = auth.state_changed("wan-router", bool(res["wan_up"]))
+        if ch: auth.record_event("wan", "warn" if not res["wan_up"] else "info", "Router reports its WAN link " + ("up" if res["wan_up"] else "down"), "wan_rt_up" if res["wan_up"] else "wan_rt_down")
+    if down:                                                     # an outage is open: the router may now tell where it is
+        with S.lock:
+            new = rtr.classify_scope(gw_ok, res)
+            if new == "wan" and S.scope == "internet":
+                S.scope = "wan"
+                try: _db("UPDATE wan_outages SET scope = ? WHERE end IS NULL", ("wan",))
+                except Exception as e: log.warning(f"could not update the outage: {e}")
+                auth.record_event("wan", "crit", "Internet down: the router reports its WAN link is down", "wan_down_wan")
+    return res
+
+def router_loop():
+    while not _stop.is_set():
+        cfg = load_config()
+        if not cfg["router"]["enabled"]:
+            S.router = None; S.router_wake.wait(10); S.router_wake.clear(); continue
+        try: router_round(cfg)
+        except Exception as e: log.error(f"router check failed: {e}")
+        S.router_wake.wait(10 if S.fails > 0 else cfg["router"]["every"]); S.router_wake.clear()
 
 def check_ip(cfg):
     S.ip_checked = time.time()
@@ -587,6 +665,12 @@ def health_report(detailed=False):
     else:
         age = time.time() - last["ts"]
         c["probe"] = auth.chk(auth.WARN, f"last probe {int(age)} s ago") if age > max(120, 4 * load_config()["interval"]) else auth.chk(auth.OK, f"last probe {int(age)} s ago")
+    rc = load_config()["router"]
+    if rc["enabled"]:
+        r = S.router
+        if r is None: c["router"] = auth.chk(auth.OK, "router check starting")
+        elif r.get("ok"): c["router"] = auth.chk(auth.OK, "router answers: WAN " + ("up" if r.get("wan_up") else "down"))
+        else: c["router"] = auth.chk(auth.WARN, "router check failed: " + str(r.get("error"))[:100])
     return auth.health_reply("wan", c, detailed)
 
 # ─── HTTP ─────────────────────────────────────────────────────────────────────
@@ -641,7 +725,7 @@ class H(BaseHTTPRequestHandler):
             cfg = load_config()
             with_hist = parse_qs(urlparse(self.path).query).get("hist", ["1"])[0] != "0"
             with S.lock: hist = list(S.history) if with_hist else []
-            return self._json(200, {"config": cfg, "snap": snapshot(cfg), "history": hist, "uptime": uptime(), "outages": recent_outages(), "speed": recent_speed(),
+            return self._json(200, {"config": public_config(cfg), "snap": snapshot(cfg), "history": hist, "uptime": uptime(), "outages": recent_outages(), "speed": recent_speed(),
                                     "speed_running": S.speed_running, "next_speed": next_speedtest(cfg), "ping_available": bool(shutil.which("ping")), "engines": engines_available()})
         if path == "/api/wan/history":
             rng = parse_qs(urlparse(self.path).query).get("range", ["1d"])[0]
@@ -684,8 +768,22 @@ class H(BaseHTTPRequestHandler):
                 try: cfg = validate(body, load_config())
                 except ValueError as e: return self._json(400, {"error": str(e)})
                 save_config(cfg)
-            S.ip_checked = 0; S.wake.set()
-            return self._json(200, {"config": cfg})
+            S.ip_checked = 0; S.wake.set(); S.router_wake.set()
+            who = (auth.get_session(tok) or {}).get("username", "?")
+            auth.audit(who, "wan_config_changed", "wan-monitor", "router " + ("on" if cfg["router"]["enabled"] else "off") + " " + cfg["router"]["type"], auth.client_ip(self), module="wan")
+            return self._json(200, {"config": public_config(cfg)})
+        if path == "/api/wan/router/test":
+            if not auth.check_permission(tok, "wan", "admin"):
+                return self._json(403 if auth.check_permission(tok, "wan", "readonly") else 401, {"error": "Admin permission required"})
+            if time.time() - S.router_test < 3: return self._json(429, {"error": "Wait a few seconds between tests"})
+            S.router_test = time.time()
+            try: cfg = validate({"router": {**(body.get("router") if isinstance(body.get("router"), dict) else {}), "enabled": False}}, load_config())
+            except ValueError as e: return self._json(400, {"error": str(e)})
+            rc = cfg["router"]
+            if not rc["password"]: return self._json(400, {"error": "Type the router password first"})
+            host = rc["host"] or S.gw or default_gateway() or ""
+            res = rtr.check(rc, host)
+            return self._json(200, {"result": {k: res.get(k) for k in ("ok", "wan_up", "ip", "uptime", "detail", "error", "type", "host")}})
         self._json(404, {"error": "Not found"})
 
 # Arranque: permiso «wan» para usuarios antiguos (una vez), hilos y servidor en loopback.
@@ -700,7 +798,7 @@ if __name__ == "__main__":
     log.info(f"WAN Monitor en http://{HOST}:{PORT}")
     n = load_history()
     if n: log.info(f"History restored: {n} samples")
-    for fn, name in ((probe_loop, "probe"), (speed_scheduler, "speed-scheduler"), (_pruner, "pruner")):
+    for fn, name in ((probe_loop, "probe"), (router_loop, "router"), (speed_scheduler, "speed-scheduler"), (_pruner, "pruner")):
         threading.Thread(target=fn, daemon=True, name=name).start()
     try:
         srv = ThreadingHTTPServer((HOST, PORT), H)

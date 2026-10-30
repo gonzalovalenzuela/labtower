@@ -27,7 +27,7 @@ const LANG={
     clientsLabel:'Clients',
     alertCritBatt:'Critical battery — connect to power immediately',
     alertOnBatt:'On battery —',alertMinLeft:'min left',
-    batTitle:'Battery',batRuntime:'Runtime now',batFull:'Runtime at full charge',batPlus50:'If the load rises 50 %',batAge:'Battery age',batYears:(y)=>`${y} years`,batAging:'Capacity trend',batAgingFmt:(c,w)=>`${c>0?'+':''}${c} % in ${w} weeks`,batCollecting:'collecting data (needs about a month)',batAgingWarn:'The battery holds noticeably less than before: consider replacing it',batOldWarn:'Battery older than 4 years: consider replacing it',batTests:'Self-tests',batTestNow:'Last result',batNoTests:'No self-test recorded yet (only changes are logged)',batApprox:'estimate',tkpassed:'passed',tkfailed:'failed',tkrunning:'running',tknone:'none',tkother:'other',
+    batTitle:'Battery',batRuntime:'Runtime now',batFull:'Runtime at full charge',batPlus50:'If the load rises 50 %',batAge:'Battery age',batSetDateTip:'Set the date the battery was replaced',batSince:(d)=>`replaced ${d}`,batUnknown:'unknown',batAskDate:'Date the battery was replaced (YYYY-MM-DD). Leave empty to use the date the UPS reports:',batDateSaved:'Battery date saved',batYears:(y)=>`${y} years`,batAging:'Capacity trend',batAgingFmt:(c,w)=>`${c>0?'+':''}${c} % in ${w} weeks`,batCollecting:'collecting data (needs about a month)',batAgingWarn:'The battery holds noticeably less than before: consider replacing it',batOldWarn:'Battery older than 4 years: consider replacing it',batTests:'Self-tests',batTestNow:'Last result',batNoTests:'No self-test recorded yet (only changes are logged)',batApprox:'estimate',tkpassed:'passed',tkfailed:'failed',tkrunning:'running',tknone:'none',tkother:'other',
     avStreak:'Online streak',avSince:'since monitoring began',avOnBatt:'On battery now',av24:'Availability 24 h',av7:'Availability 7 d',av30:'Availability 30 d',avLast:'Last outage',avNone:'None recorded',avCount:'Outages (30 d)',avMin:'min. charge',
     chartTitle_voltage:'Input vs output voltage',
     chartLegend_input:'Input',chartLegend_output:'Output',chartLegend_watts:'Watts',
@@ -75,7 +75,7 @@ const LANG={
     clientsLabel:'Clientes',
     alertCritBatt:'Batería crítica — conectar a corriente inmediatamente',
     alertOnBatt:'En batería —',alertMinLeft:'min restantes',
-    batTitle:'Batería',batRuntime:'Autonomía ahora',batFull:'Autonomía con batería llena',batPlus50:'Si la carga sube 50 %',batAge:'Edad de la batería',batYears:(y)=>`${y} años`,batAging:'Tendencia de capacidad',batAgingFmt:(c,w)=>`${c>0?'+':''}${c} % en ${w} semanas`,batCollecting:'reuniendo datos (hace falta cerca de un mes)',batAgingWarn:'La batería aguanta bastante menos que antes: conviene cambiarla',batOldWarn:'Batería de más de 4 años: conviene cambiarla',batTests:'Autotests',batTestNow:'Último resultado',batNoTests:'Aún no hay autotests registrados (solo se anotan los cambios)',batApprox:'estimación',tkpassed:'aprobado',tkfailed:'falló',tkrunning:'en curso',tknone:'ninguno',tkother:'otro',
+    batTitle:'Batería',batRuntime:'Autonomía ahora',batFull:'Autonomía con batería llena',batPlus50:'Si la carga sube 50 %',batAge:'Edad de la batería',batSetDateTip:'Indicar la fecha en que se cambió la batería',batSince:(d)=>`cambiada ${d}`,batUnknown:'desconocida',batAskDate:'Fecha en que se cambió la batería (AAAA-MM-DD). Déjala vacía para usar la fecha que informa el UPS:',batDateSaved:'Fecha de la batería guardada',batYears:(y)=>`${y} años`,batAging:'Tendencia de capacidad',batAgingFmt:(c,w)=>`${c>0?'+':''}${c} % en ${w} semanas`,batCollecting:'reuniendo datos (hace falta cerca de un mes)',batAgingWarn:'La batería aguanta bastante menos que antes: conviene cambiarla',batOldWarn:'Batería de más de 4 años: conviene cambiarla',batTests:'Autotests',batTestNow:'Último resultado',batNoTests:'Aún no hay autotests registrados (solo se anotan los cambios)',batApprox:'estimación',tkpassed:'aprobado',tkfailed:'falló',tkrunning:'en curso',tknone:'ninguno',tkother:'otro',
     avStreak:'Tiempo en línea',avSince:'desde que se monitorea',avOnBatt:'En batería ahora',av24:'Disponibilidad 24 h',av7:'Disponibilidad 7 d',av30:'Disponibilidad 30 d',avLast:'Último corte',avNone:'Ninguno registrado',avCount:'Cortes (30 d)',avMin:'carga mín.',
     chartTitle_voltage:'Voltaje entrada vs salida',
     chartLegend_input:'Entrada',chartLegend_output:'Salida',chartLegend_watts:'Watts',
@@ -568,7 +568,7 @@ function renderDashboard(){
           })()}
         </div>
         ${availHtml(row.stats)}
-        ${batHtml(row.stats)}
+        ${batHtml(row.stats,row.srv.id,row.upsName)}
         <div class="vars-section">
           ${VARS.map(([k,l,u])=>{const val=row.v[k];return`<div class="var-cell"><span class="var-key">${l}</span><span class="var-val">${val?esc(val)+' '+u:'<span style="opacity:.3">—</span>'}</span></div>`;}).join('')}
         </div>
@@ -1081,6 +1081,15 @@ async function testServer(){
 
 // Guarda el servidor nuevo o el editado.
 // EN: Save the new or the edited server.
+async function setBatteryDate(sid,upsName,cur){
+  const v=window.prompt(t('batAskDate'),cur||new Date().toISOString().slice(0,10));
+  if(v===null)return;
+  try{
+    const r=await fetch('api/battery-date',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({server:sid,ups:upsName,date:v.trim()})});
+    const d=await r.json();if(!r.ok)throw new Error(d.error||'HTTP '+r.status);
+    toast(t('batDateSaved'),false);fetchAll();
+  }catch(e){toast(e.message,true);}
+}
 async function saveServer(){
   const name=document.getElementById('f-sname').value.trim(),host=document.getElementById('f-shost').value.trim(),port=parseInt(document.getElementById('f-sport').value)||3493;
   const btn=document.getElementById('btn-save-srv');
@@ -1250,7 +1259,7 @@ function availHtml(st){
   return `<div class="vars-section avail">${streak}${cell(t('av24'),fmtPct(a['24h']))}${cell(t('av7'),fmtPct(a['7d']))}${cell(t('av30'),fmtPct(a['30d']))}${cell(t('avCount'),st.count30)}${cell(t('avLast'),esc(lastTxt))}</div>`;
 }
 // Batería: autonomía estimada, edad, tendencia de capacidad y registro de autotests / battery: estimated runtime, age, capacity trend and self-test log
-function batHtml(st){
+function batHtml(st,sid,upsName){
   const b=st&&st.battery;if(!b)return'';
   const cell=(k,v,c)=>`<div class="var-cell"><span class="var-key">${esc(k)}</span><span class="var-val"${c?` style="color:${c}"`:''}>${v}</span></div>`;
   const R=b.runtime,cells=[];
@@ -1259,7 +1268,9 @@ function batHtml(st){
     cells.push(cell(t('batFull'),'≈ '+fmtDur(R.full_s)));
     if(R.plus50_s)cells.push(cell(t('batPlus50'),'≈ '+fmtDur(R.plus50_s)));
   }
-  if(b.age_years!=null)cells.push(cell(t('batAge'),esc(t('batYears',b.age_years)),b.age_years>=4?'var(--orange)':''));
+  const btn=canAdmin()?` <button class="btn-ghost-sm" data-on-click="setBatteryDate" data-on-click-args="${jsargs([sid,upsName,b.age_manual||''])}" title="${esc(t('batSetDateTip'))}">✎</button>`:'';
+  if(b.age_years!=null)cells.push(cell(t('batAge'),esc(t('batYears',b.age_years))+(b.age_manual?` <span style="opacity:.6;font-size:11px">(${esc(t('batSince',b.age_manual))})</span>`:'')+btn,b.age_years>=4?'var(--orange)':''));
+  else if(canAdmin())cells.push(cell(t('batAge'),'<span style="opacity:.55">'+esc(t('batUnknown'))+'</span>'+btn));
   const A=b.aging;
   cells.push(cell(t('batAging'),A?esc(t('batAgingFmt',A.change_pct,A.weeks)):'<span style="opacity:.55">'+esc(t('batCollecting'))+'</span>',A&&A.warn?'var(--orange)':''));
   if(b.test_now){const kc={passed:'var(--green)',failed:'var(--red)'}[b.test_now.kind]||'';cells.push(cell(t('batTestNow'),esc(b.test_now.result),kc));}
@@ -1317,4 +1328,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ clearLog, closeAddServer, closeModals, confirmDeleteServer, doLogin, exportCSV, logout, onVChartLeave, onVChartMove, openAddServer, openEditServer, saveServer, setLang, setTheme, setVChartRange, testServer, toggleNav });
+if (window.cspRegister) cspRegister({ clearLog, closeAddServer, closeModals, confirmDeleteServer, doLogin, exportCSV, logout, onVChartLeave, onVChartMove, openAddServer, openEditServer, saveServer, setBatteryDate, setLang, setTheme, setVChartRange, testServer, toggleNav });

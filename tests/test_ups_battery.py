@@ -30,6 +30,13 @@ class Pure(unittest.TestCase):
         for bad in ("00/00/00", "", None, 5, "2027/01/01", "1980/01/01", "garbage"):
             self.assertIsNone(b.battery_age_years(bad, today), bad)
 
+    def test_factory_default_date_is_ignored_and_manual_date_wins(self):
+        today = datetime.date(2026, 10, 30)
+        self.assertIsNone(b.battery_age_years("2001/09/01", today))                  # APC keeps the factory date: 25 years is not credible
+        self.assertEqual(b.battery_age_years("2017/10/30", today), 9.0)
+        self.assertIsNone(b.parse_manual_date("2027-01-01", today)); self.assertIsNone(b.parse_manual_date("1999-01-01", today)); self.assertIsNone(b.parse_manual_date("x", today))
+        self.assertEqual(b.parse_manual_date("2026-10-01", today), datetime.date(2026, 10, 1))
+
     def test_aging_needs_enough_history(self):
         self.assertIsNone(b.aging_trend([]))
         self.assertIsNone(b.aging_trend([(1, 3000, 500), (2, 3000, 500)]))
@@ -110,6 +117,35 @@ class Db(unittest.TestCase):
         self.assertIsNone(self.m.aging("s", "empty"))                       # cached for hours
         self.m._aging_cache.clear()
         self.assertIsNotNone(self.m.aging("s", "empty"))
+
+    def test_manual_battery_date(self):
+        import tempfile
+        from pathlib import Path
+        m = self.m; old = m.BAT_FILE; m.BAT_FILE = Path(tempfile.mkdtemp(), "battery_dates.json")
+        try:
+            v = {"battery.date": "2001/09/01"}
+            self.assertIsNone(m.battery_info("s", "u", v)["age_years"])
+            d = (datetime.date.today() - datetime.timedelta(days=20)).isoformat()
+            m.BAT_FILE.write_text('{"s|u": "%s", "s|bad": "nope"}' % d)
+            i = m.battery_info("s", "u", v); self.assertEqual((i["age_years"], i["age_manual"]), (0.1, d))
+            self.assertIsNone(m.battery_info("s", "bad", v)["age_manual"])
+        finally: m.BAT_FILE = old
+
+    def test_battery_date_endpoint(self):
+        import tempfile
+        from pathlib import Path
+        from tests import support
+        m = self.m; old = (m.BAT_FILE, m.load_servers); m.BAT_FILE = Path(tempfile.mkdtemp(), "bd.json"); m.load_servers = lambda: [{"id": "s1", "name": "n", "host": "h", "port": 1}]
+        web = support.Server(m.H); adm, ro = support.make_user("bdadm", support.ADMIN), support.make_user("bdro", support.READONLY)
+        try:
+            ok = {"server": "s1", "ups": "ups1", "date": "2026-10-01"}
+            self.assertEqual(web.call("POST", "/api/battery-date", ok, adm)[0], 200); self.assertEqual(m.load_battery_dates(), {"s1|ups1": "2026-10-01"})
+            self.assertEqual(web.call("POST", "/api/battery-date", ok, ro)[0], 403); self.assertEqual(web.call("POST", "/api/battery-date", ok)[0], 401)
+            for bad in ({**ok, "date": "2999-01-01"}, {**ok, "date": "x"}, {**ok, "ups": "a|b"}, {**ok, "ups": ""}):
+                self.assertEqual(web.call("POST", "/api/battery-date", bad, adm)[0], 400, bad)
+            self.assertEqual(web.call("POST", "/api/battery-date", {**ok, "server": "zz"}, adm)[0], 404)
+            self.assertEqual(web.call("POST", "/api/battery-date", {**ok, "date": ""}, adm)[0], 200); self.assertEqual(m.load_battery_dates(), {})
+        finally: m.BAT_FILE, m.load_servers = old; web.close()
 
     def test_battery_info_and_stats_integration(self):
         m = self.m

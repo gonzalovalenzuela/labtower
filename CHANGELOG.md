@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.1.3j — 2026-10-30
+
+**Nuevo**
+- **WAN Monitor: chequeo del router para saber si el corte es de la red local o de la línea.** En Ajustes se activa «Consultar el router» y se elige el tipo: **Huawei** (WiFi AX3, Mesh y otros HiLink), **OpenWrt**, **DD-WRT** o **TP-Link** (firmware clásico). LabTower le pregunta al router si su enlace WAN está arriba. Si falla internet pero el router responde y dice que su WAN está caída, el corte se marca como **«Línea / proveedor (WAN)»**; si ni el router responde, sigue siendo «Red local (LAN)».
+- Botón **«Probar router»** en Ajustes: muestra si conectó, el estado WAN, la IP y el motivo si falla (clave incorrecta, demasiadas sesiones abiertas, tipo de router equivocado…).
+- Solo lee: no cambia nada en el router. La clave del router se guarda en el servidor y nunca se muestra de nuevo ni se envía al navegador. Mientras hay un corte pregunta cada 10 s.
+- Eventos nuevos: «el router informa WAN caída/arriba» y «Internet caído (WAN)». Los cambios de ajustes del router quedan en el registro de auditoría y el chequeo aparece en el diagnóstico de salud.
+- Los TP-Link nuevos (Archer/Deco con inicio de sesión cifrado) no se pueden consultar; en ese caso se muestra un mensaje claro.
+- **UPS Monitor: fecha de cambio de la batería.** Junto a «Edad de la batería» hay un botón ✎ para indicar la fecha en que se cambió la batería (queda registrado en la auditoría). Esa fecha tiene prioridad sobre la que informa el UPS.
+
+**Correcciones**
+- **UPS Monitor, «Edad de la batería: 25.1 años».** Algunos UPS (como el APC Easy) conservan en el firmware la fecha de fábrica y no la actualizan al cambiar la batería. Ahora una edad mayor a 10 años se ignora (no se muestra ni genera el aviso de batería vieja) y se puede indicar la fecha real con el botón ✎.
+- **WAN Monitor:** el aviso de corte mostraba la hora como un número largo («desde 1793388959»); ahora muestra fecha y hora.
+
 ## 2.1.3i — 2026-10-30
 
 **Nuevo**

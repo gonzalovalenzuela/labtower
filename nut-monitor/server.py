@@ -28,7 +28,7 @@
 #
 #     File structure: SQLite · servers · watts calculation · NUT client · cache ·
 #     pollers · health · HTTP handler.
-import json, os, re, socket, time, logging, threading, sys, sqlite3
+import datetime, json, os, re, socket, time, logging, threading, sys, sqlite3
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
 from urllib.parse import urlparse, parse_qs
@@ -205,9 +205,21 @@ def aging(sid, ups, now=None):
     _aging_cache[k] = (now, tr)
     return tr
 
+# Fecha de cambio de batería indicada por el usuario (tiene prioridad sobre la del UPS, que muchos modelos no actualizan).
+# EN: Battery replacement date set by the user (takes priority over the UPS one, which many models never update).
+BAT_FILE = DATA_DIR / "battery_dates.json"
+_bat_lock = threading.Lock()
+
+def load_battery_dates():
+    d = auth.read_json(BAT_FILE, {}, dict)
+    return {k: v for k, v in d.items() if isinstance(k, str) and isinstance(v, str) and battery.parse_manual_date(v)}
+
 def battery_info(sid, ups, vars_):
-    out = {"runtime": battery.runtime_estimate(vars_), "age_years": battery.battery_age_years(vars_.get("battery.date") or vars_.get("battery.mfr.date")),
-           "aging": None, "tests": [], "test_now": None}
+    manual = load_battery_dates().get(f"{sid}|{ups}")
+    md = battery.parse_manual_date(manual) if manual else None
+    age = round((datetime.date.today() - md).days / 365.25, 1) if md else None
+    out = {"runtime": battery.runtime_estimate(vars_), "age_years": age if md else battery.battery_age_years(vars_.get("battery.date") or vars_.get("battery.mfr.date")),
+           "age_manual": manual or None, "aging": None, "tests": [], "test_now": None}
     try: out["aging"] = aging(sid, ups)
     except Exception as e: log.debug(f"aging: {e}")
     try: out["tests"] = selftest_log(sid, ups)
@@ -1035,6 +1047,23 @@ class H(BaseHTTPRequestHandler):
                 srvs.append(server); save_servers(srvs)
             ensure_poller(server)
             self._json(201, {"server": server})
+        # Fecha de cambio de la batería de un UPS (vacía = volver a usar la del UPS).
+        # EN: Battery replacement date of a UPS (empty = go back to the UPS one).
+        elif path == "/api/battery-date":
+            if not auth.check_permission(tok, "nut", "admin"):
+                return self._json(403, {"error": "Admin permission required"})
+            sid, ups, date = str(body.get("server") or ""), str(body.get("ups") or ""), str(body.get("date") or "").strip()
+            if not any(x["id"] == sid for x in load_servers()): return self._json(404, {"error": "Unknown server"})
+            if not ups or len(ups) > 64 or re.search(r"[\x00-\x1f\x7f|]", ups): return self._json(400, {"error": "Invalid UPS name"})
+            if date and battery.parse_manual_date(date) is None: return self._json(400, {"error": "Invalid date (use YYYY-MM-DD, not in the future)"})
+            with _bat_lock:
+                d = load_battery_dates()
+                if date: d[f"{sid}|{ups}"] = date
+                else: d.pop(f"{sid}|{ups}", None)
+                auth.write_json(BAT_FILE, d)
+            who = (auth.get_session(tok) or {}).get("username", "?")
+            auth.audit(who, "battery_date_set" if date else "battery_date_cleared", ups, date, auth.client_ip(self), module="nut")
+            self._json(200, {"ok": True, "date": date or None})
         # Prueba de conexión a un upsd sin guardarlo: devuelve los UPS que encuentra o el error.
         # EN: Connection test to an upsd without saving it: returns the UPS units it finds or the error.
         elif path == "/api/test":

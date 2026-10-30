@@ -46,10 +46,25 @@ def parse_battery_date(s, today=None):
         return d
     return None
 
+# ES: Muchos UPS (APC Easy, por ejemplo) dejan la fecha de fábrica del firmware y no la actualizan al cambiar la batería. Una batería de plomo de más de
+#     MAX_PLAUSIBLE_YEARS años no es creíble: esa fecha se ignora (y se puede indicar la fecha real del cambio en LabTower).
+# EN: Many UPSs (APC Easy, for one) keep the firmware's factory date and do not update it when the battery is replaced. A lead-acid battery older than
+#     MAX_PLAUSIBLE_YEARS is not credible: that date is ignored (and the real replacement date can be set in LabTower).
+MAX_PLAUSIBLE_YEARS = 10
+
 def battery_age_years(s, today=None):
     today = today or datetime.date.today()
     d = parse_battery_date(s, today)
-    return None if d is None else round((today - d).days / 365.25, 1)
+    if d is None: return None
+    y = round((today - d).days / 365.25, 1)
+    return y if y <= MAX_PLAUSIBLE_YEARS else None
+
+def parse_manual_date(s, today=None):
+    """YYYY-MM-DD typed by the user: not in the future, not before 2000. Returns a date or None."""
+    today = today or datetime.date.today()
+    try: d = datetime.datetime.strptime(str(s).strip(), "%Y-%m-%d").date()
+    except ValueError: return None
+    return d if 2000 <= d.year and d <= today else None
 
 # Tendencia de la autonomía a batería llena. `weeks` = [(semana, autonomía_media_s, muestras)] de lecturas con batería ≥ 95 % y
 # carga parecida, ordenadas por semana. Compara el comienzo con el final de la ventana. Con poco historial devuelve None.

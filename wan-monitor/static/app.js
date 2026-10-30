@@ -40,6 +40,34 @@ const LANG={
  "stUp": "Online",
  "stDownNet": "No internet",
  "stDownLan": "No local network",
+ "stDownWan": "No internet (WAN)",
+ "scopeWan": "WAN (router)",
+ "routerRow": "Router",
+ "rtWanUp": "WAN link up",
+ "rtWanDown": "WAN link DOWN",
+ "rtNoRead": "no reading",
+ "setRouter": "Router check (tells a local outage from a line/provider outage)",
+ "setRouterOn": "Ask the router for its WAN state",
+ "setRouterType": "Router type",
+ "rtHuawei": "Huawei (WiFi AX3, Mesh, HiLink)",
+ "rtOpenwrt": "OpenWrt",
+ "rtDdwrt": "DD-WRT",
+ "rtTplink": "TP-Link (classic firmware)",
+ "setRouterHost": "Router address (empty = default gateway)",
+ "setRouterPort": "Port",
+ "setRouterHttps": "Use HTTPS",
+ "setRouterUser": "User",
+ "setRouterPass": "Password",
+ "setRouterPassKept": "stored (leave empty to keep it)",
+ "setRouterIface": "WAN interface (OpenWrt)",
+ "setRouterEvery": "Check every (s)",
+ "setRouterHint": "Read only: LabTower only asks the router for the state of its internet link. Use an account that cannot change settings if the router allows it.",
+ "setRouterTest": "Test router",
+ "rtTesting": "Asking the router…",
+ "rtTestOk": "Router answered: WAN {0}{1}",
+ "rtTestUp": "up",
+ "rtTestDown": "down",
+ "rtTestFail": "Could not read the router: {0}",
  "stWait": "Measuring",
  "since": "since {0}",
  "gRtt": "Latency",
@@ -125,6 +153,7 @@ const LANG={
  "al": {
   "down_internet": "No internet access since {0}",
   "down_lan": "The local network is unreachable since {0}",
+  "down_wan": "The router reports its internet (WAN) link is down since {0}",
   "loss": "Packet loss {0}%",
   "latency": "High latency ({0} ms)",
   "dns_slow": "Slow DNS lookup ({0} ms)",
@@ -171,6 +200,34 @@ const LANG={
  "stUp": "En línea",
  "stDownNet": "Sin internet",
  "stDownLan": "Sin red local",
+ "stDownWan": "Sin internet (WAN)",
+ "scopeWan": "WAN (router)",
+ "routerRow": "Router",
+ "rtWanUp": "Enlace WAN arriba",
+ "rtWanDown": "Enlace WAN CAÍDO",
+ "rtNoRead": "sin lectura",
+ "setRouter": "Chequeo del router (distingue un corte local de uno de la línea o del proveedor)",
+ "setRouterOn": "Preguntar al router por su estado WAN",
+ "setRouterType": "Tipo de router",
+ "rtHuawei": "Huawei (WiFi AX3, Mesh, HiLink)",
+ "rtOpenwrt": "OpenWrt",
+ "rtDdwrt": "DD-WRT",
+ "rtTplink": "TP-Link (firmware clásico)",
+ "setRouterHost": "Dirección del router (vacío = puerta de enlace)",
+ "setRouterPort": "Puerto",
+ "setRouterHttps": "Usar HTTPS",
+ "setRouterUser": "Usuario",
+ "setRouterPass": "Contraseña",
+ "setRouterPassKept": "guardada (déjala vacía para conservarla)",
+ "setRouterIface": "Interfaz WAN (OpenWrt)",
+ "setRouterEvery": "Revisar cada (s)",
+ "setRouterHint": "Solo lectura: LabTower solo le pregunta al router por el estado de su enlace a internet. Si el router lo permite, usa una cuenta que no pueda cambiar ajustes.",
+ "setRouterTest": "Probar router",
+ "rtTesting": "Preguntando al router…",
+ "rtTestOk": "El router respondió: WAN {0}{1}",
+ "rtTestUp": "arriba",
+ "rtTestDown": "caída",
+ "rtTestFail": "No se pudo leer el router: {0}",
  "stWait": "Midiendo",
  "since": "desde {0}",
  "gRtt": "Latencia",
@@ -256,6 +313,7 @@ const LANG={
  "al": {
   "down_internet": "Sin acceso a internet desde {0}",
   "down_lan": "La red local no responde desde {0}",
+  "down_wan": "El router informa que su enlace a internet (WAN) está caído desde {0}",
   "loss": "Pérdida de paquetes {0}%",
   "latency": "Latencia alta ({0} ms)",
   "dns_slow": "Resolución DNS lenta ({0} ms)",
@@ -398,7 +456,7 @@ function localPts(kind){return kind==='speed'?((W&&W.speed)||[]).filter(s=>s.dow
 function renderAll(){if(!W)return;renderMain();updateGlobalStats();}
 function stateInfo(s){
   if(!s)return {lv:'off',txt:t('stWait')};
-  if(!s.up)return {lv:'crit',txt:t(s.scope==='lan'?'stDownLan':'stDownNet')};
+  if(!s.up)return {lv:'crit',txt:t(s.scope==='lan'?'stDownLan':s.scope==='wan'?'stDownWan':'stDownNet')};
   return {lv:(s.alerts||[]).some(a=>a.lv==='warn')?'warn':'ok',txt:t('stUp')};
 }
 function updateGlobalStats(){
@@ -437,7 +495,7 @@ function speedCard(){
 }
 function outagesCard(){
   const o=W.outages||[];
-  const rows=o.length?o.map(x=>`<tr><td>${esc(fmtDate(x.start))}</td><td>${x.end?esc(fmtDur(x.end-x.start)):pill('crit',t('ongoing'))}</td><td>${esc(t(x.scope==='lan'?'scopeLan':'scopeInternet'))}</td></tr>`).join('')
+  const rows=o.length?o.map(x=>`<tr><td>${esc(fmtDate(x.start))}</td><td>${x.end?esc(fmtDur(x.end-x.start)):pill('crit',t('ongoing'))}</td><td>${esc(t(x.scope==='lan'?'scopeLan':x.scope==='wan'?'scopeWan':'scopeInternet'))}</td></tr>`).join('')
     :`<tr><td colspan="3" class="wan-empty">${esc(t('noOutages'))}</td></tr>`;
   return `<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('outages'))}</div></div><div class="tbl-wrap"><table class="wan-table"><thead><tr><th>${esc(t('colStart'))}</th><th>${esc(t('colDur'))}</th><th>${esc(t('colScope'))}</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
@@ -463,10 +521,19 @@ function renderMain(){
   h+=speedCard()+outagesCard();
   h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('info'))}</div></div>
     ${kv(t('pubIp'),esc(s.public_ip||'—')+(s.ip_changed?` <span class="sum-sub">${esc(t('ipChanged'))} ${esc(fmtDate(s.ip_changed))}</span>`:''))}
-    ${kv(t('gwIp'),esc(s.gateway_ip||'—'))}${kv(t('gUp7'),esc(upTxt(up['7d'])))}${kv(t('gUp30'),esc(upTxt(up['30d'])))}${kv(t('lastCheck'),esc(fmtDate(s.ts)))}</div>`;
+    ${kv(t('gwIp'),esc(s.gateway_ip||'—'))}${routerRow(s)}${kv(t('gUp7'),esc(upTxt(up['7d'])))}${kv(t('gUp30'),esc(upTxt(up['30d'])))}${kv(t('lastCheck'),esc(fmtDate(s.ts)))}</div>`;
   h+='</div>'+chartSections('wan');
   box.innerHTML=h;
   drawCharts('wan');
+}
+// Fila «Router» de la tarjeta de información: estado WAN que informa el router (solo si el chequeo está activo).
+// EN: "Router" row of the info card: the WAN state the router reports (only when the check is on).
+function routerRow(s){
+  const c=W.config&&W.config.router;if(!c||!c.enabled)return '';
+  const r=s.router;
+  if(!r)return kv(t('routerRow'),esc(t('rtNoRead')));
+  if(!r.ok)return kv(t('routerRow'),`<span style="color:var(--orange)">${esc(t('rtNoRead'))}: ${esc(r.error||'')}</span>`);
+  return kv(t('routerRow'),r.wan_up?`<span style="color:var(--green)">${esc(t('rtWanUp'))}</span>`:`<span style="color:var(--red)">${esc(t('rtWanDown'))}</span>`)+(r.ip?kv('IP WAN',esc(r.ip)):'');
 }
 // Gráficos: latencia (con los cortes sombreados), pérdida y jitter, y las pruebas de velocidad (puntos).
 // EN: Charts: latency (outages shaded), loss and jitter, and the speed tests (points).
@@ -498,13 +565,41 @@ function openSettings(){
   ['builtin','ookla','librespeed'].forEach(k=>{const o=$('o-eng-'+k);o.textContent=nm[k]+(av[k]?'':' ('+t('engMissing')+')');o.disabled=!av[k]&&sp.engine!==k;});
   $('s-sp-engine').value=sp.engine||'builtin';
   $('s-sp-down').value=sp.down_url;$('s-sp-upurl').value=sp.up_url;
+  const rc=c.router||{};
+  $('s-rt-on').checked=!!rc.enabled;$('s-rt-type').value=rc.type||'huawei';$('s-rt-host').value=rc.host||'';$('s-rt-port').value=rc.port||80;$('s-rt-https').checked=!!rc.https;
+  $('s-rt-user').value=rc.user||'';$('s-rt-pass').value='';$('s-rt-pass').placeholder=rc.has_password?t('setRouterPassKept'):'';$('s-rt-iface').value=rc.interface||'wan';$('s-rt-every').value=rc.every||30;$('rt-result').textContent='';
+  rtTypeChanged(false);
   $('set-overlay').classList.add('show');
+}
+const RT_PORTS={huawei:80,openwrt:80,ddwrt:80,tplink:80};
+function rtTypeChanged(setPort){
+  const ty=$('s-rt-type').value;
+  if(setPort)$('s-rt-port').value=$('s-rt-https').checked?443:RT_PORTS[ty];
+  $('rt-iface-field').style.display=ty==='openwrt'?'':'none';
+  if(setPort){$('s-rt-user').value=ty==='ddwrt'?'root':ty==='openwrt'?'root':'admin';}
+}
+function routerBody(){
+  const num=(id,d)=>{const v=parseInt($(id).value);return isNaN(v)?d:v;};
+  const o={enabled:$('s-rt-on').checked,type:$('s-rt-type').value,host:$('s-rt-host').value.trim(),port:num('s-rt-port',80),https:$('s-rt-https').checked,user:$('s-rt-user').value.trim(),interface:$('s-rt-iface').value.trim()||'wan',every:num('s-rt-every',30)};
+  const pw=$('s-rt-pass').value;if(pw)o.password=pw;
+  return o;
+}
+async function testRouter(){
+  const box=$('rt-result'),btn=$('btn-rt-test');box.style.color='var(--text-dim)';box.textContent=t('rtTesting');btn.disabled=true;
+  try{
+    const {ok,d}=await post('api/wan/router/test',{router:routerBody()});
+    if(!ok){box.style.color='var(--red)';box.textContent=d.error||'Error';return;}
+    const r=d.result;
+    if(r.ok){box.style.color='var(--green)';box.textContent=t('rtTestOk',t(r.wan_up?'rtTestUp':'rtTestDown'),r.ip?' · IP '+r.ip:'');}
+    else{box.style.color='var(--red)';box.textContent=t('rtTestFail',r.error||'?');}
+  }catch(e){box.style.color='var(--red)';box.textContent=e.message;}
+  finally{btn.disabled=false;}
 }
 async function saveSettings(){
   const btn=$('btn-save');
   const num=(id,d)=>{const v=parseInt($(id).value);return isNaN(v)?d:v;};
   const body={targets:textToTargets($('s-targets').value),gateway:$('s-gw').value.trim(),dns_name:$('s-dns').value.trim(),interval:num('s-interval',30),ip_url:$('s-ipurl').value.trim(),
-    speed:{engine:$('s-sp-engine').value,enabled:$('s-sp-on').checked,every_hours:num('s-sp-every',12),seconds:num('s-sp-secs',8),streams:num('s-sp-streams',4),upload:$('s-sp-up').checked,down_url:$('s-sp-down').value.trim(),up_url:$('s-sp-upurl').value.trim()}};
+    speed:{engine:$('s-sp-engine').value,enabled:$('s-sp-on').checked,every_hours:num('s-sp-every',12),seconds:num('s-sp-secs',8),streams:num('s-sp-streams',4),upload:$('s-sp-up').checked,down_url:$('s-sp-down').value.trim(),up_url:$('s-sp-upurl').value.trim()},router:routerBody()};
   btn.disabled=true;btn.innerHTML='<span class="spin">⟳</span>';
   try{
     const {ok,d}=await post('api/wan/config',body);
@@ -628,7 +723,7 @@ function ring(label,pct,color,txt){
 function bigNum(label,val,unit,color){
   return `<div class="gauge-box"><span class="gauge-lbl">${esc(label)}</span><div class="gauge-num"><span class="runtime-num" style="color:${color||'var(--text)'}">${esc(val)}</span></div><span class="gauge-unit">${esc(unit||'')}</span></div>`;
 }
-function alertText(a){const f=(LANG[_lang].al||{})[a.type]||(LANG.en.al||{})[a.type];return f?f.replace(/\{0\}/g,a.value==null?'':a.value):a.type;}
+function alertText(a){const f=(LANG[_lang].al||{})[a.type]||(LANG.en.al||{})[a.type];return f?f.replace(/\{0\}/g,a.value==null?'':(a.type.indexOf('down_')===0?fmtDate(a.value):a.value)):a.type;}
 function alertsHtml(list){
   const al=(list||[]);if(!al.length)return '';
   return '<div class="alerts">'+al.map(a=>`<div class="alert ${esc(a.lv)}">${a.lv==='crit'?'⛔':a.lv==='warn'?'⚠':'ℹ'} ${esc(alertText(a))}</div>`).join('')+'</div>';
@@ -662,4 +757,4 @@ _i18nReady=true;
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ closeModals, doLogin, logout, runSpeed, saveSettings, setLang, setRange, setTheme, toggleNav });
+if (window.cspRegister) cspRegister({ closeModals, doLogin, logout, rtTypeChanged, runSpeed, saveSettings, testRouter, setLang, setRange, setTheme, toggleNav });

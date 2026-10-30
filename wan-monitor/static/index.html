@@ -114,6 +114,26 @@
       </div>
       <div class="field"><label data-i18n="setDownUrl">x</label><input type="text" id="s-sp-down" autocomplete="off"></div>
       <div class="field"><label data-i18n="setUpUrl">x</label><input type="text" id="s-sp-upurl" autocomplete="off"><span class="secret-hint" data-i18n="setSpeedHint">x</span></div>
+      <div style="border-top:1px solid var(--border);margin:12px 0 4px;padding-top:10px;font-weight:600" data-i18n="setRouter">x</div>
+      <label class="remember-chk"><input type="checkbox" id="s-rt-on"><span data-i18n="setRouterOn">x</span></label>
+      <div class="two-col">
+        <div class="field"><label data-i18n="setRouterType">x</label><select id="s-rt-type" data-on-change="rtTypeChanged" data-on-change-args="[true]"><option value="huawei" data-i18n="rtHuawei">Huawei</option><option value="openwrt" data-i18n="rtOpenwrt">OpenWrt</option><option value="ddwrt" data-i18n="rtDdwrt">DD-WRT</option><option value="tplink" data-i18n="rtTplink">TP-Link</option></select></div>
+        <div class="field"><label data-i18n="setRouterHost">x</label><input type="text" id="s-rt-host" autocomplete="off"></div>
+      </div>
+      <div class="two-col">
+        <div class="field"><label data-i18n="setRouterPort">x</label><input type="number" id="s-rt-port" min="1" max="65535"></div>
+        <label class="remember-chk" style="align-self:end"><input type="checkbox" id="s-rt-https" data-on-change="rtTypeChanged" data-on-change-args="[true]"><span data-i18n="setRouterHttps">x</span></label>
+      </div>
+      <div class="two-col">
+        <div class="field"><label data-i18n="setRouterUser">x</label><input type="text" id="s-rt-user" autocomplete="off"></div>
+        <div class="field"><label data-i18n="setRouterPass">x</label><input type="password" id="s-rt-pass" autocomplete="new-password"></div>
+      </div>
+      <div class="two-col">
+        <div class="field" id="rt-iface-field"><label data-i18n="setRouterIface">x</label><input type="text" id="s-rt-iface" autocomplete="off"></div>
+        <div class="field"><label data-i18n="setRouterEvery">x</label><input type="number" id="s-rt-every" min="10" max="300"></div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button type="button" class="btn-secondary" id="btn-rt-test" data-on-click="testRouter" data-i18n="setRouterTest">x</button><span id="rt-result" style="font-size:12px"></span></div>
+      <span class="secret-hint" data-i18n="setRouterHint">x</span>
     </div>
     <div class="modal-acts">
       <button class="btn-mc" data-on-click="closeModals" data-i18n="cancel">x</button>
