@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.3c — 2026-10-30
+
+**Nuevo**
+- **Switch Monitor: errores CRC.** Por SNMP se leen los errores CRC/FCS y de alineación de cada puerto (EtherLike-MIB, si el equipo la tiene). Si suben, el aviso (puerto, Resumen y línea de tiempo) habla de **CRC: cable o tarjeta de red** en vez de «errores nuevos», y el detalle del puerto muestra los contadores.
+- **Enlaces que rebotan:** un puerto cuyo enlace cambia 4 veces o más en 10 minutos genera el aviso «enlace rebotando» (máximo uno cada 30 min por puerto), esté vigilado o no.
+- **Avisar por puerto:** casilla nueva en el detalle de cada puerto para anotar en la línea de tiempo toda caída y recuperación de ese puerto (antes solo se vigilaban los uplinks y los enlaces entre switches).
+- Instrucciones para activar SNMP en los TP-Link JetStream (T2600G y similares) en el README.
 ## 2.1.3b — 2026-10-30
 
 **Nuevo**
