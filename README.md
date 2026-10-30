@@ -50,7 +50,7 @@ sudo apt-get update
 sudo apt-get install -y ./labtower_2.1_all.deb
 ```
 
-Usa `apt-get install ./archivo.deb` y no `dpkg -i`, para que `apt` instale las dependencias. Luego abre `http://<ip-de-la-pi>/`.
+Usa `apt-get install ./archivo.deb` y no `dpkg -i`, para que `apt` instale las dependencias. Luego abre `http://<ip-de-labtower>/`.
 
 El instalador crea un usuario del sistema por servicio (`labtower-auth`, `labtower-wol`, …), los servicios systemd, la configuración de nginx y el usuario `admin` con una **contraseña aleatoria** que muestra al terminar. Si la perdiste: `sudo cat /var/lib/labtower/auth/initial-admin-password`.
 
@@ -150,7 +150,7 @@ labtower-health
 
 #### Switch Monitor (pestaña de Net Monitor)
 - Segunda pestaña junto a *Equipos*. Para cada switch muestra el panel frontal con el estado de cada puerto (arriba, abajo, deshabilitado, errores nuevos, enlace entre switches, loop), velocidad negociada, paquetes por segundo, errores, STP, temperatura y a qué equipo está conectado cada puerto (cruza la tabla MAC del switch con los equipos que ya conoce Net Monitor).
-- **Modelos:** ZX310S (interfaz web), HC-SWTGW218AS (interfaz web) y cualquier switch con SNMP v2c (TP-Link y otros); este último es el único que entrega bytes, así que solo ahí hay Mb/s.
+- **Modelos:** ZX310S (interfaz web), HC-SWTGW218AS (interfaz web) y cualquier switch con SNMP v2c (ej: TP-Link y otros); este último es el único que entrega bytes, así que solo ahí hay Mb/s.
 - **Se agregan desde la interfaz** (botón *+ Agregar switch*, solo administradores), con botón *Probar* antes de guardar. Usuario, contraseña o community se guardan en `switches.json` con permisos 600 y la API nunca los devuelve.
 - **Solo lectura:** no cambia nada en los switches. Las operaciones peligrosas (borrar contadores del ZX, vaciar la tabla MAC del HC, reiniciar, guardar) están bloqueadas en el código.
 - **Historial de 1 año** (como UPS Monitor): temperatura y, por puerto, estado, velocidad, paquetes o Mb/s y errores; rangos 1 h, 1 d, 1 sem, 1 mes y todo. Las tasas se calculan entre muestras y toleran contadores que vuelven a cero.
@@ -221,7 +221,7 @@ sudo teleporter restore ~/labtower-20261009.tar.gz         # restaurar (-y para 
 - **Antes de restaurar** se guarda una copia del estado actual en `/var/backups/labtower/`.
 - **Límites:** se rechaza un archivo que descomprima a más de 2 GiB; las subidas desde el panel tienen tope de 200 MB.
 - **Desde el panel** (`/admin/` → *Backup & restore*): crear, descargar, subir, verificar y restaurar. Solo lo usa quien es admin de todos los módulos. La descarga pide la contraseña de tu cuenta y sale **cifrada** (gpg, AES-256) con una frase que eliges (12+ caracteres); para subir un `.gpg` el panel pide esa frase. Para abrirlo a mano: `gpg --decrypt respaldo.tar.gz.gpg > respaldo.tar.gz`. Crear un respaldo no lo descarga.
-- **Migrar a otra Pi:** instala el `.deb`, entra con `admin`, sube el respaldo y pulsa *Restore*.
+- **Migrar a otra Pi/VM/Servidor:** instala el `.deb`, entra con `admin`, sube el respaldo y pulsa *Restore*.
 - El archivo contiene hashes de contraseñas y tokens (permisos 600): guárdalo en un lugar privado.
 
 ### Respaldo automático por SFTP
@@ -235,7 +235,7 @@ sudo labtower-sftp-backup run         # respaldo ahora
 sudo labtower-sftp-backup status      # resultado de la última corrida
 ```
 
-- **Cifrado:** el archivo se sube cifrado con gpg (AES-256). La contraseña se crea sola en `/etc/labtower/backup_passphrase`: **guarda una copia fuera de la Pi** (`sudo cat /etc/labtower/backup_passphrase`), sin ella no se puede abrir ningún respaldo.
+- **Cifrado:** el archivo se sube cifrado con gpg (AES-256). La contraseña se crea sola en `/etc/labtower/backup_passphrase`: **guarda una copia fuera del servidor Labtower** (`sudo cat /etc/labtower/backup_passphrase`), sin ella no se puede abrir ningún respaldo.
 - **Restaurar:** baja el `.tar.gz.gpg`, ejecuta `sudo labtower-sftp-backup decrypt archivo.tar.gz.gpg` y luego `sudo teleporter restore archivo.tar.gz`.
 - **Seguro:** se sube como `.part` y se renombra; se compara el tamaño remoto; la huella del servidor queda fijada en la primera conexión.
 - **Retención:** 30 copias en el storage (`KEEP_REMOTE`) y 7 en el servidor LabTower (`KEEP_LOCAL`). Solo se borran archivos `labtower-auto-<equipo>-<fecha>_<hora>.tar.gz`.
@@ -283,7 +283,7 @@ sudo systemctl restart wol-console labtower-ups admin-panel net-monitor proxmox-
 
 | Variable | Módulo | Por defecto | Para qué |
 |---|---|---|---|
-| `SCAN_NETWORK` | Net | /24 de la Pi | Red a escanear (ej. `192.0.2.0/24`) |
+| `SCAN_NETWORK` | Net | /24 del servidor Labtower | Red a escanear (ej. `192.0.2.0/24`) |
 | `SCAN_INTERVAL` | Net | manual | Segundos entre escaneos automáticos (0 = manual) |
 | `SCAN_PORTS` | Net | puertos comunes | Puertos que se sondean |
 | `PORT_TIMEOUT` | Net | `0.5` | Segundos de espera por puerto |
@@ -295,7 +295,7 @@ sudo systemctl restart wol-console labtower-ups admin-panel net-monitor proxmox-
 | `PVE_KEEP_DAYS` | Proxmox | `7` | Días de historial de CPU y memoria |
 | `NAS_POLL_ACTIVE`, `NAS_POLL_IDLE` | NAS | `15`, `60` | Segundos entre consultas con la página abierta / en reposo |
 | `NAS_KEEP_DAYS` | NAS | `7` | Días de historial de cada NAS |
-| `LABTOWER_PI_KEEP_DAYS` | Resumen | `7` | Días de historial de la Pi |
+| `LABTOWER_PI_KEEP_DAYS` | Resumen | `7` | Días de historial de Labtower |
 | `WOL_BROADCAST` | WOL | automático | Direcciones de broadcast separadas por coma |
 | `LABTOWER_SECURE_COOKIE` | todos | apagado | `1` marca la cookie como `Secure` (solo detrás de HTTPS) |
 
@@ -350,7 +350,7 @@ labtower/
 └── README.md, README.en.md
 ```
 
-En la Pi:
+En el servidor de Labtower:
 
 | Ruta | Contenido |
 |---|---|
