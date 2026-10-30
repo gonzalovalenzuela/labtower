@@ -2,11 +2,11 @@
 
 > **Estado: preparado, sin publicar.** / **Status: ready, not published yet.** Hoy se instala con el `.deb` (ver README). / Today, install with the `.deb` (see README).
 
-Permite instalar y actualizar LabTower con `apt` en la Pi, sin descargar el `.deb` a mano.
+Permite instalar y actualizar LabTower con `apt` en el servidor, sin descargar el `.deb` a mano.
 Se publica en GitHub Pages (rama `gh-pages`) y está firmado con una clave GPG tuya.
-/ Install and upgrade LabTower with `apt` on the Pi. Hosted on GitHub Pages (`gh-pages` branch) and signed with your own GPG key.
+/ Install and upgrade LabTower with `apt` on the server. Hosted on GitHub Pages (`gh-pages` branch) and signed with your own GPG key.
 
-## Uso en la Pi / On the Pi
+## Uso en el servidor / On the server
 
 ```bash
 sudo install -d -m 0755 /etc/apt/keyrings

@@ -141,7 +141,7 @@ labtower-health
 - **Self-test log:** if the UPS reports `ups.test.result`, every change is logged (time LabTower saw it) and the last 8 are shown. A failed test raises an Overview warning; a passed one after "In progress", an informational event. LabTower only reads: it never starts tests on the UPS.
 
 ### Net Monitor
-- **Network:** detected automatically (the Pi's /24) or set with `SCAN_NETWORK`.
+- **Network:** detected automatically (the server's /24) or set with `SCAN_NETWORK`.
 - **Scanning:** a new install scans nothing until you ask (*Run initial scan* button). Automatic scanning is enabled in *Settings* (minimum 60 s).
 - **Detection:** ping (TTL), ports and HTTP banner. It does not use `nmap`.
 - **MAC and vendor**, in this order: Pi-hole, local ARP, SNMP (ARP table of a router or switch). Vendors come from the Wireshark `manuf` list (weekly download) or `ieee-data`.
@@ -232,7 +232,7 @@ sudo teleporter restore ~/labtower-20261009.tar.gz         # restore (-y to skip
 - **Before restoring**, a copy of the current state is saved in `/var/backups/labtower/`.
 - **Limits:** an archive that expands to more than 2 GiB is rejected; uploads from the panel are capped at 200 MB.
 - **From the panel** (`/admin/` → *Backup & restore*): create, download, upload, verify and restore. Only admins of every module can use it. Downloading asks for your account password and the file comes out **encrypted** (gpg, AES-256) with a passphrase you choose (12+ characters); uploading a `.gpg` asks for that passphrase. To open it by hand: `gpg --decrypt backup.tar.gz.gpg > backup.tar.gz`. Creating a backup does not download it.
-- **Moving to another Pi:** install the `.deb`, sign in as `admin`, upload the backup and press *Restore*.
+- **Moving to another server:** install the `.deb`, sign in as `admin`, upload the backup and press *Restore*.
 - The file holds password hashes and tokens (600 permissions): keep it somewhere private.
 
 ### Automatic SFTP backup
@@ -246,7 +246,7 @@ sudo labtower-sftp-backup run         # back up now
 sudo labtower-sftp-backup status      # result of the last run
 ```
 
-- **Encryption:** the file is uploaded encrypted with gpg (AES-256). The passphrase is created automatically in `/etc/labtower/backup_passphrase`: **keep a copy off the Pi** (`sudo cat /etc/labtower/backup_passphrase`); without it no backup can be opened.
+- **Encryption:** the file is uploaded encrypted with gpg (AES-256). The passphrase is created automatically in `/etc/labtower/backup_passphrase`: **keep a copy off the server** (`sudo cat /etc/labtower/backup_passphrase`); without it no backup can be opened.
 - **Restore:** download the `.tar.gz.gpg`, run `sudo labtower-sftp-backup decrypt file.tar.gz.gpg`, then `sudo teleporter restore file.tar.gz`.
 - **Safe:** uploaded as `.part` and renamed; the remote size is compared; the server's host key is pinned on first connection.
 - **Retention:** 30 copies on the storage (`KEEP_REMOTE`) and 7 on the LabTower server (`KEEP_LOCAL`). Only files named `labtower-auto-<host>-<date>_<time>.tar.gz` are deleted.
@@ -295,7 +295,7 @@ sudo systemctl restart wol-console labtower-ups admin-panel net-monitor proxmox-
 
 | Variable | Module | Default | Purpose |
 |---|---|---|---|
-| `SCAN_NETWORK` | Net | Pi's /24 | Network to scan (e.g. `192.0.2.0/24`) |
+| `SCAN_NETWORK` | Net | Server's /24 | Network to scan (e.g. `192.0.2.0/24`) |
 | `SCAN_INTERVAL` | Net | manual | Seconds between automatic scans (0 = manual) |
 | `SCAN_PORTS` | Net | common ports | Ports probed |
 | `PORT_TIMEOUT` | Net | `0.5` | Seconds to wait per port |
@@ -362,7 +362,7 @@ labtower/
 └── README.md, README.en.md
 ```
 
-On the Pi:
+On the server:
 
 | Path | Content |
 |---|---|

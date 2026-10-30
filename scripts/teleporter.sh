@@ -3,7 +3,7 @@
 #
 #   teleporter backup  [file.tar.gz]        create a backup (needs root)
 #   teleporter check   <file.tar.gz>        verify a backup (no changes made)
-#   teleporter restore <file.tar.gz> [-y]   restore it on this Pi (needs root)
+#   teleporter restore <file.tar.gz> [-y]   restore it on this server (needs root)
 #
 # Installed as /usr/local/bin/teleporter.sh, with a `teleporter` symlink.
 #
@@ -800,7 +800,7 @@ LabTower Teleporter v$TELEPORTER_VERSION
   teleporter backup  [file.tar.gz]        create a backup (default: $SAFETY_DIR/)
   teleporter check   <file.tar.gz>        verify a backup, changes nothing
   teleporter restore <file.tar.gz> [-y] [--nut] [--nginx]
-                                          restore on this Pi (verifies first, takes a
+                                          restore on this server (verifies first, takes a
                                           safety snapshot, restarts services). The NUT
                                           and nginx configuration are kept unless you
                                           pass --nut / --nginx.

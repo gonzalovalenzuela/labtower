@@ -254,8 +254,8 @@ async function initApp(){
 
 // El refresco automático pide solo el estado actual (sin historial); el historial de cada
 // gráfico se pide aparte, por rango, y solo cuando ese gráfico lo necesita.
-// El refresco automático pide solo el estado actual (range=none, sin historial); el historial de cada gráfico se pide aparte, por rango, y solo cuando ese gráfico lo necesita. Así la Pi no envía un año de datos cada 5 s.
-// EN: The automatic refresh asks only for the current state (range=none, no history); each chart's history is requested separately, by range, and only when that chart needs it. This way the Pi does not send a year of data every 5 s.
+// El refresco automático pide solo el estado actual (range=none, sin historial); el historial de cada gráfico se pide aparte, por rango, y solo cuando ese gráfico lo necesita. Así el servidor no envía un año de datos cada 5 s.
+// EN: The automatic refresh asks only for the current state (range=none, no history); each chart's history is requested separately, by range, and only when that chart needs it. This way the server does not send a year of data every 5 s.
 const _pollRange = 'none';
 const _csvRange  = 'all';
 const DEFAULT_RANGE = '1h';   // rango inicial de los gráficos

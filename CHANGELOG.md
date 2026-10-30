@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.3h — 2026-10-30
+
+**Cambios**
+- Textos, avisos, comentarios, mensajes de los scripts y documentación ya no dicen «la Pi»: ahora dicen «el servidor» (LabTower corre en cualquier VM o equipo, no solo en una Raspberry Pi). Se mantiene «Raspberry Pi» solo donde corresponde: la fuente de poder (subtensión y limitación), la temperatura de 24 h y la lista de equipos compatibles.
+
 ## 2.1.3g — 2026-10-30
 
 **Nuevo**

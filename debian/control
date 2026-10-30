@@ -1,5 +1,5 @@
 Package: labtower
-Version: 2.1.3g
+Version: 2.1.3h
 Section: admin
 Priority: optional
 Architecture: all
@@ -9,7 +9,7 @@ Conflicts: pi-console
 Replaces: pi-console
 Maintainer: Gonzalo Valenzuela <gonzalo@rave.cl>
 Description: LabTower — Homelab dashboard
- Self-hosted homelab dashboard for Raspberry Pi with modules:
+ Self-hosted homelab dashboard for Debian servers, VMs and Raspberry Pi with modules:
  WOL Console, UPS Monitor, Net Monitor, Proxmox Monitor, NAS Monitor,
  Overview and Admin Panel.
  Served via nginx reverse proxy with shared SSO authentication.

@@ -141,7 +141,7 @@ labtower-health
 - **Registro de autotests:** si el UPS informa `ups.test.result`, cada cambio se anota (hora en que LabTower lo vio) y se muestran los últimos 8. Un test fallido genera un aviso en el Resumen; uno aprobado después de «In progress», un evento informativo. LabTower solo lee: no lanza pruebas en el UPS.
 
 ### Net Monitor
-- **Red:** se detecta sola (la /24 de la Pi) o se fija con `SCAN_NETWORK`.
+- **Red:** se detecta sola (la /24 del servidor) o se fija con `SCAN_NETWORK`.
 - **Escaneo:** en una instalación nueva no escanea hasta que lo pidas (botón *Hacer escaneo inicial*). El escaneo automático se activa en *Ajustes* (mínimo 60 s).
 - **Detección:** ping (TTL), puertos y banner HTTP. No usa `nmap`.
 - **MAC y fabricante**, en este orden: Pi-hole, ARP local, SNMP (ARP de un router o switch). El fabricante sale de la base `manuf` de Wireshark (descarga semanal) o de `ieee-data`.
@@ -232,7 +232,7 @@ sudo teleporter restore ~/labtower-20261009.tar.gz         # restaurar (-y para 
 - **Antes de restaurar** se guarda una copia del estado actual en `/var/backups/labtower/`.
 - **Límites:** se rechaza un archivo que descomprima a más de 2 GiB; las subidas desde el panel tienen tope de 200 MB.
 - **Desde el panel** (`/admin/` → *Backup & restore*): crear, descargar, subir, verificar y restaurar. Solo lo usa quien es admin de todos los módulos. La descarga pide la contraseña de tu cuenta y sale **cifrada** (gpg, AES-256) con una frase que eliges (12+ caracteres); para subir un `.gpg` el panel pide esa frase. Para abrirlo a mano: `gpg --decrypt respaldo.tar.gz.gpg > respaldo.tar.gz`. Crear un respaldo no lo descarga.
-- **Migrar a otra Pi/VM/Servidor:** instala el `.deb`, entra con `admin`, sube el respaldo y pulsa *Restore*.
+- **Migrar a otra VM/servidor:** instala el `.deb`, entra con `admin`, sube el respaldo y pulsa *Restore*.
 - El archivo contiene hashes de contraseñas y tokens (permisos 600): guárdalo en un lugar privado.
 
 ### Respaldo automático por SFTP
