@@ -91,3 +91,26 @@ class Update(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UpdateCommands(unittest.TestCase):
+    """2.1.4a: el aviso muestra los comandos wget + apt install con enlace directo a la última versión."""
+    def run_js(self, latest):
+        import subprocess, re, json as j
+        src = open("auth/static/app.js", encoding="utf-8").read()
+        fn = re.search(r"function upCmds\(u\) \{.*?\n\}\n", src, re.S).group(0)
+        out = subprocess.run(["node", "-e", fn + f"console.log(JSON.stringify(upCmds({{latest:{j.dumps(latest)}}})))"], capture_output=True, text=True, check=True)
+        return j.loads(out.stdout)
+    def test_commands(self):
+        c = self.run_js("2.1.5")
+        self.assertEqual(c.split("\n"), [
+            "wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.5/labtower_2.1.5_all.deb",
+            "sudo apt install ./labtower_2.1.5_all.deb"])
+        self.assertIn("/2.1.5a/labtower_2.1.5a_all.deb", self.run_js("2.1.5a"))
+    def test_rejects_odd_tags(self):
+        for bad in ("", "latest", "2.1; rm -rf /", "../x", "2.1 5"):
+            self.assertEqual(self.run_js(bad), "")
+    def test_registered_and_translated(self):
+        src = open("auth/static/app.js", encoding="utf-8").read()
+        self.assertRegex(src, r"cspRegister\(\{[^}]*upCopyCmd")
+        self.assertEqual(src.count("upCopied:"), 2)

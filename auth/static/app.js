@@ -40,7 +40,7 @@ const LANG = {
     ssDevice:'Device', ssIp:'IP', ssLast:'Last activity', ssExpires:'Expires', ssThis:'This session', ssClose:'Close session', ssOld:'Unknown', ssNone:'No active sessions.',
     ssConfirm:(u,d)=>`Close the session of "${u}" on ${d}?`, ssConfirmOthers:'Close all your other sessions?', ssClosed:'Session closed', ssClosedN:n=>`${n} session(s) closed`, ssNow:'now',
     upTitle:'Updates', upBanner:(n,c)=>`New LabTower version ${n} is available (installed: ${c}).`, upSee:'See release notes', upInstalled:'Installed', upLatest:'Latest published', upChecked:'Last checked', upCheck:'Check now',
-    upOk:'You are up to date.', upOff:'Update check is turned off (LABTOWER_UPDATE_CHECK=0).', upErr:'Could not reach GitHub:', upNever:'not yet', upHow:'To update: download the .deb from the release page and run sudo apt install ./labtower_VERSION_all.deb',
+    upOk:'You are up to date.', upOff:'Update check is turned off (LABTOWER_UPDATE_CHECK=0).', upErr:'Could not reach GitHub:', upNever:'not yet', upHow:'To update, run these commands on the LabTower server (as a user with sudo):', upCopy:'Copy', upCopied:'Copied',
     sfTitle:'Security: two-factor authentication', sfOff:'Two-factor authentication is OFF for your account.', sfOn:(n)=>`Two-factor authentication is ON for your account (${n} recovery codes left).`,
     sfEnable:'Turn on 2FA', sfDisable:'Turn off 2FA', sfStep1:'1. In your authenticator app (Google Authenticator, Aegis, 1Password…) choose «Scan QR code» and scan this:', sfManual:'Can’t scan it? Add the account by typing this key (type: time based):',
     sfOpen:'Open in authenticator', sfStep2:'2. Type the 6-digit code it shows:', sfConfirm:'Confirm', sfCode:'6-digit code', sfRecTitle:'Save these recovery codes now. Each works once if you lose your phone. They will not be shown again:',
@@ -110,7 +110,7 @@ const LANG = {
     ssDevice:'Dispositivo', ssIp:'IP', ssLast:'Última actividad', ssExpires:'Vence', ssThis:'Esta sesión', ssClose:'Cerrar sesión', ssOld:'Desconocido', ssNone:'No hay sesiones activas.',
     ssConfirm:(u,d)=>`¿Cerrar la sesión de "${u}" en ${d}?`, ssConfirmOthers:'¿Cerrar todas tus otras sesiones?', ssClosed:'Sesión cerrada', ssClosedN:n=>`${n} sesión(es) cerrada(s)`, ssNow:'ahora',
     upTitle:'Actualizaciones', upBanner:(n,c)=>`Hay una versión nueva de LabTower: ${n} (instalada: ${c}).`, upSee:'Ver notas de la versión', upInstalled:'Instalada', upLatest:'Última publicada', upChecked:'Última consulta', upCheck:'Consultar ahora',
-    upOk:'Estás al día.', upOff:'La consulta de versiones está desactivada (LABTOWER_UPDATE_CHECK=0).', upErr:'No se pudo consultar GitHub:', upNever:'aún no', upHow:'Para actualizar: descarga el .deb de la página de la versión y ejecuta sudo apt install ./labtower_VERSION_all.deb',
+    upOk:'Estás al día.', upOff:'La consulta de versiones está desactivada (LABTOWER_UPDATE_CHECK=0).', upErr:'No se pudo consultar GitHub:', upNever:'aún no', upHow:'Para actualizar, ejecuta estos comandos en el servidor de LabTower (con un usuario con sudo):', upCopy:'Copiar', upCopied:'Copiado',
     sfTitle:'Seguridad: autenticación en dos pasos', sfOff:'La autenticación en dos pasos está DESACTIVADA en tu cuenta.', sfOn:(n)=>`La autenticación en dos pasos está ACTIVA en tu cuenta (te quedan ${n} códigos de recuperación).`,
     sfEnable:'Activar 2FA', sfDisable:'Desactivar 2FA', sfStep1:'1. En tu app de autenticación (Google Authenticator, Aegis, 1Password…) elige «Escanear código QR» y escanea este:', sfManual:'¿No puedes escanearlo? Agrega la cuenta escribiendo esta clave (tipo: basada en tiempo):',
     sfOpen:'Abrir en la app', sfStep2:'2. Escribe el código de 6 dígitos que muestra:', sfConfirm:'Confirmar', sfCode:'Código de 6 dígitos', sfRecTitle:'Guarda estos códigos de recuperación ahora. Cada uno sirve una vez si pierdes el teléfono. No se vuelven a mostrar:',
@@ -1013,12 +1013,26 @@ function upRender() {
   }
   if (!box) return;
   const when = u.checked ? new Date(u.checked*1000).toLocaleString(_lang === 'es' ? 'es-CL' : 'en-US') : t('upNever');
+  const cmd = upCmds(u);
   const msg = !u.enabled ? t('upOff') : u.error ? `${t('upErr')} ${u.error}` : u.newer ? t('upHow') : u.latest ? t('upOk') : '';
-  box.innerHTML = `<div class="tp-hint" style="border:0">${esc(t('upInstalled'))}: <b>${esc(u.current)}</b> · ${esc(t('upLatest'))}: <b>${esc(u.latest || '—')}</b> · ${esc(t('upChecked'))}: ${esc(when)}<br>${esc(msg)}</div>
+  const how = u.enabled && !u.error && u.newer && cmd ? `<pre class="up-cmd" id="up-cmd">${esc(cmd)}</pre><button class="btn-sec" data-on-click="upCopyCmd">${esc(t('upCopy'))}</button>` : '';
+  box.innerHTML = `<div class="tp-hint" style="border:0">${esc(t('upInstalled'))}: <b>${esc(u.current)}</b> · ${esc(t('upLatest'))}: <b>${esc(u.latest || '—')}</b> · ${esc(t('upChecked'))}: ${esc(when)}<br>${esc(msg)}${how}</div>
     <div style="padding:0 18px 14px"><button class="btn-sec" data-on-click="upCheck" ${u.enabled ? '' : 'disabled'}>${esc(t('upCheck'))}</button></div>`;
 }
 function upCheck() { upLoad(true); }
+// Comandos de actualización con enlace directo al .deb de la última versión (solo si la etiqueta tiene forma de versión).
+// EN: Update commands with a direct link to the latest release .deb (only when the tag looks like a version).
+function upCmds(u) {
+  if (!u || !/^[0-9][0-9A-Za-z.]*$/.test(u.latest || '')) return '';
+  const f = `labtower_${u.latest}_all.deb`;
+  return `wget https://github.com/gonzalovalenzuela/labtower/releases/download/${u.latest}/${f}\nsudo apt install ./${f}`;
+}
+function upCopyCmd(ev) {
+  const el = document.getElementById('up-cmd'), btn = document.querySelector('[data-on-click="upCopyCmd"]'); if (!el) return;
+  const done = () => { if (btn) { btn.textContent = t('upCopied'); setTimeout(() => { btn.textContent = t('upCopy'); }, 1500); } };
+  try { navigator.clipboard.writeText(el.textContent).then(done, () => {}); } catch(e) {}
+}
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ closeDrawer, closeModals, confirmDelete, doLogin, editUser, exCancel, exGo, exPlainToggle, logout, openDrawer, reauthCancel, reauthOk, saveUser, setLang, setTheme, upCheck, sfBegin, sfConfirm, sfDisable, sfRecDone, sfResetUser, auLoad, ssClose, ssCloseOthers, toggleNav, tpCheck, tpCreate, tpDelete, tpDownload, tpRestoreGo, tpRestoreOpen });
+if (window.cspRegister) cspRegister({ closeDrawer, closeModals, confirmDelete, doLogin, editUser, exCancel, exGo, exPlainToggle, logout, openDrawer, reauthCancel, reauthOk, saveUser, setLang, setTheme, upCheck, upCopyCmd, sfBegin, sfConfirm, sfDisable, sfRecDone, sfResetUser, auLoad, ssClose, ssCloseOthers, toggleNav, tpCheck, tpCreate, tpDelete, tpDownload, tpRestoreGo, tpRestoreOpen });

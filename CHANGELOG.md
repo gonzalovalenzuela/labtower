@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.4a — 2026-10-31
+
+- El aviso de versión nueva ahora muestra los comandos para actualizar (`wget` con enlace directo al .deb de la última versión y `sudo apt install`), con un botón para copiarlos.
+
 ## 2.1.4 — 2026-10-30
 
 **Seguridad**
