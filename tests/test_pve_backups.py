@@ -43,7 +43,7 @@ class Pure(unittest.TestCase):
         n = bk.newest_by_vmid([{"storage": "s", "node": "a", "items": [item(100, 40)]}])
         self.assertEqual(bk.evaluate(g, n, 36, [], NOW)[0]["status"], "old")
         self.assertEqual(bk.evaluate(g, n, 48, [], NOW)[0]["status"], "ok")
-        self.assertEqual(bk.evaluate(g, n, "junk", None, NOW)[0]["status"], "old")      # falls back to 36 h
+        self.assertEqual(bk.evaluate(g, n, "junk", None, NOW)[0]["status"], "ok")       # falls back to 7 days
 
     def test_tasks(self):
         tasks = [{"type": "vzdump", "upid": "U1", "node": "a", "starttime": NOW - 100, "endtime": NOW - 50, "status": "OK", "id": "100"},
@@ -68,7 +68,7 @@ class Pure(unittest.TestCase):
 
     def test_config_validation(self):
         self.assertEqual(bk.clean_config({"max_age_h": 24, "ignore": [105, 101, 105]}), {"max_age_h": 24, "ignore": [101, 105]})
-        self.assertEqual(bk.clean_config({}), {"max_age_h": 36, "ignore": []})
+        self.assertEqual(bk.clean_config({}), {"max_age_h": 168, "ignore": []})
         for bad in (None, [], {"max_age_h": 0}, {"max_age_h": 9000}, {"max_age_h": True}, {"max_age_h": "9"}, {"max_age_h": float("nan")},
                     {"ignore": "x"}, {"ignore": [True]}, {"ignore": [5]}, {"ignore": ["101"]}, {"ignore": list(range(100, 400))}):
             with self.assertRaises(ValueError, msg=bad): bk.clean_config(bad)
@@ -96,7 +96,7 @@ class Round(unittest.TestCase):
         self._rec = m.auth.record_event
         m.auth.record_event = lambda mod, lv, tx, k=None, **p: self.ev.append((lv, k, p))
         m.auth._state_seen.clear(); m._bk_seen.clear(); m._backups.clear()
-        self.cl = {"id": "c1", "name": "Pen", "backup": {"max_age_h": 36, "ignore": []}}
+        self.cl = {"id": "c1", "name": "Pen", "backup": {"max_age_h": 24, "ignore": []}}
         self.real_now = m.time.time
         m.time.time = lambda: NOW
     def tearDown(self):
@@ -119,6 +119,14 @@ class Round(unittest.TestCase):
         old = next(e for e in self.ev if e[1] == "pve_backup_old"); self.assertEqual((old[2]["v"], old[2]["h"]), (100, 40))
         m._backup_round(self.cl, f, Cache())
         self.assertEqual(len(self.ev), 2)                                              # nothing repeated
+
+    def test_old_default_moves_to_seven_days(self):
+        self.assertEqual(bk.migrate_config({"max_age_h": 36, "ignore": [101]}), {"max_age_h": 168, "ignore": [101]})
+        self.assertEqual(bk.migrate_config({"max_age_h": 48, "ignore": []})["max_age_h"], 48)
+        self.cl["backup"]["max_age_h"] = 36
+        m._backup_round(self.cl, Fake(), Cache())
+        self.assertEqual(m._backups["c1"]["max_age_h"], 168)
+        self.assertEqual({r["vmid"]: r["status"] for r in m._backups["c1"]["rows"]}, {100: "ok", 101: "ok", 102: "never"})   # 50 h is fine under 7 days
 
     def test_ignored_guest_never_alerts(self):
         f = Fake(); self.cl["backup"]["ignore"] = [102]

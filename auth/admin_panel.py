@@ -271,7 +271,7 @@ class H(BaseHTTPRequestHandler):
             users = auth.load_users()
             out   = [{"username": u, "permissions": d["permissions"],
                       "must_change_password": d.get("must_change_password", False),
-                      "created": d.get("created"), "totp": bool(d.get("totp"))}
+                      "created": d.get("created"), "totp": bool(d.get("totp")), "last_login": d.get("last_login")}
                      for u, d in users.items()]
             self._json(200, {"users": out})
         elif path == "/api/sessions":

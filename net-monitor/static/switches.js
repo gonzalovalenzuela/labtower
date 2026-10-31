@@ -23,7 +23,7 @@ Object.assign(LANG.en, {
   swHistSince: d => 'Counting since ' + d, swHistResets: n => n ? n + ' counter reset' + (n > 1 ? 's' : '') + ' detected' : 'no counter resets detected',
   swHistEmpty: 'No totals yet: they appear after the first reading.', swColRx: 'Received', swColTx: 'Sent', swColSum: 'Total', swColPkRx: 'Packets received', swColPkTx: 'Packets sent', swHistTotal: 'All ports',
   swHistPktOnly: 'This model does not report bytes, only packets.', swPort: 'Port', swState: 'State', swSpeed: 'Speed', swRxPps: 'Rx pkt/s', swTxPps: 'Tx pkt/s', swMbps: 'Mbit/s rx / tx', swErrors: 'Errors', swStp: 'STP', swConn: 'Connected to',
-  swStUp: 'Up', swStDown: 'Down', swStOff: 'Disabled', swStLoop: 'Loop', swStUplink: 'Uplink', swStWarn: 'Errors',
+  swSideTitle: 'Switches', swAllSwitches: 'All switches', swNoneSide: 'No switches yet', swStUp: 'Up', swStDown: 'Down', swStOff: 'Disabled', swStLoop: 'Loop', swStUplink: 'Uplink', swStWarn: 'Errors',
   swShowAll: n => 'Show all ' + n + ' ports', swShowActive: 'Show only active ports',
   swOnline: 'Online', swOffline: 'Unreachable', swWaiting: 'Waiting for the first reading…', swTempHigh: 'High temperature', swTempCrit: 'Critical temperature',
   swNoTemp: 'This model does not report temperature, loop per port or bytes; only packets.', swNoLoop: 'No per-port loop flag on this model.',
@@ -57,7 +57,7 @@ Object.assign(LANG.es, {
   swHistSince: d => 'Contando desde ' + d, swHistResets: n => n ? n + ' reinicio' + (n > 1 ? 's' : '') + ' de contadores detectado' + (n > 1 ? 's' : '') : 'sin reinicios de contadores detectados',
   swHistEmpty: 'Aún no hay totales: aparecen tras la primera lectura.', swColRx: 'Recibido', swColTx: 'Enviado', swColSum: 'Total', swColPkRx: 'Paquetes recibidos', swColPkTx: 'Paquetes enviados', swHistTotal: 'Todos los puertos',
   swHistPktOnly: 'Este modelo no informa bytes, solo paquetes.', swPort: 'Puerto', swState: 'Estado', swSpeed: 'Velocidad', swRxPps: 'Rx pkt/s', swTxPps: 'Tx pkt/s', swMbps: 'Mbit/s rx / tx', swErrors: 'Errores', swStp: 'STP', swConn: 'Conectado a',
-  swStUp: 'Arriba', swStDown: 'Abajo', swStOff: 'Deshabilitado', swStLoop: 'Loop', swStUplink: 'Uplink', swStWarn: 'Errores',
+  swSideTitle: 'Switches', swAllSwitches: 'Todos los switches', swNoneSide: 'Aún no hay switches', swStUp: 'Arriba', swStDown: 'Abajo', swStOff: 'Deshabilitado', swStLoop: 'Loop', swStUplink: 'Uplink', swStWarn: 'Errores',
   swShowAll: n => 'Mostrar los ' + n + ' puertos', swShowActive: 'Mostrar solo puertos activos',
   swOnline: 'En línea', swOffline: 'Sin conexión', swWaiting: 'Esperando la primera lectura…', swTempHigh: 'Temperatura alta', swTempCrit: 'Temperatura crítica',
   swNoTemp: 'Este modelo no informa temperatura, loop por puerto ni bytes; solo paquetes.', swNoLoop: 'Este modelo no informa loop por puerto.',
@@ -78,7 +78,7 @@ Object.assign(LANG.es, {
 });
 
 const $ = id => document.getElementById(id);
-const SW = { sub: 'status', tot: null, macs: null, q: '', msw: '', known: false, pos: {}, drag: null, view: 'hosts', data: null, hash: '', sel: null, range: '1d', hist: {}, charts: {}, showAll: {}, timer: null, busy: false, cfg: null };
+const SW = { sub: 'status', tot: null, macs: null, q: '', msw: '', known: false, pos: {}, drag: null, view: 'hosts', data: null, hash: '', sel: null, range: '1d', hist: {}, charts: {}, showAll: {}, timer: null, busy: false, cfg: null, only: '' };
 const POLLS = [30, 60, 120, 300, 600];
 
 async function api(path, opts) {
@@ -120,6 +120,7 @@ function setView(v) {
   $('view-hosts').hidden = SW.view !== 'hosts';
   $('view-switches').hidden = SW.view !== 'switches';
   document.body.classList.toggle('view-sw', SW.view === 'switches');
+  const sd = $('sw-side'); if (sd) sd.hidden = SW.view !== 'switches';
   document.querySelectorAll('.view-tab').forEach(b => b.classList.toggle('active', b.dataset.view === SW.view));
   try { localStorage.setItem('pi-net-view', SW.view); } catch (e) {}
   try { history.replaceState(null, '', SW.view === 'switches' ? '#switches' : location.pathname + location.search); } catch (e) {}
@@ -389,9 +390,20 @@ function histHtml() {
   }).join('');
 }
 
+// Lista de switches en la barra lateral (como «Tipo de dispositivo»): clic para ver solo uno.
+// EN: Switch list in the sidebar (like "Device type"): click to show only one.
+function sbSwitches(S) {
+  const box = $('sw-side-list'); if (!box) return;
+  const lb = document.querySelector('#sw-side .sb-lbl'); if (lb) lb.textContent = t('swSideTitle');      // switches.js loads after app.js translated the page
+  if (SW.only && !S.some(s => s.id === SW.only)) SW.only = '';
+  const dot = s => !s.updated ? 'var(--text-dim)' : s.online ? 'var(--green)' : 'var(--red)';
+  const row = (id, color, name, cnt) => `<div class="os-filter${SW.only === id ? ' active' : ''}" data-sw-only="${esc(id)}" role="button" tabindex="0"><span class="os-dot" style="background:${color}"></span><span class="os-filter-name">${esc(name)}</span><span class="os-filter-count">${esc(cnt)}</span></div>`;
+  box.innerHTML = S.length ? row('', 'var(--teal)', t('swAllSwitches'), S.length) + S.map(s => row(s.id, dot(s), s.name, s.online ? s.ports_up + '/' + s.ports_total : '—')).join('') : '<div class="dim" style="padding:4px 10px;font-size:11.5px">' + esc(t('swNoneSide')) + '</div>';
+}
 function render() {
   const root = $('view-switches'); if (!root || !SW.data) return;
   const d = SW.data, admin = canAdmin(), S = d.switches;
+  sbSwitches(S);
   const upSw = S.filter(s => s.online).length;
   const pUp = S.reduce((a, s) => a + s.ports_up, 0), pTot = S.reduce((a, s) => a + s.ports_total, 0);
   const temps = S.filter(s => s.system && s.system.temperature_c != null).sort((a, b) => b.system.temperature_c - a.system.temperature_c);
@@ -408,7 +420,7 @@ function render() {
   if (SW.sub === 'mac') { root.innerHTML = bar + subbar + macHtml(); updateStamp(); return; }
   root.innerHTML = bar + subbar +
     (S.length ? `<div class="stats-row">${kpi('teal', upSw + '/' + S.length, t('swKpiOnline'))}${kpi('green', pUp + '<span class="dim"> / ' + pTot + '</span>', t('swKpiPorts'))}${kpi('orange', tmax ? Math.round(tmax.system.temperature_c) + ' °C' : '—', t('swKpiTemp') + (tmax ? ' (' + tmax.name + ')' : ''), tcol)}${kpi('red', errPorts, t('swKpiErr'), errPorts ? 'var(--amber)' : '')}${kpi('blue', macs, t('swKpiMacs'))}</div>` : '') +
-    empty + S.map(card).join('') + topology(d) + (S.length ? `<div class="sw-note">${esc(t('swReadOnlyNote'))}</div>` : '');
+    empty + S.filter(x => !SW.only || x.id === SW.only).map(card).join('') + topology(d) + (S.length ? `<div class="sw-note">${esc(t('swReadOnlyNote'))}</div>` : '');
   updateStamp();
   drawCharts();
 }
@@ -499,6 +511,12 @@ async function onClick(e) {
 function init() {
   const root = $('view-switches'); if (!root) return;
   root.addEventListener('click', onClick);
+  const side = $('sw-side-list');
+  if (side) {
+    const pick = e => { const r = e.target.closest && e.target.closest('[data-sw-only]'); if (!r) return; SW.only = r.getAttribute('data-sw-only') || ''; if (SW.data) render(); };
+    side.addEventListener('click', pick);
+    side.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(e); } });
+  }
   document.addEventListener('click', e => { if (e.target.closest && e.target.closest('#sw-modal')) onClick(e); });
   root.addEventListener('mousemove', onMove); root.addEventListener('mouseleave', () => { const tip = $('sw-tip'); if (tip) tip.style.display = 'none'; });
   const refreshMac = () => { const b = macBody(), body = $('sw-macbody'); if (body) body.innerHTML = b.html; const c = $('sw-maccount'); if (c) c.textContent = b.count; };

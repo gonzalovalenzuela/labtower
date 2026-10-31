@@ -120,7 +120,7 @@ const LANG={
  "pubIp": "Public IP",
  "gwIp": "Gateway",
  "lastCheck": "Last check",
- "ipChanged": "IP changed",
+ "ipChanged": "IP changed", "ipWas": "was", "pubIpSb": "Public IP",
  "noPing": "The ping command is not installed; only TCP checks will work.",
  "histRtt": "Latency",
  "histLoss": "Packet loss and jitter",
@@ -162,7 +162,8 @@ const LANG={
   "latency": "High latency ({0} ms)",
   "dns_slow": "Slow DNS lookup ({0} ms)",
   "dns_fail": "The DNS lookup failed",
-  "ip_changed": "The public IP changed to {0}"
+  "ip_changed": "The public IP changed to {0}",
+  "ip_changed_from": "The public IP changed from {1} to {0}"
  }
 },
   es:{
@@ -284,7 +285,7 @@ const LANG={
  "pubIp": "IP pública",
  "gwIp": "Puerta de enlace",
  "lastCheck": "Última medición",
- "ipChanged": "IP cambió",
+ "ipChanged": "IP cambió", "ipWas": "antes", "pubIpSb": "IP pública",
  "noPing": "El comando ping no está instalado; solo funcionarán las pruebas TCP.",
  "histRtt": "Latencia",
  "histLoss": "Pérdida de paquetes y jitter",
@@ -326,7 +327,8 @@ const LANG={
   "latency": "Latencia alta ({0} ms)",
   "dns_slow": "Resolución DNS lenta ({0} ms)",
   "dns_fail": "Falló la resolución DNS",
-  "ip_changed": "La IP pública cambió a {0}"
+  "ip_changed": "La IP pública cambió a {0}",
+  "ip_changed_from": "La IP pública cambió de {1} a {0}"
  }
 }
 };
@@ -475,6 +477,14 @@ function updateGlobalStats(){
   const last=lastSpeed();
   $('st-down').innerHTML=last&&last.down!=null?fmtMbps(last.down):'—';
   $('st-ip').textContent=s&&s.public_ip?s.public_ip:'—';
+  const sb=$('sb-ip');
+  if(sb){
+    sb.style.display=s&&s.public_ip?'':'none';
+    if(s&&s.public_ip){
+      const ch=s.ip_changed?`<div class="sb-ip-sub">${esc(t('ipChanged'))} ${esc(fmtDate(s.ip_changed))}${s.ip_prev?' · '+esc(t('ipWas'))+' '+esc(s.ip_prev):''}</div>`:'';
+      $('sb-ip-body').innerHTML=`<div class="sb-ip" title="${esc(s.public_ip)}"><span class="sb-ip-dot${s.ip_changed&&Date.now()/1000-s.ip_changed<86400?' chg':''}"></span><span class="sb-ip-val">${esc(s.public_ip)}</span></div>${ch}`;
+    }
+  }
 }
 function fmtMbps(v){return v==null?'—':(v>=100?Math.round(v):Math.round(v*10)/10)+'<span style="font-size:13px;color:var(--text-dim)"> Mb/s</span>';}
 function fmtMbpsTxt(v){return v==null?'—':(v>=100?Math.round(v):Math.round(v*10)/10)+' Mb/s';}
@@ -736,7 +746,7 @@ function ring(label,pct,color,txt){
 function bigNum(label,val,unit,color){
   return `<div class="gauge-box"><span class="gauge-lbl">${esc(label)}</span><div class="gauge-num"><span class="runtime-num" style="color:${color||'var(--text)'}">${esc(val)}</span></div><span class="gauge-unit">${esc(unit||'')}</span></div>`;
 }
-function alertText(a){const f=(LANG[_lang].al||{})[a.type]||(LANG.en.al||{})[a.type];return f?f.replace(/\{0\}/g,a.value==null?'':(a.type.indexOf('down_')===0?fmtDate(a.value):a.value)):a.type;}
+function alertText(a){const ty=(a.type==='ip_changed'&&a.prev)?'ip_changed_from':a.type;const f=(LANG[_lang].al||{})[ty]||(LANG.en.al||{})[ty];return f?f.replace(/\{1\}/g,a.prev||'').replace(/\{0\}/g,a.value==null?'':(a.type.indexOf('down_')===0?fmtDate(a.value):a.value)):a.type;}
 function alertsHtml(list){
   const al=(list||[]);if(!al.length)return '';
   return '<div class="alerts">'+al.map(a=>`<div class="alert ${esc(a.lv)}">${a.lv==='crit'?'⛔':a.lv==='warn'?'⚠':'ℹ'} ${esc(alertText(a))}</div>`).join('')+'</div>';

@@ -42,11 +42,15 @@
     <div class="sb-lbl" data-i18n="navSection">Navigation</div>
     <div id="nav-items"></div>
   </div>
-  <div class="sb-sec">
+  <div class="sb-sec" id="sw-side" hidden>
+    <div class="sb-lbl" data-i18n="swSideTitle">Switches</div>
+    <div class="os-filters" id="sw-side-list"></div>
+  </div>
+  <div class="sb-sec sb-hosts">
     <div class="sb-lbl" data-i18n="deviceTypes">Device type</div>
     <div class="os-filters" id="type-filters"></div>
   </div>
-  <div class="sb-sec">
+  <div class="sb-sec sb-hosts">
     <div class="sb-lbl" data-i18n="osDetected">Detected OS</div>
     <div class="os-filters" id="os-filters">
       <div class="os-filter active" data-os="ALL" data-on-click="setOsFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]">

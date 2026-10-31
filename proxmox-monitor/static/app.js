@@ -30,7 +30,7 @@ const LANG={
     clusterAdded:(name)=>`${name} added`,
     deleteClusterConfirm:(name)=>`Delete cluster "${name}"?`,
     cpuAlert:(pct)=>`CPU at ${pct}%`,ramAlert:(pct)=>`RAM at ${pct}%`,
-    bkSelAll:'Select all',bkSelNone:'Clear selection',bkSelPending:'Select those without backup or too old',bkIgnoreSel:n=>`Ignore selected (${n})`,bkUnignoreSel:n=>`Stop ignoring selected (${n})`,bkTitle:'Backups (vzdump)',bkWait:'Reading backups… (first read takes a minute)',bkNone:'No backup storage found. The API token needs Datastore.Audit on the storages.',bkOk:'Up to date',bkOld:'Too old',bkNever:'No backup',bkIgnored:'Ignored',bkUnknown:'Unknown',bkAge:(h)=>h<48?`${h} h ago`:`${Math.floor(h/24)} d ago`,bkProblems:(n)=>`${n} without a recent backup`,bkAllOk:'Backups up to date',bkMax:(h)=>`Alert after ${h} h`,bkIgnore:'Ignore',bkUnignore:'Stop ignoring',bkFailedTasks:'Failed backup tasks',bkVerified:'verified',bkVerFail:'verification failed',bkSaved:'Saved',bkStorageErr:'Could not read storage',bkCopies:(n)=>`${n} copies`,
+    bkSelAll:'Select all',bkSelNone:'Clear selection',bkSelPending:'Select those without backup or too old',bkIgnoreSel:n=>`Ignore selected (${n})`,bkUnignoreSel:n=>`Stop ignoring selected (${n})`,bkTitle:'Backups (vzdump)',bkWait:'Reading backups… (first read takes a minute)',bkNone:'No backup storage found. The API token needs Datastore.Audit on the storages.',bkOk:'Up to date',bkOld:'Too old',bkNever:'No backup',bkIgnored:'Ignored',bkUnknown:'Unknown',bkAge:(h)=>h<48?`${h} h ago`:`${Math.floor(h/24)} d ago`,bkProblems:(n)=>`${n} without a recent backup`,bkAllOk:'Backups up to date',bkMax:(h)=>`Marked old after ${Math.round(h/24*10)/10} days`,bkDays:'days',bkApply:'Apply',bkIgnore:'Ignore',bkUnignore:'Stop ignoring',bkFailedTasks:'Failed backup tasks',bkVerified:'verified',bkVerFail:'verification failed',bkSaved:'Saved',bkStorageErr:'Could not read storage',bkCopies:(n)=>`${n} copies`,
     diagTitle:'Cluster diagnostics',quorum:'Quorum',quorumOk:'Quorum OK',quorumLost:'NO QUORUM',membersOnline:(a,b)=>`${a}/${b} nodes in corosync`,
     cephOsdDown:(n)=>`${n} OSD down`,cephOsdOut:(n)=>`${n} OSD out`,cephChecks:'Ceph warnings',
     rebootsTitle:'Node reboots',noReboots:'No reboots recorded since this was enabled.',rebootAt:'booted',rebootWave:'simultaneous',
@@ -68,7 +68,7 @@ const LANG={
     clusterAdded:(name)=>`${name} agregado`,
     deleteClusterConfirm:(name)=>`¿Eliminar el cluster "${name}"?`,
     cpuAlert:(pct)=>`CPU al ${pct}%`,ramAlert:(pct)=>`RAM al ${pct}%`,
-    bkSelAll:'Seleccionar todas',bkSelNone:'Limpiar selección',bkSelPending:'Seleccionar las sin respaldo o muy viejas',bkIgnoreSel:n=>`Ignorar seleccionadas (${n})`,bkUnignoreSel:n=>`Dejar de ignorar seleccionadas (${n})`,bkTitle:'Respaldos (vzdump)',bkWait:'Leyendo respaldos… (la primera lectura tarda un minuto)',bkNone:'No hay storages de respaldo. El token de la API necesita Datastore.Audit en los storages.',bkOk:'Al día',bkOld:'Muy viejo',bkNever:'Sin respaldo',bkIgnored:'Ignorado',bkUnknown:'Desconocido',bkAge:(h)=>h<48?`hace ${h} h`:`hace ${Math.floor(h/24)} d`,bkProblems:(n)=>`${n} sin respaldo reciente`,bkAllOk:'Respaldos al día',bkMax:(h)=>`Avisar tras ${h} h`,bkIgnore:'Ignorar',bkUnignore:'Dejar de ignorar',bkFailedTasks:'Tareas de respaldo fallidas',bkVerified:'verificado',bkVerFail:'verificación fallida',bkSaved:'Guardado',bkStorageErr:'No se pudo leer el storage',bkCopies:(n)=>`${n} copias`,
+    bkSelAll:'Seleccionar todas',bkSelNone:'Limpiar selección',bkSelPending:'Seleccionar las sin respaldo o muy viejas',bkIgnoreSel:n=>`Ignorar seleccionadas (${n})`,bkUnignoreSel:n=>`Dejar de ignorar seleccionadas (${n})`,bkTitle:'Respaldos (vzdump)',bkWait:'Leyendo respaldos… (la primera lectura tarda un minuto)',bkNone:'No hay storages de respaldo. El token de la API necesita Datastore.Audit en los storages.',bkOk:'Al día',bkOld:'Muy viejo',bkNever:'Sin respaldo',bkIgnored:'Ignorado',bkUnknown:'Desconocido',bkAge:(h)=>h<48?`hace ${h} h`:`hace ${Math.floor(h/24)} d`,bkProblems:(n)=>`${n} sin respaldo reciente`,bkAllOk:'Respaldos al día',bkMax:(h)=>`Se marca como vieja tras ${Math.round(h/24*10)/10} días`,bkDays:'días',bkApply:'Aplicar',bkIgnore:'Ignorar',bkUnignore:'Dejar de ignorar',bkFailedTasks:'Tareas de respaldo fallidas',bkVerified:'verificado',bkVerFail:'verificación fallida',bkSaved:'Guardado',bkStorageErr:'No se pudo leer el storage',bkCopies:(n)=>`${n} copias`,
     diagTitle:'Diagnóstico del cluster',quorum:'Quórum',quorumOk:'Quórum OK',quorumLost:'SIN QUÓRUM',membersOnline:(a,b)=>`${a}/${b} nodos en corosync`,
     cephOsdDown:(n)=>`${n} OSD caído${n!==1?'s':''}`,cephOsdOut:(n)=>`${n} OSD fuera`,cephChecks:'Avisos de Ceph',
     rebootsTitle:'Reinicios de nodos',noReboots:'Sin reinicios registrados desde que se activó.',rebootAt:'arrancó',rebootWave:'simultáneo',
@@ -418,6 +418,20 @@ async function bkBulk(cid,ignore){
     q.clear();_diagTs[cid]=0;renderDashboard();toast(t('bkSaved'));
   }catch(e){toast(e.message,true);}
 }
+// Cambia a partir de cuántos días un respaldo se considera viejo (1 a 365).
+// EN: Change after how many days a backup counts as old (1 to 365).
+async function bkSetDays(cid){
+  const bk=_diag[cid]&&_diag[cid].backups;if(!bk)return;
+  const d=parseInt(document.getElementById('bk-days')?.value||'',10);
+  if(!(d>=1&&d<=365)){toast(t('bkDays')+': 1-365',true);return;}
+  try{
+    const r=await fetch('api/clusters/'+encodeURIComponent(cid)+'/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({max_age_h:d*24,ignore:bk.ignore||[]})});
+    if(!r.ok)throw new Error((await r.json()).error||'Error');
+    bk.max_age_h=d*24;const ig=new Set(bk.ignore||[]);
+    bk.rows.forEach(x=>{if(x.status==='unknown'||ig.has(x.vmid))return;x.status=x.last==null?'never':(x.age>bk.max_age_h*3600?'old':'ok');});
+    _diagTs[cid]=0;renderDashboard();toast(t('bkSaved'));
+  }catch(e){toast(e.message,true);}
+}
 async function toggleBkIgnore(cid,vmid){
   const bk=_diag[cid]&&_diag[cid].backups;if(!bk)return;
   const set=new Set(bk.ignore||[]);if(set.has(vmid))set.delete(vmid);else set.add(vmid);
@@ -482,6 +496,13 @@ function buildDiag(cluster){
     if(!bk.rows.length&&!(bk.storages||[]).length){b.style.color='var(--text-dim)';b.textContent=t('bkNone');return;}
     const meta=document.createElement('div');meta.style.cssText='color:var(--text-dim);font-size:11px;margin-bottom:4px';
     meta.textContent=t('bkMax',bk.max_age_h)+' · '+(bk.storages||[]).map(s=>s.storage+' ('+s.node+')'+(s.error?' ⚠':'')).join(', ');b.appendChild(meta);
+    if(isPveAdmin()){
+      const w=document.createElement('div');w.style.cssText='display:flex;gap:6px;align-items:center;margin:0 0 6px;font-size:11px;color:var(--text-dim)';
+      const inp=document.createElement('input');inp.type='number';inp.id='bk-days';inp.min='1';inp.max='365';inp.value=String(Math.max(1,Math.round(bk.max_age_h/24)));inp.style.cssText='width:56px;text-align:center';inp.setAttribute('aria-label',t('bkDays'));
+      const bt=document.createElement('button');bt.type='button';bt.className='btn-secondary';bt.style.cssText='width:auto;padding:3px 10px;font-size:11px';bt.textContent=t('bkApply');bt.setAttribute('data-on-click','bkSetDays');bt.setAttribute('data-on-click-args',JSON.stringify([cluster.id]));
+      const lb=document.createElement('span');lb.textContent=t('bkDays');
+      w.appendChild(inp);w.appendChild(lb);w.appendChild(bt);b.appendChild(w);
+    }
     (bk.storages||[]).filter(s=>s.error).forEach(s=>{const e=document.createElement('div');e.style.cssText='color:var(--red);font-size:11px';e.textContent=t('bkStorageErr')+': '+s.storage+' — '+s.error;b.appendChild(e);});
     const ST={ok:['bkOk','var(--green)'],old:['bkOld','var(--orange)'],never:['bkNever','var(--red)'],ignored:['bkIgnored','var(--text-dim)'],unknown:['bkUnknown','var(--text-dim)']};
     const sel=bkSelSet(cluster.id);
@@ -929,4 +950,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ closeModals, confirmDelete, doLogin, logout, moveNode, openAddCluster, pinCluster, toggleStopped, resetLayout, saveCluster, toggleBkIgnore, bkSelToggle, bkSelMode, bkBulk, toggleDiag, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection });
+if (window.cspRegister) cspRegister({ bkSetDays, closeModals, confirmDelete, doLogin, logout, moveNode, openAddCluster, pinCluster, toggleStopped, resetLayout, saveCluster, toggleBkIgnore, bkSelToggle, bkSelMode, bkBulk, toggleDiag, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection });

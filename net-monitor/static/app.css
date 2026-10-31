@@ -253,7 +253,10 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
 .view-tab:hover{color:var(--text)}
 .view-tab.active{color:var(--teal);border-bottom-color:var(--teal)}
 .content[hidden]{display:none}
-body.view-sw .tb-right,body.view-sw .scan-bar,body.view-sw .sb-sec ~ .sb-sec{display:none!important}
+body.view-sw .tb-right,body.view-sw .scan-bar,body.view-sw .sb-hosts{display:none!important}
+body.view-sw #sw-side{display:block}
+#sw-side[hidden]{display:none}
+.os-filter-count{font:11px var(--mono);color:var(--text-dim)}
 .grow{flex:1}.dim{color:var(--text-dim)}.mono{font-family:var(--mono);font-size:11px}
 .amber{color:var(--yellow)}
 .sw-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}

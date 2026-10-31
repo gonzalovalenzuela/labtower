@@ -16,7 +16,7 @@ const LANG = {
     topbarTitle:'User management',
     statTotal:'Total users', statAdmins:'Administrators', statReadonly:'Read-only',
     cardTitle:'System users', btnNewUser:'New user',
-    colUser:'User', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colNAS:'NAS Monitor', colDNS:'DNS Monitor', colWAN:'WAN Monitor', colStatus:'Status', colCreated:'Created', colActions:'Actions',
+    colLast:'Last connection', colUser:'User', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colNAS:'NAS Monitor', colDNS:'DNS Monitor', colWAN:'WAN Monitor', colStatus:'Status', colCreated:'Created', colActions:'Actions',
     drawerNew:'New user', drawerEdit:'Edit — ',
     fieldUsername:'Username', fieldUsernameHint:'2-32 alphanumeric chars, dash or underscore',
     fieldPassword:'Password', fieldPasswordHint:'Minimum 8 characters',
@@ -86,7 +86,7 @@ const LANG = {
     topbarTitle:'Gestión de usuarios',
     statTotal:'Usuarios totales', statAdmins:'Administradores', statReadonly:'Solo lectura',
     cardTitle:'Usuarios del sistema', btnNewUser:'Nuevo usuario',
-    colUser:'Usuario', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colNAS:'NAS Monitor', colDNS:'DNS Monitor', colWAN:'WAN Monitor', colStatus:'Estado', colCreated:'Creado', colActions:'Acciones',
+    colLast:'Última conexión', colUser:'Usuario', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colNAS:'NAS Monitor', colDNS:'DNS Monitor', colWAN:'WAN Monitor', colStatus:'Estado', colCreated:'Creado', colActions:'Acciones',
     drawerNew:'Nuevo usuario', drawerEdit:'Editar — ',
     fieldUsername:'Nombre de usuario', fieldUsernameHint:'2-32 caracteres alfanuméricos, guion o guion bajo',
     fieldPassword:'Contraseña', fieldPasswordHint:'Mínimo 8 caracteres',
@@ -431,6 +431,7 @@ function renderUsers(users) {
       <td data-label="${esc(t('colDNS'))}">${permBadge(u.permissions.dns)}</td>
       <td data-label="${esc(t('colWAN'))}">${permBadge(u.permissions.wan)}</td>
       <td data-label="${esc(t('colStatus'))}">${u.must_change_password ? `<span class="must-change">${t('mustChangeBadge')}</span>` : '<span style="font-size:11px;color:var(--text-dim)">—</span>'}</td>
+      <td data-label="${esc(t('colLast'))}"><span class="ucreated">${u.last_login ? esc(new Date(u.last_login*1000).toLocaleString(locale)) : '—'}</span></td>
       <td data-label="${esc(t('colCreated'))}"><span class="ucreated">${u.created ? new Date(u.created*1000).toLocaleDateString(locale) : '—'}</span></td>
       <td class="col-actions">
         <button class="btn-ri edit" data-on-click="editUser" data-on-click-args="${jsargs([u])}" title="Edit">✎</button>

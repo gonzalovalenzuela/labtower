@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.4d — 2026-10-31
+
+- **Proxmox Monitor:** los días para marcar un respaldo como viejo ahora se configuran (por cluster, solo administradores). Por defecto son 7 días (antes 36 horas).
+- **Admin Panel:** la tabla de usuarios tiene la columna «Última conexión».
+- **UPS Monitor:** los equipos conectados al UPS muestran el nombre que Net Monitor conoce; si no tiene, siguen mostrando la IP.
+- **WAN Monitor:** el aviso de cambio de IP pública indica la IP anterior y dura 24 horas; además queda en la línea de tiempo del Resumen. La IP pública aparece también en la barra lateral.
+- **Net Monitor:** en «Switch Monitor» los switches se listan en la barra lateral y se puede elegir uno para verlo solo.
+
 ## 2.1.4c — 2026-10-31
 
 - **Proxmox Monitor:** corregido un error de la 2.1.4b que impedía cargar la página.

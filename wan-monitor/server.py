@@ -425,7 +425,7 @@ class WanState:
         self.lock = threading.RLock()
         self.last, self.fails, self.down_since, self.scope = None, 0, None, None
         self.history = _deque(maxlen=_HIST_MAX)
-        self.ip, self.ip_changed, self.ip_checked = None, None, 0
+        self.ip, self.ip_changed, self.ip_checked, self.ip_prev = None, None, 0, None
         self.speed_running, self.speed_started, self.speed_last = False, 0, 0
         self.wake = threading.Event()
         self.gw = None
@@ -493,6 +493,7 @@ def load_history() -> int:
         if last: S.speed_last = last[0][0]
         st = auth.read_json(STATE_FILE, {}, dict)
         if isinstance(st.get("ip"), str): S.ip, S.ip_changed = st["ip"], st.get("changed")
+        if isinstance(st.get("prev"), str): S.ip_prev = st["prev"][:64]
         return len(rows)
     except Exception as e:
         log.warning(f"could not load the history: {e}"); return 0
@@ -534,7 +535,7 @@ def compute_alerts(s: dict) -> list:
         if s.get("rtt") is not None and s["rtt"] >= 150: a.append({"lv": "warn", "type": "latency", "value": s["rtt"]})
         if s.get("dns") is not None and s["dns"] >= 500: a.append({"lv": "warn", "type": "dns_slow", "value": s["dns"]})
         elif s.get("dns_fail"): a.append({"lv": "warn", "type": "dns_fail"})
-    if s.get("ip_changed") and time.time() - s["ip_changed"] < 3600: a.append({"lv": "info", "type": "ip_changed", "value": s.get("public_ip")})
+    if s.get("ip_changed") and time.time() - s["ip_changed"] < IP_NOTICE_S: a.append({"lv": "info", "type": "ip_changed", "value": s.get("public_ip"), "prev": s.get("ip_prev")})
     return a
 
 # La lectura que ve la página: última ronda, estado, IP, alertas.
@@ -545,7 +546,7 @@ def snapshot(cfg):
         if not r: return None
         s = {"ts": r["ts"], "up": r["up"], "rtt": r["rtt"], "jitter": r["jitter"], "loss": r["loss"], "gw": r["gw"], "dns": r["dns"],
              "dns_fail": bool(cfg["dns_name"]) and r["dns"] is None, "targets": r["targets"], "gateway": r["gateway"], "gateway_ip": S.gw,
-             "down_since": S.down_since, "scope": S.scope, "public_ip": S.ip, "ip_changed": S.ip_changed, "router": S.router}
+             "down_since": S.down_since, "scope": S.scope, "public_ip": S.ip, "ip_changed": S.ip_changed, "ip_prev": S.ip_prev, "router": S.router}
     s["alerts"] = compute_alerts(s)
     s["router_check"] = router_crosscheck(s.get("router"))
     return s
@@ -616,6 +617,8 @@ def router_loop():
         except Exception as e: log.error(f"router check failed: {e}")
         S.router_wake.wait(10 if S.fails > 0 else cfg["router"]["every"]); S.router_wake.clear()
 
+IP_NOTICE_S = 24 * 3600          # the "public IP changed" notice stays visible for a day
+
 def check_ip(cfg):
     S.ip_checked = time.time()
     ip = fetch_public_ip(cfg["ip_url"])
@@ -624,9 +627,10 @@ def check_ip(cfg):
         old = S.ip
         if ip != old:
             S.ip, S.ip_changed = ip, (int(time.time()) if old else S.ip_changed)
-            try: auth.write_json(STATE_FILE, {"ip": ip, "changed": S.ip_changed})
+            if old: S.ip_prev = old
+            try: auth.write_json(STATE_FILE, {"ip": ip, "changed": S.ip_changed, "prev": S.ip_prev})
             except Exception as e: log.warning(f"could not store the state: {e}")
-            if old: auth.record_event("wan", "info", f"Public IP changed to {ip}", "wan_ip", ip=ip)
+            if old: auth.record_event("wan", "warn", f"Public IP changed from {old} to {ip}", "wan_ipc", ip=ip, prev=old)
 
 def start_speedtest(by_schedule=False):
     cfg = load_config()
