@@ -248,3 +248,5 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
 .remember-chk input{width:15px;height:15px;margin:0;cursor:pointer}
 .remember-row select{font:inherit;font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--border,#e3e8ef);background:var(--surface,#fff);color:var(--text,#1a2233)}
 .remember-row select:disabled{opacity:.45}
+
+.up-cmd{margin:8px 0;padding:10px 12px;background:var(--bg);border:1px solid var(--border-b);border-radius:var(--r-sm);font-family:var(--mono,monospace);font-size:12px;color:var(--text);white-space:pre-wrap;word-break:break-all;user-select:all}
