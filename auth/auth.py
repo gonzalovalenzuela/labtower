@@ -643,6 +643,13 @@ def create_session(username: str, permissions: dict, ttl: int = SESSION_TTL, han
         }
         _purge(sessions)
         _save_sessions(sessions)
+    try:                         # última conexión del usuario (se muestra en el Admin Panel) / EN: the user's last connection (shown in the Admin Panel)
+        with users_lock():
+            users = load_users(); u = users.get(username)
+            if isinstance(u, dict) and time.time() - int(u.get("last_login") or 0) > 30:
+                u["last_login"] = int(time.time()); save_users(users)
+    except Exception:
+        pass
     return token
 
 # Valida un token y devuelve la sesión o None. Reglas:

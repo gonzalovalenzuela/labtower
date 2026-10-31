@@ -289,6 +289,7 @@ function exportCSV(){
 
 // Descarga servidores y datos de las UPS en paralelo y repinta. Un 401 recarga la página (sesión vencida).
 // EN: Download servers and UPS data in parallel and repaint. A 401 reloads the page (expired session).
+let NET_NAMES={};   // IP → nombre conocido por Net Monitor / EN: IP → name known by Net Monitor
 async function fetchAll(){
   try{
     const [r1,r2]=await Promise.all([
@@ -296,7 +297,7 @@ async function fetchAll(){
       fetch('api/ups?range='+_pollRange)
     ]);
     if(r1.status===401||r2.status===401){location.reload();return;}
-    servers=(await r1.json()).servers||[];
+    const j1=await r1.json(); servers=j1.servers||[]; NET_NAMES=j1.names||{};
     allData=await r2.json();
     renderSidebar();
     renderDashboard();
@@ -574,7 +575,7 @@ function renderDashboard(){
         </div>
         ${row.clients.length?`<div class="clients-section">
           <span class="clients-lbl">${t('clientsLabel')}</span>
-          <div class="client-chips">${row.clients.map(c=>`<span class="client-chip"><span data-nethost="${esc(c)}" data-nethost-click="1">${esc(c)}</span></span>`).join('')}</div>
+          <div class="client-chips">${row.clients.map(c=>`<span class="client-chip"><span data-nethost="${esc(c)}" data-nethost-click="1">${esc(NET_NAMES[c]?NET_NAMES[c]+' · '+c:c)}</span></span>`).join('')}</div>
         </div>`:''}
         <div class="vchart-section">
           <div class="vchart-header">

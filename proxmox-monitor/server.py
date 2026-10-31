@@ -521,7 +521,7 @@ def _backup_round(cluster, client, cache):
     from urllib.parse import quote
     cid, cname = cluster["id"], cluster["name"]
     cfg = cluster.get("backup") if isinstance(cluster.get("backup"), dict) else {}
-    try:    cfg = backups.clean_config(cfg) if cfg else {"max_age_h": backups.DEFAULT_MAX_AGE_H, "ignore": []}
+    try:    cfg = backups.migrate_config(backups.clean_config(cfg)) if cfg else {"max_age_h": backups.DEFAULT_MAX_AGE_H, "ignore": []}
     except ValueError: cfg = {"max_age_h": backups.DEFAULT_MAX_AGE_H, "ignore": []}
     nodes = cache.snap().get("data", {}).get("nodes") or []
     guests, targets, seen_shared = [], [], set()

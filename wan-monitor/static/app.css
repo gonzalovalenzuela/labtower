@@ -351,3 +351,10 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
 /* Teléfono: las 5 tarjetas de arriba en 2 columnas (la regla de 1100 px de arriba las dejaba en 5 y se cortaba el texto); la IP pública ocupa el ancho completo.
    EN: Phone: the 5 top cards in 2 columns (the 1100 px rule above kept 5 and clipped the text); the public IP spans the full width. */
 @media(max-width:700px){.stats-row{grid-template-columns:repeat(2,minmax(0,1fr))}.stats-row .stat-ico{display:flex}.stats-row .stat-card{padding:12px}.stats-row .stat-card:last-child{grid-column:1/-1}#st-ip{font-size:15px;overflow-wrap:anywhere}.stat-val{font-size:18px}}
+
+/* IP pública en la barra lateral / EN: public IP in the sidebar */
+.sb-ip{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--r-sm);background:var(--bg)}
+.sb-ip-dot{width:8px;height:8px;border-radius:50%;background:var(--green,#22c55e);flex-shrink:0}
+.sb-ip-dot.chg{background:var(--orange,#f59e0b)}
+.sb-ip-val{font-family:var(--mono);font-size:12.5px;color:var(--text);word-break:break-all}
+.sb-ip-sub{font-size:10.5px;color:var(--text-dim);padding:3px 10px 0;line-height:1.35}

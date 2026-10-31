@@ -4,7 +4,8 @@ Funciones puras (sin red ni disco) para probarlas con datos de ejemplo; server.p
 EN: Proxmox Monitor — backups: last good backup of each VM/CT and failed vzdump tasks.
     Pure functions (no network, no disk) so they can be tested with sample data; server.py uses them with the real API.
 """
-DEFAULT_MAX_AGE_H = 36          # a daily job + margin
+DEFAULT_MAX_AGE_H = 168         # 7 days; configurable per cluster (was 36 h before 2.1.4d)
+LEGACY_DEFAULT_H = 36           # the old default: it was never selectable, so a saved 36 means "never changed"
 MAX_IGNORE = 200
 
 def _i(x, default=0):
@@ -118,3 +119,10 @@ def clean_config(body):
         if isinstance(v, bool) or not isinstance(v, int) or not (100 <= v <= 999999999): raise ValueError("Invalid VM id")
         ids.append(v)
     return {"max_age_h": int(h), "ignore": sorted(set(ids))}
+
+
+# ES: Los ajustes guardados con el antiguo valor por defecto (36 h) pasan al nuevo (7 días): antes no se podía elegir, así que 36 nunca fue una decisión.
+# EN: Settings saved with the old default (36 h) move to the new one (7 days): it could not be chosen before, so 36 was never a decision.
+def migrate_config(cfg):
+    if isinstance(cfg, dict) and cfg.get("max_age_h") == LEGACY_DEFAULT_H: cfg = dict(cfg, max_age_h=DEFAULT_MAX_AGE_H)
+    return cfg

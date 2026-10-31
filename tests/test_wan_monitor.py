@@ -118,7 +118,7 @@ class Outages(unittest.TestCase):
         self.assertEqual([a["type"] for a in m.compute_alerts({**base, "loss": 6, "rtt": 200, "dns": 900})], ["loss", "latency", "dns_slow"])
         self.assertEqual([a["type"] for a in m.compute_alerts({**base, "dns": None, "dns_fail": True})], ["dns_fail"])
         self.assertEqual(m.compute_alerts({**base, "ip_changed": time.time() - 60, "public_ip": "198.51.100.1"})[0]["type"], "ip_changed")
-        self.assertEqual(m.compute_alerts({**base, "ip_changed": time.time() - 7200}), [])
+        self.assertEqual(m.compute_alerts({**base, "ip_changed": time.time() - 26 * 3600}), [])
 
     def test_uptime_and_history_range(self):
         now = int(time.time()); c = support.auth.metrics_conn()

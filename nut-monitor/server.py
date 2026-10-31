@@ -54,6 +54,7 @@ STATIC_DIR  = Path(__file__).parent / "static"
 # EN: servers.json: list of configured NUT servers. history.db: history in SQLite.
 # Los datos viven en /var/lib/labtower/nut-monitor (el código de /opt es de solo lectura para el servicio).
 # EN: The data lives in /var/lib/labtower/nut-monitor (the code in /opt is read-only for the service).
+NET_HOSTS_FILE = Path(os.environ.get("NET_HOSTS_FILE", str(auth.DATA_ROOT / "net-monitor" / "hosts.json")))
 DATA_DIR    = auth.module_dir("nut-monitor")      # solo la ruta; la carpeta se crea al arrancar (auth.prepare_module en main)
 LEGACY_FILES = ("servers.json", "history.db")
 DATA_FILE   = DATA_DIR / "servers.json"
@@ -871,6 +872,26 @@ def health_report(detailed=False):
     else:     c["history_fresh"] = auth.chk(auth.OK)
     return auth.health_reply("nut", c, detailed)
 
+# Nombres que Net Monitor conoce para las IP (alias o nombre de host); vacío si Net Monitor no está. Se renueva cada 30 s.
+# EN: Names Net Monitor knows for IPs (alias or hostname); empty if Net Monitor is absent. Refreshed every 30 s.
+_names_cache = [0.0, {}]
+def net_names() -> dict:
+    now = time.time()
+    if now - _names_cache[0] < 30: return _names_cache[1]
+    out = {}
+    try:
+        data = auth.read_published(NET_HOSTS_FILE, None, dict)       # published by Net Monitor: untrusted input
+        for ip, h in (data or {}).items():
+            if not isinstance(h, dict): continue
+            n = str(h.get("alias") or h.get("hostname") or "").strip()
+            n = re.sub(r"[\x00-\x1f\x7f]", "", n)[:60]
+            if n and isinstance(ip, str) and len(ip) <= 45: out[ip] = n
+    except Exception as e:
+        log.debug(f"net names: {e}")
+    _names_cache[0], _names_cache[1] = now, out
+    return out
+
+
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
 # Manejador HTTP. Cada petición se atiende en su propio hilo.
 # EN: HTTP handler. Each request is served in its own thread.
@@ -952,7 +973,8 @@ class H(BaseHTTPRequestHandler):
                 if t_ is None or not t_.is_alive():
                     ensure_poller(s_)
             out    = [{**s, "status": _caches.get(s["id"], SCache(s["id"])).snap(range_)} for s in srvs]
-            self._json(200, {"servers": out})
+            names = net_names() if auth.check_permission(tok, "net", "readonly") else {}      # only for users who may see Net Monitor
+            self._json(200, {"servers": out, "names": names})
         elif path == "/api/ups":
             range_ = self._range_param()
             self._json(200, {sid: c.snap(range_) for sid, c in _caches.items()})
