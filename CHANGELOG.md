@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.4c — 2026-10-31
+
+- **Proxmox Monitor:** corregido un error de la 2.1.4b que impedía cargar la página.
+- **Resumen:** en modo kiosko no se muestran los controles para pausar el bloqueo de Pi-hole.
+
 ## 2.1.4b — 2026-10-31
 
 - **Net Monitor:** opción «Quitar sin conexión tras N días» para eliminar solos los equipos que dejaron de responder (0 = nunca). Solo la ven y la cambian los administradores.

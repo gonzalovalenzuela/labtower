@@ -208,8 +208,9 @@ function dnsChart(id){
 // EN: Pause or resume blocking from the Overview (needs the "execute" level on DNS Monitor).
 function dnsCtl(n,data){
   if(!data||lvl('dns')<2||(data.blocking!=='enabled'&&data.blocking!=='disabled'))return '';
-  if(data.blocking==='disabled')return `<div class="row"><span class="l"></span><span class="v"><button type="button" class="btn" data-dns-act="resume" data-dns-id="${esc(n.id)}">${T('dnsResume')}</button></span></div>`;
-  return `<div class="row"><span class="l"></span><span class="v"><select class="btn" id="dnsp-${esc(n.id)}" aria-label="${esc(T('dnsPause'))}"><option value="300">${T('dnsP5')}</option><option value="1800">${T('dnsP30')}</option><option value="3600">${T('dnsP60')}</option><option value="">${T('dnsPU')}</option></select> <button type="button" class="btn" data-dns-act="pause" data-dns-id="${esc(n.id)}">${T('dnsPause')}</button></span></div>`;
+  const w='<div class="dnsctl" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0 2px">';
+  if(data.blocking==='disabled')return `${w}<button type="button" class="btn" data-dns-act="resume" data-dns-id="${esc(n.id)}">${T('dnsResume')}</button></div>`;
+  return `${w}<button type="button" class="btn" data-dns-act="pause" data-dns-id="${esc(n.id)}">${T('dnsPause')}</button><select class="btn" id="dnsp-${esc(n.id)}" aria-label="${esc(T('dnsPause'))}"><option value="300">${T('dnsP5')}</option><option value="1800">${T('dnsP30')}</option><option value="3600">${T('dnsP60')}</option><option value="">${T('dnsPU')}</option></select></div>`;
 }
 async function dnsAct(e){
   const b=e.target.closest&&e.target.closest('[data-dns-act]'); if(!b)return;

@@ -204,3 +204,5 @@ body.pd-open{overflow:hidden}
 @media (max-width:640px){.pd-modal{padding:0}.pd-card{max-height:100vh;height:100vh;border-radius:0}.pd-grid{grid-template-columns:1fr}}
 
 /* Franja de indicadores (mezcla NOC + Apple): tiles con borde de estado y anillo para porcentajes. EN: KPI strip (NOC + Apple blend): tiles with a status top border and a ring for percentages. */
+
+body.kiosk .dnsctl{display:none!important}

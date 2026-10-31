@@ -66,6 +66,11 @@ class Front(unittest.TestCase):
         a = open("proxmox-monitor/static/app.js", encoding="utf-8").read(); h = open("proxmox-monitor/static/index.html", encoding="utf-8").read()
         self.assertIn("toggleStopped", a); self.assertIn('data-on-click="toggleStopped"', h)
         self.assertEqual(a.count("hideStopped:"), 2)
+    def test_proxmox_state_declared_before_first_use(self):
+        a = open("proxmox-monitor/static/app.js", encoding="utf-8").read()       # setLang runs on load and calls stoppedBtn()
+        self.assertLess(a.index("let _hideStopped"), a.index("(()=>setLang(_lang))();"))
+    def test_overview_pause_hidden_in_kiosk(self):
+        self.assertIn("body.kiosk .dnsctl", open("overview/static/app.css", encoding="utf-8").read())
 
 if __name__ == "__main__":
     unittest.main()
