@@ -92,6 +92,9 @@ const post = (p, b) => api(p, { method: 'POST', headers: { 'Content-Type': 'appl
 
 // ── Formatos / formats ───────────────────────────────────────────────────────────────────
 const spd = m => !m ? '—' : m >= 1000 ? (m / 1000 % 1 ? (m / 1000).toFixed(1) : m / 1000) + 'G' : m + 'M';
+// Clase de color según la velocidad del enlace: 10G · 2.5G · 1G · 100M · 10M.
+// EN: Colour class by link speed: 10G · 2.5G · 1G · 100M · 10M.
+const SPD_CLS = m => !m ? '' : m >= 10000 ? 's10g' : m >= 2500 ? 's25g' : m >= 1000 ? 's1g' : m >= 100 ? 's100m' : 's10m';
 const spdLong = m => !m ? '—' : m >= 1000 ? (m / 1000) + ' Gb/s' : m + ' Mb/s';
 function pps(v) { return v == null ? '—' : v >= 10000 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v >= 10 ? v.toFixed(0) : v.toFixed(1); }
 function mbps(v) { return v == null ? '—' : v >= 1e9 ? (v / 1e9).toFixed(2) + ' G' : v >= 1e6 ? (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) : v >= 1e3 ? (v / 1e6).toFixed(2) : '0'; }
@@ -249,7 +252,7 @@ function tile(s, p) {
   const tip = [t('swPortTitle', s.name, p.port), p.link_up ? spdLong(p.speed_mbps) : t('swStDown'), p.label, p.link_to ? '↔ ' + p.link_to : '',
     p.rx_pps != null ? 'rx ' + pps(p.rx_pps) + ' / tx ' + pps(p.tx_pps) + ' pkt/s' : '', (p.rx_err || p.tx_err) ? t('swErrors') + ': ' + (p.rx_err || 0) + ' / ' + (p.tx_err || 0) : ''].filter(Boolean).join(' · ');
   const on = SW.sel && SW.sel.sid === s.id && SW.sel.port === p.port;
-  return `<button type="button" class="sw-port sw-p-${String(p.flag).replace(/[^a-z0-9_-]/g, '')}${on ? ' sel' : ''}" data-act="port" data-id="${esc(s.id)}" data-port="${p.port}" title="${esc(tip)}"><span class="n">${esc(num)}</span><span class="s">${p.link_up ? esc(spd(p.speed_mbps)) : '—'}</span><span class="x">${esc(sub)}</span></button>`;
+  return `<button type="button" class="sw-port sw-p-${String(p.flag).replace(/[^a-z0-9_-]/g, '')}${on ? ' sel' : ''}" data-act="port" data-id="${esc(s.id)}" data-port="${p.port}" title="${esc(tip)}"><span class="n">${esc(num)}</span><span class="s ${p.link_up ? SPD_CLS(p.speed_mbps) : ''}">${p.link_up ? esc(spd(p.speed_mbps)) : '—'}</span><span class="x">${esc(sub)}</span></button>`;
 }
 
 function stPill(p) {
@@ -276,7 +279,7 @@ function errCell(p) {
 
 function portRow(s, p) {
   const on = SW.sel && SW.sel.sid === s.id && SW.sel.port === p.port;
-  return `<tr class="sw-row${on ? ' sel' : ''}" data-act="port" data-id="${esc(s.id)}" data-port="${p.port}"><td>${esc(p.port)}</td><td>${stPill(p)}</td><td>${p.link_up ? esc(spdLong(p.speed_mbps)) : '<span class="dim">—</span>'}</td>` +
+  return `<tr class="sw-row${on ? ' sel' : ''}" data-act="port" data-id="${esc(s.id)}" data-port="${p.port}"><td>${esc(p.port)}</td><td>${stPill(p)}</td><td>${p.link_up ? `<span class="spd-pill ${SPD_CLS(p.speed_mbps)}">${esc(spdLong(p.speed_mbps))}</span>` : '<span class="dim">—</span>'}</td>` +
     `<td>${pps(p.rx_pps)}</td><td>${pps(p.tx_pps)}</td>` + (s.has_bytes ? `<td>${p.rx_bps != null ? (p.bytes_est ? '≈ ' : '') + mbps(p.rx_bps) + ' / ' + mbps(p.tx_bps) : '—'}</td><td>${p.rx_bytes != null ? esc((p.bytes_est ? '≈ ' : '') + bytesFmt(p.rx_bytes) + ' / ' + bytesFmt(p.tx_bytes)) : '—'}</td>` : '') +
     `<td>${errCell(p)}</td><td>${esc(p.stp_state || '—')}</td><td class="sw-conn">${connCell(p)}</td></tr>`;
 }
@@ -312,7 +315,7 @@ function card(s) {
   const alt = s.layout === 'alt';
   return `<div class="card sw-card"><div class="sw-head"><b class="sw-name">${esc(s.name)}</b><span class="dim mono">${esc(sub)}</span>${state}${tPill}<span class="grow"></span>` +
     `<span class="dim mono sw-scr">${esc(s.driver)}${s.scrape != null ? ' · ' + s.scrape + ' s' : ''}</span>${admin ? `<button type="button" class="sw-btn" data-act="edit" data-id="${esc(s.id)}">${esc(t('swEdit'))}</button>` : ''}</div>${errs}` +
-    (s.ports.length ? `<div class="sw-grid-ports${alt ? ' alt' : ''}">${grid}</div><div class="sw-leg"><span class="up">${esc(t('swLegUp'))}</span><span class="down">${esc(t('swLegDown'))}</span><span class="warn">${esc(t('swLegWarn'))}</span><span class="uplink">${esc(t('swLegUplink'))}</span><span class="off">${esc(t('swLegOff'))}</span>${s.driver !== 'hc' ? `<span class="loop">${esc(t('swLegLoop'))}</span>` : ''}</div>` +
+    (s.ports.length ? `<div class="sw-grid-ports${alt ? ' alt' : ''}">${grid}</div><div class="sw-leg"><span class="up">${esc(t('swLegUp'))}</span><span class="down">${esc(t('swLegDown'))}</span><span class="warn">${esc(t('swLegWarn'))}</span><span class="uplink">${esc(t('swLegUplink'))}</span><span class="off">${esc(t('swLegOff'))}</span>${s.driver !== 'hc' ? `<span class="loop">${esc(t('swLegLoop'))}</span>` : ''}</div><div class="sw-leg sw-leg-spd"><span class="s10g">10 Gb/s</span><span class="s25g">2.5 Gb/s</span><span class="s1g">1 Gb/s</span><span class="s100m">100 Mb/s</span><span class="s10m">10 Mb/s</span></div>` +
       `<div class="sw-tablewrap"><table class="sw-table"><thead><tr>${heads.map(h => `<th>${esc(t(h))}</th>`).join('')}</tr></thead><tbody>${rows.map(p => portRow(s, p)).join('')}</tbody></table></div>` +
       (hasMore ? `<button type="button" class="sw-link" data-act="showall" data-id="${esc(s.id)}">${esc(all ? t('swShowActive') : t('swShowAll', s.ports.length))}</button>` : '') : '') +
     (selP ? portDetail(s, selP) : '') +

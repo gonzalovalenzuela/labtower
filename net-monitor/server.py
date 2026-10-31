@@ -1044,6 +1044,16 @@ def _record_scan_events(changes, first_inventory, online, single_ip=None):
     except Exception as e:
         log.debug(f"scan events: {e}")
 
+# Elimina los equipos que llevan más de `days` días sin responder (0 = nunca). Se usa la última vez que se vieron conectados.
+# EN: Remove devices that have not answered for more than `days` days (0 = never). Uses the last time they were seen online.
+def purge_offline(hosts: dict, days: int, now: float = None) -> list:
+    if not days or days < 1: return []
+    now = now or time.time()
+    gone = [ip for ip, h in hosts.items()
+            if isinstance(h, dict) and not h.get("online") and isinstance(h.get("last_seen"), (int, float)) and now - h["last_seen"] > days * 86400]
+    for ip in gone: del hosts[ip]
+    return gone
+
 def run_scan(network: str = None, single_ip: str = None):
     global _live_hosts
     with _scan_lock:                      # reserve the scan atomically: two triggers can't both start
@@ -1145,6 +1155,10 @@ def run_scan(network: str = None, single_ip: str = None):
                     save_hosts(hosts); _last_save = time.time()
 
         with _hosts_lock:
+            try:
+                gone = purge_offline(hosts, int(load_config().get("purge_days", 0) or 0))
+                if gone: log.info(f"Removed {len(gone)} devices offline for too long")
+            except Exception as e: log.debug(f"purge: {e}")
             save_hosts(hosts)
             _live_hosts = None
         online = sum(1 for h in hosts.values() if h.get("online"))
@@ -1347,6 +1361,7 @@ class H(BaseHTTPRequestHandler):
             cfg = load_config()
             self._json(200, {
                 "scan_interval":   _current_interval,
+                "purge_days":      int(cfg.get("purge_days", 0) or 0),
                 "network":         NETWORK,
                 "pihole_hosts":    PIHOLE_HOSTS,
                 "pihole_enabled":  bool(PIHOLE_PASS or cfg.get("pihole_pass")),
@@ -1579,6 +1594,24 @@ class H(BaseHTTPRequestHandler):
                 save_config(cfg)
             _schedule_next_scan()
             self._json(200, {"ok": True, "interval": interval})
+
+        # Días sin conexión tras los cuales un equipo se elimina solo de la lista (0 = nunca) (admin).
+        # EN: Days offline after which a device is removed from the list by itself (0 = never) (admin).
+        elif path == "/api/hosts/purge":
+            if not auth.check_permission(tok, "net", "admin"):
+                return self._json(403, {"error": "Admin permission required"})
+            try: days = int(body.get("days", 0))
+            except (TypeError, ValueError): return self._json(400, {"error": "Invalid days"})
+            if days < 0 or days > 3650: return self._json(400, {"error": "Days must be 0 (never) to 3650"})
+            with _cfg_lock:
+                cfg = load_config(); cfg["purge_days"] = days; save_config(cfg)
+            removed = 0
+            if days and not _scan_status.get("running"):
+                with _hosts_lock:
+                    hosts = load_hosts(); gone = purge_offline(hosts, days)
+                    if gone: save_hosts(hosts)
+                    removed = len(gone)
+            self._json(200, {"ok": True, "days": days, "removed": removed})
 
         # Elimina un equipo de la lista (admin). Si sigue conectado, el próximo escaneo lo vuelve a descubrir.
         # EN: Remove a device from the list (admin). If it is still connected, the next scan discovers it again.
