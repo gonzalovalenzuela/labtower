@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.4e — 2026-10-31
+
+- **Admin Panel:** «Última conexión» ya no sale vacía para quien tiene una sesión abierta; usa la actividad de su sesión si no hay un inicio de sesión registrado.
+
 ## 2.1.4d — 2026-10-31
 
 - **Proxmox Monitor:** los días para marcar un respaldo como viejo ahora se configuran (por cluster, solo administradores). Por defecto son 7 días (antes 36 horas).
