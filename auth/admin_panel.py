@@ -269,9 +269,13 @@ class H(BaseHTTPRequestHandler):
 
         if path == "/api/users":
             users = auth.load_users()
+            act = {}                      # última actividad por usuario según sus sesiones abiertas (cubre sesiones anteriores a la columna) / EN: last activity per user from open sessions
+            for x in auth.list_sessions():
+                act[x["username"]] = max(act.get(x["username"], 0), int(x.get("last") or 0))
             out   = [{"username": u, "permissions": d["permissions"],
                       "must_change_password": d.get("must_change_password", False),
-                      "created": d.get("created"), "totp": bool(d.get("totp")), "last_login": d.get("last_login")}
+                      "created": d.get("created"), "totp": bool(d.get("totp")),
+                      "last_login": max(int(d.get("last_login") or 0), act.get(u, 0)) or None}
                      for u, d in users.items()]
             self._json(200, {"users": out})
         elif path == "/api/sessions":

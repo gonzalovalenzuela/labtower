@@ -17,6 +17,19 @@ class LastLogin(unittest.TestCase):
         finally:
             srv.close()
 
+class LastLoginFromSession(unittest.TestCase):
+    def test_user_with_open_session_but_no_stored_login(self):
+        ap = support.load("auth/admin_panel.py"); srv = support.Server(ap.H)
+        try:
+            tok = support.make_user("oldsess", ADMIN)
+            with auth.users_lock():                      # a user created before the column existed
+                us = auth.load_users(); us["oldsess"].pop("last_login", None); auth.save_users(us)
+            st, d = srv.call("GET", "/api/users", None, token=tok)
+            row = next(u for u in d["users"] if u["username"] == "oldsess")
+            self.assertGreater(row["last_login"], time.time() - 90000)
+        finally:
+            srv.close()
+
 class UpsNames(unittest.TestCase):
     def test_names_from_net_monitor(self):
         m = support.load("nut-monitor/server.py")
