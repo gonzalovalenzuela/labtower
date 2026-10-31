@@ -63,12 +63,26 @@ def battery_age_years(s, today=None):
 #     Se toma la más reciente de las dos que sean creíbles.
 # EN: Some UPSs (APC Back-UPS) keep the battery date in battery.date and others in battery.mfr.date, and vendor tools change one or the other.
 #     The most recent credible one of the two is used.
-def best_battery_age_years(vars_, today=None):
+def best_battery_date(vars_, today=None):
     today = today or datetime.date.today()
     ds = [parse_battery_date(vars_.get(k), today) for k in ("battery.date", "battery.mfr.date")] if isinstance(vars_, dict) else []
     ds = [d for d in ds if d is not None]
     if not ds: return None
-    return battery_age_years(max(ds).isoformat(), today)
+    d = max(ds)
+    return d if (today - d).days / 365.25 <= MAX_PLAUSIBLE_YEARS else None
+
+def best_battery_age_years(vars_, today=None):
+    today = today or datetime.date.today()
+    d = best_battery_date(vars_, today)
+    return battery_age_years(d.isoformat(), today) if d else None
+
+# ES: Meses cumplidos entre la fecha de la batería y hoy (0 = menos de un mes). Solo se usa para baterías de menos de 1 año.
+# EN: Whole months between the battery date and today (0 = under a month). Only used for batteries younger than 1 year.
+def age_months(d, today=None):
+    today = today or datetime.date.today()
+    if d is None or d > today: return None
+    m = (today.year - d.year) * 12 + today.month - d.month - (1 if today.day < d.day else 0)
+    return max(m, 0)
 
 def parse_manual_date(s, today=None):
     """YYYY-MM-DD typed by the user: not in the future, not before 2000. Returns a date or None."""

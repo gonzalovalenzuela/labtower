@@ -63,6 +63,12 @@
     <button class="nav-toggle" id="nav-toggle" aria-label="Menu" aria-expanded="false" data-on-click="toggleNav"><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg></button>
     <span class="topbar-title" data-i18n="netTitle">Network Monitor</span>
     <div class="tb-right">
+      <div class="interval-wrap" id="purge-wrap" style="display:none">
+        <span class="interval-lbl" data-i18n="purgeLbl">Remove offline after:</span>
+        <input type="number" id="purge-days" min="0" max="3650" value="0" style="width:52px;text-align:center" class="interval-sel" data-i18n-title="purgeTip" title="0 = never">
+        <span class="interval-lbl" data-i18n="purgeDays">days</span>
+        <button data-on-click="applyPurge" class="btn-scan" style="padding:5px 10px;font-size:11px" data-i18n="apply">Apply</button>
+      </div>
       <div class="interval-wrap">
         <span class="interval-lbl" data-i18n="autoScanLbl">Auto-scan:</span>
         <input type="number" id="iv-min" min="0" max="1440" value="60"

@@ -18,6 +18,7 @@ const LANG={
     piholeHosts:'Pi-hole hosts (comma separated)',piholePass:'Pi-hole admin password',
     piholeConnected:'Connected',piholeConnecting:'Connecting…',piholeNeedHost:'Enter at least one host',
     piholeSuccess:'Saved — syncing names…',piholeToast:'Pi-hole connected — names will appear on next scan',
+    purgeLbl:'Remove offline after:',purgeDays:'days',purgeTip:'0 = never remove',purgeSaved:(d,n)=>d?`Offline devices are removed after ${d} days (${n} removed now)`:'Offline devices are kept',
     intervalNegative:'Interval cannot be negative',intervalMin:'Minimum 60 seconds (or 0 for manual)',
     scanning:'Scanning…',scanStarted:(msg)=>`Scan started — ${msg}`,rescanHost:(ip)=>`Re-scanning ${ip}`,
     scanProgress:(p,t)=>`Scanning ${p}/${t} hosts…`,scanBtn:'Scan network',
@@ -49,6 +50,7 @@ const LANG={
     piholeHosts:'Hosts Pi-hole (separados por coma)',piholePass:'Password Pi-hole admin',
     piholeConnected:'Conectado',piholeConnecting:'Conectando…',piholeNeedHost:'Ingresa al menos un host',
     piholeSuccess:'Guardado — sincronizando nombres…',piholeToast:'Pi-hole conectado — los nombres aparecerán en el próximo escaneo',
+    purgeLbl:'Quitar sin conexión tras:',purgeDays:'días',purgeTip:'0 = no quitar nunca',purgeSaved:(d,n)=>d?`Los equipos sin conexión se quitan tras ${d} días (${n} quitados ahora)`:'Los equipos sin conexión se conservan',
     intervalNegative:'El intervalo no puede ser negativo',intervalMin:'Mínimo 60 segundos (o 0 para manual)',
     scanning:'Escaneando…',scanStarted:(msg)=>`Escaneo iniciado — ${msg}`,rescanHost:(ip)=>`Re-escaneando ${ip}`,
     scanProgress:(p,tt)=>`Escaneando ${p}/${tt} hosts…`,scanBtn:'Escanear red',
@@ -236,6 +238,9 @@ async function initApp(){
   try{
     const cfg = await fetch('api/config').then(r=>r.json());
     if(cfg.scan_interval !== undefined) loadIntervalFields(cfg.scan_interval);
+    const pw=document.getElementById('purge-wrap'), pd=document.getElementById('purge-days');
+    if(pd) pd.value=cfg.purge_days||0;
+    if(pw && typeof canAdmin==='function' && canAdmin()) pw.style.display='';
     scanNetwork=cfg.network||'';
   }catch(e){}
   await fetchData();
@@ -281,6 +286,17 @@ function fmtInterval(secs){
   if(secs < 3600) return Math.floor(secs/60)+'m '+(secs%60?secs%60+'s':'');
   const h = Math.floor(secs/3600), m = Math.floor((secs%3600)/60);
   return h+'h'+(m?' '+m+'m':'');
+}
+
+// Guarda los días sin conexión tras los cuales un equipo se quita solo (0 = nunca).
+// EN: Save the days offline after which a device is removed by itself (0 = never).
+async function applyPurge(){
+  const d = parseInt(document.getElementById('purge-days')?.value||0)||0;
+  try{
+    const r = await fetch('api/hosts/purge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({days:d})});
+    const x = await r.json(); if(!r.ok) throw new Error(x.error);
+    toast(t('purgeSaved',x.days,x.removed)); if(x.removed) fetchData();
+  }catch(e){ toast(e.message,true); }
 }
 
 // Guarda el nuevo intervalo en el servidor (mínimo 60 s; 0 = solo manual).
@@ -1127,4 +1143,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ applyInterval, deleteHost, doLogin, editAlias, editOs, logout, rescanHost, saveOuiAuto, savePiholeConfig, saveSnmp, setLang, setOsFilter, setSort, setStatusFilter, setTheme, setTypeFilter, sortKey, startScan, testSnmp, toggleNav, togglePiholePanel, toggleSnmpPanel, updateOui });
+if (window.cspRegister) cspRegister({ applyInterval, applyPurge, deleteHost, doLogin, editAlias, editOs, logout, rescanHost, saveOuiAuto, savePiholeConfig, saveSnmp, setLang, setOsFilter, setSort, setStatusFilter, setTheme, setTypeFilter, sortKey, startScan, testSnmp, toggleNav, togglePiholePanel, toggleSnmpPanel, updateOui });

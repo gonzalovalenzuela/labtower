@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.4b — 2026-10-31
+
+- **Net Monitor:** opción «Quitar sin conexión tras N días» para eliminar solos los equipos que dejaron de responder (0 = nunca). Solo la ven y la cambian los administradores.
+- **Net Monitor, switches:** la velocidad de cada puerto tiene color (10G, 2.5G, 1G, 100M, 10M) en el panel, en la tabla y en una leyenda.
+- **UPS Monitor:** si la batería tiene menos de 1 año, la edad se muestra en meses.
+- **Proxmox Monitor:** botón «Ocultar detenidas» para esconder las VM y contenedores apagados (se recuerda en el navegador).
+- **Resumen:** se puede pausar y reanudar el bloqueo de Pi-hole / AdGuard desde la tarjeta DNS (5 min, 30 min, 1 hora o hasta reanudar). Requiere nivel «ejecutar» en DNS Monitor.
+
 ## 2.1.4a — 2026-10-31
 
 - El aviso de versión nueva ahora muestra los comandos para actualizar (`wget` con enlace directo al .deb de la última versión y `sudo apt install`), con un botón para copiarlos.

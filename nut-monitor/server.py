@@ -219,7 +219,9 @@ def battery_info(sid, ups, vars_):
     md = battery.parse_manual_date(manual) if manual else None
     age = round((datetime.date.today() - md).days / 365.25, 1) if md else None
     out = {"runtime": battery.runtime_estimate(vars_), "age_years": age if md else battery.best_battery_age_years(vars_),
-           "age_manual": manual or None, "aging": None, "tests": [], "test_now": None}
+           "age_manual": manual or None, "age_months": None, "aging": None, "tests": [], "test_now": None}
+    bd = md or battery.best_battery_date(vars_)
+    if bd and (datetime.date.today() - bd).days < 365: out["age_months"] = battery.age_months(bd)
     try: out["aging"] = aging(sid, ups)
     except Exception as e: log.debug(f"aging: {e}")
     try: out["tests"] = selftest_log(sid, ups)

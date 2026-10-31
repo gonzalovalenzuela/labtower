@@ -18,7 +18,7 @@ const LANG={
     cpu:'CPU',memory:'Memory',disk:'Disk',
     historyChart:'CPU/RAM history (last samples)',
     sectionVMs:'Virtual Machines',sectionCTs:'Containers',
-    running:'running',
+    running:'running',hideStopped:'Hide stopped',showStopped:'Show stopped',
     nodeOfflineMsg:'Node offline — no data available',connError:'Connection error',connErrorHint:'Check host, port and API token',
     nodeCountNav:(n)=>`${n} node${n!==1?'s':''}`,
     pinNode:'Pin node in place',unpinNode:'Unpin node',moveEarlier:'Move earlier',moveLater:'Move later',dragReorder:'Drag to reorder',resetOrder:'Reset node order',layoutSaved:'Node order saved',
@@ -56,7 +56,7 @@ const LANG={
     cpu:'CPU',memory:'Memoria',disk:'Disco',
     historyChart:'Historial CPU/RAM (últimas muestras)',
     sectionVMs:'Máquinas Virtuales',sectionCTs:'Contenedores',
-    running:'corriendo',
+    running:'corriendo',hideStopped:'Ocultar detenidas',showStopped:'Mostrar detenidas',
     nodeOfflineMsg:'Nodo offline — sin datos disponibles',connError:'Error de conexión',connErrorHint:'Verifica host, puerto y token API',
     nodeCountNav:(n)=>`${n} nodo${n!==1?'s':''}`,
     pinNode:'Fijar nodo en su lugar',unpinNode:'Desfijar nodo',moveEarlier:'Mover antes',moveLater:'Mover después',dragReorder:'Arrastra para reordenar',resetOrder:'Restablecer orden de nodos',layoutSaved:'Orden de nodos guardado',
@@ -87,7 +87,8 @@ function setLang(l){
   _lang=l;localStorage.setItem('pi-lang',l);document.documentElement.lang=l;
   document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.getAttribute('data-i18n')));
   ['en','es'].forEach(x=>document.getElementById('lang-'+x)?.classList.toggle('active',x===l));
-  if(_i18nReady && typeof renderAll==='function')renderAll();
+  stoppedBtn();
+  if(_i18nReady && typeof renderDashboard==='function')renderDashboard();
 }
 (()=>setLang(_lang))();
 
@@ -100,6 +101,7 @@ const POLL=5000;            // fast refresh while the tab is visible; paused whe
 // El historial de CPU/RAM de los nodos es grande y cambia cada 30 s: se pide cada 30 s y entre medias se reutiliza la copia anterior.
 // EN: The nodes' CPU/RAM history is large and changes every 30 s: it is requested every 30 s and the previous copy is reused in between.
 let _histTs=0, _histCache={}, _collapsed=new Set();
+let _hideStopped=false; try{_hideStopped=localStorage.getItem('pi-px-hide-stopped')==='1';}catch(e){}
 
 // ── Theme ────────────────────────────────────────────────────────────────────
 // Elige el tema (claro, oscuro o automático según el sistema) y lo recuerda (clave pi-theme).
@@ -731,7 +733,8 @@ function buildVMSection(items, type, running, nodeName){
   if(!items.length) return '';
   const id='sec-'+String(nodeName).replace(/[^\w-]/g,'_')+'-'+type;   // stable id: collapsed state survives refreshes
   const open=!_collapsed.has(id);
-  const sorted=[...items].sort((a,b)=>{
+  const shown=_hideStopped?items.filter(v=>v.status==='running'||v.status==='paused'):items;
+  const sorted=[...shown].sort((a,b)=>{
     if(a.status==='running'&&b.status!=='running')return-1;
     if(b.status==='running'&&a.status!=='running')return 1;
     return(a.vmid||0)-(b.vmid||0);
@@ -765,6 +768,17 @@ function buildVMSection(items, type, running, nodeName){
       </div>
     </div>
   </div>`;
+}
+
+// Botón de la barra superior: oculta o muestra las VM y contenedores detenidos (se recuerda en el navegador).
+// EN: Top-bar button: hides or shows stopped VMs and containers (remembered in the browser).
+function stoppedBtn(){
+  const b=document.getElementById('tb-stopped'); if(b)b.textContent=_hideStopped?t('showStopped'):t('hideStopped');
+}
+function toggleStopped(){
+  _hideStopped=!_hideStopped;
+  try{localStorage.setItem('pi-px-hide-stopped',_hideStopped?'1':'0');}catch(e){}
+  stoppedBtn(); renderDashboard();
 }
 
 function toggleSection(id){
@@ -914,4 +928,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ closeModals, confirmDelete, doLogin, logout, moveNode, openAddCluster, pinCluster, resetLayout, saveCluster, toggleBkIgnore, bkSelToggle, bkSelMode, bkBulk, toggleDiag, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection });
+if (window.cspRegister) cspRegister({ closeModals, confirmDelete, doLogin, logout, moveNode, openAddCluster, pinCluster, toggleStopped, resetLayout, saveCluster, toggleBkIgnore, bkSelToggle, bkSelMode, bkBulk, toggleDiag, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection });
