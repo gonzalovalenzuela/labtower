@@ -81,6 +81,8 @@ var _i18nReady=false;
 // Traducción: busca la clave en el idioma activo (admite textos con función para incluir valores).
 // EN: Translation: looks the key up in the active language (supports function texts that take values).
 function t(k,...args){const v=(LANG[_lang]||LANG.en)[k]||(LANG.en)[k]||k;return typeof v==='function'?v(...args):v;}
+// Ocultar VM detenidas (se declara antes que setLang, que se ejecuta al cargar). / EN: hide stopped VMs (declared before setLang, which runs on load).
+let _hideStopped=false; try{_hideStopped=localStorage.getItem('pi-px-hide-stopped')==='1';}catch(e){}
 // Cambia el idioma, lo recuerda y vuelve a pintar los textos de la página.
 // EN: Switch the language, remember it and repaint the page texts.
 function setLang(l){
@@ -101,7 +103,6 @@ const POLL=5000;            // fast refresh while the tab is visible; paused whe
 // El historial de CPU/RAM de los nodos es grande y cambia cada 30 s: se pide cada 30 s y entre medias se reutiliza la copia anterior.
 // EN: The nodes' CPU/RAM history is large and changes every 30 s: it is requested every 30 s and the previous copy is reused in between.
 let _histTs=0, _histCache={}, _collapsed=new Set();
-let _hideStopped=false; try{_hideStopped=localStorage.getItem('pi-px-hide-stopped')==='1';}catch(e){}
 
 // ── Theme ────────────────────────────────────────────────────────────────────
 // Elige el tema (claro, oscuro o automático según el sistema) y lo recuerda (clave pi-theme).
