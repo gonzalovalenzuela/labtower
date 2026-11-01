@@ -174,18 +174,51 @@ def selftest_track(sid, ups, vars_, now=None):
             conn.execute("DELETE FROM selftests WHERE srv_id=? AND ups=? AND id NOT IN (SELECT id FROM selftests WHERE srv_id=? AND ups=? ORDER BY id DESC LIMIT 200)", (sid, ups, sid, ups))
             conn.commit()
         finally: conn.close()
+    _stl_cache.clear()
     new_c, old_c = battery.classify_test(res), battery.classify_test(old)
     if new_c == "failed":
         auth.record_event("nut", "warn", f"{ups}: battery self-test failed ({res})", "ups_test_fail", n=ups, r=res)
     elif new_c == "passed" and old_c == "running":
         auth.record_event("nut", "info", f"{ups}: battery self-test passed", "ups_test_ok", n=ups)
 
+_stl_cache = {}              # (srv, ups, limit) → (time, rows); invalidated when a new test result is logged
+STL_TTL = 15
+
 def selftest_log(sid, ups, limit=8):
+    ck, t0 = (sid, ups, limit), time.time()
+    c = _stl_cache.get(ck)
+    if c and t0 - c[0] < STL_TTL: return [dict(x) for x in c[1]]
+    rows = _selftest_log_db(sid, ups, limit)
+    _stl_cache[ck] = (t0, rows)
+    return [dict(x) for x in rows]
+
+def _selftest_log_db(sid, ups, limit=8):
     conn = db_connect()
     try:
         rows = conn.execute("SELECT ts, result FROM selftests WHERE srv_id=? AND ups=? ORDER BY ts DESC, id DESC LIMIT ?", (sid, ups, limit)).fetchall()
     finally: conn.close()
     return [{"ts": r[0], "result": r[1], "kind": battery.classify_test(r[1])} for r in rows]
+
+_aging_busy = set()          # (srv, ups) being computed in the background
+_aging_busy_lock = threading.Lock()
+
+def aging_async(sid, ups):
+    """ES: devuelve la última tendencia calculada (aunque esté vieja) sin bloquear la petición; si falta o venció,
+    la recalcula en un hilo aparte (uno solo por UPS). EN: returns the last computed trend (even stale) without
+    blocking the request; if missing or expired it is recomputed in a background thread (one per UPS)."""
+    k, now = (sid, ups), int(time.time())
+    c = _aging_cache.get(k)
+    if c and now - c[0] < AGING_TTL: return c[1]
+    with _aging_busy_lock:
+        if k not in _aging_busy:
+            _aging_busy.add(k)
+            def run():
+                try: aging(sid, ups)
+                except Exception as e: log.debug(f"aging bg: {e}")
+                finally:
+                    with _aging_busy_lock: _aging_busy.discard(k)
+            threading.Thread(target=run, daemon=True, name="nut-aging").start()
+    return c[1] if c else None
 
 def aging(sid, ups, now=None):
     k, now = (sid, ups), int(now or time.time())
@@ -211,9 +244,16 @@ def aging(sid, ups, now=None):
 BAT_FILE = DATA_DIR / "battery_dates.json"
 _bat_lock = threading.Lock()
 
+_bat_cache = [None, None]    # [file signature, parsed dates]
+
 def load_battery_dates():
+    try: st = BAT_FILE.stat(); sig = (st.st_mtime_ns, st.st_size)
+    except OSError: sig = None
+    if _bat_cache[0] == sig and _bat_cache[1] is not None: return dict(_bat_cache[1])
     d = auth.read_json(BAT_FILE, {}, dict)
-    return {k: v for k, v in d.items() if isinstance(k, str) and isinstance(v, str) and battery.parse_manual_date(v)}
+    out = {k: v for k, v in d.items() if isinstance(k, str) and isinstance(v, str) and battery.parse_manual_date(v)}
+    _bat_cache[0], _bat_cache[1] = sig, out
+    return dict(out)
 
 def battery_info(sid, ups, vars_):
     manual = load_battery_dates().get(f"{sid}|{ups}")
@@ -223,7 +263,7 @@ def battery_info(sid, ups, vars_):
            "age_manual": manual or None, "age_months": None, "aging": None, "tests": [], "test_now": None}
     bd = md or battery.best_battery_date(vars_)
     if bd and (datetime.date.today() - bd).days < 365: out["age_months"] = battery.age_months(bd)
-    try: out["aging"] = aging(sid, ups)
+    try: out["aging"] = aging_async(sid, ups)
     except Exception as e: log.debug(f"aging: {e}")
     try: out["tests"] = selftest_log(sid, ups)
     except Exception as e: log.debug(f"selftest_log: {e}")

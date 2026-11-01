@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.4f — 2026-10-31
+
+- **UPS Monitor:** el cálculo del estado de envejecimiento de la batería ya no frena las páginas. Antes se hacía al abrir la página (tardaba más de un segundo con mucho historial, cada 6 horas y después de cada reinicio); ahora se calcula en segundo plano y la página responde al tiro.
+- **UPS Monitor:** se guardan unos segundos las pruebas de batería y la fecha de cambio de batería, para no leer la base de datos y el disco en cada consulta.
+
 ## 2.1.4e — 2026-10-31
 
 - **Admin Panel:** «Última conexión» ya no sale vacía para quien tiene una sesión abierta; usa la actividad de su sesión si no hay un inicio de sesión registrado.

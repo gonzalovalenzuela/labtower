@@ -66,7 +66,7 @@ class Db(unittest.TestCase):
     def setUp(self):
         m = self.m; m.db_init()
         c = m.db_connect(); c.execute("DELETE FROM history"); c.execute("DELETE FROM selftests"); c.commit(); c.close()
-        m._test_last.clear(); m._aging_cache.clear()
+        m._test_last.clear(); m._aging_cache.clear(); m._stl_cache.clear(); m._bat_cache[:] = [None, None]
         self.ev = []; self._rec = m.auth.record_event
         m.auth.record_event = lambda mod, lv, tx, k=None, **p: self.ev.append((lv, k, p))
     def tearDown(self): self.m.auth.record_event = self._rec
@@ -103,6 +103,29 @@ class Db(unittest.TestCase):
         self._fill("old", 10, lambda w: 3000 - w * 150)
         t = self.m.aging("s", "old")
         self.assertTrue(t["warn"]); self.assertLess(t["change_pct"], -20)
+
+    def test_battery_info_does_not_block_on_aging(self):
+        import time as _t
+        self._fill("old", 10, lambda w: 3000 - w * 150)
+        t0 = _t.time(); first = self.m.battery_info("s", "old", {})["aging"]
+        self.assertIsNone(first)                                   # nothing computed yet: returned at once
+        for _ in range(100):                                       # the background thread fills the cache
+            if ("s", "old") in self.m._aging_cache: break
+            _t.sleep(0.05)
+        self.assertTrue(self.m.battery_info("s", "old", {})["aging"]["warn"])
+
+    def test_selftest_log_cache_is_invalidated_by_new_results(self):
+        m = self.m
+        m.selftest_track("s", "u", {"ups.test.result": "Done and passed"}, now=1000)
+        self.assertEqual(m.selftest_log("s", "u"), [])
+        m.selftest_track("s", "u", {"ups.test.result": "Done and error"}, now=2000)
+        self.assertEqual(len(m.selftest_log("s", "u")), 1)
+
+    def test_battery_dates_cache_follows_the_file(self):
+        m = self.m; d0 = m.load_battery_dates()
+        m.auth.write_json(m.BAT_FILE, {"s|u": "2024-01-02"})
+        self.assertEqual(m.load_battery_dates().get("s|u"), "2024-01-02")
+        m.auth.write_json(m.BAT_FILE, {}); self.assertNotIn("s|u", m.load_battery_dates())
 
     def test_aging_stable_and_ignores_other_loads_and_low_charge(self):
         self._fill("ok", 10, lambda w: 3000)
