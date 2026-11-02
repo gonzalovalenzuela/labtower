@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.6c — 2026-11-02
+
+- **Mejora:** navegación unificada. Todos los módulos comparten el mismo menú lateral, con «Inicio» y «Resumen» arriba y los módulos agrupados (Energía y servidores, Red, Herramientas, Sistema), el módulo actual resaltado y el estado de cada uno (verde, amarillo, rojo) junto al nombre. Solo aparecen los módulos a los que tienes permiso y los que el admin no apagó. El menú ya no se reordena arrastrando, así que el orden es el mismo en todas las pantallas y en la portada.
+- **Mejora:** el Resumen tiene la misma navegación como barra superior (se oculta en modo kiosco) en lugar del botón «Inicio», y la portada agrupa las tarjetas igual que el menú.
+
 ## 2.1.6b — 2026-11-02
 
 - **Mejora:** el VPN Monitor guarda la última lectura de cada servidor y la muestra de inmediato tras reiniciar (marcada «Lectura anterior, actualizando…») en vez de quedar vacío hasta que responda el SSH. Las lecturas que tardan más de 5 s se anotan en el log (`slow read`) para encontrar el servidor lento.

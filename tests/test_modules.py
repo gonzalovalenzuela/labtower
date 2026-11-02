@@ -50,8 +50,8 @@ class Wiring(unittest.TestCase):
     def test_every_module_reports_disabled_in_api_me_and_hides_nav(self):
         for d in ("overview", "wol-console", "dns-monitor", "net-monitor", "proxmox-monitor", "vpn-monitor", "wan-monitor", "nas-monitor", "nut-monitor"):
             self.assertIn("auth.disabled_modules()", (ROOT / d / "server.py").read_text(), d)
-        for d in ("wol-console", "dns-monitor", "net-monitor", "proxmox-monitor", "vpn-monitor", "wan-monitor", "nas-monitor", "nut-monitor"):
-            self.assertIn("ME.disabled.includes(item.id)", (ROOT / d / "static" / "app.js").read_text(), d)
+        for d in ("wol-console", "dns-monitor", "net-monitor", "proxmox-monitor", "vpn-monitor", "wan-monitor", "nas-monitor", "nut-monitor", "auth", "overview"):
+            self.assertIn("me.disabled", (ROOT / d / "static" / "nav.js").read_text(), d)       # the shared menu hides disabled modules
 
     def test_admin_api_requires_full_admin_and_audits(self):
         s = (ROOT / "auth" / "admin_panel.py").read_text()

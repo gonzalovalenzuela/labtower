@@ -167,6 +167,7 @@ function setLang(l){
   try{tpRender();}catch(e){}
   try{ssRender();}catch(e){}
   try{mdRender();}catch(e){}
+  try{renderNav();}catch(e){}
   try{sfRender();auRender();upRender();}catch(e){}
   // Update new-pw placeholder
   const npw = document.getElementById('d-new-pw');
@@ -209,66 +210,11 @@ function updatePermHelpBox(){
 (()=>{ setLang(_lang); updatePermHelpBox(); })();
 
 // ── Nav reordenable ───────────────────────────────────────────────────────────
-// Barra lateral común: los mismos accesos en todas las páginas. El usuario puede reordenarlos arrastrando (el orden se guarda en el navegador, clave pi-nav-order). «Admin» solo se muestra a administradores.
-// EN: Common sidebar: the same links on every page. The user can reorder them by dragging (the order is stored in the browser, key pi-nav-order). "Admin" is shown to administrators only.
-const _NAV_ITEMS=[
-  {id:'overview', href:'/overview/', get label(){return _lang==='es'?'Resumen':'Overview'}, svg:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>'},
-  {id:'nut',   href:'/nut/',   label:'UPS Monitor', svg:'<path d="M5 9V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><rect x="3" y="9" width="18" height="11" rx="2"/><line x1="12" y1="13" x2="12" y2="16"/>'},
-  {id:'net',   href:'/net/',   label:'Net Monitor', svg:'<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>'},
-  {id:'pve',   href:'/pve/',   label:'Proxmox',     svg:'<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>'},
-  {id:'nas',   href:'/nas/',   label:'NAS Monitor',svg:'<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="9" x2="17" y2="9"/><line x1="7" y1="14" x2="17" y2="14"/><line x1="16" y1="18" x2="16.01" y2="18"/>'},
-  {id:'dns',  href:'/dns/',   label:'DNS Monitor', svg:'<circle cx="12" cy="12" r="9"/><line x1="3" y1="12" x2="21" y2="12"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/>'},
-  {id:'wan',  href:'/wan/',   label:'WAN Monitor', svg:'<path d="M5 12.55a11 11 0 0 1 14 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>'},
-  {id:'vpn',  href:'/vpn/',   label:'VPN Monitor', svg:'<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'},
-  {id:'wol',   href:'/wol/',   label:'WOL Console', svg:'<polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/>'},
-  {id:'admin', href:'/admin/', label:'Admin Panel', svg:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'},
-];
-// Identificador de esta página en la barra lateral (se marca como activa).
-// EN: Identifier of this page in the sidebar (shown as active).
 const _NAV_SELF='admin';
-let _navDragSrc=null;
-// Orden guardado de los accesos; si falta alguno nuevo, se agrega al final.
-// EN: Saved order of the links; any new one missing is appended at the end.
-function _navOrder(){
-  try{const s=JSON.parse(localStorage.getItem('pi-nav-order')||'[]');
-    if(s.length){const ids=_NAV_ITEMS.map(i=>i.id);const o=s.filter(id=>ids.includes(id));ids.forEach(id=>{if(!o.includes(id))o.push(id);});return o;}}catch(e){}
-  return _NAV_ITEMS.map(i=>i.id);
-}
-// Dibuja la barra lateral y activa el arrastrar y soltar para reordenar.
-// EN: Draw the sidebar and enable drag and drop to reorder.
-let _navOff=[];
-function renderNav(){
-  const wrap=document.getElementById('nav-items');if(!wrap)return;
-  const order=_navOrder();
-  wrap.innerHTML='';
-  order.forEach(id=>{
-    const item=_NAV_ITEMS.find(i=>i.id===id);if(!item)return;
-    if(_navOff.includes(item.id))return;
-    const isSelf=item.id===_NAV_SELF;
-    const a=document.createElement('a');
-    a.className='nav-item nav-drag-item'+(isSelf?' active':'');
-    a.href=isSelf?'#':item.href;a.dataset.navId=item.id;a.draggable=true;
-    a.innerHTML=`<span class="nav-drag-handle" title="${t('dragHandle')}">⠿</span><svg viewBox="0 0 24 24">${item.svg}</svg>${item.label}`;
-    a.addEventListener('dragstart',e=>{_navDragSrc=id;e.dataTransfer.effectAllowed='move';a.classList.add('nav-dragging');});
-    a.addEventListener('dragend',()=>a.classList.remove('nav-dragging'));
-    a.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';a.classList.add('nav-drag-over');});
-    a.addEventListener('dragleave',()=>a.classList.remove('nav-drag-over'));
-    a.addEventListener('drop',e=>{
-      e.preventDefault();a.classList.remove('nav-drag-over');
-      if(_navDragSrc&&_navDragSrc!==id){
-        const cur=_navOrder(),from=cur.indexOf(_navDragSrc),to=cur.indexOf(id);
-        if(from>-1&&to>-1){cur.splice(from,1);cur.splice(to,0,_navDragSrc);}
-        try{localStorage.setItem('pi-nav-order',JSON.stringify(cur));}catch(e){}
-        renderNav();
-      }
-      _navDragSrc=null;
-    });
-    wrap.appendChild(a);
-  });
-}
+// Navegación compartida (nav.js): mismo orden y grupos en todos los módulos. / EN: shared navigation (nav.js): same order and groups in every module.
+function renderNav(){if(window.labNav)labNav.render({self:_NAV_SELF,lang:_lang,fetchMe:true});}
 // Admin siempre ve todos los items — renderizar inmediatamente
 renderNav();
-fetch('api/disabled').then(r=>r.ok?r.json():{}).then(d=>{_navOff=d.disabled||[];renderNav();}).catch(()=>{});
 
 // ── Theme ──────────────────────────────────────────────
 // Elige el tema (claro, oscuro o automático según el sistema) y lo recuerda (clave pi-theme).

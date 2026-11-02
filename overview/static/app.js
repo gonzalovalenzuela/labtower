@@ -458,9 +458,11 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&me&&me.us
 
 // ───────── Sesión / session ─────────
 function showLogin(){clearTimeout(timer);$('app').classList.add('hide');$('loginbox').classList.remove('hide');$('lu').focus()}
+function renderNav(){if(window.labNav)labNav.render({self:'overview',mode:'strip',lang:lang,me:me&&me.username?me:null});}
 async function start(){
   try{me=await jget('api/me')}catch(e){me={}}
   if(!me.username)return showLogin();
+  renderNav();
   $('loginbox').classList.add('hide');$('app').classList.remove('hide');loop();
 }
 async function doLogin(){
@@ -487,7 +489,7 @@ function applyLang(){
 $('ri').onchange=e=>{riSec=parseInt(e.target.value,10);try{localStorage.setItem('pi-refresh',String(riSec))}catch(x){}if(me&&me.username){riNext();if(riSec>0&&Date.now()-lastRef>riSec*1000)loop()}};
 document.addEventListener('click',dnsAct);
 $('rr').onclick=()=>{if(me&&me.username)loop()};
-$('bl').onclick=()=>{lang=lang==='es'?'en':'es';try{localStorage.setItem('pi-lang',lang)}catch(e){}applyLang();document.dispatchEvent(new Event('pi-lang'));if(me&&me.username){histTs=0;refresh()}};
+$('bl').onclick=()=>{lang=lang==='es'?'en':'es';try{localStorage.setItem('pi-lang',lang)}catch(e){}applyLang();try{renderNav()}catch(e){}document.dispatchEvent(new Event('pi-lang'));if(me&&me.username){histTs=0;refresh()}};
 
 // ES: Reparto equilibrado de las tarjetas: si no caben todas en una fila, se reparten en filas parejas (4 tarjetas con sitio para 3 → 2×2) en vez de dejar una sola tarjeta huérfana con un espacio a su derecha.
 // EN: Balanced card layout: if they do not all fit in one row they are spread over even rows (4 cards with room for 3 → 2×2) instead of leaving one orphan card with a gap to its right.

@@ -12,6 +12,7 @@ const H = {
        vpnN: 'VPN Monitor', vpnD: 'Tailscale, OpenVPN y WireGuard — quién está conectado y desde cuándo',
        wolN: 'WOL Console', wolD: 'Wake-on-LAN — enciende equipos remotamente',
        admN: 'Admin Panel', admD: 'Usuarios y permisos, 2FA, respaldos y salud del sistema',
+       gPower: 'Energía y servidores', gNet: 'Red', gTools: 'Herramientas', gSys: 'Sistema',
        chk: 'comprobando...', up: 'activo', warn: 'con avisos', fail: 'con fallas', down: 'sin respuesta'},
   en: {hero: 'Administration panel for your homelab.<br>UPS, network, Proxmox, NAS, Wake-on-LAN and administration',
        ovN: 'Overview', ovD: 'General status — UPS, Proxmox, network and the server on one screen',
@@ -24,6 +25,7 @@ const H = {
        vpnN: 'VPN Monitor', vpnD: 'Tailscale, OpenVPN and WireGuard — who is connected and since when',
        wolN: 'WOL Console', wolD: 'Wake-on-LAN — turn devices on remotely',
        admN: 'Admin Panel', admD: 'Users and permissions, 2FA, backups and system health',
+       gPower: 'Power & servers', gNet: 'Network', gTools: 'Tools', gSys: 'System',
        chk: 'checking...', up: 'active', warn: 'warnings', fail: 'failing', down: 'no response'}
 };
 let lang = 'en';

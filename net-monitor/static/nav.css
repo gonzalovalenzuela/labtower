@@ -1,0 +1,12 @@
+/* LabTower — navegación compartida / shared navigation (nav.js) */
+.nav-group-lbl{font-size:10px;font-weight:600;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;padding:12px 10px 4px}
+.nav-dot{width:8px;height:8px;border-radius:50%;margin-left:auto;flex-shrink:0;background:var(--text-dim);opacity:.45}
+.nav-dot.up{background:#22c55e;opacity:1}.nav-dot.mid{background:#eab308;opacity:1}.nav-dot.down{background:#ef4444;opacity:1}
+.navstrip{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 14px}
+.nav-chip{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border:1px solid var(--border,#e3e8ef);border-radius:99px;font-size:13px;color:var(--text-mid,#5a6a85);text-decoration:none;background:var(--surface,#fff)}
+.nav-chip svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+.nav-chip:hover{color:var(--text,#1a2033);border-color:var(--border-b,#cdd4e0)}
+.nav-chip.active{color:var(--text,#1a2033);font-weight:600;border-color:var(--text-mid,#5a6a85)}
+.nav-chip .nav-dot{margin-left:0}
+.nav-sep{width:1px;height:18px;background:var(--border,#e3e8ef);margin:0 4px}
+body.kiosk .navstrip{display:none}
