@@ -82,6 +82,18 @@ install -m 755 librespeed-cli /usr/local/bin/librespeed-cli
 ```
 Después elige el motor en **WAN Monitor → Ajustes → Motor de la prueba** (si sigue como «no instalado», `systemctl restart wan-monitor` dentro del CT). La primera vez, Ookla pide aceptar la licencia: `speedtest --accept-license --accept-gdpr`.
 
+### Problemas conocidos y soluciones
+- **`labtower-https: No such file or directory` con `pct exec`:** usa la ruta completa, `pct exec ID -- /usr/local/bin/labtower-https enable --redirect`.
+- **Net Monitor no escanea y WAN Monitor no mide:** el CT no deja hacer ping a los servicios. El script `labtower-ct` lo corrige solo; en un CT creado a mano, dentro del CT: `echo 'net.ipv4.ping_group_range = 0 65534' > /etc/sysctl.d/99-labtower-ping.conf && sysctl -q -p /etc/sysctl.d/99-labtower-ping.conf` y `systemctl restart net-monitor wan-monitor`. Los avisos `permission denied on key` de `sysctl` son normales en un CT.
+- **Restaurar un respaldo falla con «The "no new privileges" flag is set»:** pasa en un CT sin privilegios porque systemd activa ese indicador en el servicio del panel y `sudo` no puede subir a root. Desde la 2.1.5b el instalador lo evita dentro de un contenedor. Si instalaste una versión anterior, instala la nueva (`apt install ./labtower_X.Y.Z_all.deb`); para comprobarlo: `grep NoNewPrivs /proc/$(systemctl show -p MainPID --value admin-panel)/status` debe decir `0`.
+- **El selector de «Subir respaldo» no deja elegir mi archivo:** los respaldos descargados del panel salen cifrados (`.gpg`). Desde la 2.1.5a el selector los acepta; antes había que elegir «Todos los archivos».
+- **Ookla o LibreSpeed:** instálalos dentro del CT, no en el nodo (ver «Pruebas de velocidad»).
+- **No recuerdo la contraseña de `admin`:** dentro del CT, como root, genera una nueva (pide cambiarla al entrar):
+  ```
+  pct exec ID -- runuser -u labtower-auth -- python3 -c 'import sys; sys.path.insert(0,"/opt/labtower/auth"); import auth; u=auth.load_users(); pw=auth._random_password(); u["admin"]["password_hash"]=auth._hash(pw); u["admin"]["must_change_password"]=True; auth.save_users(u); print("Nueva contraseña:", pw)'
+  ```
+  En una VM es igual, con `sudo -u labtower-auth python3 -c '...'`. Si el usuario tiene 2FA, sigue pidiendo el código.
+
 ## English
 
 LabTower runs as a `.deb` package on Debian 12 with systemd. On Proxmox the simplest way is an **unprivileged CT** (LXC) with Debian 12: it is light and needs no changes in LabTower. There is no Docker image.
@@ -107,3 +119,11 @@ Enable HTTPS with `pct exec ID -- /usr/local/bin/labtower-https enable --redirec
 
 ### Speed tests (optional)
 WAN Monitor has its own engine and works with nothing installed. To use **Ookla** or **LibreSpeed**, install the program **inside the CT** (`pct enter ID`), not on the Proxmox node: Ookla's script does not recognise the node's Debian version. The commands are the same as in the Spanish section above (Ookla: packagecloud script, or the `x86_64` binary from `speedtest.net/apps/cli`; LibreSpeed: the `amd64` binary of v1.0.14). Then pick the engine in **WAN Monitor → Settings → Test engine**; the first time Ookla asks you to accept its license: `speedtest --accept-license --accept-gdpr`.
+
+### Known problems and fixes
+- **`labtower-https: No such file or directory` with `pct exec`:** use the full path, `pct exec ID -- /usr/local/bin/labtower-https enable --redirect`.
+- **Net Monitor does not scan and WAN Monitor does not measure:** the CT does not let the services ping. `labtower-ct` fixes it by itself; on a hand-made CT, inside the CT: `echo 'net.ipv4.ping_group_range = 0 65534' > /etc/sysctl.d/99-labtower-ping.conf && sysctl -q -p /etc/sysctl.d/99-labtower-ping.conf`, then `systemctl restart net-monitor wan-monitor`. The `permission denied on key` messages from `sysctl` are normal in a CT.
+- **Restoring a backup fails with "The 'no new privileges' flag is set":** in an unprivileged CT systemd sets that flag on the panel service and `sudo` cannot become root. Since 2.1.5b the installer avoids it inside a container; on an older version, install the new package. To check: `grep NoNewPrivs /proc/$(systemctl show -p MainPID --value admin-panel)/status` must say `0`.
+- **The "Upload backup" picker does not let me choose my file:** backups downloaded from the panel are encrypted (`.gpg`). Since 2.1.5a the picker accepts them; before, you had to pick "All files".
+- **Ookla or LibreSpeed:** install them inside the CT, not on the node (see "Speed tests").
+- **I do not remember the `admin` password:** see the Spanish section above for the command (it generates a new one and asks to change it on login).
