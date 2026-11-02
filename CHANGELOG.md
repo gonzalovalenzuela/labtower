@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.4v — 2026-11-02
+
+- **Nueva Funcionalidad:** Proxmox Monitor: al hacer click en el nombre de una VM o contenedor te lleva a su detalle en Net Monitor (como en UPS Monitor), y al pasar el mouse muestra la tarjeta con sus datos. El equipo se busca por IP, luego por MAC y, si no hay ninguna, por nombre.
+- **Mejora:** Instalador: al terminar ya no recomienda activar el HTTPS si ya está activado; en su lugar muestra que está habilitado.
+
 ## 2.1.4u — 2026-11-02
 
 - **Mejora:** Net Monitor: si un equipo no se puede asociar a su VM/CT de Proxmox por MAC ni por IP (por ejemplo, una red enrutada donde no se ve la MAC, o una VM sin agente), ahora se asocia por nombre cuando el nombre o alias del equipo es idéntico al de la VM/CT.

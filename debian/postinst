@@ -537,4 +537,10 @@ if [ -n "$INIT_PW" ]; then
     echo "  Initial password: $INIT_PW"
     echo "  (random; you must change it at the first login; also in $DATA_DIR/auth/initial-admin-password until then)"
 fi
-echo "  HTTPS (recommended, encrypts password and session): sudo labtower-https enable --redirect"
+# Solo se recomienda el HTTPS si todavía no está activado.
+# EN: HTTPS is only recommended when it is not enabled yet.
+if [ -f /etc/labtower/https.d/443.conf ]; then
+    echo "  HTTPS: enabled (https://$(hostname -I | awk '{print $1}')/)"
+else
+    echo "  HTTPS (recommended, encrypts password and session): sudo labtower-https enable --redirect"
+fi

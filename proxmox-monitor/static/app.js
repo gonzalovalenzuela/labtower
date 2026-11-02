@@ -248,6 +248,7 @@ async function initApp(){
 // Descarga los clusters con su última lectura. El historial pesado se pide solo cada 30 s y se reutiliza entre medias. Un 401 recarga la página (sesión vencida).
 // EN: Download the clusters with their last reading. The heavy history is requested only every 30 s and reused in between. A 401 reloads the page (expired session).
 async function fetchAll(){
+  loadGuestHosts();
   try{
     // node history is big and only changes every 30 s: ask for it rarely, reuse the last copy otherwise
     const wantHist=Date.now()-_histTs>=30000;
@@ -778,7 +779,7 @@ function buildVMSection(items, type, running, nodeName){
           return `<div class="vm-row">
             <span class="vm-dot ${dotCls}"></span>
             <span class="vm-id">${esc(v.vmid)}</span>
-            <span class="vm-main"><span class="vm-name" title="${esc(v.name||'')}">${esc(v.name||'—')}${v.lock==='migrate'?' <span title="migrating" style="color:var(--orange)">⇄</span>':''}</span>${v.status==='running'?`<span class="vm-meta">${cpuPct}% · ${fmtBytes(v.mem||0)} · ${fmtUptime(v.uptime)}</span>`:''}</span>
+            <span class="vm-main"><span class="vm-name" title="${esc(v.name||'')}" data-nethost="${esc(guestHost(v))}" data-nethost-click="1">${esc(v.name||'—')}${v.lock==='migrate'?' <span title="migrating" style="color:var(--orange)">⇄</span>':''}</span>${v.status==='running'?`<span class="vm-meta">${cpuPct}% · ${fmtBytes(v.mem||0)} · ${fmtUptime(v.uptime)}</span>`:''}</span>
             <span class="vm-type ${esc(String(type).toLowerCase().replace(/[^a-z0-9_-]/g,''))}">${esc(type)}</span>
             ${v.status==='running'?'':`<span class="vm-state">${esc(v.status)}</span>`}
           </div>`;
@@ -897,6 +898,30 @@ function confirmDelete(id,name){
 // ── Helpers ──────────────────────────────────────────────────────────────────
 // Formateadores: bytes y tiempo encendido a texto legible.
 // EN: Formatters: bytes and uptime to readable text.
+// Para llevar una VM/CT al detalle de Net Monitor: se busca su equipo por IP y, si no, por MAC; sin ninguna de las dos se usa el nombre.
+// Los datos se piden cada minuto y solo si el usuario tiene acceso a Net Monitor.
+// EN: To take a VM/CT to the Net Monitor detail: its device is looked up by IP and then by MAC; with neither the name is used.
+//     The data is requested once a minute and only if the user has access to Net Monitor.
+let _gHost={}, _gTs=0;
+async function loadGuestHosts(){
+  if(Date.now()-_gTs<60000)return;
+  _gTs=Date.now();
+  try{
+    const [g,n]=await Promise.all([fetch('api/guests'),fetch('/net/api/hosts')]);
+    if(!g.ok)return;
+    const guests=(await g.json()).guests||[];
+    const hosts=n.ok?((await n.json()).hosts||[]):[];
+    const ips=new Set(hosts.map(h=>h.ip)), byMac=new Map(hosts.filter(h=>h.mac).map(h=>[String(h.mac).toLowerCase(),h.ip]));
+    const m={};
+    guests.forEach(x=>{
+      const ip=(x.ips||[]).find(i=>ips.has(i))||(x.macs||[]).map(a=>byMac.get(a)).find(Boolean);
+      if(ip)m[x.vmid]=ip;
+    });
+    _gHost=m;
+  }catch(e){}
+}
+function guestHost(v){return _gHost[v.vmid]||v.name||''}
+
 function fmtBytes(b){b=Number(b);if(!b)return'0B';const u=['B','KB','MB','GB','TB'];let i=0;while(b>=1024&&i<u.length-1){b/=1024;i++;}return b.toFixed(i>0?1:0)+' '+u[i];}
 function fmtUptime(s){s=Number(s);if(!s)return'—';const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);if(d>0)return d+'d '+h+'h';if(h>0)return h+'h '+m+'m';return m+'m';}
 // Escapa HTML antes de insertar texto de usuarios, equipos o la red en la página: evita inyección de código (XSS).
