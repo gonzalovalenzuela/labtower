@@ -75,6 +75,9 @@ SMART_EVERY = float(os.environ.get("PVE_SMART_EVERY", 900))
 # Cada cuántos segundos se revisan los respaldos (contenido de los storages de backup y tareas vzdump).
 # EN: How often, in seconds, the backups are checked (content of the backup storages and vzdump tasks).
 BACKUP_EVERY = float(os.environ.get("PVE_BACKUP_EVERY", 600))
+# Cada cuántos segundos se leen las MAC e IP de las VM y contenedores (para mapearlos en Net Monitor).
+# EN: How often, in seconds, the MACs and IPs of VMs and containers are read (to map them in Net Monitor).
+GUEST_EVERY = float(os.environ.get("PVE_GUEST_EVERY", 300))
 # Instante de la última petición de un navegador (decide el ritmo de consulta).
 # EN: Time of the last browser request (decides the polling rate).
 _last_view  = 0.0                                             # last time a browser asked for data
@@ -512,6 +515,7 @@ def _smart_loop(cluster, cache):
 #     old. Plus the vzdump tasks of the last 7 days. Read in a separate thread every PVE_BACKUP_EVERY seconds.
 _backups: dict = {}           # { cluster_id: {"ts", "max_age_h", "ignore", "rows", "tasks", "storages"} }
 _backup_threads: dict = {}
+_guest_threads: dict = {}
 _bk_seen: dict = {}           # { cluster_id: set of failed task ids already reported (None before the first reading) }
 
 def _backup_round(cluster, client, cache):
@@ -582,6 +586,76 @@ def _backup_loop(cluster, cache):
         time.sleep(BACKUP_EVERY)
     if client: client.close()
     _backups.pop(cid, None); _bk_seen.pop(cid, None)
+
+# ─── Red de las VM y contenedores (para Net Monitor) ─────────────────────────
+# Por cada VM/CT se leen sus MAC (de la configuración) y sus IP: las fijas del contenedor, las que informa el agente de
+# invitado (VM) o la interfaz del contenedor. Si falta algún permiso o el agente no corre, queda solo lo que se pudo leer.
+# EN: Network of VMs and containers (for Net Monitor). For each VM/CT its MACs (from the configuration) and its IPs are
+#     read: the container's static ones, those the guest agent reports (VM) or the container's interface. If a permission
+#     is missing or the agent is not running, only what could be read is kept.
+_gnets: dict = {}                                    # cluster id -> list of guests with macs / ips
+_MAC_RE = re.compile(r"(?i)\b([0-9a-f]{2}(?::[0-9a-f]{2}){5})\b")
+_IP4_RE = re.compile(r"^\d{1,3}(?:\.\d{1,3}){3}$")
+
+def _guest_ips(client, node, kind, vmid, cfg, running):
+    ips = []
+    if kind == "lxc":
+        for k, v in cfg.items():                     # net0: name=eth0,hwaddr=..,ip=192.0.2.5/24
+            if re.fullmatch(r"net\d+", k):
+                m = re.search(r"(?:^|,)ip=(\d{1,3}(?:\.\d{1,3}){3})(?:/\d+)?", str(v))
+                if m: ips.append(m.group(1))
+    if running:
+        try:
+            if kind == "qemu" and re.match(r"(enabled=)?1\b", str(cfg.get("agent", "0"))):
+                for itf in client.get(f"/nodes/{node}/qemu/{vmid}/agent/network-get-interfaces").get("data", {}).get("result", []):
+                    for a in itf.get("ip-addresses", []):
+                        if a.get("ip-address-type") == "ipv4": ips.append(a.get("ip-address", ""))
+            elif kind == "lxc":
+                for itf in client.get(f"/nodes/{node}/lxc/{vmid}/interfaces").get("data", []):
+                    ips.append(str(itf.get("inet", "")).split("/")[0])
+        except Exception:
+            pass                                      # no agent / no permission: keep what the config gave
+    return sorted({i for i in ips if _IP4_RE.match(i) and not i.startswith(("127.", "169.254."))})
+
+def _guest_round(cur, client, cache):
+    out = []
+    for nd in (cache.snap().get("data") or {}).get("nodes", []):
+        if nd.get("status") != "online": continue
+        for kind, items in (("qemu", nd.get("vms") or []), ("lxc", nd.get("cts") or [])):
+            for g in items:
+                if g.get("template"): continue
+                vmid = g.get("vmid")
+                try:
+                    cfg = client.get(f"/nodes/{nd['name']}/{kind}/{vmid}/config").get("data", {})
+                except Exception:
+                    cfg = {}
+                macs = sorted({m.lower() for k, v in cfg.items() if re.fullmatch(r"net\d+", k) for m in _MAC_RE.findall(str(v))})
+                ips = _guest_ips(client, nd["name"], kind, vmid, cfg, g.get("status") == "running")
+                out.append({"cid": cur["id"], "cluster": cur["name"], "node": nd["name"], "vmid": vmid, "type": kind,
+                            "name": g.get("name", ""), "status": g.get("status", ""), "macs": macs, "ips": ips})
+    _gnets[cur["id"]] = out
+
+def _guest_loop(cluster, cache):
+    cid = cluster["id"]
+    client = None
+    time.sleep(min(15, GUEST_EVERY))
+    while _cache.get(cid) is cache:
+        try:
+            cur = next((c for c in load_clusters() if c["id"] == cid), None)
+            if cur is None: break
+            if client is None:
+                client = PVEClient(host=cur["host"], port=cur.get("port", 8006), user=cur["user"], token_name=cur["token_name"],
+                                   token_value=cur["token_value"], verify_ssl=cur.get("verify_ssl", False), fingerprint=cur.get("fingerprint"))
+            else:
+                fp = _fp_norm(cur.get("fingerprint"))
+                if fp != client.fingerprint: client.fingerprint = fp; client.close()
+            _guest_round(cur, client, cache)
+        except Exception as e:
+            log.warning(f"[{cluster['name']}] guest network round: {e}")
+            if client: client.close()
+        time.sleep(GUEST_EVERY)
+    if client: client.close()
+    _gnets.pop(cid, None)
 
 # Orden «natural» (pve2 antes que pve10) para que el orden de los nodos no cambie entre consultas.
 # EN: "Natural" order (pve2 before pve10) so the node order does not change between queries.
@@ -689,6 +763,8 @@ def _poll_cluster(cluster):
         _smart_threads[cid] = threading.Thread(target=_smart_loop, args=(cluster, cache), daemon=True); _smart_threads[cid].start()
     if BACKUP_EVERY > 0 and not (_backup_threads.get(cid) and _backup_threads[cid].is_alive()):
         _backup_threads[cid] = threading.Thread(target=_backup_loop, args=(cluster, cache), daemon=True); _backup_threads[cid].start()
+    if GUEST_EVERY > 0 and not (_guest_threads.get(cid) and _guest_threads[cid].is_alive()):
+        _guest_threads[cid] = threading.Thread(target=_guest_loop, args=(cluster, cache), daemon=True); _guest_threads[cid].start()
 
     while True:
         try:
@@ -911,6 +987,11 @@ class H(BaseHTTPRequestHandler):
             with _diag_lock:
                 rb = diag.with_waves([r for r in _diag_load()["reboots"] if r.get("cid") == cid])
             self._json(200, {"reboots": rb[:100], "smart": _smart.get(cid), "smart_every": SMART_EVERY, "backups": _backups.get(cid)})
+
+        # VM y contenedores con sus MAC e IP, para que Net Monitor los asocie a los equipos de la red.
+        # EN: VMs and containers with their MACs and IPs, so Net Monitor can match them to the devices on the network.
+        elif path == "/api/guests":
+            self._json(200, {"guests": [g for c in load_clusters() for g in _gnets.get(c["id"], [])]})
 
         # Resumen técnico del estado de cada cluster, útil para diagnosticar.
         # EN: Technical summary of each cluster's state, useful for diagnosis.

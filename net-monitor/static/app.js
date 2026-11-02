@@ -13,7 +13,7 @@ const LANG={
     scanningNet:'Scanning network...',
     permReadonly:'Read-only',permExecute:'Execute',permAdmin:'Administrator',
     sessionExpired:'Session expired',
-    noHosts:'No hosts found',searchPlaceholder:'IP, hostname, OS, port...',
+    noHosts:'No hosts found',searchPlaceholder:'IP, hostname, OS, port...',pveVm:'VM',pveCt:'CT',pveTip:(g)=>'Proxmox · '+g.cluster+' / '+g.node+' · '+g.name+' ('+g.status+')',pveLbl:'Proxmox',
     piholeIntegration:'Pi-hole Integration',piholeDesc:'Pi-hole v6 API for name resolution and MAC vendor. Credentials are stored on the server.',
     piholeHosts:'Pi-hole hosts (comma separated)',piholePass:'Pi-hole admin password',
     piholeConnected:'Connected',piholeDiag:'Devices {d} · DHCP leases {l} · Local DNS {n}',piholeErrLocal:'Local DNS not readable ({e}). In Pi-hole use the web password, or enable the app password option “webserver.api.app_sudo”.',piholeErrLeases:'DHCP leases not readable ({e}).',piholeErrLogin:'Could not log in ({e}).',piholeConnecting:'Connecting…',piholeNeedHost:'Enter at least one host',
@@ -45,7 +45,7 @@ const LANG={
     scanningNet:'Escaneando red...',
     permReadonly:'Solo lectura',permExecute:'Ejecución',permAdmin:'Administrador',
     sessionExpired:'Sesión expirada',
-    noHosts:'Sin hosts encontrados',searchPlaceholder:'IP, hostname, OS, puerto...',
+    noHosts:'Sin hosts encontrados',searchPlaceholder:'IP, hostname, OS, puerto...',pveVm:'VM',pveCt:'CT',pveTip:(g)=>'Proxmox · '+g.cluster+' / '+g.node+' · '+g.name+' ('+g.status+')',pveLbl:'Proxmox',
     piholeIntegration:'Integración Pi-hole',piholeDesc:'Pi-hole v6 API para resolución de nombres y vendor MAC. Las credenciales se guardan en el servidor.',
     piholeHosts:'Hosts Pi-hole (separados por coma)',piholePass:'Password Pi-hole admin',
     piholeConnected:'Conectado',piholeDiag:'Dispositivos {d} · Concesiones DHCP {l} · DNS local {n}',piholeErrLocal:'No se pudo leer el DNS local ({e}). En Pi-hole usa la contraseña de la web, o activa la opción «webserver.api.app_sudo» para la contraseña de aplicación.',piholeErrLeases:'No se pudieron leer las concesiones DHCP ({e}).',piholeErrLogin:'No se pudo iniciar sesión ({e}).',piholeConnecting:'Conectando…',piholeNeedHost:'Ingresa al menos un host',
@@ -99,6 +99,7 @@ function setLang(l){
 // Enlace profundo desde otras páginas: /net/?ip=192.168.0.10 abre ese equipo expandido.
 // EN: Deep link from other pages: /net/?ip=192.168.0.10 opens that device expanded.
 let _deepIp=(()=>{try{const v=new URLSearchParams(location.search).get('ip')||'';return /^\d{1,3}(\.\d{1,3}){3}$/.test(v)?v:null}catch(e){return null}})();
+let pveByMac=new Map(), pveByIp=new Map(), pveTs=0;
 let ME=null, scanNetwork='', scanRunning=false, hosts=[], filterOs='ALL', filterType='ALL', filterStatus='ALL', searchQ='', expanded=null, pollTimer=null;
 let sortKeyName=null, sortDir=1;   // null = orden por defecto (online primero, luego IP)
 try{const sv=JSON.parse(localStorage.getItem('pi-net-sort')||'null');if(sv&&['status','ip','os','vendor','ports','latency','seen'].includes(sv.k)){sortKeyName=sv.k;sortDir=sv.d===-1?-1:1;}}catch(e){}
@@ -330,6 +331,30 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 // Descarga los equipos y el estado del escaneo. Durante un escaneo consulta cada 3 s y en reposo cada 30 s. Solo repinta si algo cambió realmente (quickHash), para no parpadear ni gastar CPU.
 // EN: Download the devices and scan state. During a scan it polls every 3 s and at rest every 30 s. It repaints only if something really changed (quickHash), to avoid flicker and wasted CPU.
+// Lee las VM y contenedores de Proxmox (con sus MAC e IP) para marcar qué equipos de la red son invitados de Proxmox.
+// Si el usuario no tiene permiso en Proxmox o el módulo no está, simplemente no se muestra nada.
+// EN: Read Proxmox VMs and containers (with their MACs and IPs) to mark which network devices are Proxmox guests.
+//     If the user has no Proxmox permission or the module is absent, nothing is shown.
+async function fetchPveGuests(){
+  if(Date.now()-pveTs<60000)return;
+  pveTs=Date.now();
+  try{
+    const r=await fetch('/pve/api/guests');
+    if(!r.ok)return;
+    const d=await r.json();
+    pveByMac=new Map();pveByIp=new Map();
+    (d.guests||[]).forEach(g=>{(g.macs||[]).forEach(m=>pveByMac.set(m,g));(g.ips||[]).forEach(i=>pveByIp.set(i,g))});
+    renderTable();
+  }catch(e){}
+}
+// Invitado de Proxmox que corresponde a un equipo: primero por MAC (más fiable), luego por IP.
+// EN: Proxmox guest matching a device: by MAC first (more reliable), then by IP.
+function pveOf(h){return (h.mac&&pveByMac.get(String(h.mac).toLowerCase()))||pveByIp.get(h.ip)||null}
+function pveBadge(h){
+  const g=pveOf(h);if(!g)return '';
+  return `<span class="pve-badge" title="${esc(t('pveTip',g))}">${g.type==='lxc'?t('pveCt'):t('pveVm')} ${esc(g.vmid)}</span>`;
+}
+
 async function fetchData(){
   try{
     const r=await fetch('api/hosts');
@@ -337,6 +362,7 @@ async function fetchData(){
     const d=await r.json();
 
     updateScanBar(d.scan);
+    fetchPveGuests();
     if(d.pihole_enabled !== undefined) updatePiholeStatusDot(d.pihole_enabled);
     refreshSnmpDot();
 
@@ -457,10 +483,14 @@ function setOsFilter(el){
   filterOs=el.dataset.os;
   renderTable();
 }
+// Filtro por estado. Lo usan los botones y las tarjetas de arriba; tocar la tarjeta ya activa vuelve a «Todos».
+// EN: Status filter. Used by the buttons and the cards on top; tapping the already active card goes back to "All".
 function setStatusFilter(el){
-  document.querySelectorAll('.pill').forEach(e=>e.classList.remove('active'));
-  el.classList.add('active');
-  filterStatus=el.dataset.status;
+  let st=el.dataset.status;
+  if(el.classList.contains('stat-card')&&st===filterStatus)st='ALL';
+  filterStatus=st;
+  document.querySelectorAll('.pill').forEach(e=>e.classList.toggle('active',e.dataset.status===st));
+  document.querySelectorAll('.stat-card[data-status]').forEach(e=>e.classList.toggle('active',e.dataset.status===st&&st!=='ALL'));
   renderTable();
 }
 
@@ -473,7 +503,7 @@ function filtered(){
     if(filterStatus==='online'&&!h.online)return false;
     if(filterStatus==='offline'&&h.online)return false;
     if(searchQ){
-      const hay=(h.ip+' '+(h.hostname||'')+' '+(h.alias||'')+' '+h.os+' '+tType(devType(h))+' '+(h.vendor||'')+' '+(h.mac||'')+' '+(h.ports||[]).map(p=>p.port+' '+p.service).join(' ')).toLowerCase();
+      const hay=(h.ip+' '+(h.hostname||'')+' '+(h.alias||'')+' '+h.os+' '+tType(devType(h))+' '+(h.vendor||'')+' '+(h.mac||'')+' '+(pveOf(h)?'proxmox '+(pveOf(h).type==='lxc'?'ct lxc ':'vm qemu ')+pveOf(h).vmid+' '+pveOf(h).name+' ':'')+(h.ports||[]).map(p=>p.port+' '+p.service).join(' ')).toLowerCase();
       if(!hay.includes(searchQ))return false;
     }
     return true;
@@ -639,6 +669,7 @@ function renderTable(){
       <td>
         <span class="host-name">${esc(name)}</span>
         ${sub!==name?`<span class="host-sub">${esc(sub)}</span>`:''}
+        ${pveBadge(h)}
         ${h.wol?`<span title="WOL Console" style="margin-left:5px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:rgba(42,157,143,.15);color:var(--teal);vertical-align:middle">WOL</span>`:''}
         ${h.new_device?`<span style="margin-left:5px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:rgba(67,97,238,.15);color:var(--blue);vertical-align:middle">${t('newDevice')}</span>`:''}
       </td>
@@ -683,7 +714,7 @@ function renderTable(){
           <div class="detail-label">${esc(t('detailInfo'))}</div>
           <div class="detail-value">IP: ${esc(h.ip)}</div>
           ${h.hostname?`<div class="detail-value">Host: ${esc(h.hostname)}</div>`:''}
-          ${h.vendor?`<div class="detail-value">Vendor: ${esc(h.vendor)}</div>`:''}${h.mac?`<div class="detail-value">MAC: ${esc(h.mac)}</div>`:''}
+          ${pveOf(h)?`<div class="detail-value">${esc(t('pveLbl'))}: ${esc(t('pveTip',pveOf(h)))}</div>`:''}${h.vendor?`<div class="detail-value">Vendor: ${esc(h.vendor)}</div>`:''}${h.mac?`<div class="detail-value">MAC: ${esc(h.mac)}</div>`:''}
           ${h.os_raw?`<div class="detail-value" style="color:var(--text-dim);font-size:10px">${esc(h.os_raw)}</div>`:''}
           <div class="detail-value" style="margin-top:6px">
             <button class="btn-rescan"${canScan()?'':' style="display:none"'} data-on-click="rescanHost" data-on-click-args="${jsargs([h.ip])}" data-on-click-stop="1">

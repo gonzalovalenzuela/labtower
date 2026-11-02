@@ -87,6 +87,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 .stats-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}
 .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow);transition:box-shadow .15s}
 .stat-card:hover{box-shadow:var(--shadow-md)}
+.stat-card.clickable{cursor:pointer;user-select:none}.stat-card.clickable:hover{border-color:var(--teal)}.stat-card.clickable.active{border-color:var(--teal);box-shadow:0 0 0 1px var(--teal)}
+.pve-badge{margin-left:5px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:rgba(230,126,34,.15);color:var(--orange,#e67e22);vertical-align:middle;cursor:help}
 .stat-ico{width:38px;height:38px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .stat-ico svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2}
 .stat-ico.teal{background:var(--teal-dim);color:var(--teal)}
