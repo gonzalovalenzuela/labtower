@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.5b — 2026-11-02
+
+- **Fix:** Instalación en un contenedor (CT de Proxmox): restaurar un respaldo desde el Admin Panel fallaba con «The "no new privileges" flag is set» porque systemd activaba ese indicador en el servicio del panel y `sudo` no podía subir a root. En un contenedor, el servicio `admin-panel` (el único que usa `sudo`) ahora se instala sin las opciones de seguridad que lo activan. En una VM no cambia nada.
+
 ## 2.1.5a — 2026-11-02
 
 - **Fix:** Admin Panel, subir respaldo: el selector de archivos solo dejaba elegir `.gz` y los respaldos descargados del panel salen cifrados (`.gpg`), así que no se podía importar un respaldo de otro LabTower sin cambiar a «Todos los archivos». Ahora acepta también `.gpg`.

@@ -357,6 +357,26 @@ Environment=LABTOWER_MODULE=${datadir}"
         auth_run=""
         after="After=network.target admin-panel.service"
     fi
+    # ES: Estas opciones de systemd instalan filtros de seguridad que en un contenedor (CT/LXC sin privilegios) activan «no new privileges»
+    #     y entonces «sudo» deja de funcionar. Solo el panel de administración usa «sudo» (restaurar respaldos): en un contenedor se omiten ahí.
+    # EN: These systemd options install security filters that, in a container (unprivileged CT/LXC), switch on "no new privileges" and then
+    #     "sudo" stops working. Only the admin panel uses "sudo" (restoring backups): inside a container they are left out for it.
+    if [ "$name" = "admin-panel" ] && systemd-detect-virt --container --quiet 2>/dev/null; then
+        seccomp=""
+        echo "  container detected: ${name} runs without the seccomp-based options (sudo needs them off)"
+    else
+        seccomp="ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK"
+    fi
     cat > "/etc/systemd/system/${name}.service" <<EOF
 [Unit]
 Description=LabTower — ${desc}
@@ -382,18 +402,8 @@ SyslogIdentifier=${name}
 UMask=0077
 PrivateTmp=true
 ProtectHome=true
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectKernelLogs=true
 ProtectControlGroups=true
-ProtectClock=true
-ProtectHostname=true
-RestrictRealtime=true
-RestrictSUIDSGID=true
-RestrictNamespaces=true
-LockPersonality=true
-SystemCallArchitectures=native
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+${seccomp}
 ${extra}
 
 [Install]
