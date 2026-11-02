@@ -907,7 +907,6 @@ function fmtUptime(s){s=Number(s);if(!s)return'—';const d=Math.floor(s/86400),
 // EN: Escape HTML before inserting text from users, devices or the network into the page: prevents code injection (XSS).
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 // Valor seguro dentro de un handler on*="…": literal JS entre comillas, escapado también para HTML.
-function jsa(s){return esc(JSON.stringify(String(s)));}
 // Lista de argumentos para data-on-*-args="…" (JSON escapado para HTML).
 function jsargs(a){return esc(JSON.stringify(a));}
 function updateClock(){const el=document.getElementById('clock');if(el)el.textContent=PCT.time(new Date(),true);}

@@ -406,7 +406,8 @@ cmd_backup() {
     if [[ "$rel" == *.db ]]; then
       # ES: La instantánea SQLite la toma el usuario del servicio (no root): root solo recoge el resultado sin seguir enlaces.
       # ES: La toma el DUEÑO del archivo (su módulo) y la deja en su propia carpeta; root solo la recoge sin seguir enlaces.
-      local snap="$(dirname -- "$src")/.snap.$$.db" owner
+      local snap owner
+      snap="$(dirname -- "$src")/.snap.$$.db"
       owner=$(owner_of "$src") || { err "$rel — unknown owner"; continue; }
       if as_owner "$owner" python3 -I -c 'import sqlite3, sys
 s = sqlite3.connect("file:%s?mode=ro" % sys.argv[1], uri=True)
@@ -506,7 +507,7 @@ check_archive() {
   else warn "data/users.json not in backup: current users will be kept"; fi
   for entry in "${CONF_FILES[@]}"; do
     rel="${entry%%|*}"
-    [ -f "$dir/$rel" ] && ok "$rel" || warn "$rel — not in backup"
+    if [ -f "$dir/$rel" ]; then ok "$rel"; else warn "$rel — not in backup"; fi
   done
   [ "$ERRORS" -eq 0 ]
 }
@@ -568,6 +569,7 @@ install_file() {  # src dst mode owner:group
   local src="$1" dst="$2" mode="$3" owner="$4" tmpf
   mkdir -p "$(dirname "$dst")" || return 1
   tmpf="$dst.teleporter.$$"
+  # shellcheck disable=SC2015  # either command failing must clean up and return
   cp -- "$src" "$tmpf" && chmod "$mode" "$tmpf" || { rm -f "$tmpf"; return 1; }
   [ "$SKIP_SYSTEM" = "1" ] || chown "$owner" "$tmpf" 2>/dev/null || true
   mv -f -- "$tmpf" "$dst"          # atomic replace; also replaces a stray symlink
@@ -577,6 +579,7 @@ install_file() {  # src dst mode owner:group
 #     · 4) detener servicios · 5) restaurar datos (borrando restos -wal/-shm de SQLite) · 6) recrear los enlaces de auth
 #     · 7) configuración del sistema (NUT y nginx solo si se pidió con --nut / --nginx; nginx se prueba con «nginx -t» y, si falla, vuelve la anterior)
 #     · 8) permisos · 9) arrancar servicios. Termina con «RESULT: ok|errors|failed», que el panel lee en restore.log.
+# shellcheck disable=SC2030,SC2031  # the safety snapshot runs in a subshell on purpose: its ERRORS must not change this restore's count
 cmd_restore() {
   need_root restore "$@"; need_tools
   local archive="" assume_yes=0 with_nut=0 with_nginx=0 rm_source=0 a
@@ -612,7 +615,8 @@ cmd_restore() {
 
   hdr "Safety snapshot of the current state"
   mkdir -p "$SAFETY_DIR" && chmod 700 "$SAFETY_DIR"
-  local snap="$SAFETY_DIR/pre-restore-$(date +%Y%m%d_%H%M%S).tar.gz"
+  local snap
+  snap="$SAFETY_DIR/pre-restore-$(date +%Y%m%d_%H%M%S).tar.gz"
   # ES: En un subshell: cmd_backup limpia SUS carpetas al salir y no debe tocar la carpeta de trabajo de esta restauración (WORKROOT/TMP).
   # EN: In a subshell: cmd_backup cleans up ITS folders on exit and must not touch this restore's work folder (WORKROOT/TMP).
   if ( ERRORS=0; WORKROOT=""; STAGE=""; cmd_backup "$snap" >/dev/null 2>&1 ); then ok "saved to $snap"
@@ -621,7 +625,9 @@ cmd_restore() {
   hdr "Stopping services"
   if [ "$SKIP_SYSTEM" != "1" ]; then
     local s; SERVICES_STOPPED=1
-    for s in $SERVICES; do systemctl stop "$s" 2>/dev/null && ok "$s stopped" || warn "$s was not running"; done
+    for s in $SERVICES; do
+      if systemctl stop "$s" 2>/dev/null; then ok "$s stopped"; else warn "$s was not running"; fi
+    done
   fi
 
   hdr "Restoring data"
@@ -633,6 +639,7 @@ cmd_restore() {
   if [ -f "$TMP/$OLD_METRICS" ]; then
     if as_service python3 -I "$PI_HOME/auth/migrate_layout.py" split-metrics "$TMP/$OLD_METRICS" "$TMP/data/.split" >/dev/null 2>&1; then
       for m in $METRICS_MODULES; do
+        # shellcheck disable=SC2016  # the $1/$2 belong to the inner sh, which receives them as arguments
         [ -f "$TMP/data/$m/metrics.db" ] || as_service sh -c 'mkdir -p "$1/data/$2" && [ -f "$1/data/.split/$2.db" ] && mv "$1/data/.split/$2.db" "$1/data/$2/metrics.db"' sh "$TMP" "$m" 2>/dev/null || true
       done
       ok "$OLD_METRICS split per module"
@@ -676,11 +683,11 @@ cmd_restore() {
         if [ "$with_nut" -ne 1 ]; then warn "$dst — kept (NUT config is only restored with --nut)"; continue; fi
         if [ ! -d "$NUT_DIR" ]; then warn "$NUT_DIR does not exist (is 'nut' installed?) — skipped"; continue; fi
         mode=640; grp=root; getent group nut >/dev/null 2>&1 && grp=nut
-        install_file "$src" "$dst" "$mode" "root:$grp" && ok "$dst" || err "$dst — could not be restored";;
+        if install_file "$src" "$dst" "$mode" "root:$grp"; then ok "$dst"; else err "$dst — could not be restored"; fi;;
       conf/nginx/*)
         if [ "$with_nginx" -ne 1 ]; then warn "$dst — kept (the package ships its own; use --nginx to overwrite)"; continue; fi
         [ -f "$dst" ] && { nginx_bak="$TMP/nginx.prev"; cp -- "$dst" "$nginx_bak"; }
-        install_file "$src" "$dst" 644 "root:root" && ok "$dst" || err "$dst — could not be restored";;
+        if install_file "$src" "$dst" 644 "root:root"; then ok "$dst"; else err "$dst — could not be restored"; fi;;
     esac
   done
   if [ "$SKIP_SYSTEM" != "1" ] && [ -f "$NGINX_CONF" ]; then
@@ -743,7 +750,8 @@ spool_prune() {  # keep the newest 5 backups, drop uploads older than a day (nev
 cmd_gui_backup() {
   need_root gui-backup "$@"; need_tools; take_lock
   spool_init
-  local name="labtower-$(hostname -s | tr -c 'A-Za-z0-9.\n-' '_')-$(date +%Y%m%d_%H%M%S).tar.gz"
+  local name
+  name="labtower-$(hostname -s | tr -c 'A-Za-z0-9.\n-' '_')-$(date +%Y%m%d_%H%M%S).tar.gz"
   [[ "$name" =~ $NAME_RE ]] || die "could not build a valid backup name"
   # ES: Se arma en una carpeta de root y luego se entrega al panel sin seguir enlaces (la carpeta del panel la controla un servicio).
   local o; o=$(owner_of "$SPOOL_DIR")

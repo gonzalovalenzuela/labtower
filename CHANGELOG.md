@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.4q — 2026-11-02
+
+- **Limpieza de código:** los scripts de respaldo, HTTPS e instalación quedan sin avisos de `shellcheck` (variables declaradas por separado, `if/else` en vez de `&&`/`||` encadenados, búsqueda de respaldos con `find`, y protección extra para que una variable vacía nunca borre `/etc`). Se quitó código que ya no se usaba (funciones sueltas de Python y de las páginas). No cambia ningún comportamiento.
+
 ## 2.1.4p — 2026-11-02
 
 - **Net Monitor, seguridad:** los nombres de equipos que vienen de Pi-hole o del DNS se limpian de caracteres de control y se limitan a 80 caracteres antes de guardarlos. La consulta directa al DNS de Pi-hole aplica la misma regla anti-SSRF que la API de Pi-hole (no consulta este mismo equipo ni direcciones link-local).

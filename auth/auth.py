@@ -100,13 +100,6 @@ def module_dir(name: str) -> Path:
     """Data folder of a module. Only computes the path: nothing is created (so importing a module has no side effects)."""
     return DATA_ROOT / name
 
-def module_data(name: str) -> Path:
-    """Writable data folder of a module (created on demand)."""
-    d = module_dir(name)
-    try: d.mkdir(parents=True, exist_ok=True)
-    except OSError as e: log.warning(f"cannot create {d}: {e}")
-    return d
-
 # Prepara la carpeta de datos de un módulo al arrancar (no al importarlo): la crea y adopta los archivos antiguos.
 # EN: Prepare a module's data folder at startup (not at import): create it and adopt the old files.
 def prepare_module(data_dir, old_dir, names):

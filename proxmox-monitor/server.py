@@ -187,9 +187,6 @@ class PVEClient:
     def nodes(self) -> list:
         return self.get("/nodes").get("data", [])
 
-    def node_status(self, node: str) -> dict:
-        return self.get(f"/nodes/{node}/status").get("data", {})
-
     def vms(self, node: str) -> list:
         return self.get(f"/nodes/{node}/qemu").get("data", [])
 

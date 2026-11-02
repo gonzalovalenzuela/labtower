@@ -433,7 +433,7 @@ class WanState:
 
 S = WanState()
 
-def _db(sql, args=(), many=False, fetch=False):
+def _db(sql, args=(), fetch=False):
     c = auth.metrics_conn()
     try:
         cur = c.execute(sql, args); rows = cur.fetchall() if fetch else None; c.commit(); return rows
@@ -639,7 +639,7 @@ def check_ip(cfg):
             except Exception as e: log.warning(f"could not store the state: {e}")
             if old: auth.record_event("wan", "warn", f"Public IP changed from {old} to {ip}", "wan_ipc", ip=ip, prev=old)
 
-def start_speedtest(by_schedule=False):
+def start_speedtest():
     cfg = load_config()
     with S.lock:
         if S.speed_running: return False
@@ -667,7 +667,7 @@ def speed_scheduler():
         _stop.wait(60)
         try:
             cfg = load_config(); nxt = next_speedtest(cfg)
-            if nxt and time.time() >= nxt and S.last and S.last["up"] and not S.speed_running: start_speedtest(True)
+            if nxt and time.time() >= nxt and S.last and S.last["up"] and not S.speed_running: start_speedtest()
         except Exception as e: log.error(f"scheduler: {e}")
 
 def _pruner():

@@ -590,7 +590,6 @@ function closeModals(){document.querySelectorAll('.overlay').forEach(o=>o.classL
 // EN: Escape HTML before inserting text from users, devices or the network into the page: prevents code injection (XSS).
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 // Valor seguro dentro de un handler on*="…": literal JS entre comillas, escapado también para HTML.
-function jsa(s){return esc(JSON.stringify(String(s)));}
 // Lista de argumentos para data-on-*-args="…" (JSON escapado para HTML).
 function jsargs(a){return esc(JSON.stringify(a));}
 function relTime(ts){const d=Math.floor((Date.now()-ts)/1000);if(d<60)return t('ago',d+'s');if(d<3600)return t('ago',Math.floor(d/60)+'m');if(d<86400)return t('ago',Math.floor(d/3600)+'h');return new Date(ts).toLocaleDateString((_lang==='es'?'es-CL':'en-GB'),{day:'2-digit',month:'2-digit'});}

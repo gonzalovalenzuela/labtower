@@ -99,13 +99,14 @@ server {
 }
 CONF
   if [ "$redirect" = 1 ]; then
+    # shellcheck disable=SC2016  # $host and $request_uri are nginx variables, they must stay literal
     printf '# Generado por labtower-https\nreturn 301 https://$host$request_uri;\n' > "$HTTP_EXTRA_D/redirect.conf"
   else rm -f "$HTTP_EXTRA_D/redirect.conf"; fi
   if ! nginx_apply; then
     rm -f "$HTTPS_D/443.conf" "$HTTP_EXTRA_D/redirect.conf"; nginx_apply || true
     die "nginx rejected the configuration — HTTPS was not enabled"
   fi
-  [ "$redirect" = 1 ] && set_cookie_secure on || set_cookie_secure off
+  if [ "$redirect" = 1 ]; then set_cookie_secure on; else set_cookie_secure off; fi
   echo "HTTPS enabled: https://$name/  ($([ "$redirect" = 1 ] && echo "port 80 redirects to HTTPS, Secure cookies + HSTS" || echo "port 80 still serves HTTP"))"
 }
 

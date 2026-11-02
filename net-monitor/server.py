@@ -124,15 +124,6 @@ PORT_NAMES = {
 # EN: OS groups the page offers for filtering and editing.
 OS_GROUPS = ["Windows", "Linux", "macOS", "iOS", "IoT", "Android", "BSD", "Desconocido"]
 
-# ─── TTL → OS hint ────────────────────────────────────────────────────────────
-# El TTL inicial del ping delata la familia del SO: 64 Linux/Apple/Android, 128 Windows, 255 equipos de red.
-# EN: The initial ping TTL reveals the OS family: 64 Linux/Apple/Android, 128 Windows, 255 network equipment.
-def ttl_os_hint(ttl: int) -> str:
-    if ttl <= 0:   return ""
-    if ttl <= 64:  return "linux_or_apple"   # Linux / macOS / iOS / Android
-    if ttl <= 128: return "windows"           # Windows
-    return "network_device"                   # routers, IoT
-
 # ─── Ping con TTL ─────────────────────────────────────────────────────────────
 # Un ping con tiempo límite: devuelve (responde, TTL, latencia en ms). Se usa el comando del sistema porque enviar ICMP directo requiere root.
 # EN: One ping with a timeout: returns (alive, TTL, latency in ms). The system command is used because sending ICMP directly requires root.
@@ -445,18 +436,6 @@ def resolve_name(ip: str) -> str:
         n = _clean_name(ptr_query(srv, ip))
         if n: return n
     return _clean_name(resolve_dns(ip))
-
-# ─── mDNS hint (sin librería externa) ────────────────────────────────────────
-# Pista barata de que el nombre corresponde a un equipo Apple.
-# EN: Cheap hint that the name belongs to an Apple device.
-def mdns_hint(hostname: str) -> str:
-    """Si el hostname termina en .local y tiene sufijo típico de Apple."""
-    if not hostname:
-        return ""
-    h = hostname.lower()
-    if any(s in h for s in ["iphone", "ipad", "macbook", "imac", "apple"]):
-        return "apple"
-    return ""
 
 # ─── SNMP: ARP table from a switch/router (MAC for hosts the server cannot see) ───
 import shutil, tempfile

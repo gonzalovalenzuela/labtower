@@ -625,7 +625,6 @@ window.addEventListener('resize',()=>{const id=chartOwner();if(id!=null)drawChar
 
 // ── Utilidades ───────────────────────────────────────────────────────────────
 function fmtNum(n){if(n==null||!isFinite(Number(n)))return '—';return Number(n).toLocaleString(_lang==='es'?'es-CL':'en-GB');}
-function fmtBps(v){if(v==null||!isFinite(Number(v)))return'—';v=Number(v);const u=['bit/s','Kb/s','Mb/s','Gb/s'];let i=0;while(v>=1000&&i<u.length-1){v/=1000;i++;}return v.toFixed(i>0?1:0)+' '+u[i];}
 function fmtDur(s){s=Math.max(0,Math.round(Number(s)||0));const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);if(d>0)return d+'d '+h+'h';if(h>0)return h+'h '+m+'m';if(m>0)return m+'m '+(s%60)+'s';return s+'s';}
 function fmtDate(ts){const d=new Date(ts*1000);return d.toLocaleDateString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit'})+' '+PCT.time(d);}
 // Escapa HTML antes de insertar texto de la red o de usuarios en la página: evita inyección de código (XSS).
