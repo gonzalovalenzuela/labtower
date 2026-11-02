@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.5c — 2026-11-02
+
+- **Mejora:** NAS Monitor: los umbrales de espacio de los volúmenes ahora se configuran por NAS (Editar NAS → «Aviso de volumen» y «Crítico de volumen», por defecto 90 % / 95 %). Antes las alertas usaban 90/95 pero los colores de la página NAS y del Resumen usaban 80/90 fijos, y un volumen al 84 % salía en naranja/rojo sin alerta. Ahora todo usa los mismos valores.
+- **Quitado:** Resumen: se elimina la tarjeta «Monitores sugeridos» (generaba demasiados falsos positivos).
+
 ## 2.1.5b — 2026-11-02
 
 - **Fix:** Instalación en un contenedor (CT de Proxmox): restaurar un respaldo desde el Admin Panel fallaba con «The "no new privileges" flag is set» porque systemd activaba ese indicador en el servicio del panel y `sudo` no podía subir a root. En un contenedor, el servicio `admin-panel` (el único que usa `sudo`) ahora se instala sin las opciones de seguridad que lo activan. En una VM no cambia nada.
