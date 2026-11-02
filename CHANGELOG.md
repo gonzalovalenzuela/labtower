@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.4j — 2026-11-02
+
+- **Net Monitor:** los nombres de Pi-hole ahora incluyen los registros de «Local DNS» y las concesiones DHCP, y tienen prioridad sobre el nombre deducido por DNS inverso. Antes solo se usaba la lista de dispositivos de red de Pi-hole, y por eso no aparecían los nombres recién configurados.
+- **Net Monitor:** los nombres de Pi-hole se actualizan cada 5 minutos (antes 30) y al empezar cada escaneo. Si Pi-hole no responde, se conservan los nombres que ya había en vez de borrarlos.
+
 ## 2.1.4i — 2026-11-02
 
 - **Resumen:** nueva tarjeta «Monitores sugeridos». Si Net Monitor ve un equipo en línea con puertos típicos de un servicio que LabTower puede monitorear (Proxmox, servidor UPS, Pi-hole o AdGuard Home, Synology) y todavía no está configurado, lo sugiere con un enlace al módulo. Solo la ven los administradores de ese módulo y se puede descartar cada sugerencia.

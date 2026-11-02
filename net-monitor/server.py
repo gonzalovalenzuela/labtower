@@ -258,10 +258,51 @@ def _pihole_logout(host: str, sid: str):
 # EN: Valid MAC in aa:bb:cc:dd:ee:ff format.
 MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
 
+# Nombres que el administrador definió en Pi-hole: «Local DNS» (líneas «IP nombre [alias…]») y concesiones DHCP. Ganan sobre el nombre que Pi-hole
+# dedujo por DNS inverso, porque alguien los escribió a propósito.
+# EN: Names the administrator defined in Pi-hole: "Local DNS" (lines "IP name [alias…]") and DHCP leases. They win over the name Pi-hole deduced by
+#     reverse DNS because someone wrote them on purpose.
+def _clean_name(n) -> str:
+    n = re.sub(r"[\x00-\x1f\x7f]", "", str(n or "")).strip()
+    return re.sub(r"(\.local)?\.?$", "", n)[:80] if n not in ("", "*") else ""
+
+def pihole_parse_local_hosts(lines) -> dict:
+    out = {}
+    for l in lines if isinstance(lines, list) else []:
+        if not isinstance(l, str): continue
+        parts = l.split("#", 1)[0].split()
+        if len(parts) < 2: continue
+        try: ip = str(ipaddress.ip_address(parts[0]))
+        except ValueError: continue
+        name = _clean_name(parts[1])
+        if name and ip not in out: out[ip] = name
+    return out
+
+def pihole_parse_leases(leases) -> dict:
+    out = {}
+    for x in leases if isinstance(leases, list) else []:
+        if not isinstance(x, dict): continue
+        try: ip = str(ipaddress.ip_address(str(x.get("ip") or "")))
+        except ValueError: continue
+        name = _clean_name(x.get("name"))
+        mac = x.get("hwaddr") if isinstance(x.get("hwaddr"), str) and MAC_RE.match(x.get("hwaddr")) else ""
+        if name or mac: out[ip] = {"hostname": name, "mac": mac}
+    return out
+
+PIHOLE_TTL = 300             # s: how long the names are kept before they are fetched again
+
 # Descarga de Pi-hole los dispositivos conocidos (nombre, fabricante, MAC por IP). Usa el primer Pi-hole que responda.
 # EN: Download the known devices from Pi-hole (name, vendor, MAC per IP). Uses the first Pi-hole that answers.
+_pihole_busy = threading.Lock()      # one refresh at a time (every scan worker may ask for it)
+
 def refresh_pihole_cache():
     """Obtiene hostname+vendor+MAC de Pi-hole y llena _pihole_cache."""
+    if not _pihole_busy.acquire(blocking=False):
+        return
+    try: _refresh_pihole_cache()
+    finally: _pihole_busy.release()
+
+def _refresh_pihole_cache():
     global _pihole_ts
     password = PIHOLE_PASS
     if not password:
@@ -269,6 +310,7 @@ def refresh_pihole_cache():
 
     hosts_list = [h.strip() for h in PIHOLE_HOSTS.split(",") if h.strip()]
     new_cache: dict = {}
+    answered = False
 
     for host in hosts_list:
         sid = _pihole_login(host, password)
@@ -276,6 +318,7 @@ def refresh_pihole_cache():
             continue
         try:
             data = _pihole_request(host, "/api/network/devices", sid=sid)
+            answered = True
             devices = data.get("devices", [])
             for dev in devices:
                 mac    = dev.get("hwaddr", "") or ""
@@ -291,6 +334,21 @@ def refresh_pihole_cache():
                             "vendor":   vendor or (oui_vendor(mac) if mac else ""),
                             "mac":      mac,
                         }
+            # DHCP leases and Local DNS records (optional: an app password without access to them just skips these two)
+            try:
+                for ip, x in pihole_parse_leases(_pihole_request(host, "/api/dhcp/leases", sid=sid).get("leases")).items():
+                    e = new_cache.setdefault(ip, {"hostname": "", "vendor": "", "mac": ""})
+                    if x["hostname"]: e["hostname"] = x["hostname"]
+                    if x["mac"] and not e["mac"]:
+                        e["mac"] = x["mac"]; e["vendor"] = e["vendor"] or oui_vendor(x["mac"])
+            except Exception as e:
+                log.debug(f"Pi-hole dhcp/leases {host}: {e}")
+            try:
+                lh = _pihole_request(host, "/api/config/dns/hosts", sid=sid)
+                for ip, name in pihole_parse_local_hosts(((lh.get("config") or {}).get("dns") or {}).get("hosts")).items():
+                    new_cache.setdefault(ip, {"hostname": "", "vendor": "", "mac": ""})["hostname"] = name
+            except Exception as e:
+                log.debug(f"Pi-hole config/dns/hosts {host}: {e}")
             log.info(f"Pi-hole cache: {len(new_cache)} entries from {host}")
             break  # Usar solo el primero que responda
         except Exception as e:
@@ -299,16 +357,21 @@ def refresh_pihole_cache():
             _pihole_logout(host, sid)
 
     with _pihole_lock:
+        if not answered and _pihole_cache:
+            # ES: Pi-hole no respondió: se conservan los nombres que ya había y se reintenta en 1 minuto.
+            # EN: Pi-hole did not answer: the names already known are kept and it is retried in 1 minute.
+            _pihole_ts = time.time() - PIHOLE_TTL + 60
+            return
         _pihole_cache.clear()
         _pihole_cache.update(new_cache)
         _pihole_ts = time.time()
 
-# Datos de una IP desde la caché; si tiene más de 30 minutos, la refresca en segundo plano sin bloquear.
-# EN: Data of an IP from the cache; if it is older than 30 minutes, it is refreshed in the background without blocking.
+# Datos de una IP desde la caché; si tiene más de 5 minutos, la refresca en segundo plano sin bloquear.
+# EN: Data of an IP from the cache; if it is older than 5 minutes, it is refreshed in the background without blocking.
 def pihole_lookup(ip: str) -> dict:
     """Retorna {hostname, vendor, mac} desde cache de Pi-hole."""
     # Refrescar cache si tiene más de 30 minutos
-    if time.time() - _pihole_ts > 1800 and PIHOLE_PASS:
+    if time.time() - _pihole_ts > PIHOLE_TTL and PIHOLE_PASS:
         threading.Thread(target=refresh_pihole_cache, daemon=True).start()
     with _pihole_lock:
         return _pihole_cache.get(ip, {})
@@ -1076,6 +1139,9 @@ def run_scan(network: str = None, single_ip: str = None):
             hosts = load_hosts()
             _live_hosts = hosts
         refresh_snmp()
+        if PIHOLE_PASS and time.time() - _pihole_ts > 60:        # names changed in Pi-hole show up in this very scan
+            try: refresh_pihole_cache()
+            except Exception as e: log.debug(f"Pi-hole refresh: {e}")
         oui_maybe_update()
     except Exception as e:
         log.error(f"Scan setup failed: {e}")
