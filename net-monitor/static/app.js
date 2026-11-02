@@ -16,7 +16,7 @@ const LANG={
     noHosts:'No hosts found',searchPlaceholder:'IP, hostname, OS, port...',
     piholeIntegration:'Pi-hole Integration',piholeDesc:'Pi-hole v6 API for name resolution and MAC vendor. Credentials are stored on the server.',
     piholeHosts:'Pi-hole hosts (comma separated)',piholePass:'Pi-hole admin password',
-    piholeConnected:'Connected',piholeConnecting:'Connecting…',piholeNeedHost:'Enter at least one host',
+    piholeConnected:'Connected',piholeDiag:'Devices {d} · DHCP leases {l} · Local DNS {n}',piholeErrLocal:'Local DNS not readable ({e}). In Pi-hole use the web password, or enable the app password option “webserver.api.app_sudo”.',piholeErrLeases:'DHCP leases not readable ({e}).',piholeErrLogin:'Could not log in ({e}).',piholeConnecting:'Connecting…',piholeNeedHost:'Enter at least one host',
     piholeSuccess:'Saved — syncing names…',piholeToast:'Pi-hole connected — names will appear on next scan',
     purgeLbl:'Remove offline after:',purgeDays:'days',purgeTip:'0 = never remove',purgeSaved:(d,n)=>d?`Offline devices are removed after ${d} days (${n} removed now)`:'Offline devices are kept',
     intervalNegative:'Interval cannot be negative',intervalMin:'Minimum 60 seconds (or 0 for manual)',
@@ -48,7 +48,7 @@ const LANG={
     noHosts:'Sin hosts encontrados',searchPlaceholder:'IP, hostname, OS, puerto...',
     piholeIntegration:'Integración Pi-hole',piholeDesc:'Pi-hole v6 API para resolución de nombres y vendor MAC. Las credenciales se guardan en el servidor.',
     piholeHosts:'Hosts Pi-hole (separados por coma)',piholePass:'Password Pi-hole admin',
-    piholeConnected:'Conectado',piholeConnecting:'Conectando…',piholeNeedHost:'Ingresa al menos un host',
+    piholeConnected:'Conectado',piholeDiag:'Dispositivos {d} · Concesiones DHCP {l} · DNS local {n}',piholeErrLocal:'No se pudo leer el DNS local ({e}). En Pi-hole usa la contraseña de la web, o activa la opción «webserver.api.app_sudo» para la contraseña de aplicación.',piholeErrLeases:'No se pudieron leer las concesiones DHCP ({e}).',piholeErrLogin:'No se pudo iniciar sesión ({e}).',piholeConnecting:'Conectando…',piholeNeedHost:'Ingresa al menos un host',
     piholeSuccess:'Guardado — sincronizando nombres…',piholeToast:'Pi-hole conectado — los nombres aparecerán en el próximo escaneo',
     purgeLbl:'Quitar sin conexión tras:',purgeDays:'días',purgeTip:'0 = no quitar nunca',purgeSaved:(d,n)=>d?`Los equipos sin conexión se quitan tras ${d} días (${n} quitados ahora)`:'Los equipos sin conexión se conservan',
     intervalNegative:'El intervalo no puede ser negativo',intervalMin:'Mínimo 60 segundos (o 0 para manual)',
@@ -896,7 +896,13 @@ async function loadPiholeConfig(){
       const ts=d.pihole_cache_ts?PCT.time(new Date(d.pihole_cache_ts*1000),true):'—';
       st.style.display='block';st.style.background='var(--teal-dim)';st.style.color='var(--teal)';
       st.style.border='1px solid rgba(20,184,166,.2)';
-      st.textContent=`✓ ${t('piholeConnected')||'Connected'} — ${d.pihole_entries} hosts | ${ts}`;
+      const g=d.pihole_diag||{},er=g.errors||{},dash=v=>v==null?'—':v;
+      let txt=`${er.login?'⚠':'✓'} ${t('piholeConnected')||'Connected'} — ${d.pihole_entries} hosts | ${ts}`;
+      if(g.ts){txt+='\n'+t('piholeDiag').replace('{d}',dash(g.devices)).replace('{l}',dash(g.leases)).replace('{n}',dash(g.local));
+        if(er.login)txt+='\n⚠ '+t('piholeErrLogin').replace('{e}',er.login);
+        if(er.local)txt+='\n⚠ '+t('piholeErrLocal').replace('{e}',er.local);
+        if(er.leases)txt+='\n⚠ '+t('piholeErrLeases').replace('{e}',er.leases)}
+      st.style.whiteSpace='pre-line';st.textContent=txt;
     }else{st.style.display='none';}
   }catch(e){}
 }

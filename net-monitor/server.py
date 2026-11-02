@@ -104,6 +104,7 @@ PIHOLE_PASS   = os.environ.get("PIHOLE_PASS",   "")
 _pihole_cache: dict = {}   # { ip: {hostname, vendor, mac} }
 _pihole_lock  = threading.Lock()
 _pihole_ts    = 0          # timestamp of last successful fetch
+_pihole_diag: dict = {}    # what the last refresh got from each Pi-hole endpoint (shown in the panel so a missing name can be traced)
 
 # Nombre del servicio típico de cada puerto, para mostrarlo en la página.
 # EN: Typical service name for each port, to show on the page.
@@ -234,6 +235,7 @@ def _pihole_request(host: str, path: str, method: str = "GET",
 
 # Abre sesión en Pi-hole y devuelve el identificador de sesión (o None).
 # EN: Log in to Pi-hole and return the session id (or None).
+_pihole_last_err: dict = {}
 def _pihole_login(host: str, password: str) -> str | None:
     try:
         d = _pihole_request(host, "/api/auth", "POST",
@@ -244,6 +246,7 @@ def _pihole_login(host: str, password: str) -> str | None:
         return sid
     except Exception as e:
         log.warning(f"Pi-hole login error {host}: {e}")
+        _pihole_last_err[host] = str(e)[:80]
         return None
 
 # Cierra la sesión de Pi-hole para no dejar sesiones colgadas.
@@ -311,11 +314,15 @@ def _refresh_pihole_cache():
     hosts_list = [h.strip() for h in PIHOLE_HOSTS.split(",") if h.strip()]
     new_cache: dict = {}
     answered = False
+    diag = {"ts": int(time.time()), "host": "", "login": False, "devices": None, "leases": None, "local": None, "errors": {}}
 
     for host in hosts_list:
+        diag["host"] = host
         sid = _pihole_login(host, password)
         if not sid:
+            diag["errors"]["login"] = _pihole_last_err.get(host, "login failed")
             continue
+        diag["login"] = True
         try:
             data = _pihole_request(host, "/api/network/devices", sid=sid)
             answered = True
@@ -334,21 +341,24 @@ def _refresh_pihole_cache():
                             "vendor":   vendor or (oui_vendor(mac) if mac else ""),
                             "mac":      mac,
                         }
+            diag["devices"] = len(new_cache)
             # DHCP leases and Local DNS records (optional: an app password without access to them just skips these two)
             try:
-                for ip, x in pihole_parse_leases(_pihole_request(host, "/api/dhcp/leases", sid=sid).get("leases")).items():
+                lz = pihole_parse_leases(_pihole_request(host, "/api/dhcp/leases", sid=sid).get("leases")); diag["leases"] = len(lz)
+                for ip, x in lz.items():
                     e = new_cache.setdefault(ip, {"hostname": "", "vendor": "", "mac": ""})
                     if x["hostname"]: e["hostname"] = x["hostname"]
                     if x["mac"] and not e["mac"]:
                         e["mac"] = x["mac"]; e["vendor"] = e["vendor"] or oui_vendor(x["mac"])
             except Exception as e:
-                log.debug(f"Pi-hole dhcp/leases {host}: {e}")
+                diag["errors"]["leases"] = str(e)[:80]; log.info(f"Pi-hole dhcp/leases {host}: {e}")
             try:
                 lh = _pihole_request(host, "/api/config/dns/hosts", sid=sid)
-                for ip, name in pihole_parse_local_hosts(((lh.get("config") or {}).get("dns") or {}).get("hosts")).items():
+                lhz = pihole_parse_local_hosts(((lh.get("config") or {}).get("dns") or {}).get("hosts")); diag["local"] = len(lhz)
+                for ip, name in lhz.items():
                     new_cache.setdefault(ip, {"hostname": "", "vendor": "", "mac": ""})["hostname"] = name
             except Exception as e:
-                log.debug(f"Pi-hole config/dns/hosts {host}: {e}")
+                diag["errors"]["local"] = str(e)[:80]; log.info(f"Pi-hole config/dns/hosts {host}: {e}")
             log.info(f"Pi-hole cache: {len(new_cache)} entries from {host}")
             break  # Usar solo el primero que responda
         except Exception as e:
@@ -356,6 +366,7 @@ def _refresh_pihole_cache():
         finally:
             _pihole_logout(host, sid)
 
+    _pihole_diag.clear(); _pihole_diag.update(diag)
     with _pihole_lock:
         if not answered and _pihole_cache:
             # ES: Pi-hole no respondió: se conservan los nombres que ya había y se reintenta en 1 minuto.
@@ -1439,6 +1450,7 @@ class H(BaseHTTPRequestHandler):
                 "pihole_enabled":  bool(PIHOLE_PASS or cfg.get("pihole_pass")),
                 "pihole_cache_ts": _pihole_ts,
                 "pihole_entries":  len(_pihole_cache),
+                "pihole_diag":     dict(_pihole_diag),
             })
 
         # Ruta duplicada heredada: queda inalcanzable, se conserva para no cambiar el código.

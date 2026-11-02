@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.4m — 2026-11-02
+
+- **Net Monitor:** el panel de Pi-hole ahora muestra cuántos dispositivos, concesiones DHCP y registros de DNS local leyó la última vez, y avisa si alguno no se pudo leer (por ejemplo, el DNS local con una contraseña de aplicación sin permiso). Así se ve por qué un nombre no aparece.
+
 ## 2.1.4l — 2026-11-02
 
 - **Resumen:** nueva tarjeta «Reglas de alerta». Los administradores definen umbrales sobre las métricas del servidor, UPS, NAS, Proxmox, DNS e internet (por ejemplo, «temperatura del servidor > 65 °C» o «batería del UPS < 50 %»), como aviso o crítico. Las reglas que se cumplen aparecen en el panel de atención y en el estado general. Se evalúan mientras el Resumen está abierto; todos los usuarios ven los avisos de los módulos que pueden ver.

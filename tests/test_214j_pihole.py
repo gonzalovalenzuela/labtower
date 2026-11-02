@@ -42,6 +42,12 @@ class Refresh(unittest.TestCase):
         net._pihole_request = lambda h, p, method="GET", data=None, sid=None: orig(h, p, method, data, sid) if p == "/api/network/devices" else (_ for _ in ()).throw(RuntimeError("HTTP 403"))
         net.refresh_pihole_cache()
         self.assertEqual(net._pihole_cache["192.0.2.5"]["hostname"], "reverse-name")
+        g = net._pihole_diag                                  # 2.1.4m: the panel can say WHY the Local DNS names are missing
+        self.assertEqual((g["login"], g["leases"], g["local"]), (True, None, None))
+        self.assertIn("403", g["errors"]["local"]); self.assertIn("403", g["errors"]["leases"])
+    def test_diag_counts(self):
+        net.refresh_pihole_cache(); g = net._pihole_diag
+        self.assertEqual((g["devices"], g["leases"], g["local"], g["errors"]), (2, 2, 1, {}))
     def test_outage_keeps_known_names_and_retries_soon(self):
         net.refresh_pihole_cache(); self.assertTrue(net._pihole_cache)
         self.fail = True; net.refresh_pihole_cache()
