@@ -109,6 +109,11 @@ if [ "$DRY" != 1 ]; then
   [ "$ok" = 1 ] || die "the CT has no network or DNS (bridge, VLAN, IP?). Check with: pct enter $CTID"
 fi
 
+# En un CT sin privilegios, los servicios no pueden usar «ping» (Net Monitor y WAN Monitor) si el grupo no está en ping_group_range.
+# EN: In an unprivileged CT the services cannot use "ping" (Net Monitor and WAN Monitor) unless their group is in ping_group_range.
+say "Allowing ping for the LabTower services"
+run pct exec "$CTID" -- sh -c "echo 'net.ipv4.ping_group_range = 0 65534' > /etc/sysctl.d/99-labtower-ping.conf && sysctl -q -p /etc/sysctl.d/99-labtower-ping.conf" || die "could not set ping_group_range in the CT"
+
 say "Installing LabTower"
 run pct exec "$CTID" -- env DEBIAN_FRONTEND=noninteractive sh -c "apt-get update -qq && apt-get install -y -qq wget ca-certificates" || die "could not install wget"
 run pct exec "$CTID" -- sh -c "wget -q -O /tmp/labtower.deb '$URL'" || die "could not download $URL"

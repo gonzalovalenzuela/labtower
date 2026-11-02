@@ -53,6 +53,7 @@ apt install ./labtower_X.Y.Z_all.deb
 - **HTTPS:** `pct exec ID -- /usr/local/bin/labtower-https enable --redirect` (con la ruta completa, porque `pct exec` no incluye `/usr/local/bin` en el PATH).
 - **Actualizar:** dentro del CT, `apt install ./labtower_NUEVA_all.deb` con el `.deb` nuevo.
 - **Respaldo:** usa los respaldos de Proxmox (vzdump) del CT además del Teleporter de LabTower.
+- **Ping:** en un CT sin privilegios los servicios no pueden hacer ping (Net Monitor y WAN Monitor) hasta que el grupo `labtower` entre en `net.ipv4.ping_group_range`. El script lo configura solo (`/etc/sysctl.d/99-labtower-ping.conf` dentro del CT); si creas el CT desde la interfaz, ejecuta en el nodo: `pct exec ID -- sh -c 'echo "net.ipv4.ping_group_range = 0 65534" > /etc/sysctl.d/99-labtower-ping.conf && sysctl -q -p /etc/sysctl.d/99-labtower-ping.conf'`.
 - **Net Monitor:** el CT debe estar en el mismo bridge que tu LAN para ver las MAC de los equipos. Si el ping falla, revisa el firewall del CT y del bridge.
 - **UPS Monitor:** LabTower se conecta a tu servidor NUT por la red; no necesita acceso USB al CT.
 
@@ -77,4 +78,4 @@ The script downloads the Debian 12 template, creates the CT (2 cores, 1 GB RAM, 
 Create an unprivileged **debian-12-standard** CT (1 GB RAM, 2 cores, 8 GB disk) on your LAN bridge, enable **Nesting** and *Start at boot*, start it and install the `.deb` from the latest release with `apt install ./labtower_X.Y.Z_all.deb`. Then open `http://CT-IP/`.
 
 ### After installing
-Enable HTTPS with `pct exec ID -- /usr/local/bin/labtower-https enable --redirect`; update by installing the new `.deb` inside the CT; back the CT up with Proxmox (vzdump) as well as LabTower's Teleporter. Keep the CT on the same bridge as your LAN so Net Monitor can see MAC addresses.
+Enable HTTPS with `pct exec ID -- /usr/local/bin/labtower-https enable --redirect`; update by installing the new `.deb` inside the CT; back the CT up with Proxmox (vzdump) as well as LabTower's Teleporter. Keep the CT on the same bridge as your LAN so Net Monitor can see MAC addresses. In an unprivileged CT, allow ping for the services (the script does it): `echo 'net.ipv4.ping_group_range = 0 65534' > /etc/sysctl.d/99-labtower-ping.conf && sysctl -q -p /etc/sysctl.d/99-labtower-ping.conf` inside the CT.

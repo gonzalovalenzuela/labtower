@@ -21,6 +21,7 @@ class Ct(unittest.TestCase):
         self.assertIn("--onboot 1", out)
         self.assertIn("deb-builds/labtower_2.1.5_all.deb", out)
         self.assertIn("pct start 321", out)
+        self.assertIn("net.ipv4.ping_group_range = 0 65534", out)   # without it Net Monitor and WAN Monitor cannot ping in an unprivileged CT
 
     def test_defaults_use_dhcp(self):
         r = run("--dry-run", "--version", "2.1.5")
