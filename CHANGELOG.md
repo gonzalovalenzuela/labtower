@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.6a — 2026-11-02
+
+- **Nuevo:** el admin puede deshabilitar los módulos que no usa (Admin Panel → Módulos, o `sudo labtower-modules disable|enable <módulo>`). El módulo se detiene y desaparece de los menús, del inicio y del Resumen, no cuenta en la salud, y sigue apagado tras reinicios, actualizaciones y restauraciones de respaldo. Sus datos se conservan. Solo lo cambia quien administra todos los módulos; queda en la auditoría.
+
 ## 2.1.6 — 2026-11-02
 
 - **Nuevo:** VPN Monitor (`/vpn/`, puerto 8089): quién está conectado a Tailscale, OpenVPN y WireGuard, desde cuándo, con qué dirección y cuánto tráfico.

@@ -315,6 +315,18 @@ journalctl -u net-monitor -f        # logs of one service
 sudo systemctl restart net-monitor  # restart one
 ```
 
+### Disabling modules you do not use
+
+In **Admin Panel → Modules** (only for someone who administers every module) you can turn off the ones you do not need, for example the UPS Monitor if you have no UPS. A disabled module stops, disappears from the menus, the home page and the Overview, does not count in the system health and **stays off** after restarts, updates (`apt`) and backup restores. Its data is not deleted: enabling it brings everything back as it was. From the console:
+
+```bash
+sudo labtower-modules list              # state of every module
+sudo labtower-modules disable vpn       # turn off (wol nut net pve nas dns wan vpn)
+sudo labtower-modules enable vpn        # turn it back on
+```
+
+The state lives in `/etc/labtower/modules.disabled` (one module per line). The Admin Panel and the Overview cannot be turned off.
+
 ### Forgot the password
 
 From the machine's console, as root (no login needed):
@@ -438,7 +450,7 @@ On the server:
 | `/etc/labtower/` | `backup.conf`, backup key and passphrase, `tls/` |
 | `/var/backups/labtower/` | Copies made before updating, uninstalling or restoring |
 | `/var/log/labtower/` | SFTP backup status and restore log |
-| `/usr/local/bin/` | `teleporter`, `labtower-sftp-backup`, `labtower-https`, `labtower-health`, `labtower-resources`, `labtower-resetpw` |
+| `/usr/local/bin/` | `teleporter`, `labtower-sftp-backup`, `labtower-https`, `labtower-health`, `labtower-resources`, `labtower-resetpw`, `labtower-modules` |
 
 Each module is an independent Python HTTP server. All of them use `auth/auth.py` for users and sessions.
 

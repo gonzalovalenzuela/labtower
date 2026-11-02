@@ -362,7 +362,8 @@ class H(BaseHTTPRequestHandler):
         elif path == "/api/me":
             sess = auth.get_session(tok)
             self._json(200, {"username": sess["username"],
-                              "permissions": sess["permissions"]} if sess else {})
+                              "permissions": sess["permissions"],
+                      "disabled": auth.disabled_modules()} if sess else {})
         else:
             self._json(404, {"error": "Not found"})
 

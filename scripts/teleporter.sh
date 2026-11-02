@@ -543,11 +543,23 @@ print("  Package:  %s   teleporter %s" % (d.get("package_version", "?"), d.get("
 # ── RESTORE ───────────────────────────────────────────────────────────────────
 SERVICES_STOPPED=0
 # ES: RESTORE. Arranca los 5 servicios e informa cuál falla (con el comando para ver su log).
+# ¿El admin apagó este servicio (labtower-modules)? Entonces no se arranca tras restaurar.
+# EN: Did the administrator turn this service off (labtower-modules)? Then it is not started after a restore.
+service_is_off() {
+  local f="${LABTOWER_DISABLED_FILE:-/etc/labtower/modules.disabled}" m
+  [ -f "$f" ] || return 1
+  case "$1" in
+    wol-console) m=wol;; labtower-ups) m=nut;; net-monitor) m=net;; proxmox-monitor) m=pve;;
+    nas-monitor) m=nas;; dns-monitor) m=dns;; wan-monitor) m=wan;; vpn-monitor) m=vpn;; *) return 1;;
+  esac
+  grep -qx "$m" "$f"
+}
 start_services() {
   [ "$SKIP_SYSTEM" = "1" ] && return 0
   systemctl daemon-reload 2>/dev/null || true
   local s
   for s in $SERVICES; do
+    if service_is_off "$s"; then echo "  - $s left off (disabled by the administrator)"; continue; fi
     if systemctl start "$s" 2>/dev/null; then ok "$s started"
     else err "$s failed to start — journalctl -u $s -n 20"; fi
   done

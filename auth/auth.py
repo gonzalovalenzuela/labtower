@@ -1163,6 +1163,18 @@ def check_permission(token: str, resource: str, required: str) -> bool:
     if not s: return False
     return LEVELS.get(s["permissions"].get(resource, ""), 0) >= LEVELS.get(required, 999)
 
+# Módulos que el admin apagó (labtower-modules). El archivo tiene un id por línea; si no existe, no hay ninguno apagado.
+# EN: Modules the admin turned off (labtower-modules). The file has one id per line; if it is missing nothing is disabled.
+DISABLED_FILE = os.environ.get("LABTOWER_DISABLED_FILE", "/etc/labtower/modules.disabled")
+OPTIONAL_MODULES = ("wol", "nut", "net", "pve", "nas", "dns", "wan", "vpn")
+def disabled_modules() -> list:
+    try:
+        with open(DISABLED_FILE, encoding="utf-8") as f:
+            off = {l.strip() for l in f}
+        return [x for x in OPTIONAL_MODULES if x in off]
+    except OSError:
+        return []
+
 # Extrae el token de la cabecera «Authorization: Bearer …» o, si no está, de la cookie «session».
 # EN: Extract the token from the "Authorization: Bearer …" header or, if absent, from the "session" cookie.
 def token_from_request(headers, cookie_str="") -> str | None:

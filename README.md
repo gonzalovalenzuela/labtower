@@ -315,6 +315,18 @@ journalctl -u net-monitor -f        # logs de un servicio
 sudo systemctl restart net-monitor  # reiniciar uno
 ```
 
+### Deshabilitar módulos que no usas
+
+En **Admin Panel → Módulos** (solo para quien administra todos los módulos) puedes apagar los que no necesitas, por ejemplo el UPS Monitor si no tienes UPS. Un módulo deshabilitado se detiene, desaparece de los menús, del inicio y del Resumen, no cuenta en la salud del sistema y **sigue apagado** tras reinicios, actualizaciones (`apt`) y restauraciones de respaldo. Sus datos no se borran: al habilitarlo vuelve todo como estaba. Desde la consola:
+
+```bash
+sudo labtower-modules list              # estado de cada módulo
+sudo labtower-modules disable vpn       # apagar (wol nut net pve nas dns wan vpn)
+sudo labtower-modules enable vpn        # volver a encender
+```
+
+El estado queda en `/etc/labtower/modules.disabled` (un módulo por línea). El Admin Panel y el Resumen no se pueden apagar.
+
 ### Olvidé la contraseña
 
 Desde la consola del equipo, como root (no necesita iniciar sesión):
@@ -438,7 +450,7 @@ En el servidor de Labtower:
 | `/etc/labtower/` | `backup.conf`, llave y contraseña del respaldo, `tls/` |
 | `/var/backups/labtower/` | Copias antes de actualizar, desinstalar o restaurar |
 | `/var/log/labtower/` | Estado del respaldo SFTP y registro de restauración |
-| `/usr/local/bin/` | `teleporter`, `labtower-sftp-backup`, `labtower-https`, `labtower-health`, `labtower-resources`, `labtower-resetpw` |
+| `/usr/local/bin/` | `teleporter`, `labtower-sftp-backup`, `labtower-https`, `labtower-health`, `labtower-resources`, `labtower-resetpw`, `labtower-modules` |
 
 Cada módulo es un servidor HTTP Python independiente. Todos usan `auth/auth.py` para usuarios y sesiones.
 

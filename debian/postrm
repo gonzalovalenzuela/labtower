@@ -37,7 +37,7 @@ if [ "$1" = "purge" ]; then
     # HTTPS opcional: certificado, configuración generada y registro de restauraciones.
     # EN: Optional HTTPS: certificate, generated configuration and restore log.
     rm -rf /etc/labtower/tls /etc/labtower/https.d /etc/labtower/http-extra.d /var/log/labtower
-    rm -f /etc/labtower/backup_passphrase
+    rm -f /etc/labtower/backup_passphrase /etc/labtower/modules.disabled
     rmdir /etc/labtower 2>/dev/null || true
     # Eliminar usuarios del sistema
     # ES: Los datos se conservan, pero pasan a root (700) antes de borrar el usuario: así no quedan a nombre de un uid huérfano que otro usuario podría heredar.

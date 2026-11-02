@@ -64,4 +64,12 @@ async function checkService(id) {
   o.dot.className = 'dot ' + ({up: 'green', warn: 'yellow', fail: 'red'}[level] || 'gray');
   o.txt.textContent = o.st.title = H[lang][level];
 }
-for (const id of Object.keys(stateOf)) checkService(id);
+// Módulos que el admin apagó: su tarjeta no se muestra y no se consulta. / EN: Modules the admin turned off: the card is hidden and not queried.
+fetch('/admin/api/disabled', {signal: AbortSignal.timeout(3000), cache: 'no-store'}).then(r => r.ok ? r.json() : {}).catch(() => ({})).then(d => {
+  const off = d.disabled || [];
+  for (const card of document.querySelectorAll('.app-card')) {
+    const id = (card.getAttribute('href') || '').split('/')[1];
+    if (off.includes(id)) { card.hidden = true; delete stateOf[id]; }
+  }
+  for (const id of Object.keys(stateOf)) checkService(id);
+});

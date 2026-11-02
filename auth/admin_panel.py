@@ -96,7 +96,9 @@ def health_report(tok, detailed=False):
     pw = auth.check_power()                       # Raspberry Pi only: absent on VMs and other hardware
     if pw: c["power"] = pw
     modules = {}
+    off = auth.disabled_modules()
     for name, port in MODULES.items():
+        if name in off: continue                  # turned off by the admin: not a failure
         h = _module_health(name, port, tok)
         if h is None:
             c[name] = auth.chk(auth.FAIL, f"service on :{port} not answering")
@@ -109,6 +111,20 @@ def health_report(tok, detailed=False):
     if detailed is None: return code, body
     if not detailed: body["modules"] = {k: {"status": v.get("status")} for k, v in modules.items()}
     return code, body
+
+# Enciende o apaga un módulo con el ayudante root (sudo, una regla por módulo y acción). Devuelve (ok, mensaje).
+# EN: Turn a module on or off with the root helper (sudo, one rule per module and action). Returns (ok, message).
+MODULES_CMD = os.environ.get("LABTOWER_MODULES_CMD", "/usr/local/bin/labtower-modules")
+def set_module(mid, enable):
+    import subprocess
+    if mid not in auth.OPTIONAL_MODULES: return False, "Unknown module"
+    cmd = ["sudo", "-n", MODULES_CMD, "enable" if enable else "disable", mid]
+    if os.environ.get("LABTOWER_MODULES_CMD"): cmd = cmd[2:]      # tests: run the stub directly
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)  # nosec B603
+    except Exception as e:
+        return False, str(e)
+    return r.returncode == 0, (r.stdout + r.stderr).strip()[-300:]
 
 # Manejador HTTP del panel. Cada petición corre en su propio hilo (ThreadingHTTPServer).
 # EN: HTTP handler of the panel. Each request runs in its own thread (ThreadingHTTPServer).
@@ -252,6 +268,8 @@ class H(BaseHTTPRequestHandler):
 
         if path == "/api/version":     # shown in the page footer; only with a session (or from this machine)
             return self._json(200, {"version": auth.version()} if (auth.get_session(tok) or auth.is_local_request(self)) else {})
+        if path == "/api/disabled":    # public: ids only, the home page uses it to hide the cards
+            return self._json(200, {"disabled": auth.disabled_modules()})
         if path == "/api/health":      # public: levels only; details need a valid session
             code, body = health_report(tok, auth.health_mode(self, tok))
             return self._json(code, body)
@@ -280,6 +298,9 @@ class H(BaseHTTPRequestHandler):
             self._json(200, {"users": out})
         elif path == "/api/sessions":
             self._json(200, {"sessions": auth.list_sessions(tok)})
+        elif path == "/api/modules":
+            off = auth.disabled_modules()
+            self._json(200, {"modules": [{"id": m, "enabled": m not in off} for m in auth.OPTIONAL_MODULES]})
         elif path == "/api/update":
             self._json(200, auth.update_info())
         elif path == "/api/2fa":
@@ -293,7 +314,8 @@ class H(BaseHTTPRequestHandler):
         elif path == "/api/me":
             sess = auth.get_session(tok)
             self._json(200, {"username": sess["username"],
-                              "permissions": sess["permissions"]} if sess else {})
+                              "permissions": sess["permissions"],
+                      "disabled": auth.disabled_modules()} if sess else {})
         else:
             self._json(404, {"error": "Not found"})
 
@@ -386,6 +408,18 @@ class H(BaseHTTPRequestHandler):
 
         sess = auth.get_session(tok)
         me   = sess["username"] if sess else ""
+
+        # Módulos: apagar o encender uno que no se usa. Solo el admin de todos los módulos (cambia el sistema entero).
+        # EN: Modules: turn an unused one off or on. Only the admin of every module (it changes the whole system).
+        if path == "/api/modules":
+            if not self._is_full_admin(tok):
+                return self._json(403, {"error": "Turning modules on or off requires administrator access on all modules"})
+            mid, en = body.get("id"), body.get("enabled")
+            if not isinstance(en, bool) or mid not in auth.OPTIONAL_MODULES:
+                return self._json(400, {"error": "Invalid module"})
+            ok, msg = set_module(mid, en)
+            auth.audit(me, "module_enabled" if en else "module_disabled", mid, "" if ok else "FAILED", auth.client_ip(self))
+            return self._json(200 if ok else 500, {"ok": ok, **({} if ok else {"error": msg or "Failed"})})
 
         # Respaldos: backup (crear), check (verificar sin cambiar nada) y restore (requiere confirm=true).
         # La restauración desde el panel nunca toca /etc/nut ni nginx; eso solo se hace por consola.

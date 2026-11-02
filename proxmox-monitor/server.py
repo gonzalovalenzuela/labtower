@@ -1019,7 +1019,8 @@ class H(BaseHTTPRequestHandler):
             sess = auth.get_session(tok)
             if sess:
                 self._json(200, {"username": sess["username"],
-                                  "permissions": sess["permissions"]})
+                                  "permissions": sess["permissions"],
+                      "disabled": auth.disabled_modules()})
             else:
                 self._json(200, {})
         else:

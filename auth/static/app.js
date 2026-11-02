@@ -36,6 +36,7 @@ const LANG = {
     modalDeleteTitle:'Delete user', modalDeleteBtn:'Delete',
     mustChangeBadge:'Change pwd',
     hlTitle:'System health', hl_ok:'All healthy', hl_degraded:'Degraded', hl_fail:'Failing', hlSystem:'system', hlDown:'Service not answering', hlUptime:'Running for',
+    mdTitle:'Modules', mdHint:'Turn off the modules you do not use. A disabled module stops, disappears from the menus and the home page, and stays off after restarts and updates. Its data is kept. Only an administrator of every module can change this.', mdOn:'Enabled', mdOff:'Disabled', mdDisable:'Disable', mdEnable:'Enable', mdConfirm:n=>`Disable ${n}? It will stop and disappear from the menus. Its data is kept.`, mdDone:'Done',
     ssTitle:'Active sessions', ssCloseOthers:'Close my other sessions', ssHint:'Devices signed in right now. Closing a session signs that device out immediately. Times are approximate.',
     ssDevice:'Device', ssIp:'IP', ssLast:'Last activity', ssExpires:'Expires', ssThis:'This session', ssClose:'Close session', ssOld:'Unknown', ssNone:'No active sessions.',
     ssConfirm:(u,d)=>`Close the session of "${u}" on ${d}?`, ssConfirmOthers:'Close all your other sessions?', ssClosed:'Session closed', ssClosedN:n=>`${n} session(s) closed`, ssNow:'now',
@@ -106,6 +107,7 @@ const LANG = {
     modalDeleteTitle:'Eliminar usuario', modalDeleteBtn:'Eliminar',
     mustChangeBadge:'Cambiar pwd',
     hlTitle:'Salud del sistema', hl_ok:'Todo bien', hl_degraded:'Degradado', hl_fail:'Con fallas', hlSystem:'sistema', hlDown:'El servicio no responde', hlUptime:'Activo hace',
+    mdTitle:'Módulos', mdHint:'Apaga los módulos que no usas. Un módulo deshabilitado se detiene, desaparece de los menús y del inicio, y sigue apagado tras reinicios y actualizaciones. Sus datos se conservan. Solo un administrador de todos los módulos puede cambiarlo.', mdOn:'Habilitado', mdOff:'Deshabilitado', mdDisable:'Deshabilitar', mdEnable:'Habilitar', mdConfirm:n=>`¿Deshabilitar ${n}? Se detendrá y desaparecerá de los menús. Sus datos se conservan.`, mdDone:'Listo',
     ssTitle:'Sesiones activas', ssCloseOthers:'Cerrar mis otras sesiones', ssHint:'Dispositivos con sesión iniciada ahora. Cerrar una sesión desconecta ese dispositivo de inmediato. Las horas son aproximadas.',
     ssDevice:'Dispositivo', ssIp:'IP', ssLast:'Última actividad', ssExpires:'Vence', ssThis:'Esta sesión', ssClose:'Cerrar sesión', ssOld:'Desconocido', ssNone:'No hay sesiones activas.',
     ssConfirm:(u,d)=>`¿Cerrar la sesión de "${u}" en ${d}?`, ssConfirmOthers:'¿Cerrar todas tus otras sesiones?', ssClosed:'Sesión cerrada', ssClosedN:n=>`${n} sesión(es) cerrada(s)`, ssNow:'ahora',
@@ -164,6 +166,7 @@ function setLang(l){
   document.getElementById('btn-logout').title = t('logoutTitle');
   try{tpRender();}catch(e){}
   try{ssRender();}catch(e){}
+  try{mdRender();}catch(e){}
   try{sfRender();auRender();upRender();}catch(e){}
   // Update new-pw placeholder
   const npw = document.getElementById('d-new-pw');
@@ -233,12 +236,14 @@ function _navOrder(){
 }
 // Dibuja la barra lateral y activa el arrastrar y soltar para reordenar.
 // EN: Draw the sidebar and enable drag and drop to reorder.
+let _navOff=[];
 function renderNav(){
   const wrap=document.getElementById('nav-items');if(!wrap)return;
   const order=_navOrder();
   wrap.innerHTML='';
   order.forEach(id=>{
     const item=_NAV_ITEMS.find(i=>i.id===id);if(!item)return;
+    if(_navOff.includes(item.id))return;
     const isSelf=item.id===_NAV_SELF;
     const a=document.createElement('a');
     a.className='nav-item nav-drag-item'+(isSelf?' active':'');
@@ -263,6 +268,7 @@ function renderNav(){
 }
 // Admin siempre ve todos los items — renderizar inmediatamente
 renderNav();
+fetch('api/disabled').then(r=>r.ok?r.json():{}).then(d=>{_navOff=d.disabled||[];renderNav();}).catch(()=>{});
 
 // ── Theme ──────────────────────────────────────────────
 // Elige el tema (claro, oscuro o automático según el sistema) y lo recuerda (clave pi-theme).
@@ -336,7 +342,7 @@ async function loadUsers() {
   const users = d.users || [];
   renderUsers(users);
   updateStats(users);
-  tpLoad(); ssLoad(); sfLoad(); auLoad(); upLoad();
+  tpLoad(); mdLoad(); ssLoad(); sfLoad(); auLoad(); upLoad();
   hlLoad(); if (!window._hlTimer) window._hlTimer = setInterval(hlLoad, 30000);
 }
 
@@ -925,6 +931,30 @@ async function ssCloseOthers() {
   ssLoad();
 }
 
+// ── Módulos: apagar los que no se usan ──
+// EN: Modules: turn off the ones that are not used.
+const MD_NAMES = {wol:'WOL Console', nut:'UPS Monitor', net:'Net Monitor', pve:'Proxmox', nas:'NAS Monitor', dns:'DNS Monitor', wan:'WAN Monitor', vpn:'VPN Monitor'};
+let _md = [];
+async function mdLoad() {
+  try { const r = await fetch('api/modules'); if (r.ok) { _md = (await r.json()).modules || []; mdRender(); } } catch(e) {}
+}
+function mdRender() {
+  const box = document.getElementById('md-list'); if (!box) return;
+  box.innerHTML = '';
+  _md.forEach(m => {
+    const d = document.createElement('div'); d.className = 'md-item' + (m.enabled ? '' : ' off');
+    d.innerHTML = `<span><b>${esc(MD_NAMES[m.id] || m.id)}</b><br><span class="ucreated">${esc(t(m.enabled ? 'mdOn' : 'mdOff'))}</span></span>
+      <button class="btn-sec" data-on-click="mdToggle" data-on-click-args="${jsargs([m.id, !m.enabled])}">${esc(t(m.enabled ? 'mdDisable' : 'mdEnable'))}</button>`;
+    box.appendChild(d);
+  });
+}
+async function mdToggle(id, enable) {
+  if (!enable && !confirm(t('mdConfirm', MD_NAMES[id] || id))) return;
+  const r = await fetch('api/modules', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, enabled:enable})});
+  if (r.ok) toast(t('mdDone')); else toast((await r.json().catch(()=>({}))).error || t('tpFailed'), true);
+  mdLoad();
+}
+
 // ── Seguridad: 2FA (TOTP) y registro de auditoría ──────
 // EN: Security: 2FA (TOTP) and the audit log.
 let _sf = {enabled:false, recovery_left:0}, _au = [], _sfSetup = null, _sfRec = null;
@@ -1039,4 +1069,4 @@ function upCopyCmd(ev) {
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ closeDrawer, closeModals, confirmDelete, doLogin, editUser, exCancel, exGo, exPlainToggle, logout, openDrawer, reauthCancel, reauthOk, saveUser, setLang, setTheme, upCheck, upCopyCmd, sfBegin, sfConfirm, sfDisable, sfRecDone, sfResetUser, auLoad, ssClose, ssCloseOthers, toggleNav, tpCheck, tpCreate, tpDelete, tpDownload, tpRestoreGo, tpRestoreOpen });
+if (window.cspRegister) cspRegister({ closeDrawer, closeModals, confirmDelete, doLogin, editUser, exCancel, exGo, exPlainToggle, logout, mdToggle, openDrawer, reauthCancel, reauthOk, saveUser, setLang, setTheme, upCheck, upCopyCmd, sfBegin, sfConfirm, sfDisable, sfRecDone, sfResetUser, auLoad, ssClose, ssCloseOthers, toggleNav, tpCheck, tpCreate, tpDelete, tpDownload, tpRestoreGo, tpRestoreOpen });

@@ -155,6 +155,11 @@ if [ -d /etc/sudoers.d ] && command -v visudo >/dev/null 2>&1; then
 # LabTower: the admin panel runs backup/restore as root
 labtower-auth ALL=(root) NOPASSWD: /usr/local/bin/teleporter.sh gui-backup, /usr/local/bin/teleporter.sh gui-restore *
 SUDOEOF
+    # Apagar / encender módulos desde el panel: una regla por módulo y acción (sin comodines).
+    # EN: Turn modules off/on from the panel: one rule per module and action (no wildcards).
+    for m in wol nut net pve nas dns wan vpn; do
+        printf 'labtower-auth ALL=(root) NOPASSWD: /usr/local/bin/labtower-modules disable %s, /usr/local/bin/labtower-modules enable %s\n' "$m" "$m" >> "$SUDOERS_TMP"
+    done
     if visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
         install -m 0440 -o root -g root "$SUDOERS_TMP" /etc/sudoers.d/labtower-teleporter
         echo "  sudo rule for teleporter installed"
@@ -515,7 +520,23 @@ done
 # EN: Step 8: reload systemd, then enable and (re)start the services and reload nginx if its configuration is valid.
 systemctl daemon-reload
 
+# Módulos que el admin apagó (/etc/labtower/modules.disabled): se conservan apagados en cada actualización.
+# EN: Modules the admin turned off (/etc/labtower/modules.disabled): they stay off across every update.
+OFF_FILE=/etc/labtower/modules.disabled
+off_svc() {
+    [ -f "$OFF_FILE" ] || return 1
+    case "$1" in
+        wol-console) m=wol;; labtower-ups) m=nut;; net-monitor) m=net;; proxmox-monitor) m=pve;;
+        nas-monitor) m=nas;; dns-monitor) m=dns;; wan-monitor) m=wan;; vpn-monitor) m=vpn;; *) return 1;;
+    esac
+    grep -qx "$m" "$OFF_FILE"
+}
 for svc in wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor labtower-overview; do
+    if off_svc "$svc"; then
+        systemctl disable --now "$svc" 2>/dev/null || true
+        echo "  $svc disabled (turned off by the administrator)"
+        continue
+    fi
     systemctl enable "$svc" 2>/dev/null || true
     systemctl restart "$svc" 2>/dev/null || true
     echo "  $svc enabled"

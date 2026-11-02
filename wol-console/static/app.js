@@ -159,6 +159,7 @@ function renderNav(){
   order.forEach(id=>{
     const item=_NAV_ITEMS.find(i=>i.id===id);if(!item)return;
     if(item.adminOnly&&!isAdmin)return;
+    if(ME&&Array.isArray(ME.disabled)&&ME.disabled.includes(item.id))return;
     const isSelf=item.id===_NAV_SELF;
     const a=document.createElement('a');
     a.className='nav-item nav-drag-item'+(isSelf?' active':'');

@@ -250,3 +250,8 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
 .remember-row select:disabled{opacity:.45}
 
 .up-cmd{margin:8px 0;padding:10px 12px;background:var(--bg);border:1px solid var(--border-b);border-radius:var(--r-sm);font-family:var(--mono,monospace);font-size:12px;color:var(--text);white-space:pre-wrap;word-break:break-all;user-select:all}
+
+.md-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;padding:14px 18px}
+.md-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:13px}
+.md-item.off{opacity:.6}
+.md-item button{white-space:nowrap}

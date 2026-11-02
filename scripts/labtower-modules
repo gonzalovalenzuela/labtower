@@ -1,0 +1,56 @@
+#!/bin/bash
+# labtower-modules — turn unused LabTower modules off and on (run as root).
+#   labtower-modules list              module, service and state (enabled / disabled)
+#   labtower-modules disable <module>  stop the service and keep it off (also after restarts, updates and restores)
+#   labtower-modules enable <module>   start it again
+# Modules: wol nut net pve nas dns wan vpn.  The Admin Panel and the Overview cannot be turned off.
+# ES: Apaga y enciende los módulos que no usas (como root). El estado queda en /etc/labtower/modules.disabled (una línea por módulo apagado);
+#     el instalador, el reinicio de servicios y las restauraciones de respaldo no arrancan los módulos apagados. El Admin Panel lo ejecuta por sudo,
+#     una regla por módulo y acción, y este script valida el módulo contra una lista fija.
+# EN: The state lives in /etc/labtower/modules.disabled (one line per disabled module). The installer, service restarts and backup restores
+#     do not start disabled modules. The Admin Panel runs this through sudo (one rule per module and action); the module is checked against a fixed list here.
+FILE="${LABTOWER_DISABLED_FILE:-/etc/labtower/modules.disabled}"
+DRY="${LABTOWER_MODULES_DRY:-0}"      # 1 = do not call systemctl (tests)
+
+svc_of() {
+    case "$1" in
+        wol) echo wol-console;;   nut) echo labtower-ups;;   net) echo net-monitor;;   pve) echo proxmox-monitor;;
+        nas) echo nas-monitor;;   dns) echo dns-monitor;;    wan) echo wan-monitor;;   vpn) echo vpn-monitor;;
+        *) return 1;;
+    esac
+}
+IDS="wol nut net pve nas dns wan vpn"
+is_off() { [ -f "$FILE" ] && grep -qx -- "$1" "$FILE"; }
+write_state() {  # write_state <ids to keep off…>  (atomic, sorted, no duplicates)
+    local tmp; tmp="$(mktemp "${FILE}.XXXXXX")" || exit 1
+    printf '%s\n' "$@" | grep -E '^(wol|nut|net|pve|nas|dns|wan|vpn)$' | sort -u > "$tmp"
+    chmod 0644 "$tmp"; mv -f -- "$tmp" "$FILE"
+}
+current_off() { [ -f "$FILE" ] && grep -E '^(wol|nut|net|pve|nas|dns|wan|vpn)$' "$FILE"; return 0; }
+
+if [ "$(id -u)" != "0" ] && [ "$DRY" != "1" ]; then echo "labtower-modules: run it as root (sudo labtower-modules)" >&2; exit 1; fi
+action="${1:-list}"
+case "$action" in
+    list)
+        for id in $IDS; do
+            if is_off "$id"; then st=disabled; else st=enabled; fi
+            printf '%-4s %-17s %s\n' "$id" "$(svc_of "$id")" "$st"
+        done;;
+    disable|enable)
+        id="${2:-}"
+        svc="$(svc_of "$id")" || { echo "labtower-modules: unknown module '$id' (valid: $IDS)" >&2; exit 2; }
+        mkdir -p -- "$(dirname -- "$FILE")"
+        mapfile -t off < <(current_off)
+        if [ "$action" = disable ]; then
+            write_state "${off[@]}" "$id"
+            [ "$DRY" = 1 ] || systemctl disable --now "$svc" >/dev/null 2>&1 || true
+            echo "$id disabled"
+        else
+            keep=(); for x in "${off[@]}"; do [ "$x" = "$id" ] || keep+=("$x"); done
+            write_state "${keep[@]}"
+            [ "$DRY" = 1 ] || systemctl enable --now "$svc" >/dev/null 2>&1 || true
+            echo "$id enabled"
+        fi;;
+    *)
+        echo "usage: labtower-modules list | disable <module> | enable <module>" >&2; exit 2;;
+esac

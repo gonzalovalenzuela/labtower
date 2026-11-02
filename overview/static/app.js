@@ -87,7 +87,7 @@ const PAL=['#4361ee','#16a34a','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899'
 
 // ───────── Estado / state ─────────
 let me=null,issues=[],hist={},histTs=0,timer=null,piH=null,piHTs=0,pveH={},pveHTs=0,nasH={},nasHTs=0,dnsH={},dnsHTs=0,wanH=[],wanHTs=0;
-const lvl=(m)=>({readonly:1,execute:2,admin:3})[(me.permissions||{})[m]]||0;
+const lvl=(m)=>(me.disabled||[]).includes(m)?0:({readonly:1,execute:2,admin:3})[(me.permissions||{})[m]]||0;
 
 // ───────── UPS ─────────
 function renderUPS(d){

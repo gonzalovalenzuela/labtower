@@ -631,7 +631,8 @@ class H(BaseHTTPRequestHandler):
             return self._json(code, body)
         if path == "/api/me":
             sess = auth.get_session(tok)
-            return self._json(200, {"username": sess["username"], "permissions": sess["permissions"]} if sess else {})
+            return self._json(200, {"username": sess["username"], "permissions": sess["permissions"],
+                      "disabled": auth.disabled_modules()} if sess else {})
         if not auth.check_permission(tok, "dns", "readonly"):
             return self._json(401, {"error": "Unauthorized"})
         if path == "/api/dns":

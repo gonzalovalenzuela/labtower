@@ -50,3 +50,4 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
   input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{font-size:16px!important}
   button,.btn{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 }
+.app-card[hidden]{display:none}
