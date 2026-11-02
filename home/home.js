@@ -12,7 +12,7 @@ const H = {
        vpnN: 'VPN Monitor', vpnD: 'Tailscale, OpenVPN y WireGuard — quién está conectado y desde cuándo',
        wolN: 'WOL Console', wolD: 'Wake-on-LAN — enciende equipos remotamente',
        admN: 'Admin Panel', admD: 'Usuarios y permisos, 2FA, respaldos y salud del sistema',
-       chk: 'comprobando...', up: 'activo', down: 'sin respuesta'},
+       chk: 'comprobando...', up: 'activo', warn: 'con avisos', fail: 'con fallas', down: 'sin respuesta'},
   en: {hero: 'Administration panel for your homelab.<br>UPS, network, Proxmox, NAS, Wake-on-LAN and administration',
        ovN: 'Overview', ovD: 'General status — UPS, Proxmox, network and the server on one screen',
        nutN: 'UPS Monitor', nutD: 'UPS — battery, load and runtime in real time',
@@ -24,7 +24,7 @@ const H = {
        vpnN: 'VPN Monitor', vpnD: 'Tailscale, OpenVPN and WireGuard — who is connected and since when',
        wolN: 'WOL Console', wolD: 'Wake-on-LAN — turn devices on remotely',
        admN: 'Admin Panel', admD: 'Users and permissions, 2FA, backups and system health',
-       chk: 'checking...', up: 'active', down: 'no response'}
+       chk: 'checking...', up: 'active', warn: 'warnings', fail: 'failing', down: 'no response'}
 };
 let lang = 'en';
 try { lang = localStorage.getItem('pi-lang') || ((navigator.language || '').toLowerCase().startsWith('es') ? 'es' : 'en'); } catch (e) {}
@@ -37,19 +37,31 @@ for (const el of document.querySelectorAll('[data-h]')) {
   if (n) el.textContent = n + ' ' + v; else el.innerHTML = v;
 }
 
-// Consulta una URL con 3 s de espera: si responde bien, el punto se pone verde y el texto dice «activo»; si no, «sin respuesta».
-// EN: Query a URL with a 3 s timeout: if it answers fine, the dot turns green and the text says "active"; otherwise "no response".
-async function checkService(url,dotId,lblId,name){
-  try{
-    const r=await fetch(url,{signal:AbortSignal.timeout(3000)});
-    if(r.ok){
-      document.getElementById(dotId).className='dot green';
-      document.getElementById(lblId).textContent=name+' '+H[lang].up;
-    }else throw new Error();
-  }catch{
-    document.getElementById(dotId).className='dot';
-    document.getElementById(lblId).textContent=name+' '+H[lang].down;
-  }
+// Estado de cada módulo, junto a la flecha de su tarjeta: consulta su /api/health público (sin sesión; solo trae el estado global) con 3 s de espera.
+// ok → verde «activo», degraded → amarillo «con avisos», fail (503) → rojo «con fallas», sin respuesta → gris «sin respuesta».
+// EN: Status of every module, next to the arrow of its card: it queries its public /api/health (no session; only the overall status) with a 3 s timeout.
+//     ok → green "active", degraded → yellow "warnings", fail (503) → red "failing", no answer → grey "no response".
+const SERVICES = ['overview', 'wol', 'nut', 'net', 'pve', 'nas', 'dns', 'wan', 'vpn', 'admin'];
+const stateOf = {};
+for (const card of document.querySelectorAll('.app-card')) {
+  const id = (card.getAttribute('href') || '').split('/')[1];
+  if (!SERVICES.includes(id)) continue;
+  const st = document.createElement('span'); st.className = 'app-state'; st.title = H[lang].chk;
+  const dot = document.createElement('span'); dot.className = 'dot gray';
+  const txt = document.createElement('span'); txt.className = 'app-state-txt'; txt.textContent = H[lang].chk;
+  st.append(dot, txt);
+  card.insertBefore(st, card.querySelector('.app-arrow'));
+  stateOf[id] = {dot, txt, st};
 }
-checkService('/wol/api/devices','dot-wol','lbl-wol','WOL');
-checkService('/nut/api/config', 'dot-nut','lbl-nut','NUT');
+async function checkService(id) {
+  let level = 'down';
+  try {
+    const r = await fetch('/' + id + '/api/health', {signal: AbortSignal.timeout(3000), cache: 'no-store'});
+    const d = await r.json().catch(() => ({}));
+    level = d.status === 'ok' ? 'up' : d.status === 'degraded' ? 'warn' : d.status === 'fail' || r.status === 503 ? 'fail' : 'down';
+  } catch (e) { level = 'down'; }
+  const o = stateOf[id];
+  o.dot.className = 'dot ' + ({up: 'green', warn: 'yellow', fail: 'red'}[level] || 'gray');
+  o.txt.textContent = o.st.title = H[lang][level];
+}
+for (const id of Object.keys(stateOf)) checkService(id);
