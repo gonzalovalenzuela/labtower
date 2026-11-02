@@ -31,7 +31,7 @@ MAX_CONNS   = 64             # concurrent connections served; the rest are close
 RESERVED    = frozenset({"module", "level", "text", "k", "self"})   # names a caller must not pass as event parameters
 USER_PREFIX = "labtower-"
 # Identidades que pueden hablar con el servicio: usuario del sistema «labtower-<id>». / Identities allowed to talk to the service.
-CALLERS = ("wol", "nut", "net", "pve", "nas", "dns", "wan", "overview")
+CALLERS = ("wol", "nut", "net", "pve", "nas", "dns", "wan", "vpn", "overview")
 
 
 class AuthUnavailable(Exception):

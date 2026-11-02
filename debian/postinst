@@ -22,7 +22,7 @@ migrate_from_pi_console() {
     echo "  migrating from pi-console to labtower..."
     # Servicios con nombre antiguo: parar, deshabilitar y borrar sus archivos (los demás conservan nombre y se reescriben en el paso 5).
     # EN: Services with an old name: stop, disable and delete their files (the others keep their name and are rewritten in step 5).
-    systemctl stop wol-console pi-console-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor pi-console-overview 2>/dev/null || true
+    systemctl stop wol-console pi-console-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor pi-console-overview 2>/dev/null || true
     for u in pi-console-ups pi-console-overview; do
         systemctl disable "$u" 2>/dev/null || true
         rm -f "/etc/systemd/system/$u.service" "/etc/systemd/system/multi-user.target.wants/$u.service"
@@ -110,7 +110,7 @@ fi
 #     «labtower». El usuario «labtower» solo queda para migrar datos antiguos: ningún servicio corre con él.
 # EN: Module isolation: every service runs as its own system user ("labtower-<id>", no shell, no home) and all share the group "labtower".
 #     The user "labtower" only remains to migrate old data: no service runs as it any more.
-for u in auth wol nut net pve nas dns wan overview; do
+for u in auth wol nut net pve nas dns wan vpn overview; do
     if ! id -u "labtower-$u" >/dev/null 2>&1; then
         useradd --system --no-create-home --shell /usr/sbin/nologin -g labtower "labtower-$u"
         echo "  system user labtower-$u created"
@@ -134,7 +134,7 @@ LEGACY_LAYOUT=false
 [ -d "$DATA_DIR/auth" ] || LEGACY_LAYOUT=true
 if [ "$LEGACY_LAYOUT" = true ]; then
     install -d -m 750 -o labtower -g labtower "$DATA_DIR"
-    for d in wol-console nut-monitor net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor; do
+    for d in wol-console nut-monitor net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor; do
         as_svc mkdir -p "$DATA_DIR/$d"
         as_svc chmod 750 "$DATA_DIR/$d"
     done
@@ -180,7 +180,7 @@ rm -f "$AUTH_LINK/sessions.json"
 # EN: Step 3b: move the module data from /opt/labtower (versions < 1.2.0u) to /var/lib/labtower/<module>/.
 # ES: Se hace con el usuario del servicio y ANTES de pasar el código a root. Las bases SQLite se copian con su API de respaldo.
 # EN: Done as the service user and BEFORE the code becomes root-owned. SQLite databases are copied with their backup API.
-systemctl stop wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor labtower-overview 2>/dev/null || true
+systemctl stop wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor labtower-overview 2>/dev/null || true
 MIGRATED=""
 for pair in wol-console/devices.json wol-console/wake_log.json nut-monitor/servers.json nut-monitor/history.db \
             net-monitor/hosts.json net-monitor/config.json proxmox-monitor/clusters.json proxmox-monitor/history.json; do
@@ -215,7 +215,7 @@ rm -f /var/backups/labtower/sessions.json.*.bak
 #     la base de métricas común se parte con un usuario sin privilegios, y luego root solo mueve y cambia dueño (sin seguir enlaces).
 # EN: The services are stopped. Root never follows planted links: first every symbolic link inside is deleted (no module uses any), the shared
 #     metrics database is split by an unprivileged user, and only then does root move files and change owners (never following links).
-MODULE_MAP="wol-console:wol nut-monitor:nut net-monitor:net proxmox-monitor:pve nas-monitor:nas dns-monitor:dns wan-monitor:wan overview:overview"
+MODULE_MAP="wol-console:wol nut-monitor:nut net-monitor:net proxmox-monitor:pve nas-monitor:nas dns-monitor:dns wan-monitor:wan vpn-monitor:vpn overview:overview"
 if [ -d "$DATA_DIR" ] && [ ! -L "$DATA_DIR" ]; then
     find "$DATA_DIR" -xdev -type l -delete
     if [ "$LEGACY_LAYOUT" = true ] && [ -f "$DATA_DIR/metrics.db" ]; then
@@ -420,6 +420,7 @@ install_service "proxmox-monitor"   "Proxmox Monitor" "proxmox-monitor" "server.
 install_service "nas-monitor"       "NAS Monitor"     "nas-monitor"     "server.py"      strict labtower-nas      nas-monitor
 install_service "dns-monitor"       "DNS Monitor"     "dns-monitor"     "server.py"      strict labtower-dns      dns-monitor
 install_service "wan-monitor"       "WAN Monitor"     "wan-monitor"     "server.py"      fs     labtower-wan      wan-monitor
+install_service "vpn-monitor"       "VPN Monitor"     "vpn-monitor"     "server.py"      strict labtower-vpn      vpn-monitor
 install_service "labtower-overview" "Overview"        "overview"        "server.py"      strict labtower-overview overview
 
 # ── 6. Nginx ──────────────────────────────────────────────────────────────────
@@ -447,7 +448,7 @@ user_of() {
     case "$(basename "$(dirname "$1")")" in
         auth|teleporter) echo labtower-auth;; wol-console) echo labtower-wol;; nut-monitor) echo labtower-nut;;
         net-monitor) echo labtower-net;; proxmox-monitor) echo labtower-pve;; nas-monitor) echo labtower-nas;;
-        dns-monitor) echo labtower-dns;; wan-monitor) echo labtower-wan;; overview) echo labtower-overview;; *) echo labtower;;
+        dns-monitor) echo labtower-dns;; wan-monitor) echo labtower-wan;; vpn-monitor) echo labtower-vpn;; overview) echo labtower-overview;; *) echo labtower;;
     esac
 }
 # shellcheck disable=SC2016  # $1 belongs to the inner sh, which receives it as an argument
@@ -482,6 +483,8 @@ nas-monitor/nas.json:nas.json
 dns-monitor/dns.json:dns.json
 wan-monitor/wan.json:wan.json
 wan-monitor/state.json:state.json
+vpn-monitor/vpn.json:vpn.json
+vpn-monitor/state.json:state.json
 "
     printf '%s\n' "$MODULE_FILES" | grep -v '^$' | while IFS=: read -r rel_path base; do
         dest="$DATA_DIR/$rel_path"
@@ -512,7 +515,7 @@ done
 # EN: Step 8: reload systemd, then enable and (re)start the services and reload nginx if its configuration is valid.
 systemctl daemon-reload
 
-for svc in wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor labtower-overview; do
+for svc in wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor labtower-overview; do
     systemctl enable "$svc" 2>/dev/null || true
     systemctl restart "$svc" 2>/dev/null || true
     echo "  $svc enabled"

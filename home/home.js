@@ -9,6 +9,7 @@ const H = {
        nasN: 'NAS Monitor', nasD: 'Synology, TrueNAS y OpenMediaVault — discos, volúmenes, temperatura y red',
        dnsN: 'DNS Monitor', dnsD: 'Pi-hole y AdGuard Home — consultas, bloqueo y servidores DNS',
        wanN: 'WAN Monitor', wanD: 'Salida a internet — latencia, cortes, IP pública y velocidad',
+       vpnN: 'VPN Monitor', vpnD: 'Tailscale, OpenVPN y WireGuard — quién está conectado y desde cuándo',
        wolN: 'WOL Console', wolD: 'Wake-on-LAN — enciende equipos remotamente',
        admN: 'Admin Panel', admD: 'Usuarios y permisos, 2FA, respaldos y salud del sistema',
        chk: 'comprobando...', up: 'activo', down: 'sin respuesta'},
@@ -20,6 +21,7 @@ const H = {
        nasN: 'NAS Monitor', nasD: 'Synology, TrueNAS and OpenMediaVault — disks, volumes, temperature and network',
        dnsN: 'DNS Monitor', dnsD: 'Pi-hole and AdGuard Home — queries, blocking and DNS servers',
        wanN: 'WAN Monitor', wanD: 'Internet connection — latency, outages, public IP and speed',
+       vpnN: 'VPN Monitor', vpnD: 'Tailscale, OpenVPN and WireGuard — who is connected and since when',
        wolN: 'WOL Console', wolD: 'Wake-on-LAN — turn devices on remotely',
        admN: 'Admin Panel', admD: 'Users and permissions, 2FA, backups and system health',
        chk: 'checking...', up: 'active', down: 'no response'}

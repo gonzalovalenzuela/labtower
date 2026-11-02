@@ -54,7 +54,7 @@ RESTORE_LOG="${LABTOWER_RESTORE_LOG:-/var/log/labtower/restore.log}"   # root-ow
 # EN: Data-less user used to open an untrusted backup (extract, validate JSON/SQLite). "labtower" owns nothing and runs no service any more.
 #     Every data file belongs to the user of ITS module (owner_of); the panel (labtower-auth) owns auth/ and the exchange folder.
 SANDBOX_USER="${LABTOWER_SANDBOX_USER:-labtower}"
-SERVICES="wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor labtower-overview"
+SERVICES="wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor labtower-overview"
 SKIP_SYSTEM="${TELEPORTER_SKIP_SYSTEM:-0}"   # 1 = no systemctl/nginx/chown (tests)
 DROP_FORCE="${TELEPORTER_DROP:-0}"           # 1 = drop to the service user even with SKIP_SYSTEM (tests)
 # Trusted base for the `sfs` helper: the (root-owned) parent of the data folder, resolved once.
@@ -78,6 +78,8 @@ DATA_FILES=(
   "data/dns-monitor/dns.json|$DATA_DIR/dns-monitor/dns.json"
   "data/wan-monitor/wan.json|$DATA_DIR/wan-monitor/wan.json"
   "data/wan-monitor/state.json|$DATA_DIR/wan-monitor/state.json"
+  "data/vpn-monitor/vpn.json|$DATA_DIR/vpn-monitor/vpn.json"
+  "data/vpn-monitor/state.json|$DATA_DIR/vpn-monitor/state.json"
   "data/overview/metrics.db|$DATA_DIR/overview/metrics.db"
   "data/proxmox-monitor/metrics.db|$DATA_DIR/proxmox-monitor/metrics.db"
   "data/nas-monitor/metrics.db|$DATA_DIR/nas-monitor/metrics.db"
@@ -138,7 +140,7 @@ need_tools() {
   done
 }
 users_exist() {
-  local u; for u in "$SANDBOX_USER" labtower-auth labtower-wol labtower-nut labtower-net labtower-pve labtower-nas labtower-dns labtower-wan labtower-overview; do
+  local u; for u in "$SANDBOX_USER" labtower-auth labtower-wol labtower-nut labtower-net labtower-pve labtower-nas labtower-dns labtower-wan labtower-vpn labtower-overview; do
     id -u "$u" >/dev/null 2>&1 || { echo "$u"; return 1; }
   done
 }
@@ -261,7 +263,7 @@ owner_of() {  # <path under $DATA_DIR>
   case "${rel%%/*}" in
     auth|teleporter) echo labtower-auth;;   wol-console) echo labtower-wol;;      nut-monitor) echo labtower-nut;;
     net-monitor) echo labtower-net;;        proxmox-monitor) echo labtower-pve;;   nas-monitor) echo labtower-nas;;
-    dns-monitor) echo labtower-dns;;        wan-monitor) echo labtower-wan;;       overview) echo labtower-overview;;
+    dns-monitor) echo labtower-dns;;        wan-monitor) echo labtower-wan;;       vpn-monitor) echo labtower-vpn;;   overview) echo labtower-overview;;
     *) return 1;;
   esac
 }
@@ -276,7 +278,7 @@ as_owner() {  # <user> cmd…
 }
 is_secret() {
   case "$1" in
-    *users.json|*sessions.json|*config.json|*clusters.json|*nas.json|*dns.json|*servers.json|*upsd.users|*upsmon.conf) return 0;;
+    *users.json|*sessions.json|*config.json|*clusters.json|*nas.json|*dns.json|*vpn.json|*servers.json|*upsd.users|*upsmon.conf) return 0;;
   esac
   return 1
 }
