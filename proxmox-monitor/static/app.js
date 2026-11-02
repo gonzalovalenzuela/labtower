@@ -31,7 +31,7 @@ const LANG={
     deleteClusterConfirm:(name)=>`Delete cluster "${name}"?`,
     cpuAlert:(pct)=>`CPU at ${pct}%`,ramAlert:(pct)=>`RAM at ${pct}%`,
     bkSelAll:'Select all',bkSelNone:'Clear selection',bkSelPending:'Select those without backup or too old',bkIgnoreSel:n=>`Ignore selected (${n})`,bkUnignoreSel:n=>`Stop ignoring selected (${n})`,bkTitle:'Backups (vzdump)',bkWait:'Reading backups… (first read takes a minute)',bkNone:'No backup storage found. The API token needs Datastore.Audit on the storages.',bkOk:'Up to date',bkOld:'Too old',bkNever:'No backup',bkIgnored:'Ignored',bkUnknown:'Unknown',bkAge:(h)=>h<48?`${h} h ago`:`${Math.floor(h/24)} d ago`,bkProblems:(n)=>`${n} without a recent backup`,bkAllOk:'Backups up to date',bkMax:(h)=>`Marked old after ${Math.round(h/24*10)/10} days`,bkDays:'days',bkApply:'Apply',bkIgnore:'Ignore',bkUnignore:'Stop ignoring',bkFailedTasks:'Failed backup tasks',bkVerified:'verified',bkVerFail:'verification failed',bkSaved:'Saved',bkStorageErr:'Could not read storage',bkCopies:(n)=>`${n} copies`,
-    diagTitle:'Cluster diagnostics',quorum:'Quorum',quorumOk:'Quorum OK',quorumLost:'NO QUORUM',membersOnline:(a,b)=>`${a}/${b} nodes in corosync`,
+    diagTitle:'Cluster diagnostics',diagExpand:'Expand all',diagCollapse:'Collapse all',quorum:'Quorum',quorumOk:'Quorum OK',quorumLost:'NO QUORUM',membersOnline:(a,b)=>`${a}/${b} nodes in corosync`,
     cephOsdDown:(n)=>`${n} OSD down`,cephOsdOut:(n)=>`${n} OSD out`,cephChecks:'Ceph warnings',
     rebootsTitle:'Node reboots',noReboots:'No reboots recorded since this was enabled.',rebootAt:'booted',rebootWave:'simultaneous',
     smartTitle:'Disks (SMART)',smartWait:'Reading SMART data… (first read takes up to a minute)',smartNone:'No disk data. The API token needs the Sys.Audit privilege on /nodes.',
@@ -69,7 +69,7 @@ const LANG={
     deleteClusterConfirm:(name)=>`¿Eliminar el cluster "${name}"?`,
     cpuAlert:(pct)=>`CPU al ${pct}%`,ramAlert:(pct)=>`RAM al ${pct}%`,
     bkSelAll:'Seleccionar todas',bkSelNone:'Limpiar selección',bkSelPending:'Seleccionar las sin respaldo o muy viejas',bkIgnoreSel:n=>`Ignorar seleccionadas (${n})`,bkUnignoreSel:n=>`Dejar de ignorar seleccionadas (${n})`,bkTitle:'Respaldos (vzdump)',bkWait:'Leyendo respaldos… (la primera lectura tarda un minuto)',bkNone:'No hay storages de respaldo. El token de la API necesita Datastore.Audit en los storages.',bkOk:'Al día',bkOld:'Muy viejo',bkNever:'Sin respaldo',bkIgnored:'Ignorado',bkUnknown:'Desconocido',bkAge:(h)=>h<48?`hace ${h} h`:`hace ${Math.floor(h/24)} d`,bkProblems:(n)=>`${n} sin respaldo reciente`,bkAllOk:'Respaldos al día',bkMax:(h)=>`Se marca como vieja tras ${Math.round(h/24*10)/10} días`,bkDays:'días',bkApply:'Aplicar',bkIgnore:'Ignorar',bkUnignore:'Dejar de ignorar',bkFailedTasks:'Tareas de respaldo fallidas',bkVerified:'verificado',bkVerFail:'verificación fallida',bkSaved:'Guardado',bkStorageErr:'No se pudo leer el storage',bkCopies:(n)=>`${n} copias`,
-    diagTitle:'Diagnóstico del cluster',quorum:'Quórum',quorumOk:'Quórum OK',quorumLost:'SIN QUÓRUM',membersOnline:(a,b)=>`${a}/${b} nodos en corosync`,
+    diagTitle:'Diagnóstico del cluster',diagExpand:'Expandir todo',diagCollapse:'Contraer todo',quorum:'Quórum',quorumOk:'Quórum OK',quorumLost:'SIN QUÓRUM',membersOnline:(a,b)=>`${a}/${b} nodos en corosync`,
     cephOsdDown:(n)=>`${n} OSD caído${n!==1?'s':''}`,cephOsdOut:(n)=>`${n} OSD fuera`,cephChecks:'Avisos de Ceph',
     rebootsTitle:'Reinicios de nodos',noReboots:'Sin reinicios registrados desde que se activó.',rebootAt:'arrancó',rebootWave:'simultáneo',
     smartTitle:'Discos (SMART)',smartWait:'Leyendo SMART… (la primera lectura tarda hasta un minuto)',smartNone:'Sin datos de discos. El token de la API necesita el privilegio Sys.Audit en /nodes.',
@@ -443,6 +443,8 @@ async function toggleBkIgnore(cid,vmid){
     _diagTs[cid]=0;renderDashboard();toast(t('bkSaved'));
   }catch(e){toast(e.message,true);}
 }
+const DIAG_KEYS=['reboots','backups','smart'];
+function toggleDiagAll(){if(DIAG_KEYS.every(k=>_diagShown.has(k)))_diagShown.clear();else DIAG_KEYS.forEach(k=>_diagShown.add(k));renderDashboard();}
 function toggleDiag(k){if(_diagShown.has(k))_diagShown.delete(k);else _diagShown.add(k);renderDashboard();}
 function pill(txt,col){const e=document.createElement('span');e.textContent=txt;e.style.cssText='font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;color:'+col+';background:color-mix(in srgb,'+col+' 14%,transparent);white-space:nowrap';return e;}
 function dtFmt(ts){const d=new Date(Number(ts)*1000);return isNaN(d)?'—':d.toLocaleDateString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'short'})+' '+PCT.time(d,false);}
@@ -452,7 +454,10 @@ function buildDiag(cluster){
   const dg=_diag[cluster.id];
   const box=document.createElement('div');
   box.style.cssText='margin-top:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px';
-  const hd=document.createElement('div');hd.style.cssText='font-size:13px;font-weight:600;margin-bottom:10px';hd.textContent=t('diagTitle');box.appendChild(hd);
+  const hd=document.createElement('div');hd.style.cssText='font-size:13px;font-weight:600;margin-bottom:10px';hd.style.display='flex';hd.style.justifyContent='space-between';hd.style.alignItems='center';
+  const hdt=document.createElement('span');hdt.textContent=t('diagTitle');hd.appendChild(hdt);
+  const all=document.createElement('button');all.type='button';all.className='btn-secondary';all.style.cssText='font-size:11px;padding:2px 10px';
+  all.setAttribute('data-on-click','toggleDiagAll');all.textContent=DIAG_KEYS.every(k=>_diagShown.has(k))?t('diagCollapse'):t('diagExpand');hd.appendChild(all);box.appendChild(hd);
   const row=document.createElement('div');row.style.cssText='display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;color:var(--text-mid)';
   if(cs){
     row.appendChild(pill(cs.quorate?t('quorumOk'):t('quorumLost'),cs.quorate?'var(--green)':'var(--red)'));
@@ -970,4 +975,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ bkSetDays, closeModals, confirmDelete, doLogin, logout, moveNode, openAddCluster, pinCluster, toggleStopped, resetLayout, saveCluster, toggleBkIgnore, bkSelToggle, bkSelMode, bkBulk, toggleDiag, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection });
+if (window.cspRegister) cspRegister({ bkSetDays, closeModals, confirmDelete, doLogin, logout, moveNode, openAddCluster, pinCluster, toggleStopped, resetLayout, saveCluster, toggleBkIgnore, bkSelToggle, bkSelMode, bkBulk, toggleDiag, toggleDiagAll, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection });
