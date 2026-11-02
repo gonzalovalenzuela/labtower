@@ -23,6 +23,7 @@
 | **NAS Monitor** | `/nas/` | 8086 | Uno o varios NAS (Synology por SNMP, TrueNAS y OpenMediaVault por su API): discos, volúmenes, temperatura, CPU, memoria y red |
 | **DNS Monitor** | `/dns/` | 8087 | Pi-hole (v5 y v6) y AdGuard Home: consultas, % bloqueado, tops, DNS de salida y pausa del bloqueo |
 | **WAN Monitor** | `/wan/` | 8088 | Salida a internet: latencia, pérdida, cortes (local o de la línea, consultando al router), IP pública y prueba de velocidad programada |
+| **VPN Monitor** | `/vpn/` | 8089 | Quién está conectado a Tailscale, OpenVPN y WireGuard: desde cuándo, desde qué dirección y cuánto tráfico, con avisos de conexión y desconexión |
 | **WOL Console** | `/wol/` | 8080 | Enciende equipos con Wake-on-LAN |
 | **Admin Panel** | `/admin/` | 8082 | Usuarios, permisos, 2FA, sesiones, auditoría, respaldos y salud del sistema |
 
@@ -210,6 +211,27 @@ labtower-health
 - En la tarjeta **Conexión** se ve cuánto tiempo lleva conectada la WAN según el router y cuántos cortes registró LabTower en ese período, para contrastar ambos.
 - IP pública con aviso de cambio, prueba de velocidad programada (motor propio, Ookla o LibreSpeed) y gráficos históricos.
 
+### VPN Monitor
+- Muestra los clientes conectados a cada servidor VPN: nombre, dirección real y virtual, tiempo conectado, tráfico, sesiones recientes y avisos de conexión / desconexión en la línea de tiempo del Resumen. Solo lectura: nunca cambia nada en el servidor VPN. Se permiten hasta 16 servidores.
+- **Permiso:** da el permiso **vpn** a los usuarios en *Admin Panel → Usuarios*.
+- **Tailscale:** se lee por la API de Tailscale. Crea una **clave de API** en la consola de Tailscale, pégala junto con el nombre de tu tailnet (o `-` para el predeterminado). Un dispositivo cuenta como conectado si Tailscale lo ve en línea.
+- **OpenVPN y WireGuard:** se leen por **SSH** en el servidor VPN, que puede ser otra VM, CT o un NAS. LabTower genera su propia llave SSH y solo ejecuta dos comandos fijos: `cat <archivo de estado>` (OpenVPN) y `wg show all dump` (WireGuard).
+
+  1. En *Agregar VPN* elige el tipo, escribe host, usuario SSH y puerto, y pulsa **Crear / mostrar llave**.
+  2. Copia la llave pública al `~/.ssh/authorized_keys` del usuario SSH en el servidor VPN. Se recomienda restringirla; el formulario muestra la línea lista, por ejemplo `command="cat /ruta/al/estado",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding ssh-ed25519 AAAA…`.
+  3. Pulsa **Probar**. La huella del servidor se acepta la primera vez y después se exige.
+
+  La llave SSH **no** entra en los respaldos: tras restaurar, créala de nuevo y vuelve a instalarla en el servidor VPN.
+- **OpenVPN:** el servidor debe escribir su archivo de estado con `status <archivo> 2` (o `3`) en su configuración, y ese archivo es el que va en *Status file*. Busca la ruta con `grep -rn "^status" /etc/openvpn/`. En Debian suele ser `/run/openvpn-server/status-server.log`; una ruta relativa queda relativa a `/etc/openvpn/server/`. Si no hay línea `status`, agrégala y reinicia el servicio (`sudo systemctl restart openvpn-server@server`). La lista sale vacía si nadie está conectado.
+- **WireGuard:** WireGuard no tiene usuarios, así que los peers se nombran con **alias**: una línea `<clave pública> Nombre` por peer. Un peer cuenta como conectado si su último handshake tiene menos de 180 segundos. `wg show` exige root: usa `root` o marca «Ejecutar con sudo».
+- **Ejecutar con sudo:** para cuando el archivo de estado o `wg show` son solo de root. LabTower antepone `sudo -n` (nunca pide contraseña) y solo a esos dos comandos fijos. En el servidor VPN autoriza **solo** ese comando para el usuario SSH, con las **dos** rutas de `cat`: por SSH sin terminal el `PATH` es más corto y `cat` suele resolverse a `/usr/bin/cat`, no a `/bin/cat`. Si falta una ruta, el error es «sudo: a password is required». Comprueba con `sudo -l -U <usuario>` y, desde LabTower, con `ssh <usuario>@<servidor> 'command -v cat; sudo -n cat <archivo de estado>'`. Los cambios de sudoers se pueden comprobar en `/var/log/auth.log`: ahí aparece el comando exacto que recibió sudo.
+- **Synology (VPN Server con OpenVPN):** el archivo de estado es `/tmp/ovpn_status_2_result` (confírmalo con `grep -n "^status" /usr/syno/etc/packages/VPNCenter/openvpn/openvpn.conf`), es de root con permisos 600 y se refresca cada 30 s. Necesita SSH activado (*Panel de control → Terminal y SNMP*) y un usuario administrador. Usa «Ejecutar con sudo» con esta regla (en `/etc/sudoers.d/labtower-vpn`, permisos 440; Synology no trae `visudo`, comprueba con `sudo -l -U <usuario>`):
+
+  ```
+  usuario ALL=(root) NOPASSWD: /bin/cat /tmp/ovpn_status_2_result, /usr/bin/cat /tmp/ovpn_status_2_result
+  ```
+  Si el SSH falla con «Permission denied» casi siempre son permisos: `chmod 755 ~`, `chmod 700 ~/.ssh` y `chmod 600 ~/.ssh/authorized_keys`. Con autenticación solo por certificado, la columna de usuario viene vacía y LabTower muestra el *Common Name*.
+
 ### WOL Console
 - Envía paquetes mágicos (máximo 10 por minuto por IP).
 - Toma equipos detectados por Net Monitor (nombre, MAC, IP y categoría) y usa la IP más reciente si cambió por DHCP.
@@ -288,7 +310,7 @@ sudo labtower-sftp-backup status      # resultado de la última corrida
 ```bash
 labtower-health         # resumen: exit 0 = ok, 1 = degradado, 2 = falla (-j para JSON)
 labtower-resources      # memoria y CPU de cada servicio (-w refresca cada 2 s)
-systemctl status wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor labtower-overview
+systemctl status wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor labtower-overview
 journalctl -u net-monitor -f        # logs de un servicio
 sudo systemctl restart net-monitor  # reiniciar uno
 ```
@@ -305,6 +327,7 @@ Cada módulo responde `GET /api/health` (200 = ok o degradado, 503 = falla). Sin
 | `nas-monitor` | NAS Monitor |
 | `dns-monitor` | DNS Monitor |
 | `wan-monitor` | WAN Monitor |
+| `vpn-monitor` | VPN Monitor |
 | `labtower-overview` | Resumen |
 
 **Desinstalar:** `sudo apt remove labtower` detiene los servicios y guarda una copia de los datos en `/var/backups/labtower`. `sudo apt purge labtower` elimina además el código, los servicios, el sitio nginx y los usuarios `labtower-*`. En ambos casos `/var/lib/labtower` y `/var/backups/labtower` **no se borran**; elimínalos a mano si quieres dejar el equipo limpio.
@@ -317,7 +340,7 @@ Los valores por defecto sirven para la mayoría. Para cambiarlos, escribe `NOMBR
 
 ```bash
 echo 'NUT_POLL=5' | sudo tee -a /etc/default/labtower
-sudo systemctl restart wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor labtower-overview
+sudo systemctl restart wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor labtower-overview
 ```
 
 | Variable | Módulo | Por defecto | Para qué |
@@ -377,6 +400,7 @@ labtower/
 ├── nas-monitor/       # NAS Monitor (Synology por SNMP, TrueNAS y OpenMediaVault por API)
 ├── dns-monitor/       # DNS Monitor (Pi-hole / AdGuard Home)
 ├── wan-monitor/       # WAN Monitor (internet y chequeo del router)
+├── vpn-monitor/       # VPN Monitor (Tailscale, OpenVPN, WireGuard)
 ├── overview/          # Resumen
 ├── home/              # página de inicio e iconos
 ├── etc/               # nginx, backup.conf, cron

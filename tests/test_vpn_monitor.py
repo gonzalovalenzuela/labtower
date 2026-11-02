@@ -74,6 +74,10 @@ class Ssh(unittest.TestCase):
         with mock.patch.object(m, "ssh_run", return_value="") as r:
             m.collect(cfg)
         self.assertEqual(r.call_args[0][1], "cat /var/log/openvpn/status.log")
+    def test_openvpn_real_address_forms(self):
+        for raw, want in (("1.2.3.4:5000", "1.2.3.4"), ("[2001:db8::1]:5000", "2001:db8::1"), ("::ffff:190.1.2.3", "190.1.2.3"),
+                          ("::ffff:190.1.2.3:44444", "190.1.2.3"), ("udp6:[::ffff:190.1.2.3]:1194", "190.1.2.3"), ("2001:db8::1", "2001:db8::1")):
+            self.assertEqual(m._ovpn_ip(raw), want, raw)
     def test_sudo_option_prefixes_only_the_fixed_command(self):
         for typ, extra, want in (("openvpn", {"status_path": "/tmp/ovpn_status_2_result"}, "sudo -n cat /tmp/ovpn_status_2_result"),
                                  ("wireguard", {}, "sudo -n " + m.CMD_WG)):
