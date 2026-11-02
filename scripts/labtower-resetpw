@@ -1,0 +1,13 @@
+#!/bin/bash
+# labtower-resetpw — reset a LabTower user's password from the console (run as root). Default user: admin.
+#   sudo labtower-resetpw [user]               random password, must be changed at the next login
+#   sudo labtower-resetpw --ask [user]         type the new password yourself
+#   sudo labtower-resetpw --disable-2fa user   also turn off 2FA (lost phone)
+#   sudo labtower-resetpw --list               list the users
+# ES: Restablece la contraseña de un usuario desde la consola (como root). Cierra sus sesiones y limpia el bloqueo por intentos.
+# EN: Runs as the authentication user (labtower-auth), the only one that may touch the user files, with the Admin Panel's own code.
+if [ "$(id -u)" != "0" ]; then echo "labtower-resetpw: run it as root (sudo labtower-resetpw)" >&2; exit 1; fi
+if ! id -u labtower-auth >/dev/null 2>&1 || [ ! -f /opt/labtower/auth/resetpw.py ]; then
+    echo "labtower-resetpw: LabTower is not installed" >&2; exit 1
+fi
+exec runuser -u labtower-auth -- python3 -I /opt/labtower/auth/resetpw.py "$@"

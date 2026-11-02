@@ -55,7 +55,7 @@ sudo apt-get install -y ./labtower_2.1.5_all.deb
 
 Use `apt-get install ./file.deb`, not `dpkg -i`, so `apt` installs the dependencies. Then open `http://<pi-ip>/`.
 
-The installer creates one system user per service (`labtower-auth`, `labtower-wol`, …), the systemd services, the nginx config and the `admin` user with a **random password**, shown when it finishes. If you lost it: `sudo cat /var/lib/labtower/auth/initial-admin-password`.
+The installer creates one system user per service (`labtower-auth`, `labtower-wol`, …), the systemd services, the nginx config and the `admin` user with a **random password**, shown when it finishes. If you lost it: `sudo cat /var/lib/labtower/auth/initial-admin-password`. If you already changed it and forgot the new one, reset it with `sudo labtower-resetpw` (see below).
 
 **From source** (development): copy the modules to `/opt/labtower`, install the config from `etc/nginx/` and create the services using `debian/postinst` as a guide.
 
@@ -310,10 +310,26 @@ sudo labtower-sftp-backup status      # result of the last run
 ```bash
 labtower-health         # summary: exit 0 = ok, 1 = degraded, 2 = failed (-j for JSON)
 labtower-resources      # memory and CPU per service (-w refreshes every 2 s)
+sudo labtower-resetpw   # forgot the password: generates a new one for "admin" (see below)
 systemctl status wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor labtower-overview
 journalctl -u net-monitor -f        # logs of one service
 sudo systemctl restart net-monitor  # restart one
 ```
+
+### Forgot the password
+
+From the machine's console, as root (no login needed):
+
+```bash
+sudo labtower-resetpw                  # generates a new password for "admin" and prints it
+sudo labtower-resetpw ana              # same for another user
+sudo labtower-resetpw --ask ana        # you type the new password
+sudo labtower-resetpw --disable-2fa ana  # also turns 2FA off (lost phone)
+sudo labtower-resetpw --list           # list the users
+```
+
+The new password must be changed at the next login (except with `--ask --no-change`). The command closes every session of that user, clears its failed-login lock and is recorded in the audit log as "console". It uses the same code as the Admin Panel and runs as the authentication service's user; the services do not need a restart.
+
 
 Each module answers `GET /api/health` (200 = ok or degraded, 503 = failed). Without a session it only shows levels. It detects a stopped service, a corrupt data file, a nearly full disk, a locked history database, a stuck scan, and `upsd`, Proxmox or a NAS not answering. On a Raspberry Pi it also warns about under-voltage or throttling; that warning comes from the firmware and only clears on reboot.
 
@@ -423,7 +439,7 @@ On the server:
 | `/etc/labtower/` | `backup.conf`, backup key and passphrase, `tls/` |
 | `/var/backups/labtower/` | Copies made before updating, uninstalling or restoring |
 | `/var/log/labtower/` | SFTP backup status and restore log |
-| `/usr/local/bin/` | `teleporter`, `labtower-sftp-backup`, `labtower-https`, `labtower-health`, `labtower-resources` |
+| `/usr/local/bin/` | `teleporter`, `labtower-sftp-backup`, `labtower-https`, `labtower-health`, `labtower-resources`, `labtower-resetpw` |
 
 Each module is an independent Python HTTP server. All of them use `auth/auth.py` for users and sessions.
 

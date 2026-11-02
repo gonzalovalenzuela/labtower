@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.5i — 2026-11-02
+
+- **Nuevo:** comando `sudo labtower-resetpw [usuario]` para recuperar el acceso desde la consola: genera una contraseña aleatoria (cambio obligatorio en el próximo inicio), cierra las sesiones de ese usuario, quita su bloqueo por intentos y lo anota en la auditoría. Opciones: `--ask` (tú escribes la contraseña), `--disable-2fa` (perdiste el teléfono) y `--list`.
+
 ## 2.1.5h — 2026-11-02
 
 - **Corregido:** VPN Monitor mostraba «::ffff» como dirección de un cliente OpenVPN conectado por IPv4 a un servidor de doble pila (Synology): ahora muestra la IPv4 real.
