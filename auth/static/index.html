@@ -176,7 +176,7 @@
         <span class="card-title" data-i18n="tpTitle">Backup &amp; restore</span>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn-sec" id="tp-upload-btn" data-on-click="@click-id" data-on-click-args="[&quot;tp-file&quot;]" data-i18n="tpUpload">Upload backup</button>
-          <input type="file" id="tp-file" accept=".gz,.tgz,application/gzip,application/x-gzip" style="display:none">
+          <input type="file" id="tp-file" accept=".gz,.tgz,.gpg,application/gzip,application/x-gzip,application/pgp-encrypted" style="display:none">
           <button class="btn-primary" id="tp-create" data-on-click="tpCreate"><span data-i18n="tpCreate">Create backup</span></button>
         </div>
       </div>
