@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.5a — 2026-11-02
+
+- **Fix:** Admin Panel, subir respaldo: el selector de archivos solo dejaba elegir `.gz` y los respaldos descargados del panel salen cifrados (`.gpg`), así que no se podía importar un respaldo de otro LabTower sin cambiar a «Todos los archivos». Ahora acepta también `.gpg`.
+
 ## 2.1.5 — 2026-11-02
 
 Reúne todos los cambios desde 2.1.4 (builds 2.1.4a a 2.1.4v).
