@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.5g — 2026-11-02
+
+- **Nuevo:** VPN Monitor: opción «Ejecutar con sudo» para servidores donde el archivo de estado de OpenVPN o `wg show` son solo de root (por ejemplo Synology). Usa `sudo -n` (nunca pide contraseña) y solo con los dos comandos fijos.
+
 ## 2.1.5f — 2026-11-02
 
 - **Corregido:** el paquete 2.1.5e no incluía la carpeta del VPN Monitor, así que el servicio no arrancaba (502 Bad Gateway en `/vpn/`). Ahora el paquete la incluye.

@@ -125,6 +125,7 @@
             <div class="field"><label data-i18n="fieldPort">Port</label><input type="number" id="f-port" value="22" min="1" max="65535"></div>
           </div>
         </div>
+        <div class="field"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="f-sudo" style="width:auto"><span data-i18n="fieldSudo">Run with sudo</span></label><span class="secret-hint" data-i18n="sudoHint"></span></div>
         <div class="field" id="ovpn-box"><label data-i18n="fieldStatusPath">Status file</label><input type="text" id="f-status-path" autocomplete="off"><span class="secret-hint" data-i18n="statusPathHint"></span></div>
         <div class="field" id="wg-box"><label data-i18n="fieldAliases">Peer names</label><textarea id="f-aliases" rows="4" style="width:100%;font-family:var(--mono);font-size:11px" placeholder="&lt;public key&gt; Name"></textarea><span class="secret-hint" data-i18n="aliasesHint"></span></div>
         <div class="vpn-sshbox" id="ssh-key-box">

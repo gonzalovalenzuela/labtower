@@ -116,7 +116,7 @@ def validate(body: dict, current=None) -> dict:
             cfg["api_key"] = k
         if not cfg.get("api_key"): raise ValueError("API key required")
         cfg["timeout"] = _to(10)
-        for k in ("host", "port", "ssh_user", "status_path", "aliases"): cfg.pop(k, None)
+        for k in ("host", "port", "ssh_user", "use_sudo", "status_path", "aliases"): cfg.pop(k, None)
         return cfg
     host = str(body.get("host", cfg.get("host", "")) or "").strip()
     if not host or host.startswith("-") or not auth.valid_target(host): raise ValueError("Invalid host (this machine and link-local addresses are not allowed)")
@@ -128,6 +128,7 @@ def validate(body: dict, current=None) -> dict:
     user = str(body.get("ssh_user", cfg.get("ssh_user", "")) or "").strip()
     if not re.fullmatch(r"[a-z_][a-z0-9_.-]{0,31}", user): raise ValueError("Invalid SSH user")
     cfg["ssh_user"] = user
+    cfg["use_sudo"] = bool(body.get("use_sudo", cfg.get("use_sudo", False)))
     cfg["timeout"] = _to(10)
     if typ == "openvpn":
         sp = str(body.get("status_path", cfg.get("status_path", DEFAULT_OVPN_STATUS)) or DEFAULT_OVPN_STATUS).strip()
@@ -166,6 +167,10 @@ def ssh_keygen() -> str:
         r = subprocess.run(["ssh-keygen", "-y", "-f", str(SSH_KEY)], capture_output=True, text=True, timeout=20)
         if r.returncode == 0: SSH_KEY.with_suffix(".pub").write_text(r.stdout)
     return ssh_pub()
+
+def _sudo(cfg: dict) -> str:
+    """"sudo -n " (never asks for a password) when the server is set to use sudo."""
+    return "sudo -n " if cfg.get("use_sudo") else ""
 
 def ssh_run(cfg: dict, command: str) -> str:
     if not SSH_KEY.exists(): raise RuntimeError("No SSH key yet: create it in the VPN Monitor settings and install it on the VPN server")
@@ -269,8 +274,8 @@ def fetch_tailscale(cfg: dict, now: float) -> list:
 def collect(cfg: dict) -> dict:
     now = time.time(); typ = cfg["type"]
     if typ == "tailscale": cl = fetch_tailscale(cfg, now)
-    elif typ == "openvpn": cl = parse_openvpn(ssh_run(cfg, "cat " + cfg["status_path"]))
-    else: cl = parse_wireguard(ssh_run(cfg, CMD_WG), cfg.get("aliases") or {}, now)
+    elif typ == "openvpn": cl = parse_openvpn(ssh_run(cfg, _sudo(cfg) + "cat " + cfg["status_path"]))
+    else: cl = parse_wireguard(ssh_run(cfg, _sudo(cfg) + CMD_WG), cfg.get("aliases") or {}, now)
     return {"ts": int(now), "clients": cl, "online": sum(1 for c in cl if c["online"]), "total": len(cl),
             "rx": sum(c["rx"] for c in cl if c.get("rx") and c["online"]) if typ != "tailscale" else None,
             "tx": sum(c["tx"] for c in cl if c.get("tx") and c["online"]) if typ != "tailscale" else None}
