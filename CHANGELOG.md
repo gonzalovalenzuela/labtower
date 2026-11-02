@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.6b — 2026-11-02
+
+- **Mejora:** el VPN Monitor guarda la última lectura de cada servidor y la muestra de inmediato tras reiniciar (marcada «Lectura anterior, actualizando…») en vez de quedar vacío hasta que responda el SSH. Las lecturas que tardan más de 5 s se anotan en el log (`slow read`) para encontrar el servidor lento.
+
 ## 2.1.6a — 2026-11-02
 
 - **Nuevo:** el admin puede deshabilitar los módulos que no usa (Admin Panel → Módulos, o `sudo labtower-modules disable|enable <módulo>`). El módulo se detiene y desaparece de los menús, del inicio y del Resumen, no cuenta en la salud, y sigue apagado tras reinicios, actualizaciones y restauraciones de respaldo. Sus datos se conservan. Solo lo cambia quien administra todos los módulos; queda en la auditoría.

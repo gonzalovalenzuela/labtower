@@ -40,6 +40,7 @@ DATA_DIR   = auth.module_dir("vpn-monitor")
 LEGACY_FILES = ()
 DATA_FILE  = DATA_DIR / "vpn.json"
 STATE_FILE = DATA_DIR / "state.json"
+LAST_FILE  = DATA_DIR / "last.json"      # last reading of each server: shown right after a restart, marked as stale
 SSH_DIR    = DATA_DIR / "ssh"
 SSH_KEY    = SSH_DIR / "id_ed25519"
 KNOWN      = SSH_DIR / "known_hosts"
@@ -337,21 +338,39 @@ def drop_state(nid: str):
 # ─── Caché, historial y poller / Cache, history and poller ─────────────────────
 class Cache:
     def __init__(self, nid):
-        self.id, self._lock, self._data, self._err, self._ts = nid, threading.RLock(), {}, None, None
+        self.id, self._lock, self._data, self._err, self._ts, self._stale = nid, threading.RLock(), {}, None, None, False
         self.hist = _deque(maxlen=_HIST_MAX)
         self.wake = threading.Event()
     def update(self, data):
         with self._lock:
-            self._data, self._err, self._ts = data, None, time.time()
+            self._data, self._err, self._ts, self._stale = data, None, time.time(), False
             self.hist.append([data["ts"], data["online"]])
+    def preload(self, data, ts):
+        """Last reading stored before the restart: shown (stale) until the first fresh one arrives."""
+        with self._lock:
+            if not self._data: self._data, self._ts, self._stale = data, ts, True
     def set_error(self, e):
         with self._lock: self._err = e
     def snap(self):
-        with self._lock: return {"id": self.id, "data": dict(self._data), "error": self._err, "ts": self._ts}
+        with self._lock: return {"id": self.id, "data": dict(self._data), "error": self._err, "ts": self._ts, "stale": self._stale}
     def history(self):
         with self._lock: return list(self.hist)
 
 _cache: dict = {}
+_last: dict = {}
+_last_lock = threading.Lock()
+SLOW_READ = 5.0                  # seconds: slower reads are logged so a slow server can be found
+
+def load_last():
+    global _last
+    with _last_lock: _last = auth.read_json(LAST_FILE, {}, dict)
+
+def save_last(nid, snap):
+    with _last_lock:
+        _last[nid] = {"ts": time.time(), "snap": snap}
+        for k in [k for k in _last if k not in _cache]: _last.pop(k, None)
+        try: auth.write_json(LAST_FILE, _last)
+        except OSError as e: log.warning(f"last reading not saved: {e}")
 _pollers: dict = {}
 _glock = threading.Lock()
 
@@ -365,9 +384,12 @@ def _poll(nid: str):
         if n is None: return
         if n:
             try:
+                t0 = time.time()
                 snap = collect(n)
+                if time.time() - t0 > SLOW_READ: log.info(f"[{n['name']}] slow read: {time.time() - t0:.1f}s")
                 track(n, snap, time.time())
                 cache.update(snap)
+                save_last(nid, snap)
                 if auth.state_changed(f"vpn-dn:{nid}", "up"):
                     auth.record_event("vpn", "info", f"{n['name']}: reachable again", "vpn_reach", n=n["name"])
             except Exception as e:
@@ -382,7 +404,11 @@ def _poll(nid: str):
 def ensure_poller(n: dict):
     nid = n["id"]
     with _glock:
-        if nid not in _cache: _cache[nid] = Cache(nid)
+        if nid not in _cache:
+            _cache[nid] = Cache(nid)
+            old = _last.get(nid)
+            if isinstance(old, dict) and isinstance(old.get("snap"), dict) and isinstance(old.get("snap", {}).get("clients"), list):
+                _cache[nid].preload(old["snap"], float(old.get("ts") or 0))
         if nid not in _pollers or not _pollers[nid].is_alive():
             t = threading.Thread(target=_poll, args=(nid,), daemon=True, name=f"vpn-{nid[:8]}")
             _pollers[nid] = t; t.start()
@@ -396,6 +422,7 @@ def remove_poller(nid: str):
 
 def start_all():
     load_state()
+    load_last()
     for n in load_vpn(): ensure_poller(n)
 
 def health_report(detailed=False):

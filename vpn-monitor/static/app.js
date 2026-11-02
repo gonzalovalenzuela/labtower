@@ -3,6 +3,7 @@
 const LANG={
   en:{
   "connecting":"Connecting…",
+  "stale":"Previous reading, updating…",
   "loginTitle":"Sign in",
   "loginSub":"Enter your credentials to continue.",
   "username":"Username",
@@ -92,6 +93,7 @@ const LANG={
   },
   es:{
   "connecting":"Conectando…",
+  "stale":"Lectura anterior, actualizando…",
   "loginTitle":"Iniciar sesión",
   "loginSub":"Ingresa tus credenciales para continuar.",
   "username":"Usuario",
@@ -386,6 +388,7 @@ function ago(ts){return ts?t('agoFmt',fmtDur(Date.now()/1000-ts)):'—';}
 function buildDetail(n){
   const sn=n.snap||{},d=sn.data;let h='';
   if(sn.error)h+=`<div class="conn-err">${esc(sn.error)}</div>`;
+  if(sn.stale&&!sn.error)h+=`<div class="nas-empty">${esc(t('stale'))}</div>`;
   if(!d||!d.clients){return h||`<div class="nas-empty">${esc(t('connecting'))}</div>`;}
   const now=Date.now()/1000,cl=[...d.clients].sort((a,b)=>(b.online-a.online)||String(a.name).localeCompare(String(b.name)));
   const ts=n.type==='tailscale',wg=n.type==='wireguard';

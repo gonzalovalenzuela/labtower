@@ -8,6 +8,25 @@ from tests.support import ADMIN, READONLY, NONE
 m = support.load("vpn-monitor/server.py")
 K1, K2 = "A" * 43 + "=", "B" * 43 + "="
 
+class LastReading(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.pa = mock.patch.object(m, "LAST_FILE", Path(self.tmp) / "last.json"); self.pa.start()
+        m._cache.clear(); m._last.clear()
+    def tearDown(self): self.pa.stop(); m._cache.clear(); m._last.clear()
+    SNAP = {"ts": 1, "clients": [{"key": "k", "name": "n", "online": True}], "online": 1, "total": 1}
+    def test_saved_reading_is_shown_stale_after_restart_then_replaced(self):
+        m._cache["a"] = m.Cache("a"); m.save_last("a", self.SNAP)
+        self.assertTrue((Path(self.tmp) / "last.json").exists())
+        m._cache.clear(); m._last.clear(); m.load_last()
+        c = m.Cache("a"); old = m._last["a"]; c.preload(old["snap"], old["ts"])
+        s = c.snap(); self.assertTrue(s["stale"]); self.assertEqual(s["data"]["online"], 1)
+        c.update({**self.SNAP, "ts": 2}); self.assertFalse(c.snap()["stale"])
+    def test_removed_server_is_pruned(self):
+        m._cache["a"] = m.Cache("a"); m.save_last("a", self.SNAP)
+        m._cache.pop("a"); m._cache["b"] = m.Cache("b"); m.save_last("b", self.SNAP)
+        self.assertEqual(list(m._last), ["b"])
+
 class Validate(unittest.TestCase):
     def test_types_and_required(self):
         t = m.validate({"type": "tailscale", "name": "ts", "api_key": "tskey-api-abc12345"})
