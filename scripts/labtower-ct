@@ -1,0 +1,125 @@
+#!/bin/bash
+# labtower-ct — crea un contenedor (CT) de Proxmox con Debian 12 e instala LabTower dentro. Se ejecuta como root en un nodo de Proxmox VE.
+# EN: labtower-ct — creates a Proxmox container (CT) with Debian 12 and installs LabTower inside. Run as root on a Proxmox VE node.
+#
+#   labtower-ct [--id N] [--hostname NAME] [--storage ST] [--template-storage ST] [--bridge BR] [--vlan N]
+#               [--ip dhcp|CIDR] [--gw IP] [--dns IP] [--memory MB] [--cores N] [--disk GB]
+#               [--version X.Y.Z | --url URL] [--dry-run]
+#
+# Sin --version / --url instala la última versión publicada (GitHub Releases). Con --version usa la compilación de la rama deb-builds.
+# EN: Without --version / --url it installs the latest published version (GitHub Releases). With --version it uses the build from the deb-builds branch.
+set -uo pipefail
+
+REPO="gonzalovalenzuela/labtower"
+CTID="" HOST="labtower" STORAGE="local-lvm" TSTORAGE="local" BRIDGE="vmbr0" VLAN="" IPCFG="dhcp" GW="" DNS=""
+MEM=1024 CORES=2 DISK=8 VERSION="" URL="" DRY=0
+
+die() { echo "Error: $*" >&2; exit 1; }
+say() { echo "==> $*"; }
+# Ejecuta el comando, o solo lo muestra con --dry-run. / Run the command, or only print it with --dry-run.
+run() { if [ "$DRY" = 1 ]; then echo "+ $*"; else "$@"; fi; }
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --id) CTID="${2:-}"; shift 2;;
+    --hostname) HOST="${2:-}"; shift 2;;
+    --storage) STORAGE="${2:-}"; shift 2;;
+    --template-storage) TSTORAGE="${2:-}"; shift 2;;
+    --bridge) BRIDGE="${2:-}"; shift 2;;
+    --vlan) VLAN="${2:-}"; shift 2;;
+    --ip) IPCFG="${2:-}"; shift 2;;
+    --gw) GW="${2:-}"; shift 2;;
+    --dns) DNS="${2:-}"; shift 2;;
+    --memory) MEM="${2:-}"; shift 2;;
+    --cores) CORES="${2:-}"; shift 2;;
+    --disk) DISK="${2:-}"; shift 2;;
+    --version) VERSION="${2:-}"; shift 2;;
+    --url) URL="${2:-}"; shift 2;;
+    --dry-run) DRY=1; shift;;
+    -h|--help) sed -n '2,12p' "$0"; exit 0;;
+    *) die "unknown option: $1";;
+  esac
+done
+
+# Validación de lo que se escribe, porque va a comandos de Proxmox. / Validate what is typed, since it goes into Proxmox commands.
+case "$HOST" in ""|*[!a-zA-Z0-9-]*|-*|*-) die "invalid --hostname (letters, digits and hyphens)";; esac
+for v in "$MEM" "$CORES" "$DISK"; do case "$v" in ""|*[!0-9]*) die "--memory, --cores and --disk must be numbers";; esac; done
+[ -z "$CTID" ] || case "$CTID" in *[!0-9]*) die "--id must be a number";; esac
+[ -z "$VLAN" ] || case "$VLAN" in *[!0-9]*) die "--vlan must be a number";; esac
+case "$STORAGE$TSTORAGE$BRIDGE" in *[!a-zA-Z0-9._-]*) die "invalid storage or bridge name";; esac
+if [ "$IPCFG" != "dhcp" ]; then
+  case "$IPCFG" in */*) ;; *) die "--ip must be dhcp or an address with prefix, e.g. 192.0.2.50/24";; esac
+  case "$IPCFG$GW$DNS" in *[!0-9./:a-fA-F\ ]*) die "invalid --ip, --gw or --dns";; esac
+fi
+[ -z "$VERSION" ] || case "$VERSION" in *[!0-9a-z.]*) die "invalid --version";; esac
+
+if [ "$DRY" != 1 ]; then
+  [ "$(id -u)" -eq 0 ] || die "run as root on a Proxmox VE node"
+  for c in pct pveam pvesh; do command -v "$c" >/dev/null 2>&1 || die "$c not found: run this on a Proxmox VE node"; done
+fi
+
+# Dirección del .deb. / Where the .deb comes from.
+if [ -z "$URL" ]; then
+  if [ -n "$VERSION" ]; then
+    URL="https://raw.githubusercontent.com/$REPO/deb-builds/labtower_${VERSION}_all.deb"
+  else
+    TAG=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
+    [ -n "$TAG" ] || die "could not read the latest release; use --version or --url"
+    URL="https://github.com/$REPO/releases/download/$TAG/labtower_${TAG}_all.deb"
+  fi
+fi
+case "$URL" in https://*) ;; *) die "--url must be https";; esac
+
+# Número del CT. / CT number.
+if [ -z "$CTID" ]; then
+  if [ "$DRY" = 1 ]; then CTID=900; else CTID=$(pvesh get /cluster/nextid) || die "could not get a free CT id"; fi
+fi
+
+# Plantilla de Debian 12. / Debian 12 template.
+say "Template (Debian 12)"
+run pveam update >/dev/null
+if [ "$DRY" = 1 ]; then TEMPLATE="debian-12-standard_12.0-1_amd64.tar.zst"
+else
+  TEMPLATE=$(pveam available --section system | awk '{print $2}' | grep '^debian-12-standard' | sort -V | tail -1)
+  [ -n "$TEMPLATE" ] || die "no Debian 12 template found"
+fi
+if [ "$DRY" = 1 ] || ! pveam list "$TSTORAGE" 2>/dev/null | grep -q "$TEMPLATE"; then
+  run pveam download "$TSTORAGE" "$TEMPLATE"
+fi
+
+# Creación. Sin privilegios y con nesting (systemd lo necesita en algunos kernels). / Creation. Unprivileged with nesting (systemd needs it on some kernels).
+say "Creating CT $CTID ($HOST)"
+NET="name=eth0,bridge=$BRIDGE,firewall=0"
+[ -z "$VLAN" ] || NET="$NET,tag=$VLAN"
+if [ "$IPCFG" = "dhcp" ]; then NET="$NET,ip=dhcp"; else NET="$NET,ip=$IPCFG"; [ -z "$GW" ] || NET="$NET,gw=$GW"; fi
+args=(create "$CTID" "$TSTORAGE:vztmpl/$TEMPLATE" --hostname "$HOST" --unprivileged 1 --features nesting=1
+      --cores "$CORES" --memory "$MEM" --swap 512 --rootfs "$STORAGE:$DISK" --net0 "$NET" --onboot 1 --ostype debian)
+[ -z "$DNS" ] || args+=(--nameserver "$DNS")
+run pct "${args[@]}" || die "pct create failed"
+run pct start "$CTID" || die "pct start failed"
+
+# Espera a que el CT tenga red. / Wait for the CT to have network.
+say "Waiting for the network"
+if [ "$DRY" != 1 ]; then
+  ok=0
+  for _ in $(seq 1 30); do
+    if pct exec "$CTID" -- sh -c 'getent hosts deb.debian.org >/dev/null 2>&1'; then ok=1; break; fi
+    sleep 2
+  done
+  [ "$ok" = 1 ] || die "the CT has no network or DNS (bridge, VLAN, IP?). Check with: pct enter $CTID"
+fi
+
+say "Installing LabTower"
+run pct exec "$CTID" -- env DEBIAN_FRONTEND=noninteractive sh -c "apt-get update -qq && apt-get install -y -qq wget ca-certificates" || die "could not install wget"
+run pct exec "$CTID" -- sh -c "wget -q -O /tmp/labtower.deb '$URL'" || die "could not download $URL"
+run pct exec "$CTID" -- env DEBIAN_FRONTEND=noninteractive sh -c "apt-get install -y /tmp/labtower.deb && rm -f /tmp/labtower.deb" || die "installing LabTower failed"
+
+if [ "$DRY" != 1 ]; then
+  IP=$(pct exec "$CTID" -- sh -c "hostname -I | awk '{print \$1}'" 2>/dev/null)
+  PW=$(pct exec "$CTID" -- cat /var/lib/labtower/auth/initial-admin-password 2>/dev/null | head -1)
+  echo
+  echo "LabTower is ready in CT $CTID"
+  echo "  URL:  http://${IP:-<CT-IP>}/"
+  [ -z "$PW" ] || { echo "  User: admin"; echo "  Initial password: $PW  (you must change it at the first login)"; }
+  echo "  HTTPS: pct exec $CTID -- labtower-https enable --redirect"
+fi

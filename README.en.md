@@ -44,10 +44,12 @@ All screens (light and dark, 4 sizes) are in [`docs/screenshots/`](docs/screensh
 
 ## Install
 
+- **Install in a Proxmox container (CT):** [guide and script](docs/CT.md) (`scripts/labtower-ct` creates the CT and installs LabTower).
+
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1/labtower_2.1_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.5/labtower_2.1.5_all.deb
 sudo apt-get update
-sudo apt-get install -y ./labtower_2.1_all.deb
+sudo apt-get install -y ./labtower_2.1.5_all.deb
 ```
 
 Use `apt-get install ./file.deb`, not `dpkg -i`, so `apt` installs the dependencies. Then open `http://<pi-ip>/`.
@@ -96,8 +98,8 @@ librespeed-cli --version
 ## Update
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1/labtower_2.1_all.deb
-sudo apt-get install -y ./labtower_2.1_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.5/labtower_2.1.5_all.deb
+sudo apt-get install -y ./labtower_2.1.5_all.deb
 labtower-health
 ```
 
