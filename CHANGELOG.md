@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.4g — 2026-11-02
+
+- **Net Monitor:** la purga de equipos offline no borra nada si en el escaneo no respondió ningún equipo (por ejemplo, si el servidor perdió la red).
+- **DNS Monitor:** se quitó código que ya no se usaba en los gráficos.
+
 ## 2.1.4f — 2026-10-31
 
 - **UPS Monitor:** el cálculo del estado de envejecimiento de la batería ya no frena las páginas. Antes se hacía al abrir la página (tardaba más de un segundo con mucho historial, cada 6 horas y después de cada reinicio); ahora se calcula en segundo plano y la página responde al tiro.

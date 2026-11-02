@@ -1054,6 +1054,12 @@ def purge_offline(hosts: dict, days: int, now: float = None) -> list:
     for ip in gone: del hosts[ip]
     return gone
 
+def purge_after_scan(hosts: dict, days: int, now: float = None) -> list:
+    """ES: si no respondió ningún equipo, probablemente fue la red del servidor: no se purga nada.
+    EN: if no device answered, it was probably the server's own network: nothing is purged."""
+    if not any(h.get("online") for h in hosts.values() if isinstance(h, dict)): return []
+    return purge_offline(hosts, days, now)
+
 def run_scan(network: str = None, single_ip: str = None):
     global _live_hosts
     with _scan_lock:                      # reserve the scan atomically: two triggers can't both start
@@ -1156,7 +1162,7 @@ def run_scan(network: str = None, single_ip: str = None):
 
         with _hosts_lock:
             try:
-                gone = purge_offline(hosts, int(load_config().get("purge_days", 0) or 0))
+                gone = purge_after_scan(hosts, int(load_config().get("purge_days", 0) or 0))
                 if gone: log.info(f"Removed {len(gone)} devices offline for too long")
             except Exception as e: log.debug(f"purge: {e}")
             save_hosts(hosts)

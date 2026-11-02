@@ -598,7 +598,7 @@ async function loadRange(id,range,force){
   }catch(e){console.error(e);}
   finally{_rangeBusy[key]=false;}
 }
-function ensureRanges(){const id=chartOwner();if(id==null)return;Object.keys(CHARTS).forEach(k=>{if(!CHARTS[k].local)loadRange(id,chartRange[k]);});}
+function ensureRanges(){const id=chartOwner();if(id==null)return;Object.keys(CHARTS).forEach(k=>{loadRange(id,chartRange[k]);});}
 function setRange(btn,kind,range){
   chartRange[kind]=range;
   btn.parentNode.querySelectorAll('.vchart-filter').forEach(b=>b.classList.toggle('active',b===btn));
@@ -610,7 +610,7 @@ function chartSections(id,kinds){
   return (kinds||Object.keys(CHARTS)).map(k=>{
     const C=CHARTS[k],cid=_cid(id,k);
     const leg=C.series.map(x=>`<div class="vchart-legend-item"><div class="vchart-legend-dot" style="background:${x.c}"></div>${esc(t(x.l))}</div>`).join('');
-    const flt=C.local?'':RANGES.map(r=>`<button class="vchart-filter${chartRange[k]===r?' active':''}" data-on-click="setRange" data-on-click-args="${jsargs([{'@':'this'},k,r])}">${r==='all'?esc(t('filterAll')):r}</button>`).join('');
+    const flt=RANGES.map(r=>`<button class="vchart-filter${chartRange[k]===r?' active':''}" data-on-click="setRange" data-on-click-args="${jsargs([{'@':'this'},k,r])}">${r==='all'?esc(t('filterAll')):r}</button>`).join('');
     return `<div class="vchart-section"><div class="vchart-header"><span class="vchart-title">${esc(t(C.title))}</span><div class="vchart-legend">${leg}</div><div class="vchart-filters">${flt}</div></div>
       <div class="vchart-body" style="position:relative"><div class="vchart-tooltip" id="${cid}-tip"></div><canvas class="vchart" id="${cid}" style="--chart-h:${C.h}px"></canvas></div></div>`;
   }).join('');
@@ -618,7 +618,7 @@ function chartSections(id,kinds){
 function drawCharts(id){if(id!==chartOwner())return;Object.keys(CHARTS).forEach(k=>drawChart(id,k,-1));}
 function drawChart(id,kind,hover){
   const C=CHARTS[kind],cv=document.getElementById(_cid(id,kind));if(!cv)return;
-  const range=chartRange[kind],pts=(C.local?localPts(kind):((_rangeData[id+'|'+range]||{}).pts||[])).filter(p=>p&&typeof p.ts==='number');
+  const range=chartRange[kind],pts=((_rangeData[id+'|'+range]||{}).pts||[]).filter(p=>p&&typeof p.ts==='number');
   const dpr=window.devicePixelRatio||1,W=cv.offsetWidth||600,H=Math.round(cv.getBoundingClientRect().height)||C.h;
   if(cv.width!==W*dpr||cv.height!==H*dpr){cv.width=W*dpr;cv.height=H*dpr;}
   const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
@@ -643,7 +643,7 @@ function drawChart(id,kind,hover){
   if(C.down){pts.forEach((p,i)=>{if(p.up===0){ctx.fillStyle='rgba(239,68,68,.25)';const w=Math.max(2,W2/N);ctx.fillRect(xOf(i)-w/2,PT,w,H2);}});}
   ctx.fillStyle=cDim;ctx.font='9px DM Mono,monospace';ctx.textAlign='center';
   const step=Math.max(1,Math.floor(N/5));
-  for(let i=0;i<N;i+=step){const d=new Date(pts[i].ts*1000);ctx.fillText(range==='1mo'||range==='all'||C.local?d.toLocaleDateString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit'}):PCT.time(d),xOf(i),H-3);}
+  for(let i=0;i<N;i+=step){const d=new Date(pts[i].ts*1000);ctx.fillText(range==='1mo'||range==='all'?d.toLocaleDateString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit'}):PCT.time(d),xOf(i),H-3);}
   if(hover>=0&&hover<N){
     const cx=xOf(hover),p=pts[hover];
     ctx.beginPath();ctx.moveTo(cx,PT);ctx.lineTo(cx,PT+H2);ctx.strokeStyle='rgba(100,116,139,.4)';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([]);

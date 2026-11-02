@@ -31,6 +31,12 @@ class Purge(unittest.TestCase):
         gone = self.net.purge_offline(h, 30, now)
         self.assertEqual(gone, ["a"]); self.assertEqual(sorted(h), ["b", "c", "d"])
         self.assertEqual(self.net.purge_offline(h, 0, now), [])
+    def test_scan_without_any_online_host_purges_nothing(self):
+        now = 1_000_000_000
+        h = {"a": {"online": False, "last_seen": now - 40 * 86400}, "b": {"online": False, "last_seen": now - 50 * 86400}}
+        self.assertEqual(self.net.purge_after_scan(h, 30, now), []); self.assertEqual(sorted(h), ["a", "b"])
+        h["c"] = {"online": True, "last_seen": now}
+        self.assertEqual(sorted(self.net.purge_after_scan(h, 30, now)), ["a", "b"])
     def test_endpoint(self):
         srv = support.Server(self.net.H)
         try:
