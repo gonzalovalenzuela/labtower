@@ -55,6 +55,8 @@ const LANG={
   "fieldTailnet":"Tailnet",
   "tailnetHint":"\"-\" = the tailnet of the API key, or your tailnet name (example.com).",
   "fieldSshUser":"SSH user",
+  "fieldSudo":"Run with sudo (needs passwordless sudo for that command)",
+  "sudoHint":"Needed when the file or command is root-only (for example Synology). Add to sudoers on the VPN server: <user> ALL=(root) NOPASSWD: /bin/cat <status file>  (or wg show all dump).",
   "fieldStatusPath":"Status file",
   "statusPathHint":"Default on Debian: /run/openvpn-server/status-server.log",
   "fieldAliases":"Peer names",
@@ -142,6 +144,8 @@ const LANG={
   "fieldTailnet":"Tailnet",
   "tailnetHint":"«-» = la tailnet de la clave de API, o el nombre de tu tailnet (ejemplo.com).",
   "fieldSshUser":"Usuario SSH",
+  "fieldSudo":"Ejecutar con sudo (requiere sudo sin contraseña para ese comando)",
+  "sudoHint":"Se necesita cuando el archivo o comando es solo de root (por ejemplo Synology). Agrega en sudoers del servidor VPN: <usuario> ALL=(root) NOPASSWD: /bin/cat <archivo de estado>  (o wg show all dump).",
   "fieldStatusPath":"Archivo de estado",
   "statusPathHint":"Por defecto en Debian: /run/openvpn-server/status-server.log",
   "fieldAliases":"Nombres de peers",
@@ -418,7 +422,7 @@ async function openVpnForm(id){
   $('f-type').value=ty;$('f-type').disabled=!!n;
   $('f-name').value=n?n.name:'';$('f-timeout').value=n?n.timeout:10;
   $('f-tailnet').value=n&&n.tailnet?n.tailnet:'-';$('f-api-key').value='';$('h-api-key').textContent=n&&n.has_api_key?t('secretKept'):'';
-  $('f-host').value=n&&n.host?n.host:'';$('f-ssh-user').value=n&&n.ssh_user?n.ssh_user:'';$('f-port').value=n&&n.port?n.port:22;
+  $('f-host').value=n&&n.host?n.host:'';$('f-ssh-user').value=n&&n.ssh_user?n.ssh_user:'';$('f-port').value=n&&n.port?n.port:22;$('f-sudo').checked=!!(n&&n.use_sudo);
   $('f-status-path').value=n&&n.status_path?n.status_path:'/run/openvpn-server/status-server.log';
   $('f-aliases').value=n&&n.aliases_text?n.aliases_text:'';
   $('test-result').className='test-result';
@@ -430,7 +434,7 @@ function formBody(){
   const ty=curType(),b={type:ty,name:$('f-name').value.trim(),timeout:parseInt($('f-timeout').value)||10};
   if(ty==='tailscale'){b.tailnet=$('f-tailnet').value.trim()||'-';b.api_key=$('f-api-key').value.trim();}
   else{
-    Object.assign(b,{host:$('f-host').value.trim(),ssh_user:$('f-ssh-user').value.trim(),port:parseInt($('f-port').value)||22});
+    Object.assign(b,{host:$('f-host').value.trim(),ssh_user:$('f-ssh-user').value.trim(),port:parseInt($('f-port').value)||22,use_sudo:$('f-sudo').checked});
     if(ty==='openvpn')b.status_path=$('f-status-path').value.trim();else b.aliases=$('f-aliases').value;
   }
   if(editingId)b.id=editingId;

@@ -74,6 +74,16 @@ class Ssh(unittest.TestCase):
         with mock.patch.object(m, "ssh_run", return_value="") as r:
             m.collect(cfg)
         self.assertEqual(r.call_args[0][1], "cat /var/log/openvpn/status.log")
+    def test_sudo_option_prefixes_only_the_fixed_command(self):
+        for typ, extra, want in (("openvpn", {"status_path": "/tmp/ovpn_status_2_result"}, "sudo -n cat /tmp/ovpn_status_2_result"),
+                                 ("wireguard", {}, "sudo -n " + m.CMD_WG)):
+            cfg = m.validate({"type": typ, "name": "x", "host": "192.0.2.9", "ssh_user": "gonzalo", "use_sudo": True, **extra})
+            self.assertTrue(cfg["use_sudo"])
+            with mock.patch.object(m, "ssh_run", return_value="") as r:
+                m.collect(cfg)
+            self.assertEqual(r.call_args[0][1], want)
+        cfg = m.validate({"type": "openvpn", "name": "x", "host": "192.0.2.9", "ssh_user": "gonzalo"})
+        self.assertFalse(cfg["use_sudo"])
     def test_missing_key_is_explained(self):
         with mock.patch.object(m, "SSH_KEY", Path(tempfile.mkdtemp(), "nokey")):
             with self.assertRaises(RuntimeError) as e: m.ssh_run({"port": 22, "ssh_user": "root", "host": "192.0.2.9"}, "x")
