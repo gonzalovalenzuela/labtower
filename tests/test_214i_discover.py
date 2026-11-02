@@ -41,7 +41,7 @@ class Discover(unittest.TestCase):
         self.assertEqual(r["rows"], ["a", "b", "c"]); self.assertFalse(r["hidden"])
     def test_page_and_hooks(self):
         h = (ROOT / "overview/static/index.html").read_text(); app = (ROOT / "overview/static/app.js").read_text()
-        self.assertLess(h.index('src="links.js"'), h.index('src="discover.js"')); self.assertIn('id="c-sug"', h)
+        self.assertLess(h.index('src="search.js"'), h.index('src="discover.js"')); self.assertIn('id="c-sug"', h)
         self.assertIn("discoverUpdate(R)", app); self.assertIn("discoverLang()", app)
         self.assertNotIn("onclick=", JS)
     def test_same_keys_in_both_languages(self):

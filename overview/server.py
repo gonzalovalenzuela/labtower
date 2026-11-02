@@ -16,7 +16,7 @@ Overview — resumen de UPS, Proxmox, red y el servidor / Overview of UPS, Proxm
 #       /api/pidetail → full server detail (per-core CPU, memory, disks, network, users, processes)
 #       /api/events  → timeline (modules record their state changes with auth.record_event)
 #     Structure: health · HTTP (GET/POST) · startup.
-import json, os, re, sys, logging, threading, time
+import json, os, sys, logging, threading, time
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 ThreadingHTTPServer.request_queue_size = 128
 from urllib.parse import urlparse, parse_qs
@@ -144,46 +144,6 @@ def pi_detail_cached(full):
         return d
 
 
-# ─── Marcadores / Bookmarks ───────────────────────────────────────────────────
-# Enlaces propios del laboratorio (el router, Jellyfin, etc.) agrupados en una tarjeta del Resumen. Los ve cualquier usuario con sesión; solo los
-# administradores (WOL o UPS) los editan. Se guardan enteros en bookmarks.json: [{"g": grupo, "n": nombre, "u": enlace}]. Solo se aceptan enlaces
-# http(s) o rutas internas que empiezan con «/» (nunca javascript: ni data:).
-# EN: Own lab links (the router, Jellyfin, ...) grouped in an Overview card. Any logged-in user sees them; only administrators (WOL or UPS) edit
-#     them. Stored whole in bookmarks.json: [{"g": group, "n": name, "u": link}]. Only http(s) links or internal paths starting with "/" are accepted.
-BOOKMARKS_FILE = DATA_DIR / "bookmarks.json"
-BM_MAX, BM_MAX_GROUPS = 120, 12
-_bm_lock = threading.Lock()
-_CTRL = re.compile(r"[\x00-\x1f\x7f]")
-
-def bm_url_ok(u):
-    if not isinstance(u, str) or not u or len(u) > 500 or _CTRL.search(u) or u != u.strip(): return False
-    if u.startswith("/") and not u.startswith("//") and "\\" not in u: return True
-    p = urlparse(u)
-    return p.scheme in ("http", "https") and bool(p.hostname) and not p.username and not p.password
-
-def clean_bookmarks(d):
-    """Return (list, error). Strict: a wrong entry rejects the whole save so the editor can show the problem."""
-    if not isinstance(d, list): return None, "Invalid bookmarks"
-    if len(d) > BM_MAX: return None, f"At most {BM_MAX} links"
-    out, groups = [], []
-    for x in d:
-        if not isinstance(x, dict): return None, "Invalid bookmarks"
-        g, n, u = x.get("g", ""), x.get("n"), x.get("u")
-        if not isinstance(g, str) or not isinstance(n, str): return None, "Invalid bookmarks"
-        g, n = g.strip(), n.strip()
-        if not n or len(n) > 40 or len(g) > 30 or _CTRL.search(n) or _CTRL.search(g): return None, "Invalid name or group"
-        if not bm_url_ok(u): return None, f"Invalid link: {n}"
-        if g not in groups: groups.append(g)
-        out.append({"g": g, "n": n, "u": u})
-    if len(groups) > BM_MAX_GROUPS: return None, f"At most {BM_MAX_GROUPS} groups"
-    return out, ""
-
-def load_bookmarks():
-    d = auth.read_json(BOOKMARKS_FILE, [], list)
-    out, err = clean_bookmarks(d)
-    return out if out is not None else []
-
-
 # ─── Reglas de alerta / alert rules ───
 # Umbrales que el administrador define sobre las métricas que el Resumen ya lee de los módulos (temperatura, CPU, batería, etc.). La página
 # los evalúa en cada actualización y los que se cumplen aparecen en el panel de atención. Se guardan enteras en rules.json:
@@ -197,7 +157,7 @@ RULES_MAX = 40
 _rules_lock = threading.Lock()
 
 def clean_rules(d):
-    """Return (list, error). Strict like the bookmarks: a wrong rule rejects the whole save."""
+    """Return (list, error). Strict: a wrong rule rejects the whole save so the editor can show the problem."""
     if not isinstance(d, list): return None, "Invalid rules"
     if len(d) > RULES_MAX: return None, f"At most {RULES_MAX} rules"
     out = []
@@ -245,7 +205,8 @@ class H(BaseHTTPRequestHandler):
         for k, v in extra_headers: self.send_header(k, v)
         self.end_headers(); self.wfile.write(body)
 
-    def _body(self, limit=8192):
+    def _body(self):
+        limit = 8192
         try:
             n = int(self.headers.get("Content-Length", 0))
             if n < 0 or n > limit: return None
@@ -307,9 +268,6 @@ class H(BaseHTTPRequestHandler):
             except Exception as e:
                 log.warning(f"Pi history unavailable: {e}"); return self._json(200, {"pi": True, "every": PI_EVERY, "samples": []})
 
-        if path == "/api/bookmarks":
-            return self._json(200, {"bookmarks": load_bookmarks(), "can_edit": is_admin(tok)})
-
         if path == "/api/rules":
             return self._json(200, {"rules": load_rules(), "can_edit": is_admin(tok)})
 
@@ -330,7 +288,7 @@ class H(BaseHTTPRequestHandler):
         if auth.cross_origin(self.headers): return self._json(403, {"error": "Cross-origin request blocked"})
         path = urlparse(self.path).path.rstrip("/")
         tok  = self._tok()
-        body = self._body(65536 if path == "/api/bookmarks" and auth.get_session(tok) else 8192)
+        body = self._body()
         if body is None: return self._json(400, {"error": "Invalid request body"})
         if path == "/api/login":
             r, err = auth.login_session(self, body.get("username", ""), body.get("password", ""), body.get("remember"), body.get("code"))   # the service checks the password and opens the session
@@ -340,14 +298,6 @@ class H(BaseHTTPRequestHandler):
                               [("Set-Cookie", auth.session_cookie(r["token"], r["ttl"]))])
         if path == "/api/logout":
             auth.delete_session(tok); return self._json(200, {"ok": True})
-        if path == "/api/bookmarks":
-            if not is_admin(tok): return self._json(403, {"error": "Admin permission required"})
-            items, err = clean_bookmarks(body.get("bookmarks"))
-            if items is None: return self._json(400, {"error": err})
-            with _bm_lock: auth.write_json(BOOKMARKS_FILE, items)
-            who = (auth.get_session(tok) or {}).get("username", "?")
-            auth.audit(who, "bookmarks_saved", "", f"{len(items)} links", auth.client_ip(self), module="overview")
-            return self._json(200, {"ok": True, "bookmarks": items})
         if path == "/api/rules":
             if not is_admin(tok): return self._json(403, {"error": "Admin permission required"})
             items, err = clean_rules(body.get("rules"))

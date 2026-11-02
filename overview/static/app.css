@@ -206,7 +206,7 @@ body.pd-open{overflow:hidden}
 /* Franja de indicadores (mezcla NOC + Apple): tiles con borde de estado y anillo para porcentajes. EN: KPI strip (NOC + Apple blend): tiles with a status top border and a ring for percentages. */
 
 body.kiosk .dnsctl{display:none!important}
-/* Marcadores y búsqueda global / Bookmarks and global search */
+/* Búsqueda global / Global search */
 .gs-wrap{position:relative;flex:0 1 260px;min-width:150px}
 .gs-wrap input{width:100%;cursor:text}
 .gsr{position:absolute;top:calc(100% + 4px);left:0;width:min(440px,92vw);max-height:60vh;overflow:auto;background:var(--surface);border:1px solid var(--border-b);border-radius:var(--r-sm);box-shadow:var(--shadow);z-index:30}
@@ -217,19 +217,7 @@ body.kiosk .dnsctl{display:none!important}
 .gst{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gss{font-size:.72rem;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gsn{padding:10px;font-size:.82rem;color:var(--text-dim)}
-.bm-grp{display:flex;flex-direction:column;gap:6px}
-.bm-gn{font-size:.68rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim)}
-.bm-list{display:flex;flex-wrap:wrap;gap:8px}
-.bm{display:inline-flex;align-items:center;gap:8px;padding:6px 12px 6px 7px;border:1px solid var(--border-b);border-radius:99px;background:var(--surface2);font-size:.84rem;font-weight:500}
-.bm:hover{border-color:var(--blue);color:var(--blue)}
-.bm-i{width:22px;height:22px;border-radius:50%;background:var(--blue-dim);color:var(--blue);display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700}
-.bm-row{display:grid;grid-template-columns:minmax(70px,.7fr) minmax(90px,1fr) minmax(140px,2fr) auto;gap:6px;margin-bottom:6px}
-.bm-row input{font:inherit;font-size:.82rem;padding:6px 8px;border:1px solid var(--border-b);border-radius:var(--r-sm);background:var(--surface);color:var(--text);min-width:0}
-.bm-act{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.bm-err{color:var(--red);font-size:.78rem}
-.bm-save{background:var(--blue);color:#fff;border-color:var(--blue)}
-@media (max-width:640px){.bm-row{grid-template-columns:1fr 1fr}.bm-row .bm-u{grid-column:1/3}}
-body.kiosk #c-bm,body.kiosk .gs-wrap{display:none!important}
+body.kiosk .gs-wrap{display:none!important}
 /* Monitores sugeridos / Suggested monitors */
 .sug-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--border)}
 .sug-k{font-size:.66rem;text-transform:uppercase;letter-spacing:.4px;color:var(--text-dim);min-width:130px}
@@ -242,3 +230,6 @@ body.kiosk #c-sug,body.kiosk #c-rules{display:none!important}
 .rl-list{list-style:none;margin:0 0 6px;padding:0;display:flex;flex-direction:column;gap:3px;font-size:.84rem}
 .rl-off{opacity:.5;text-decoration:line-through}
 @media (max-width:640px){.rl-row{grid-template-columns:1fr 56px 1fr}}
+.rl-act{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.rl-msg{color:var(--red);font-size:.78rem}
+.rl-save{background:var(--blue);color:#fff;border-color:var(--blue)}

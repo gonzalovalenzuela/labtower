@@ -421,7 +421,7 @@ async function refresh(){
   $('attnl').innerHTML=issues.map(i=>`<li><b class="${i.lv}" style="background:none">${esc(String(i.m).toUpperCase())}</b>${i.href?`<a href="${esc(i.href)}">${esc(i.t)}</a>`:esc(i.t)}</li>`).join('');
   $('upd').textContent=T('updated')+' '+PCT.time(new Date(),true);
   decorate();
-  if(window.linksUpdate)linksUpdate(R).catch(()=>{});
+  if(window.searchUpdate)searchUpdate(R).catch(()=>{});
   if(window.discoverUpdate)discoverUpdate(R);
 }
 // Intervalo de actualización elegible (se guarda en este navegador). Solo cambia cuánto se redibuja ESTA pantalla: los módulos siguen vigilando y anotando eventos en el servidor aunque nadie mire, y los eventos quedan en la línea de tiempo.
@@ -463,7 +463,7 @@ function applyLang(){
   document.querySelectorAll('[data-i]').forEach(e=>e.textContent=T(e.dataset.i));
   $('bl').textContent=lang==='es'?'EN':'ES';riFill();
   paintSort();
-  if(window.linksLang)linksLang();
+  if(window.searchLang)searchLang();
   if(window.rulesLang)rulesLang();
   if(window.discoverLang)discoverLang();
   $('lu').placeholder=lang==='es'?'Usuario':'User';$('lp').placeholder=lang==='es'?'Contraseña':'Password';

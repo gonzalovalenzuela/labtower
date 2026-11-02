@@ -77,8 +77,8 @@
     h += '</div>';
     if (editing) {
       h += '<div id="rl-rows">' + (RU.length ? RU : [null]).map(rowHtml).join('') + '</div>' +
-        `<div class="bm-act"><button type="button" class="btn" data-rl="add">${esc(X('add'))}</button><span class="spacer"></span><span class="bm-err" id="rl-err"></span>` +
-        `<button type="button" class="btn" data-rl="cancel">${esc(X('cancel'))}</button><button type="button" class="btn bm-save" data-rl="save">${esc(X('save'))}</button></div>`;
+        `<div class="rl-act"><button type="button" class="btn" data-rl="add">${esc(X('add'))}</button><span class="spacer"></span><span class="rl-msg" id="rl-err"></span>` +
+        `<button type="button" class="btn" data-rl="cancel">${esc(X('cancel'))}</button><button type="button" class="btn rl-save" data-rl="save">${esc(X('save'))}</button></div>`;
     } else if (!RU.length) h += `<div class="empty">${esc(X('none'))}</div>`;
     else h += '<ul class="rl-list">' + RU.map(r => `<li class="${r.on ? '' : 'rl-off'}"><b class="${r.lv}" style="background:none">${esc(X(r.lv))}</b> ${esc(name(r.m))} ${esc(r.o)} ${esc(r.v)} ${esc(M[r.m][1])}</li>`).join('') + `</ul><div class="sub">${esc(X('hint'))}</div>`;
     el.innerHTML = h;
