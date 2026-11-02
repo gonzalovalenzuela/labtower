@@ -180,7 +180,7 @@ function renderNAS(d){
      <div class="kpis"><div class="kpi"><b>${disks.length?dOk+'/'+disks.length:'—'}</b><span>${T('nasdisks')}</span></div><div class="kpi"><b>${sy.temp!=null?sy.temp+'°':'—'}</b><span>${T('temp')}</span></div><div class="kpi"><b>${sy.uptime?dur(sy.uptime):'—'}</b><span>${T('uptime')}</span></div></div>
      ${cpu!=null?`<div class="row"><span class="l">${T('cpu')}</span>${bar(cpu,70,90)}<span class="v">${cpu.toFixed(0)}%</span></div>`:''}
      ${mem!=null?`<div class="row"><span class="l">${T('mem')}</span>${bar(mem,80,92)}<span class="v">${mem.toFixed(0)}%</span></div>`:''}
-     ${vmax.pct>=0?`<div class="row"><span class="l">${T('nasvol')}</span>${bar(vmax.pct,80,90)}<span class="v">${vmax.pct.toFixed(0)}%</span></div>`:''}${nasChart(n.id)}</div>`;
+     ${vmax.pct>=0?`<div class="row"><span class="l">${T('nasvol')}</span>${bar(vmax.pct,data.thr?.vol_warn||90,data.thr?.vol_crit||95)}<span class="v">${vmax.pct.toFixed(0)}%</span></div>`:''}${nasChart(n.id)}</div>`;
   });
   el.innerHTML=`<div class="ch"><h2>${T('nas')}</h2>${L.length?pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail')):''}<a class="go" href="/nas/">${T('open')}</a></div>`+(L.length?body:`<div class="empty">${T('nonas')}</div>`);
   return sev;
@@ -422,7 +422,6 @@ async function refresh(){
   $('upd').textContent=T('updated')+' '+PCT.time(new Date(),true);
   decorate();
   if(window.searchUpdate)searchUpdate(R).catch(()=>{});
-  if(window.discoverUpdate)discoverUpdate(R);
 }
 // Intervalo de actualización elegible (se guarda en este navegador). Solo cambia cuánto se redibuja ESTA pantalla: los módulos siguen vigilando y anotando eventos en el servidor aunque nadie mire, y los eventos quedan en la línea de tiempo.
 // EN: Selectable refresh interval (stored in this browser). It only changes how often THIS screen redraws: the modules keep watching and recording events on the server even when nobody looks, and events stay in the timeline.
@@ -465,7 +464,6 @@ function applyLang(){
   paintSort();
   if(window.searchLang)searchLang();
   if(window.rulesLang)rulesLang();
-  if(window.discoverLang)discoverLang();
   $('lu').placeholder=lang==='es'?'Usuario':'User';$('lp').placeholder=lang==='es'?'Contraseña':'Password';
 }
 $('ri').onchange=e=>{riSec=parseInt(e.target.value,10);try{localStorage.setItem('pi-refresh',String(riSec))}catch(x){}if(me&&me.username){riNext();if(riSec>0&&Date.now()-lastRef>riSec*1000)loop()}};

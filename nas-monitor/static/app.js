@@ -14,7 +14,7 @@ const LANG={
     fieldApiUserTn:'User that owns the key',connErrorHintTn:'Check host, port, API key and the user it belongs to. TrueNAS 25.04 or newer is required and this server must be able to reach it.',
     connErrorHintOmv:'Check host, port, HTTP/HTTPS, user and password. The account must be an OpenMediaVault administrator.',
     addNasTitle:'Add NAS',editNasTitle:'Edit NAS',addNasHint:'Enable SNMP on the NAS: Control Panel → Terminal & SNMP → SNMP. SNMPv3 is recommended.',
-    fieldName:'Name',fieldPort:'Port',fieldVersion:'SNMP version',fieldTimeout:'Timeout (s)',fieldCommunity:'Community',fieldUser:'SNMP user',fieldLevel:'Security level',
+    fieldName:'Name',fieldPort:'Port',fieldVersion:'SNMP version',fieldTimeout:'Timeout (s)',fieldVolWarn:'Volume warning (%)',fieldVolCrit:'Volume critical (%)',fieldCommunity:'Community',fieldUser:'SNMP user',fieldLevel:'Security level',
     fieldAuthProto:'Auth protocol',fieldAuthPass:'Auth password',fieldPrivProto:'Privacy protocol',fieldPrivPass:'Privacy password',
     secretKept:'Saved. Leave empty to keep it.',cancel:'Cancel',test:'Test',save:'Save',delete:'Delete',deleteNas:'Delete NAS',deleteConfirm:n=>`Delete "${n}" and its history?`,
     edit:'Edit',testFillAll:'Fill in the name, host and credentials.',testOk:(m,d)=>`✓ ${m||'SNMP'}${d?' — '+d:''}`,testNotSyno:'✓ SNMP answers, but this is not a Synology (no Synology MIB).',
@@ -44,7 +44,7 @@ const LANG={
     fieldApiUserTn:'Usuario dueño de la clave',connErrorHintTn:'Revisa host, puerto, clave de API y el usuario al que pertenece. Se requiere TrueNAS 25.04 o más nuevo y que este servidor pueda alcanzarlo.',
     connErrorHintOmv:'Revisa host, puerto, HTTP/HTTPS, usuario y contraseña. La cuenta debe ser administrador de OpenMediaVault.',
     addNasTitle:'Agregar NAS',editNasTitle:'Editar NAS',addNasHint:'Activa SNMP en el NAS: Panel de control → Terminal y SNMP → SNMP. Se recomienda SNMPv3.',
-    fieldName:'Nombre',fieldPort:'Puerto',fieldVersion:'Versión de SNMP',fieldTimeout:'Tiempo de espera (s)',fieldCommunity:'Comunidad',fieldUser:'Usuario SNMP',fieldLevel:'Nivel de seguridad',
+    fieldName:'Nombre',fieldPort:'Puerto',fieldVersion:'Versión de SNMP',fieldTimeout:'Tiempo de espera (s)',fieldVolWarn:'Aviso de volumen (%)',fieldVolCrit:'Crítico de volumen (%)',fieldCommunity:'Comunidad',fieldUser:'Usuario SNMP',fieldLevel:'Nivel de seguridad',
     fieldAuthProto:'Protocolo de autenticación',fieldAuthPass:'Clave de autenticación',fieldPrivProto:'Protocolo de privacidad',fieldPrivPass:'Clave de privacidad',
     secretKept:'Guardada. Déjala vacía para conservarla.',cancel:'Cancelar',test:'Probar',save:'Guardar',delete:'Eliminar',deleteNas:'Eliminar NAS',deleteConfirm:n=>`¿Eliminar «${n}» y su historial?`,
     edit:'Editar',testFillAll:'Completa nombre, host y credenciales.',testOk:(m,d)=>`✓ ${m||'SNMP'}${d?' — '+d:''}`,testNotSyno:'✓ SNMP responde, pero no es un Synology (sin la MIB de Synology).',
@@ -251,7 +251,7 @@ function renderSummary(){
       <td>${cell(d?.cpu?.pct,CPU_W,CPU_C)}</td><td>${cell(d?.mem?.pct,MEM_W,MEM_C)}</td>
       <td class="c-temp">${sy.temp==null?'—':esc(sy.temp)+' °C'}</td>
       <td>${dk.length?esc(dOk+'/'+dk.length):'—'}</td>
-      <td>${vmax>=0?cell(vmax,VOL_W,VOL_C):'—'}</td>
+      <td>${vmax>=0?cell(vmax,volW(d),volC(d)):'—'}</td>
       <td class="c-spark">${spark(n.history)}</td>
       <td><span class="expand-arrow ${open?'open':''}">▶</span></td></tr>
     <tr class="detail-row${open?' show':''}"><td colspan="11" class="detail-cell"><div class="nas-detail">${open?buildDetail(n):''}</div></td></tr>`;
@@ -321,7 +321,7 @@ function buildDetail(n){
   (d.raids||[]).forEach(r=>{
     const st=r.status_text||(LANG[_lang].raid||{})[r.status]||('#'+r.status);
     h+=`<div class="vol-row"><div class="vol-top"><span class="vol-name">${esc(r.name)}</span>${pill(r.lv,st)}</div>
-      ${r.pct!=null?(r.pool?bar(r.pct,101,101):bar(r.pct,VOL_W,VOL_C)):''}
+      ${r.pct!=null?(r.pool?bar(r.pct,101,101):bar(r.pct,volW(d),volC(d))):''}
       <div class="vol-size">${r.pct!=null?esc(r.pct)+'% '+esc(t('used'))+' · '+esc(fmtBytes(r.total-r.free))+' / '+esc(fmtBytes(r.total))+' · '+esc(fmtBytes(r.free))+' '+esc(t('free')):'—'}</div></div>`;
   });
   h+='</div>';
@@ -354,7 +354,8 @@ function buildDetail(n){
   h+='</div>'+chartSections(n);
   return h;
 }
-const CPU_W=70,CPU_C=85,MEM_W=80,MEM_C=90,VOL_W=80,VOL_C=90,DISK_HOT=55;
+const volW=d=>d?.thr?.vol_warn||90,volC=d=>d?.thr?.vol_crit||95;
+const CPU_W=70,CPU_C=85,MEM_W=80,MEM_C=90,DISK_HOT=55;
 
 // ── Gráficos de detalle (como los de UPS Monitor): canvas con rangos 1h / 1d / 1mo / todo, cuadrícula, valores actuales y cursor con tooltip ──
 // EN: Detail charts (like UPS Monitor's): canvas with 1h / 1d / 1mo / all ranges, grid, current values and a hover cursor with tooltip.
@@ -429,7 +430,7 @@ function gauges(d){
   const tc=s.temp==null?'var(--text)':s.temp>=70?'var(--red)':s.temp>=55?'var(--orange)':'var(--blue)';
   return '<div class="nas-gauges">'+
     ring(t('cpu'),cpu.pct,barColor(cpu.pct||0,CPU_W,CPU_C))+ring('RAM',mem?mem.pct:null,barColor(mem?mem.pct:0,MEM_W,MEM_C))+
-    ring(t('volumes'),vmax>=0?vmax:null,barColor(vmax,VOL_W,VOL_C))+
+    ring(t('volumes'),vmax>=0?vmax:null,barColor(vmax,volW(d),volC(d)))+
     bigNum(t('temp'),s.temp==null?'—':s.temp,s.temp==null?'':'°C',tc)+bigNum(t('disks'),dk.length?dOk+'/'+dk.length:'—','',dk.length&&dOk<dk.length?'var(--red)':'var(--text)')+
     bigNum(t('uptime'),fmtUptime(s.uptime),'')+'</div>';
 }
@@ -472,6 +473,7 @@ function openNasForm(id){
   const n=editingId?items.find(x=>x.id===editingId):null,ty=n?(n.type||'synology'):'synology';
   $('nas-form-title').textContent=t(n?'editNasTitle':'addNasTitle');
   $('f-type').value=ty;$('f-type').disabled=!!n;
+  $('f-vol-warn').value=n?.vol_warn||90;$('f-vol-crit').value=n?.vol_crit||95;
   $('f-name').value=n?n.name:'';$('f-host').value=n?n.host:'';$('f-port').value=n?n.port:TYPE_PORT[ty];
   $('f-version').value=n&&ty==='synology'?n.version:'3';$('f-timeout').value=n&&ty==='synology'?n.timeout:5;
   $('f-user').value=n&&ty==='synology'?n.user:'';$('f-level').value=n&&ty==='synology'?n.level:'authPriv';
@@ -491,7 +493,7 @@ function openNasForm(id){
 }
 function formBody(){
   const ty=curType();
-  const b={type:ty,name:$('f-name').value.trim(),host:$('f-host').value.trim(),port:parseInt($('f-port').value)||TYPE_PORT[ty]};
+  const b={type:ty,name:$('f-name').value.trim(),vol_warn:parseInt($('f-vol-warn').value)||90,vol_crit:parseInt($('f-vol-crit').value)||95,host:$('f-host').value.trim(),port:parseInt($('f-port').value)||TYPE_PORT[ty]};
   if(ty==='synology'){
     Object.assign(b,{version:$('f-version').value,timeout:parseInt($('f-timeout').value)||5,user:$('f-user').value.trim(),level:$('f-level').value,
       auth_proto:$('f-auth-proto').value,priv_proto:$('f-priv-proto').value,

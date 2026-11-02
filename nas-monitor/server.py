@@ -159,11 +159,37 @@ def save_nas(items: list):
 # Combina la petición con lo guardado y valida cada campo. Un secreto vacío significa «conservar el actual».
 # EN: Merge the request with what is stored and validate every field. An empty secret means "keep the current one".
 def validate(body: dict, current=None) -> dict:
+    cfg = _validate_base(body, current)
+    _vol_thresholds(cfg, body, current)
+    return cfg
+
+# Umbrales de aviso / crítico de los volúmenes, por NAS (por defecto 90 / 95). 1–100 y aviso < crítico.
+# EN: Per-NAS volume warning / critical thresholds (default 90 / 95). 1-100 and warning < critical.
+def _vol_thresholds(cfg: dict, body: dict, current=None) -> None:
+    out = {}
+    for k, d in (("vol_warn", VOL_WARN), ("vol_crit", VOL_CRIT)):
+        v = body[k] if k in body else (current or {}).get(k, d)
+        if isinstance(v, bool): raise ValueError("Invalid volume threshold")
+        try:    v = int(v)
+        except (TypeError, ValueError): raise ValueError("Invalid volume threshold")
+        if not 1 <= v <= 100: raise ValueError("Volume thresholds must be 1-100")
+        out[k] = v
+    if out["vol_warn"] >= out["vol_crit"]: raise ValueError("Volume warning must be lower than critical")
+    cfg.update(out)
+
+def vol_thr(cfg) -> tuple:
+    try:
+        w, c = int(cfg.get("vol_warn", VOL_WARN)), int(cfg.get("vol_crit", VOL_CRIT))
+        if 1 <= w < c <= 100: return w, c
+    except (TypeError, ValueError): pass
+    return VOL_WARN, VOL_CRIT
+
+def _validate_base(body: dict, current=None) -> dict:
     typ = (current.get("type") or "synology") if current is not None else body.get("type") or "synology"
     if not isinstance(typ, str) or typ not in TYPES: raise ValueError("Invalid NAS type")
     if current is not None and body.get("type") not in (None, "", typ): raise ValueError("The NAS type cannot be changed")
     if typ != "synology": return _validate_api(typ, body, current)
-    cfg = dict(DEFAULTS); cfg.update({k: v for k, v in (current or {}).items() if k in SNMP_FIELDS or k in ("name", "id")})
+    cfg = dict(DEFAULTS); cfg.update({k: v for k, v in (current or {}).items() if k in SNMP_FIELDS or k in ("name", "id", "vol_warn", "vol_crit")})
     cfg["type"] = "synology"
     for k in ("name",) + SNMP_FIELDS:
         if k not in body: continue
@@ -203,7 +229,7 @@ def validate(body: dict, current=None) -> dict:
 #     The pinned TLS fingerprint (tls_pin) is learned by the server and never accepted from the form; saving the NAS again clears it
 #     (it is learned again on the next connection): that is how a new certificate is accepted on purpose.
 def _validate_api(typ: str, body: dict, current=None) -> dict:
-    cfg = dict(API_DEFAULTS[typ]); cfg.update({k: v for k, v in (current or {}).items() if k in API_FIELDS or k in ("name", "id")})
+    cfg = dict(API_DEFAULTS[typ]); cfg.update({k: v for k, v in (current or {}).items() if k in API_FIELDS or k in ("name", "id", "vol_warn", "vol_crit")})
     cfg["type"] = typ
     for k in ("name", "host", "user", "password", "api_key"):
         if body.get(k) is not None and not isinstance(body[k], str): raise ValueError(f"Invalid {k}")
@@ -306,7 +332,8 @@ def collect(cfg: dict, prev: dict) -> dict:
     typ = cfg.get("type") or "synology"
     if typ == "synology": return collect_synology(cfg, prev)
     snap = (remote.tn_collect if typ == "truenas" else remote.omv_collect)(cfg, prev, _learn_pin(cfg))
-    snap["alerts"] = compute_alerts(snap) + snap.pop("extra_alerts", [])
+    snap["thr"] = dict(zip(("vol_warn", "vol_crit"), vol_thr(cfg)))
+    snap["alerts"] = compute_alerts(snap, vol_thr(cfg)) + snap.pop("extra_alerts", [])
     return snap
 
 def collect_synology(cfg: dict, prev: dict) -> dict:
@@ -395,12 +422,14 @@ def collect_synology(cfg: dict, prev: dict) -> dict:
 
     snap = {"system": system, "cpu": cpu, "mem": mem, "disks": disks, "raids": raids, "ups": ups, "io": io, "net": net,
             "synology": bool(syn), "warnings": warnings}
-    snap["alerts"] = compute_alerts(snap)
+    snap["thr"] = dict(zip(("vol_warn", "vol_crit"), vol_thr(cfg)))
+    snap["alerts"] = compute_alerts(snap, vol_thr(cfg))
     return snap
 
 # Alertas de una lectura: la página y el Resumen las traducen por «type».
 # EN: Alerts of a reading: the page and the Overview translate them by "type".
-def compute_alerts(s: dict) -> list:
+def compute_alerts(s: dict, thr=None) -> list:
+    vw, vc = thr or (VOL_WARN, VOL_CRIT)
     a = []
     sysd = s["system"]
     if sysd.get("status") == 2: a.append({"lv": "crit", "type": "system"})
@@ -414,8 +443,8 @@ def compute_alerts(s: dict) -> list:
         if _num(d.get("temp")) and d["temp"] >= T_DISK_WARN: a.append({"lv": "warn", "type": "disk_temp", "item": d["name"], "value": d["temp"]})
     for r in s["raids"]:
         if r["lv"] in ("warn", "crit"): a.append({"lv": r["lv"], "type": "raid", "item": r["name"], "value": r.get("status_text") or r["status"]})
-        if r["pct"] is not None and r["pct"] >= VOL_WARN and not r.get("pool"):
-            a.append({"lv": "crit" if r["pct"] >= VOL_CRIT else "warn", "type": "vol_full", "item": r["name"], "value": r["pct"]})
+        if r["pct"] is not None and r["pct"] >= vw and not r.get("pool"):
+            a.append({"lv": "crit" if r["pct"] >= vc else "warn", "type": "vol_full", "item": r["name"], "value": r["pct"]})
     if s["system"].get("upgrade") == 1: a.append({"lv": "info", "type": "upgrade"})
     return a
 

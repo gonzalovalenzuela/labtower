@@ -218,11 +218,7 @@ body.kiosk .dnsctl{display:none!important}
 .gss{font-size:.72rem;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gsn{padding:10px;font-size:.82rem;color:var(--text-dim)}
 body.kiosk .gs-wrap{display:none!important}
-/* Monitores sugeridos / Suggested monitors */
-.sug-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--border)}
-.sug-k{font-size:.66rem;text-transform:uppercase;letter-spacing:.4px;color:var(--text-dim);min-width:130px}
-.sug-n{flex:1;min-width:140px;font-size:.84rem;overflow:hidden;text-overflow:ellipsis}
-body.kiosk #c-sug,body.kiosk #c-rules{display:none!important}
+body.kiosk #c-rules{display:none!important}
 
 .rl-row{display:grid;grid-template-columns:minmax(150px,2fr) 56px 90px 100px auto auto;gap:6px;margin-bottom:6px;align-items:center}
 .rl-row select,.rl-row input.rl-v{font:inherit;font-size:.82rem;padding:6px 8px;border:1px solid var(--border-b);border-radius:var(--r-sm);background:var(--surface);color:var(--text);min-width:0}
