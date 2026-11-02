@@ -57,6 +57,31 @@ apt install ./labtower_X.Y.Z_all.deb
 - **Net Monitor:** el CT debe estar en el mismo bridge que tu LAN para ver las MAC de los equipos. Si el ping falla, revisa el firewall del CT y del bridge.
 - **UPS Monitor:** LabTower se conecta a tu servidor NUT por la red; no necesita acceso USB al CT.
 
+### Pruebas de velocidad (opcional)
+WAN Monitor trae su motor propio y funciona sin instalar nada. Para usar **Ookla** o **LibreSpeed**, instala el programa **dentro del CT** (`pct enter ID`), no en el nodo de Proxmox: el script de Ookla no reconoce la versión de Debian del nodo.
+
+Ookla (`speedtest`), dentro del CT:
+```
+apt-get install -y curl
+curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.deb.sh | bash
+apt-get install -y speedtest
+speedtest --version
+```
+Si el script no reconoce el sistema, instala el binario:
+```
+apt-get install -y wget
+wget https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-x86_64.tgz
+tar -xzf ookla-speedtest-1.2.0-linux-x86_64.tgz speedtest
+install -m 755 speedtest /usr/local/bin/speedtest
+```
+LibreSpeed (`librespeed-cli`), dentro del CT (en Debian 12 no hay paquete; usa `arm64` en vez de `amd64` si `uname -m` dice `aarch64`):
+```
+wget https://github.com/librespeed/speedtest-cli/releases/download/v1.0.14/librespeed-cli_1.0.14_linux_amd64.tar.gz
+tar -xzf librespeed-cli_1.0.14_linux_amd64.tar.gz librespeed-cli
+install -m 755 librespeed-cli /usr/local/bin/librespeed-cli
+```
+Después elige el motor en **WAN Monitor → Ajustes → Motor de la prueba** (si sigue como «no instalado», `systemctl restart wan-monitor` dentro del CT). La primera vez, Ookla pide aceptar la licencia: `speedtest --accept-license --accept-gdpr`.
+
 ## English
 
 LabTower runs as a `.deb` package on Debian 12 with systemd. On Proxmox the simplest way is an **unprivileged CT** (LXC) with Debian 12: it is light and needs no changes in LabTower. There is no Docker image.
@@ -79,3 +104,6 @@ Create an unprivileged **debian-12-standard** CT (1 GB RAM, 2 cores, 8 GB disk) 
 
 ### After installing
 Enable HTTPS with `pct exec ID -- /usr/local/bin/labtower-https enable --redirect`; update by installing the new `.deb` inside the CT; back the CT up with Proxmox (vzdump) as well as LabTower's Teleporter. Keep the CT on the same bridge as your LAN so Net Monitor can see MAC addresses. In an unprivileged CT, allow ping for the services (the script does it): `echo 'net.ipv4.ping_group_range = 0 65534' > /etc/sysctl.d/99-labtower-ping.conf && sysctl -q -p /etc/sysctl.d/99-labtower-ping.conf` inside the CT.
+
+### Speed tests (optional)
+WAN Monitor has its own engine and works with nothing installed. To use **Ookla** or **LibreSpeed**, install the program **inside the CT** (`pct enter ID`), not on the Proxmox node: Ookla's script does not recognise the node's Debian version. The commands are the same as in the Spanish section above (Ookla: packagecloud script, or the `x86_64` binary from `speedtest.net/apps/cli`; LibreSpeed: the `amd64` binary of v1.0.14). Then pick the engine in **WAN Monitor → Settings → Test engine**; the first time Ookla asks you to accept its license: `speedtest --accept-license --accept-gdpr`.
