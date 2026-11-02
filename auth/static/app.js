@@ -16,7 +16,7 @@ const LANG = {
     topbarTitle:'User management',
     statTotal:'Total users', statAdmins:'Administrators', statReadonly:'Read-only',
     cardTitle:'System users', btnNewUser:'New user',
-    colLast:'Last connection', colUser:'User', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colNAS:'NAS Monitor', colDNS:'DNS Monitor', colWAN:'WAN Monitor', colStatus:'Status', colCreated:'Created', colActions:'Actions',
+    colLast:'Last connection', colUser:'User', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colNAS:'NAS Monitor', colDNS:'DNS Monitor', colWAN:'WAN Monitor', colVPN:'VPN Monitor', colStatus:'Status', colCreated:'Created', colActions:'Actions',
     drawerNew:'New user', drawerEdit:'Edit — ',
     fieldUsername:'Username', fieldUsernameHint:'2-32 alphanumeric chars, dash or underscore',
     fieldPassword:'Password', fieldPasswordHint:'Minimum 8 characters',
@@ -86,7 +86,7 @@ const LANG = {
     topbarTitle:'Gestión de usuarios',
     statTotal:'Usuarios totales', statAdmins:'Administradores', statReadonly:'Solo lectura',
     cardTitle:'Usuarios del sistema', btnNewUser:'Nuevo usuario',
-    colLast:'Última conexión', colUser:'Usuario', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colNAS:'NAS Monitor', colDNS:'DNS Monitor', colWAN:'WAN Monitor', colStatus:'Estado', colCreated:'Creado', colActions:'Acciones',
+    colLast:'Última conexión', colUser:'Usuario', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colNAS:'NAS Monitor', colDNS:'DNS Monitor', colWAN:'WAN Monitor', colVPN:'VPN Monitor', colStatus:'Estado', colCreated:'Creado', colActions:'Acciones',
     drawerNew:'Nuevo usuario', drawerEdit:'Editar — ',
     fieldUsername:'Nombre de usuario', fieldUsernameHint:'2-32 caracteres alfanuméricos, guion o guion bajo',
     fieldPassword:'Contraseña', fieldPasswordHint:'Mínimo 8 caracteres',
@@ -172,7 +172,7 @@ function setLang(l){
   const dpw = document.getElementById('d-password');
   if(dpw) dpw.placeholder = t('fieldPasswordHint');
   // Update permission selects
-  ['d-wol','d-nut','d-net','d-pve','d-nas','d-dns','d-wan'].forEach(id=>{
+  ['d-wol','d-nut','d-net','d-pve','d-nas','d-dns','d-wan','d-vpn'].forEach(id=>{
     const sel = document.getElementById(id); if(!sel) return;
     const val = sel.value;
     sel.innerHTML = ['none','readonly','execute','admin'].map(v=>`<option value="${v}"${val===v?' selected':''}>${t('perm'+v.charAt(0).toUpperCase()+v.slice(1))}</option>`).join('');
@@ -216,6 +216,7 @@ const _NAV_ITEMS=[
   {id:'nas',   href:'/nas/',   label:'NAS Monitor',svg:'<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="9" x2="17" y2="9"/><line x1="7" y1="14" x2="17" y2="14"/><line x1="16" y1="18" x2="16.01" y2="18"/>'},
   {id:'dns',  href:'/dns/',   label:'DNS Monitor', svg:'<circle cx="12" cy="12" r="9"/><line x1="3" y1="12" x2="21" y2="12"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/>'},
   {id:'wan',  href:'/wan/',   label:'WAN Monitor', svg:'<path d="M5 12.55a11 11 0 0 1 14 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>'},
+  {id:'vpn',  href:'/vpn/',   label:'VPN Monitor', svg:'<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'},
   {id:'wol',   href:'/wol/',   label:'WOL Console', svg:'<polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/>'},
   {id:'admin', href:'/admin/', label:'Admin Panel', svg:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'},
 ];
@@ -342,7 +343,7 @@ async function loadUsers() {
 // ── System health ───────────────────────────────────────
 // SALUD DEL SISTEMA: tarjetas con el estado de cada módulo (datos de /api/health). HL_DESC explica en palabras simples qué comprueba cada chequeo.
 // EN: SYSTEM HEALTH: cards with the state of each module (data from /api/health). HL_DESC explains in plain words what each check verifies.
-const HL_NAMES = {wol:'WOL Console', nut:'UPS Monitor', net:'Net Monitor', pve:'Proxmox', nas:'NAS Monitor', dns:'DNS Monitor', wan:'WAN Monitor', overview:'Overview'};
+const HL_NAMES = {wol:'WOL Console', nut:'UPS Monitor', net:'Net Monitor', pve:'Proxmox', nas:'NAS Monitor', dns:'DNS Monitor', wan:'WAN Monitor', vpn:'VPN Monitor', overview:'Overview'};
 const HL_DESC = {
   en:{users:'User database (users.json) is readable and has accounts', sessions:'Session file is readable and its folder writable', disk:'Free disk space (warns below 100 MB, fails below 5 MB)',
       teleporter:'Backup tool (teleporter.sh) is installed', power:'Raspberry Pi power supply: no under-voltage or throttling (shown only on a Raspberry Pi)', devices:'Device list file is readable and writable', wake_log:'Wake log file is readable and writable',
@@ -350,16 +351,16 @@ const HL_DESC = {
       servers_file:'UPS server list file is readable and writable', database:'History database opens and is not locked', history_write:'Buffered history rows are being written to disk',
       pollers:'Background threads that read the data are alive', upsd:'Every NUT server answers', history_fresh:'Recent readings are really stored in the history',
       hosts_file:'Host table file is readable and writable', config_file:'Configuration file is readable and writable', scanner:'The scan is not stuck', auto_scan:'Automatic scan timer is armed and scans are recent',
-      clusters_file:'Cluster list file is readable and writable', clusters:'Every Proxmox cluster answers with fresh data', nas_file:'NAS list file is readable and writable', dns_file:'DNS server list file is readable and writable', dns_servers:'Every DNS server answers with fresh data', wan_file:'WAN settings file is readable and writable', ping_tool:'The ping command is installed', probe:'The internet checks run on time', snmp_tools:'The net-snmp tools (snmpget, snmpbulkwalk) are installed', nas_snmp:'Every NAS answers over SNMP with fresh data', events:'Event timeline file is readable and its folder writable',
-      wol:'WOL Console service', nut:'UPS Monitor service', net:'Net Monitor service', pve:'Proxmox service', nas:'NAS Monitor service', dns:'DNS Monitor service', wan:'WAN Monitor service', overview:'Overview service'},
+      clusters_file:'Cluster list file is readable and writable', clusters:'Every Proxmox cluster answers with fresh data', nas_file:'NAS list file is readable and writable', dns_file:'DNS server list file is readable and writable', dns_servers:'Every DNS server answers with fresh data', wan_file:'WAN settings file is readable and writable', vpn_file:'VPN server list file is readable and writable', ssh_tools:'The ssh client is installed', vpn_sources:'Every VPN server answers with fresh data', ping_tool:'The ping command is installed', probe:'The internet checks run on time', snmp_tools:'The net-snmp tools (snmpget, snmpbulkwalk) are installed', nas_snmp:'Every NAS answers over SNMP with fresh data', events:'Event timeline file is readable and its folder writable',
+      wol:'WOL Console service', nut:'UPS Monitor service', net:'Net Monitor service', pve:'Proxmox service', nas:'NAS Monitor service', dns:'DNS Monitor service', wan:'WAN Monitor service', vpn:'VPN Monitor service', overview:'Overview service'},
   es:{users:'Base de usuarios (users.json) legible y con cuentas', sessions:'Archivo de sesiones legible y carpeta escribible', disk:'Espacio libre en disco (avisa bajo 100 MB, falla bajo 5 MB)',
       teleporter:'Herramienta de respaldo (teleporter.sh) instalada', power:'Fuente de la Raspberry Pi: sin subtensión ni limitación (solo se muestra en una Raspberry Pi)', devices:'Archivo de dispositivos legible y escribible', wake_log:'Archivo del registro de encendidos legible y escribible',
       net_monitor:'Se puede leer la lista de hosts de Net Monitor (opcional)', network:'Este equipo tiene dirección LAN para los magic packets',
       servers_file:'Archivo de servidores UPS legible y escribible', database:'La base de historial abre y no está bloqueada', history_write:'Las filas de historial en memoria se escriben a disco',
       pollers:'Los hilos que leen los datos están vivos', upsd:'Todos los servidores NUT responden', history_fresh:'Las lecturas recientes realmente quedan guardadas en el historial',
       hosts_file:'Archivo de hosts legible y escribible', config_file:'Archivo de configuración legible y escribible', scanner:'El escaneo no está trabado', auto_scan:'El temporizador de auto-escaneo está armado y los escaneos son recientes',
-      clusters_file:'Archivo de clusters legible y escribible', clusters:'Todos los clusters Proxmox responden con datos frescos', nas_file:'Archivo de la lista de NAS legible y escribible', dns_file:'Archivo de la lista de servidores DNS legible y escribible', dns_servers:'Todos los servidores DNS responden con datos frescos', wan_file:'Archivo de ajustes de WAN legible y escribible', ping_tool:'El comando ping está instalado', probe:'Las mediciones de internet corren a tiempo', snmp_tools:'Las herramientas net-snmp (snmpget, snmpbulkwalk) están instaladas', nas_snmp:'Todos los NAS responden por SNMP con datos frescos', events:'Archivo de la línea de tiempo legible y carpeta escribible',
-      wol:'Servicio WOL Console', nut:'Servicio UPS Monitor', net:'Servicio Net Monitor', pve:'Servicio Proxmox', nas:'Servicio NAS Monitor', dns:'Servicio DNS Monitor', wan:'Servicio WAN Monitor', overview:'Servicio Resumen'}
+      clusters_file:'Archivo de clusters legible y escribible', clusters:'Todos los clusters Proxmox responden con datos frescos', nas_file:'Archivo de la lista de NAS legible y escribible', dns_file:'Archivo de la lista de servidores DNS legible y escribible', dns_servers:'Todos los servidores DNS responden con datos frescos', wan_file:'Archivo de ajustes de WAN legible y escribible', vpn_file:'Archivo de la lista de VPN legible y escribible', ssh_tools:'El cliente ssh está instalado', vpn_sources:'Todos los servidores VPN responden con datos frescos', ping_tool:'El comando ping está instalado', probe:'Las mediciones de internet corren a tiempo', snmp_tools:'Las herramientas net-snmp (snmpget, snmpbulkwalk) están instaladas', nas_snmp:'Todos los NAS responden por SNMP con datos frescos', events:'Archivo de la línea de tiempo legible y carpeta escribible',
+      wol:'Servicio WOL Console', nut:'Servicio UPS Monitor', net:'Servicio Net Monitor', pve:'Servicio Proxmox', nas:'Servicio NAS Monitor', dns:'Servicio DNS Monitor', wan:'Servicio WAN Monitor', vpn:'Servicio VPN Monitor', overview:'Servicio Resumen'}
 };
 const _hlOpen = new Set();
 // Consulta /api/health y arma una tarjeta por módulo más la del propio panel (usuarios, sesiones, disco, respaldo y fuente de la Pi). Cada tarjeta se despliega para ver cada chequeo y recuerda si estaba abierta entre refrescos.
@@ -430,6 +431,7 @@ function renderUsers(users) {
       <td data-label="${esc(t('colNAS'))}">${permBadge(u.permissions.nas)}</td>
       <td data-label="${esc(t('colDNS'))}">${permBadge(u.permissions.dns)}</td>
       <td data-label="${esc(t('colWAN'))}">${permBadge(u.permissions.wan)}</td>
+      <td data-label="${esc(t('colVPN'))}">${permBadge(u.permissions.vpn)}</td>
       <td data-label="${esc(t('colStatus'))}">${u.must_change_password ? `<span class="must-change">${t('mustChangeBadge')}</span>` : '<span style="font-size:11px;color:var(--text-dim)">—</span>'}</td>
       <td data-label="${esc(t('colLast'))}"><span class="ucreated">${u.last_login ? esc(new Date(u.last_login*1000).toLocaleString(locale)) : '—'}</span></td>
       <td data-label="${esc(t('colCreated'))}"><span class="ucreated">${u.created ? new Date(u.created*1000).toLocaleDateString(locale) : '—'}</span></td>
@@ -463,9 +465,9 @@ function openDrawer(user) {
   document.getElementById('d-must-change').checked = isEdit ? user.must_change_password : false;
 
   // Rebuild selects with translated options at current perm values
-  ['d-wol','d-nut','d-net','d-pve','d-nas','d-dns','d-wan'].forEach(id=>{
+  ['d-wol','d-nut','d-net','d-pve','d-nas','d-dns','d-wan','d-vpn'].forEach(id=>{
     const sel = document.getElementById(id); if(!sel) return;
-    const key = id.slice(2), defs = {wol:'execute', nut:'readonly', net:'none', pve:'none', nas:'none', dns:'none', wan:'none'};
+    const key = id.slice(2), defs = {wol:'execute', nut:'readonly', net:'none', pve:'none', nas:'none', dns:'none', wan:'none', vpn:'none'};
     const val = isEdit ? (user.permissions[key]||'none') : defs[key];
     sel.innerHTML = ['none','readonly','execute','admin'].map(v=>`<option value="${v}"${val===v?' selected':''}>${t('perm'+v.charAt(0).toUpperCase()+v.slice(1))}</option>`).join('');
   });
@@ -512,12 +514,13 @@ async function saveUser() {
       const nas   = document.getElementById('d-nas').value;
       const dns   = document.getElementById('d-dns').value;
       const wan   = document.getElementById('d-wan').value;
+      const vpn   = document.getElementById('d-vpn').value;
       const must  = document.getElementById('d-must-change').checked;
       if (!uname || !pwd) { toast(t('loginFill'), true); return; }
       const apw = await askPassword(); if (!apw) return;
       const r = await fetch('api/users', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({username:uname, password:pwd, wol_permission:wol, nut_permission:nut, net_permission:net, pve_permission:pve, nas_permission:nas, dns_permission:dns, wan_permission:wan, must_change_password:must, current_password:apw})
+        body: JSON.stringify({username:uname, password:pwd, wol_permission:wol, nut_permission:nut, net_permission:net, pve_permission:pve, nas_permission:nas, dns_permission:dns, wan_permission:wan, vpn_permission:vpn, must_change_password:must, current_password:apw})
       });
       const d = await r.json();
       if (!r.ok) { toast(d.error||'Error', true); return; }
@@ -531,11 +534,12 @@ async function saveUser() {
       const nas   = document.getElementById('d-nas').value;
       const dns   = document.getElementById('d-dns').value;
       const wan   = document.getElementById('d-wan').value;
+      const vpn   = document.getElementById('d-vpn').value;
       const newPw = document.getElementById('d-new-pw').value;
       // Actualizar permisos
       const r = await fetch('api/users/'+uorig, {
         method: 'PUT', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({wol_permission:wol, nut_permission:nut, net_permission:net, pve_permission:pve, nas_permission:nas, dns_permission:dns, wan_permission:wan})
+        body: JSON.stringify({wol_permission:wol, nut_permission:nut, net_permission:net, pve_permission:pve, nas_permission:nas, dns_permission:dns, wan_permission:wan, vpn_permission:vpn})
       });
       const d = await r.json();
       if (!r.ok) { toast(d.error||'Error', true); return; }

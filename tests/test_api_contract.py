@@ -13,6 +13,7 @@ PROTECTED_GET = [
     ("nas-monitor/server.py", ["/api/nas"]),
     ("dns-monitor/server.py", ["/api/dns"]),
     ("wan-monitor/server.py", ["/api/wan"]),
+    ("vpn-monitor/server.py", ["/api/vpn"]),
 ]
 # (módulo, ruta POST de escritura, cuerpo)
 WRITE_POST = [
@@ -23,6 +24,7 @@ WRITE_POST = [
     ("nas-monitor/server.py", "/api/nas", {"name": "x", "host": "nas.example", "user": "u"}),
     ("dns-monitor/server.py", "/api/dns", {"name": "x", "url": "192.0.2.9", "password": "p"}),
     ("wan-monitor/server.py", "/api/wan/config", {"interval": 60}),
+    ("vpn-monitor/server.py", "/api/vpn", {"type": "tailscale", "name": "x", "api_key": "tskey-api-abcdef123"}),
 ]
 
 class ApiContract(unittest.TestCase):

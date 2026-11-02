@@ -1,7 +1,7 @@
 // ───────── Textos / texts ─────────
 const TXT={
  en:{title:'Overview',sortBtn:'Reorder',sortDone:'Done',sortReset:'Reset order',mvEarlier:'Move earlier',mvLater:'Move later',mvDrag:'Drag to move',home:'Home',kiosk:'Kiosk',logout:'Sign out',login:'Sign in',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',exitk:'Exit kiosk',rint:'Refresh every',rman:'Manual',rnow:'Refresh now',ascroll:'Auto-scroll',updated:'Updated',allok:'All good',attn:'Attention',fail:'Failure',
-  ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',dns:'DNS Monitor',wan:'WAN Monitor',net:'Net Monitor',pi:'LabTower Server',ev:'Timeline',open:'Open →',noups:'No UPS servers configured',nopve:'No clusters configured',nonas:'No NAS configured',nodns:'No DNS servers configured',dnspct:'% blocked',issue_dnsdown:'DNS server unreachable',dnsq:'Queries',dnsblk:'Blocked',dnsms:'Response',dnsPause:'Pause blocking',dnsResume:'Resume blocking',dnsP5:'5 min',dnsP30:'30 min',dnsP60:'1 hour',dnsPU:'until resumed',dnsPaused:'Blocking paused',dnsResumed:'Blocking resumed',dnsprot:'Blocking',protoff:'Paused',proton:'Active',protfail:'Failed',wanrtt:'Latency',wanloss:'Loss',wanup:'Uptime 24 h',wandown:'Download',wanip:'Public IP',wanstate:'Internet',wanon:'Online',wannet:'Down',wanlan:'No LAN',wanwait:'Measuring…',issue_wandown:'No internet access',issue_wanlan:'Local network unreachable',nasdisks:'Disks OK',nasvol:'Volume',issue_nasdown:'NAS unreachable',nonet:'No scan yet',noev:'No events yet',
+  ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',dns:'DNS Monitor',wan:'WAN Monitor',vpn:'VPN Monitor',vpnwait:'Waiting for the first reading…',vpnconn:'connected',vpnnone:'Nobody connected',vpnoff:'Cannot read the VPN status',net:'Net Monitor',pi:'LabTower Server',ev:'Timeline',open:'Open →',noups:'No UPS servers configured',nopve:'No clusters configured',nonas:'No NAS configured',nodns:'No DNS servers configured',dnspct:'% blocked',issue_dnsdown:'DNS server unreachable',dnsq:'Queries',dnsblk:'Blocked',dnsms:'Response',dnsPause:'Pause blocking',dnsResume:'Resume blocking',dnsP5:'5 min',dnsP30:'30 min',dnsP60:'1 hour',dnsPU:'until resumed',dnsPaused:'Blocking paused',dnsResumed:'Blocking resumed',dnsprot:'Blocking',protoff:'Paused',proton:'Active',protfail:'Failed',wanrtt:'Latency',wanloss:'Loss',wanup:'Uptime 24 h',wandown:'Download',wanip:'Public IP',wanstate:'Internet',wanon:'Online',wannet:'Down',wanlan:'No LAN',wanwait:'Measuring…',issue_wandown:'No internet access',issue_wanlan:'Local network unreachable',nasdisks:'Disks OK',nasvol:'Volume',issue_nasdown:'NAS unreachable',nonet:'No scan yet',noev:'No events yet',
   uptimeOnl:'Online',avail:'Availability',lastOut:'Last outage',noOut:'no outages recorded',onbattNow:'on battery now',
   mains:'On mains',batt:'On battery',lowb:'Low battery',unreach:'Unreachable',battery:'Battery',load:'Load',runtime:'Runtime',power:'Power',nodes:'Nodes',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memory',disk:'Disk',temp:'Temp',uptime:'Uptime',
   online:'Online',known:'Known',offline:'Offline',newdev:'New devices',lastscan:'Last scan',scanning:'Scanning…',ceph:'Ceph',types:'By device type',nonew:'No new devices',
@@ -9,7 +9,7 @@ const TXT={
   issue_batt:'is running on battery',issue_lowb:'has low battery',issue_srv:'unreachable',issue_node:'node offline',issue_cl:'cluster unreachable',issue_cpu:'high CPU',issue_ram:'high memory',issue_ceph:'Ceph',
   issue_temp:'Pi temperature high',issue_temp_srv:'Server temperature high',issue_disk_srv:'Server disk almost full',issue_mem_srv:'Server memory high',swtitle:'Switches',swup:'Switch unreachable',swtemp:'Switch temperature',swtempc:'Switch temperature critical',swloop:'loop',swerr:'new errors',swcrc:'CRC errors (cable or network card)',swflap:'link flapping',swports:'ports',issue_disk:'Pi disk almost full',issue_mem:'Pi memory high',issue_pwr:'Pi power supply problem',issue_scan:'scan error',h_temp:'Temp',h_min:'min',h_max:'max',h_uv:'Under-voltage',h_nouv:'no under-voltage',h_utemp:'UPS temperature 24 h'},
  es:{title:'Resumen',sortBtn:'Ordenar',sortDone:'Listo',sortReset:'Restablecer orden',mvEarlier:'Mover antes',mvLater:'Mover después',mvDrag:'Arrastra para mover',home:'Inicio',kiosk:'Kiosko',logout:'Cerrar sesión',login:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',exitk:'Salir de kiosko',rint:'Actualizar cada',rman:'Manual',rnow:'Actualizar ahora',ascroll:'Auto-desplazar',updated:'Actualizado',allok:'Todo en orden',attn:'Atención',fail:'Falla',
-  ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',dns:'DNS Monitor',wan:'WAN Monitor',net:'Net Monitor',pi:'LabTower Server',ev:'Línea de tiempo',open:'Abrir →',noups:'Sin servidores UPS configurados',nopve:'Sin clusters configurados',nonas:'Sin NAS configurados',nodns:'Sin servidores DNS configurados',dnspct:'% bloqueado',issue_dnsdown:'Servidor DNS sin conexión',dnsq:'Consultas',dnsblk:'Bloqueadas',dnsms:'Respuesta',dnsPause:'Pausar bloqueo',dnsResume:'Reanudar bloqueo',dnsP5:'5 min',dnsP30:'30 min',dnsP60:'1 hora',dnsPU:'hasta reanudar',dnsPaused:'Bloqueo pausado',dnsResumed:'Bloqueo reanudado',dnsprot:'Bloqueo',protoff:'Pausado',proton:'Activo',protfail:'Con falla',wanrtt:'Latencia',wanloss:'Pérdida',wanup:'Disponibilidad 24 h',wandown:'Bajada',wanip:'IP pública',wanstate:'Internet',wanon:'En línea',wannet:'Caído',wanlan:'Sin LAN',wanwait:'Midiendo…',issue_wandown:'Sin acceso a internet',issue_wanlan:'Red local sin respuesta',nasdisks:'Discos OK',nasvol:'Volumen',issue_nasdown:'NAS sin conexión',nonet:'Aún sin escaneo',noev:'Sin eventos todavía',
+  ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',dns:'DNS Monitor',wan:'WAN Monitor',vpn:'VPN Monitor',vpnwait:'Esperando la primera lectura…',vpnconn:'conectados',vpnnone:'Nadie conectado',vpnoff:'No se puede leer el estado de la VPN',net:'Net Monitor',pi:'LabTower Server',ev:'Línea de tiempo',open:'Abrir →',noups:'Sin servidores UPS configurados',nopve:'Sin clusters configurados',nonas:'Sin NAS configurados',nodns:'Sin servidores DNS configurados',dnspct:'% bloqueado',issue_dnsdown:'Servidor DNS sin conexión',dnsq:'Consultas',dnsblk:'Bloqueadas',dnsms:'Respuesta',dnsPause:'Pausar bloqueo',dnsResume:'Reanudar bloqueo',dnsP5:'5 min',dnsP30:'30 min',dnsP60:'1 hora',dnsPU:'hasta reanudar',dnsPaused:'Bloqueo pausado',dnsResumed:'Bloqueo reanudado',dnsprot:'Bloqueo',protoff:'Pausado',proton:'Activo',protfail:'Con falla',wanrtt:'Latencia',wanloss:'Pérdida',wanup:'Disponibilidad 24 h',wandown:'Bajada',wanip:'IP pública',wanstate:'Internet',wanon:'En línea',wannet:'Caído',wanlan:'Sin LAN',wanwait:'Midiendo…',issue_wandown:'Sin acceso a internet',issue_wanlan:'Red local sin respuesta',nasdisks:'Discos OK',nasvol:'Volumen',issue_nasdown:'NAS sin conexión',nonet:'Aún sin escaneo',noev:'Sin eventos todavía',
   uptimeOnl:'En línea',avail:'Disponibilidad',lastOut:'Último corte',noOut:'sin cortes registrados',onbattNow:'en batería ahora',
   mains:'En red eléctrica',batt:'Con batería',lowb:'Batería baja',unreach:'Sin conexión',battery:'Batería',load:'Carga',runtime:'Autonomía',power:'Consumo',nodes:'Nodos',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memoria',disk:'Disco',temp:'Temp',uptime:'Encendida',
   online:'En línea',known:'Conocidos',offline:'Apagados',newdev:'Equipos nuevos',lastscan:'Último escaneo',scanning:'Escaneando…',ceph:'Ceph',types:'Por tipo de equipo',nonew:'Sin equipos nuevos',
@@ -257,6 +257,20 @@ function wanChart(){
   const lo=Math.min.apply(null,v),hi=Math.max.apply(null,v),f=x=>Math.round(x*10)/10;
   return `<div class="kp"><svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${down}${pl}</svg><div class="hc"><i style="background:var(--blue)"></i>${T('wanrtt')} ${f(lo)}–${f(hi)} ms · ${dur(a[n-1].ts-a[0].ts)}</div></div>`;
 }
+function renderVPN(d){
+  const el=$('c-vpn'),list=d.vpn||[];let sev='ok',body='';
+  if(!list.length)body=`<div class="empty">${T('vpnnone')}</div>`;
+  list.forEach(n=>{
+    const sn=n.snap||{},x=sn.data;
+    if(sn.error){sev=worst(sev,'warn');issues.push({lv:'warn',m:'vpn',t:`${n.name}: ${T('vpnoff')}`,href:'/vpn/'})}
+    const names=x&&x.clients?x.clients.filter(c=>c.online).slice(0,6).map(c=>esc(c.name)).join(', '):'';
+    body+=`<div class="unit"><div class="uh">${esc(n.name)} ${pill(sn.error?'warn':!sn.ts?'ok':'ok',sn.error?T('attn'):!sn.ts?'…':'OK')}</div>
+     <div class="row"><span class="l">${esc(({tailscale:'Tailscale',openvpn:'OpenVPN',wireguard:'WireGuard'})[n.type]||n.type)}</span><span class="v">${x?`${esc(x.online)} / ${esc(x.total)} ${T('vpnconn')}`:T('vpnwait')}</span></div>
+     ${names?`<div class="row"><span class="l"></span><span class="v">${names}</span></div>`:''}</div>`;
+  });
+  el.innerHTML=`<div class="ch"><h2>${T('vpn')}</h2>${pill(sev,sev==='ok'?'OK':T('attn'))}<a class="go" href="/vpn/">${T('open')}</a></div>`+body;
+  return sev;
+}
 function renderWAN(d){
   const el=$('c-wan'),s0=d.snap;let sev='ok',body='';
   if(!s0){body=`<div class="empty">${T('wanwait')}</div>`}
@@ -341,6 +355,7 @@ const EVT={
   pve_cl_down:'{c}: cluster unreachable',pve_cl_up:'{c}: cluster reachable again',pve_node_on:'{c}/{n}: node online',pve_node_off:'{c}/{n}: node {st}',pve_ceph:'{c}: Ceph {a} → {b}',
   pve_reboot:'{c}/{n}: node rebooted (boot {b})',pve_reboot_multi:'{c}: {cnt} nodes rebooted within {mins} min ({ns})',pve_quorum_lost:'{c}: cluster lost quorum',pve_quorum_ok:'{c}: quorum recovered',pve_osd_down:'{c}: Ceph has {d} OSD down ({u}/{t} up)',pve_osd_ok:'{c}: all Ceph OSDs up again',pve_smart:'{c}/{n}: disk {d} SMART warning ({w})',pve_unsafe:'{c}/{n}: {d} unsafe shutdowns {a} → {b}',pve_backup_old:'{c}/{n}: last backup {h} h ago',pve_backup_never:'{c}/{n}: no backup found',pve_backup_ok:'{c}/{n}: backup up to date again',pve_backup_fail:'{c}/{n}: backup {w} failed ({e})',
   dns_off:'{n}: blocking paused',dns_on:'{n}: blocking active',dns_fail:'{n}: blocking failed',dns_down:'{n}: DNS server unreachable',dns_up:'{n}: DNS server reachable again',
+  vpn_up:'{n}: {c} connected',vpn_down:'{n}: {c} disconnected',vpn_reach:'{n}: reachable again',vpn_unreach:'{n}: cannot read the VPN status',
   wan_down_internet:'Internet connection down',wan_down_lan:'Internet down (local network too)',wan_down_wan:'Internet down: the router reports its WAN link is down',wan_rt_down:'Router reports its WAN link down',wan_rt_up:'Router reports its WAN link up',wan_up:'Internet connection restored after {d} s',wan_ip:'Public IP changed to {ip}',wan_ipc:'Public IP changed from {prev} to {ip}',
   nas_down:'{n}: NAS unreachable',nas_up:'{n}: NAS reachable again',nas_sys:'{n}: system or power failure',nas_raid:'{n}/{v}: volume status {st}',nas_disk:'{n}/{d}: disk status {st}',
   net_first:'First scan: {n} hosts found',net_new:'New device: {ip} {n} {v}',net_up:'Back online: {ip} {n}',net_down:'Went offline: {ip} {n}',net_new_n:'{n} new devices',net_up_n:'{n} hosts back online',net_down_n:'{n} hosts went offline',
@@ -349,6 +364,7 @@ const EVT={
   pve_cl_down:'{c}: cluster sin conexión',pve_cl_up:'{c}: cluster otra vez disponible',pve_node_on:'{c}/{n}: nodo en línea',pve_node_off:'{c}/{n}: nodo {st}',pve_ceph:'{c}: Ceph {a} → {b}',
   pve_reboot:'{c}/{n}: el nodo se reinició (arranque {b})',pve_reboot_multi:'{c}: {cnt} nodos se reiniciaron en {mins} min ({ns})',pve_quorum_lost:'{c}: el cluster perdió el quórum',pve_quorum_ok:'{c}: quórum recuperado',pve_osd_down:'{c}: Ceph tiene {d} OSD caído ({u}/{t} activos)',pve_osd_ok:'{c}: todos los OSD de Ceph activos otra vez',pve_smart:'{c}/{n}: aviso SMART en disco {d} ({w})',pve_unsafe:'{c}/{n}: {d} apagados inseguros {a} → {b}',pve_backup_old:'{c}/{n}: último respaldo hace {h} h',pve_backup_never:'{c}/{n}: sin respaldos',pve_backup_ok:'{c}/{n}: respaldo al día otra vez',pve_backup_fail:'{c}/{n}: falló el respaldo {w} ({e})',
   dns_off:'{n}: bloqueo pausado',dns_on:'{n}: bloqueo activo',dns_fail:'{n}: el bloqueo falló',dns_down:'{n}: servidor DNS sin conexión',dns_up:'{n}: servidor DNS otra vez disponible',
+  vpn_up:'{n}: {c} se conectó',vpn_down:'{n}: {c} se desconectó',vpn_reach:'{n}: volvió a responder',vpn_unreach:'{n}: no se puede leer el estado de la VPN',
   wan_down_internet:'Se cayó la conexión a internet',wan_down_lan:'Internet caído (la red local también)',wan_down_wan:'Internet caído: el router informa su enlace WAN caído',wan_rt_down:'El router informa su enlace WAN caído',wan_rt_up:'El router informa su enlace WAN arriba',wan_up:'Volvió internet tras {d} s',wan_ip:'La IP pública cambió a {ip}',wan_ipc:'La IP pública cambió de {prev} a {ip}',
   nas_down:'{n}: NAS sin conexión',nas_up:'{n}: NAS otra vez disponible',nas_sys:'{n}: falla del sistema o de la fuente de poder',nas_raid:'{n}/{v}: estado del volumen {st}',nas_disk:'{n}/{d}: estado del disco {st}',
   net_first:'Primer escaneo: {n} equipos encontrados',net_new:'Equipo nuevo: {ip} {n} {v}',net_up:'Volvió a estar en línea: {ip} {n}',net_down:'Dejó de responder: {ip} {n}',net_new_n:'{n} equipos nuevos',net_up_n:'{n} equipos volvieron a estar en línea',net_down_n:'{n} equipos dejaron de responder',
@@ -364,7 +380,7 @@ function evText(e){const t=e.k&&EVT[lang][e.k];return t?t.replace(/\{(\w+)\}/g,(
 // EN: Event text with the IP (if any) marked for the Net Monitor card. Everything is escaped; the span is created by this code.
 function evHtml(e){const s=esc(evText(e)),ip=e.m==='net'&&e.p&&/^\d{1,3}(\.\d{1,3}){3}$/.test(String(e.p.ip||''))?String(e.p.ip):'';return ip&&s.includes(ip)?s.replace(ip,`<span data-nethost="${ip}" data-nethost-click="1">${ip}</span>`):s}
 function renderEvents(list){
-  $('c-ev').innerHTML=`<div class="ch"><h2>${T('ev')}</h2></div>`+(list.length?`<div class="tl">${list.map(e=>`<div class="ev"><i class="d ${esc(e.lv)}"></i><span class="m">${esc({nut:'UPS',pve:'PVE',nas:'NAS',dns:'DNS',wan:'WAN',net:'NET'}[e.m]||e.m)}</span><span>${evHtml(e)}</span><span class="t" title="${PCT.ls(new Date(e.t*1000))}">${esc(ago(e.t))}</span></div>`).join('')}</div>`:`<div class="empty">${T('noev')}</div>`);
+  $('c-ev').innerHTML=`<div class="ch"><h2>${T('ev')}</h2></div>`+(list.length?`<div class="tl">${list.map(e=>`<div class="ev"><i class="d ${esc(e.lv)}"></i><span class="m">${esc({nut:'UPS',pve:'PVE',nas:'NAS',dns:'DNS',wan:'WAN',vpn:'VPN',net:'NET'}[e.m]||e.m)}</span><span>${evHtml(e)}</span><span class="t" title="${PCT.ls(new Date(e.t*1000))}">${esc(ago(e.t))}</span></div>`).join('')}</div>`:`<div class="empty">${T('noev')}</div>`);
 }
 
 // ───────── Ciclo de actualización / refresh loop ─────────
@@ -380,6 +396,7 @@ async function refresh(){
   const wantDH=Date.now()-dnsHTs>60000;
   if(lvl('dns')){jobs.dns=jget('/dns/api/dns'+(wantDH?'':'?hist=0'))}
   const wantWH=Date.now()-wanHTs>60000;
+  if(lvl('vpn')){jobs.vpn=jget('/vpn/api/vpn?hist=0')}
   if(lvl('wan')){jobs.wan=jget('/wan/api/wan?hist=0');if(wantWH)jobs.wanh=jget('/wan/api/wan/history?range=1d')}
   if(lvl('net')){jobs.net=jget('/net/api/hosts');jobs.sw=jget('/net/api/switches/summary')}
   jobs.sys=jget('api/system');jobs.ev=jget('api/events?limit=40');
@@ -402,12 +419,13 @@ async function refresh(){
     try{const h=await jget('api/pihistory');piH=h&&h.pi?h:null}catch(e){}
   }
   const card=(id,show)=>$(id).classList.toggle('hide',!show);
-  card('c-nut',!!R.nut);card('c-pve',!!R.pve);card('c-nas',!!R.nas);card('c-dns',!!R.dns);card('c-wan',!!R.wan);card('c-net',!!R.net);fitGrid();
+  card('c-nut',!!R.nut);card('c-pve',!!R.pve);card('c-nas',!!R.nas);card('c-dns',!!R.dns);card('c-wan',!!R.wan);card('c-vpn',!!R.vpn);card('c-net',!!R.net);fitGrid();
   const fail=(id,name)=>{$(id).innerHTML=`<div class="ch"><h2>${name}</h2>${pill('crit',T('unreach'))}</div>`;issues.push({lv:'crit',m:name,t:`${name}: ${T('unreach')}`});return 'crit'};
   if(R.nut)sevs.push(R.nut.status==='fulfilled'?renderUPS(R.nut.value):fail('c-nut',T('ups')));
   if(R.pve)sevs.push(R.pve.status==='fulfilled'?renderPVE(R.pve.value):fail('c-pve',T('pve')));
   if(R.nas)sevs.push(R.nas.status==='fulfilled'?renderNAS(R.nas.value):fail('c-nas',T('nas')));
   if(R.dns)sevs.push(R.dns.status==='fulfilled'?renderDNS(R.dns.value):fail('c-dns',T('dns')));
+  if(R.vpn)sevs.push(R.vpn.status==='fulfilled'?renderVPN(R.vpn.value):fail('c-vpn',T('vpn')));
   if(R.wan)sevs.push(R.wan.status==='fulfilled'?renderWAN(R.wan.value):fail('c-wan',T('wan')));
   if(R.net)sevs.push(R.net.status==='fulfilled'?renderNet(R.net.value,R.sw&&R.sw.status==='fulfilled'?R.sw.value:null):fail('c-net',T('net')));
   if(R.sys.status==='fulfilled')sevs.push(renderPi(R.sys.value));
@@ -499,7 +517,7 @@ setInterval(()=>{if(document.body.classList.contains('kiosk'))fitGrid()},2000);
 // ───────── Orden de las tarjetas / card order ─────────
 // ES: Las tarjetas se pueden reordenar con el botón «Ordenar» (flechas o arrastrando). El orden se guarda en este navegador (clave pi-card-order); por defecto es el de siempre: UPS, Proxmox, Red, Pi. La línea de tiempo siempre va debajo.
 // EN: Cards can be reordered with the "Reorder" button (arrows or drag). The order is stored in this browser (key pi-card-order); the default is the usual one: UPS, Proxmox, Network, Pi. The timeline always stays below.
-const CARDS=['c-nut','c-pve','c-nas','c-dns','c-wan','c-net','c-pi'];
+const CARDS=['c-nut','c-pve','c-nas','c-dns','c-wan','c-vpn','c-net','c-pi'];
 let ord=CARDS.slice(),sortMode=false,dragId=null;
 try{const v=JSON.parse(localStorage.getItem('pi-card-order')||'[]');if(Array.isArray(v)){const k=v.filter((x,i)=>CARDS.includes(x)&&v.indexOf(x)===i);ord=k.concat(CARDS.filter(x=>!k.includes(x)))}}catch(e){}
 function saveOrd(){try{if(ord.join()===CARDS.join())localStorage.removeItem('pi-card-order');else localStorage.setItem('pi-card-order',JSON.stringify(ord))}catch(e){}}

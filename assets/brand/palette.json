@@ -51,6 +51,12 @@
       "accent-light": "#93d6f5",
       "accent-dim": "#173653"
     },
+    "vpn": {
+      "name": "VPN Monitor",
+      "accent": "#6366f1",
+      "accent-light": "#b9baf9",
+      "accent-dim": "#262b54"
+    },
     "wol": {
       "name": "WOL Console",
       "accent": "#4361ee",

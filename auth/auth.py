@@ -413,7 +413,7 @@ def ensure_initial_user() -> bool:
         pw = _random_password()
         users = {"admin": {
             "password_hash": _hash(pw),
-            "permissions": {"wol": "admin", "nut": "admin", "net": "admin", "pve": "admin", "nas": "admin", "dns": "admin", "wan": "admin"},
+            "permissions": {"wol": "admin", "nut": "admin", "net": "admin", "pve": "admin", "nas": "admin", "dns": "admin", "wan": "admin", "vpn": "admin"},
             "created": int(time.time()),
             "must_change_password": True,
         }}
@@ -531,7 +531,7 @@ def _users_cached() -> dict:
 # creados antes de que existieran esos módulos. Es idempotente (si ya están, no toca nada).
 # EN: Migration that runs when each service starts: gives an explicit "net" and "pve" level to users
 #     created before those modules existed. It is idempotent (if they are already there, nothing changes).
-def ensure_permissions(modules=("net", "pve", "nas", "dns", "wan")) -> bool:
+def ensure_permissions(modules=("net", "pve", "nas", "dns", "wan", "vpn")) -> bool:
     """One-time migration at service start: give every user an EXPLICIT level for `modules`.
 
     Users that predate a module get "admin" if they administer WOL, else "readonly" (what the
@@ -1157,7 +1157,7 @@ def password_guard_ok(username):
     throttle_clear("pw:" + str(username))
 
 # ¿La sesión del token tiene al menos el nivel «required» sobre el recurso (wol, nut, net, pve)?
-# EN: Does the token's session have at least the "required" level on the resource (wol, nut, net, pve, nas, dns, wan)?
+# EN: Does the token's session have at least the "required" level on the resource (wol, nut, net, pve, nas, dns, wan, vpn)?
 def check_permission(token: str, resource: str, required: str) -> bool:
     s = get_session(token)
     if not s: return False

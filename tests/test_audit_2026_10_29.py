@@ -122,7 +122,7 @@ class BackupEncryption(unittest.TestCase):
 class CspBinding(unittest.TestCase):
     NAME = re.compile(r'data-on-(?:click|change|keydown|mousemove|mouseleave|mouseover|mouseout)=\\?["\']([A-Za-z_][\w]*)')
     def test_copies_are_identical_and_use_no_window_lookup(self):
-        files = sorted(ROOT.glob("*/static/csp-bind.js")); self.assertEqual(len(files), 8)
+        files = sorted(ROOT.glob("*/static/csp-bind.js")); self.assertEqual(len(files), 9)
         ref = files[0].read_text()
         for f in files:
             self.assertEqual(f.read_text(), ref, f)

@@ -111,6 +111,7 @@
           <th data-i18n="colNAS">NAS Monitor</th>
           <th data-i18n="colDNS">DNS Monitor</th>
           <th data-i18n="colWAN">WAN Monitor</th>
+          <th data-i18n="colVPN">VPN Monitor</th>
           <th data-i18n="colStatus">Status</th>
           <th data-i18n="colLast">Last connection</th>
           <th data-i18n="colCreated">Created</th>
@@ -282,6 +283,15 @@
           <div class="field">
             <label>WAN Monitor</label>
             <select id="d-wan">
+              <option value="none" selected>No access</option>
+              <option value="readonly">Read only</option>
+              <option value="execute">Execute</option>
+              <option value="admin">Administrator</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>VPN Monitor</label>
+            <select id="d-vpn">
               <option value="none" selected>No access</option>
               <option value="readonly">Read only</option>
               <option value="execute">Execute</option>
