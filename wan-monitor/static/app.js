@@ -141,6 +141,10 @@ const LANG={
  "setInterval": "Seconds between checks (10–300)",
  "setIpUrl": "Public IP service (https, empty = off)",
  "setSpeed": "Automatic speed test",
+ "setPlanDown": "Contracted download (Mb/s, 0 = not set)",
+ "setPlanUp": "Contracted upload (Mb/s, 0 = not set)",
+ "planOf": "of contracted",
+ "planAvg": "7-day average",
  "setEvery": "Every (hours, 0 = never)",
  "setSecs": "Seconds per direction",
  "setStreams": "Parallel streams",
@@ -306,6 +310,10 @@ const LANG={
  "setInterval": "Segundos entre mediciones (10–300)",
  "setIpUrl": "Servicio de IP pública (https, vacío = apagado)",
  "setSpeed": "Prueba de velocidad automática",
+ "setPlanDown": "Bajada contratada (Mb/s, 0 = sin definir)",
+ "setPlanUp": "Subida contratada (Mb/s, 0 = sin definir)",
+ "planOf": "de lo contratado",
+ "planAvg": "Promedio 7 días",
  "setEvery": "Cada (horas, 0 = nunca)",
  "setSecs": "Segundos por sentido",
  "setStreams": "Flujos paralelos",
@@ -497,6 +505,18 @@ function targetRows(s){
       <td>${esc(kind)}</td><td>${ms(x.rtt)}</td><td>${x.loss==null?'—':esc(Math.round(x.loss))+'%'}</td><td class="c-temp">${ms(x.jitter)}</td><td>${pill(x.ok?'ok':'crit',t(x.ok?'ok':'fail'))}</td></tr>`;
   }).join('');
 }
+// % de lo entregado respecto a la velocidad contratada (última prueba y promedio de 7 días). / Delivered vs contracted speed in % (last test and 7-day average).
+function pctCol(p){return p>=90?'var(--green)':p>=70?'var(--orange)':'var(--red)';}
+function planRows(cfg,sp,last){
+  const wk=Date.now()/1000-7*86400,ok=sp.filter(x=>!x.error&&x.ts>=wk);
+  const one=(lbl,plan,key)=>{
+    if(!plan)return '';
+    const v=last[key];if(v==null)return '';
+    const p=Math.round(v/plan*100),vs=ok.map(x=>x[key]).filter(x=>x!=null),avg=vs.length?Math.round(vs.reduce((a,b)=>a+b,0)/vs.length/plan*100):null;
+    return kv(lbl,`<b style="color:${pctCol(p)}">${p}%</b> <span class="sum-sub">${esc(t('planOf'))} (${fmtNum(plan)} Mb/s)</span>`+(avg!=null?` · <span class="sum-sub">${esc(t('planAvg'))}: <b style="color:${pctCol(avg)}">${avg}%</b></span>`:''));
+  };
+  return one(t('speedDown'),cfg.plan_down,'down')+one(t('speedUp'),cfg.plan_up,'up');
+}
 function speedCard(){
   const sp=W.speed||[],cfg=W.config.speed,last=sp.length?sp[sp.length-1]:null;
   let btn='';
@@ -506,7 +526,7 @@ function speedCard(){
   if(!last)body=`<div class="wan-empty">${esc(t('speedNone'))}</div>`;
   else if(last.error)body=`<div class="wan-empty" style="color:var(--red)">${esc(t('speedErr'))}: ${esc(last.error)}</div>`;
   else body=`<div class="wan-gauges" style="grid-template-columns:repeat(3,1fr);padding:12px 14px">${bigNum(t('speedDown'),last.down==null?'—':fmtNum(Math.round(last.down*10)/10),'Mb/s','var(--green)')}${bigNum(t('speedUp'),last.up==null?'—':fmtNum(Math.round(last.up*10)/10),last.up==null?'':'Mb/s','var(--blue)')}${bigNum(t('speedPing'),last.ping==null?'—':last.ping,last.ping==null?'':'ms')}</div>
-    ${kv(t('speedServer'),esc(last.server||'—')+(cfg.engine&&cfg.engine!=='builtin'?' <span class="sum-sub">'+esc(cfg.engine==='ookla'?'Ookla':'LibreSpeed')+'</span>':''))}${kv(t('lastCheck'),esc(fmtDate(last.ts)))}`;
+    ${planRows(cfg,sp,last)}${kv(t('speedServer'),esc(last.server||'—')+(cfg.engine&&cfg.engine!=='builtin'?' <span class="sum-sub">'+esc(cfg.engine==='ookla'?'Ookla':'LibreSpeed')+'</span>':''))}${kv(t('lastCheck'),esc(fmtDate(last.ts)))}`;
   const next=!cfg.enabled||!cfg.every_hours?t('speedOff'):(W.next_speed?t('speedNext',fmtDate(W.next_speed)):'');
   return `<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('speed'))}</div>${btn}</div>${body}<div class="wan-note">${esc(next)}<br>${esc(t('speedHint'))}</div></div>`;
 }
@@ -582,7 +602,7 @@ function textToTargets(s){
 function openSettings(){
   const c=W.config,sp=c.speed;
   $('s-targets').value=targetsToText(c.targets);$('s-gw').value=c.gateway;$('s-dns').value=c.dns_name;$('s-interval').value=c.interval;$('s-ipurl').value=c.ip_url;
-  $('s-sp-on').checked=!!sp.enabled;$('s-sp-every').value=sp.every_hours;$('s-sp-secs').value=sp.seconds;$('s-sp-streams').value=sp.streams;$('s-sp-up').checked=!!sp.upload;
+  $('s-sp-on').checked=!!sp.enabled;$('s-sp-every').value=sp.every_hours;$('s-sp-secs').value=sp.seconds;$('s-sp-streams').value=sp.streams;$('s-sp-pdown').value=sp.plan_down||0;$('s-sp-pup').value=sp.plan_up||0;$('s-sp-up').checked=!!sp.upload;
   const av=W.engines||{builtin:true},nm={builtin:t('engBuiltin'),ookla:t('engOokla'),librespeed:t('engLibre')};
   ['builtin','ookla','librespeed'].forEach(k=>{const o=$('o-eng-'+k);o.textContent=nm[k]+(av[k]?'':' ('+t('engMissing')+')');o.disabled=!av[k]&&sp.engine!==k;});
   $('s-sp-engine').value=sp.engine||'builtin';
@@ -621,7 +641,7 @@ async function saveSettings(){
   const btn=$('btn-save');
   const num=(id,d)=>{const v=parseInt($(id).value);return isNaN(v)?d:v;};
   const body={targets:textToTargets($('s-targets').value),gateway:$('s-gw').value.trim(),dns_name:$('s-dns').value.trim(),interval:num('s-interval',30),ip_url:$('s-ipurl').value.trim(),
-    speed:{engine:$('s-sp-engine').value,enabled:$('s-sp-on').checked,every_hours:num('s-sp-every',12),seconds:num('s-sp-secs',8),streams:num('s-sp-streams',4),upload:$('s-sp-up').checked,down_url:$('s-sp-down').value.trim(),up_url:$('s-sp-upurl').value.trim()},router:routerBody()};
+    speed:{engine:$('s-sp-engine').value,enabled:$('s-sp-on').checked,every_hours:num('s-sp-every',12),seconds:num('s-sp-secs',8),streams:num('s-sp-streams',4),plan_down:num('s-sp-pdown',0),plan_up:num('s-sp-pup',0),upload:$('s-sp-up').checked,down_url:$('s-sp-down').value.trim(),up_url:$('s-sp-upurl').value.trim()},router:routerBody()};
   btn.disabled=true;btn.innerHTML='<span class="spin">⟳</span>';
   try{
     const {ok,d}=await post('api/wan/config',body);

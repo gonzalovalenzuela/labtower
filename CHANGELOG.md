@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.5d — 2026-11-02
+
+- **Mejora:** WAN Monitor: nuevos ajustes «Bajada contratada» y «Subida contratada» (Mb/s). La tarjeta de velocidad muestra el porcentaje entregado respecto a lo contratado en la última prueba y su promedio de 7 días (verde desde 90 %, naranja desde 70 %, rojo bajo eso).
+- **Mejora:** Proxmox Monitor: el panel «Diagnóstico del cluster» tiene un botón «Expandir todo / Contraer todo» para abrir o cerrar de una vez reinicios, respaldos y SMART.
+
 ## 2.1.5c — 2026-11-02
 
 - **Mejora:** NAS Monitor: los umbrales de espacio de los volúmenes ahora se configuran por NAS (Editar NAS → «Aviso de volumen» y «Crítico de volumen», por defecto 90 % / 95 %). Antes las alertas usaban 90/95 pero los colores de la página NAS y del Resumen usaban 80/90 fijos, y un volumen al 84 % salía en naranja/rojo sin alerta. Ahora todo usa los mismos valores.

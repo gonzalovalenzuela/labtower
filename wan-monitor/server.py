@@ -63,7 +63,7 @@ DEFAULTS = {
     "ip_url": "https://api.ipify.org",    # returns the public IP as plain text ("" = off)
     "router": {"enabled": False, "type": "huawei", "host": "", "port": 80, "https": False, "user": "admin", "password": "", "interface": "wan", "every": 30},
     "speed": {"enabled": True, "every_hours": 12, "down_url": "https://speed.cloudflare.com/__down", "up_url": "https://speed.cloudflare.com/__up",
-              "seconds": 8, "streams": 4, "upload": True, "engine": "builtin"},
+              "seconds": 8, "streams": 4, "upload": True, "engine": "builtin", "plan_down": 0, "plan_up": 0},
 }
 _cfg_lock = threading.RLock()
 # Motores de la prueba de velocidad: el integrado (Cloudflare) y, si están instalados, los programas Ookla y LibreSpeed para contrastar.
@@ -160,6 +160,8 @@ def validate(body: dict, current=None) -> dict:
     sp["every_hours"] = _int(sp.get("every_hours", 12), 0, 720, "Speed test period")
     sp["seconds"] = _int(sp.get("seconds", 8), 3, 20, "Speed test duration")
     sp["streams"] = _int(sp.get("streams", 4), 1, 8, "Streams")
+    sp["plan_down"] = _int(sp.get("plan_down", 0), 0, 100000, "Contracted download speed")      # Mb/s, 0 = not set
+    sp["plan_up"] = _int(sp.get("plan_up", 0), 0, 100000, "Contracted upload speed")
     sp["down_url"] = _https_url(sp.get("down_url"), "Download address")
     sp["up_url"] = _https_url(sp.get("up_url"), "Upload address")
     return cfg
