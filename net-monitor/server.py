@@ -1182,6 +1182,24 @@ def purge_after_scan(hosts: dict, days: int, now: float = None) -> list:
     if not any(h.get("online") for h in hosts.values() if isinstance(h, dict)): return []
     return purge_offline(hosts, days, now)
 
+def name_offline_hosts(hosts: dict, limit: int = 60) -> int:
+    """ES: los equipos apagados no responden al ping y por eso el escaneo nunca les pedía el nombre (por ejemplo la interfaz AMT de un servidor
+    apagado). Aquí se les pone el nombre de Pi-hole (lo definido por el administrador gana) o, si no tienen ninguno, el del DNS. Devuelve cuántos cambió.
+    EN: powered-off devices do not answer ping, so the scan never asked for their name (for example the AMT interface of a switched-off server).
+    Here they get the Pi-hole name (what the administrator defined wins) or, if they have none, the DNS one. Returns how many it changed."""
+    with _hosts_lock:
+        todo = [(ip, h.get("hostname", "")) for ip, h in hosts.items() if isinstance(h, dict) and not h.get("online")]
+    found, asked = {}, 0
+    for ip, cur in todo:
+        n = pihole_lookup(ip).get("hostname", "")
+        if not n and not cur and asked < limit:
+            asked += 1; n = resolve_name(ip)
+        if n and n != cur: found[ip] = n
+    with _hosts_lock:
+        for ip, n in found.items():
+            if ip in hosts and isinstance(hosts[ip], dict) and not hosts[ip].get("online"): hosts[ip]["hostname"] = n
+    return len(found)
+
 def run_scan(network: str = None, single_ip: str = None):
     global _live_hosts
     with _scan_lock:                      # reserve the scan atomically: two triggers can't both start
@@ -1285,6 +1303,8 @@ def run_scan(network: str = None, single_ip: str = None):
                 if (found and time.time() - _last_save >= 2) or completed % 20 == 0:
                     save_hosts(hosts); _last_save = time.time()
 
+        try: name_offline_hosts(hosts)
+        except Exception as e: log.debug(f"offline names: {e}")
         with _hosts_lock:
             try:
                 gone = purge_after_scan(hosts, int(load_config().get("purge_days", 0) or 0))

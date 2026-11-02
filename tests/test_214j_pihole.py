@@ -95,3 +95,19 @@ class PtrDirect(unittest.TestCase):
             self.assertEqual(net.resolve_name("192.0.2.5"), "nas01"); self.assertEqual(seen, ["192.0.2.2"])   # web port dropped, ".local" cleaned
             net.ptr_query = lambda h, ip, **k: ""; self.assertEqual(net.resolve_name("192.0.2.5"), "sys")
         finally: net.PIHOLE_HOSTS, net.ptr_query, net.resolve_dns = old
+
+class OfflineNames(unittest.TestCase):
+    """2.1.4n: devices that are switched off (AMT interfaces…) also get their Pi-hole / DNS name."""
+    def test_offline_hosts_get_names(self):
+        old = (net.pihole_lookup, net.resolve_name)
+        try:
+            net.pihole_lookup = lambda ip: {"hostname": "nodo4pve-amt"} if ip == "192.0.2.41" else {}
+            net.resolve_name = lambda ip: "from-dns" if ip == "192.0.2.45" else ""
+            hosts = {"192.0.2.41": {"online": False, "hostname": ""}, "192.0.2.45": {"online": False, "hostname": ""},
+                     "192.0.2.46": {"online": False, "hostname": "keep"}, "192.0.2.47": {"online": True, "hostname": ""},
+                     "192.0.2.48": {"online": False, "hostname": "old-name"}}
+            net.pihole_lookup = (lambda f: lambda ip: {"hostname": "new-name"} if ip == "192.0.2.48" else f(ip))(net.pihole_lookup)
+            self.assertEqual(net.name_offline_hosts(hosts), 3)
+            self.assertEqual([hosts[i]["hostname"] for i in ("192.0.2.41", "192.0.2.45", "192.0.2.46", "192.0.2.47", "192.0.2.48")],
+                             ["nodo4pve-amt", "from-dns", "keep", "", "new-name"])   # Pi-hole name beats an old one; DNS only fills empty names; online hosts are left to the scan
+        finally: net.pihole_lookup, net.resolve_name = old

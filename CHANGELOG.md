@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.4o — 2026-11-02
+
+- **Net Monitor:** los equipos apagados o sin respuesta (por ejemplo la interfaz AMT de un servidor apagado) ahora también reciben su nombre de Pi-hole o del DNS. Antes solo se les pedía el nombre a los equipos que respondían al ping, así que los registros de «Local DNS» de equipos apagados nunca aparecían.
+
 ## 2.1.4n — 2026-11-02
 
 - **Net Monitor:** los nombres de los equipos ahora también se piden directamente al servidor DNS de Pi-hole (puerto 53), sin contraseña ni API. Los registros de «Local DNS» responden ahí, así que aparecen aunque la contraseña de aplicación no pueda leer la configuración de Pi-hole. Solo hace falta tener el host de Pi-hole en la configuración de Net Monitor.
