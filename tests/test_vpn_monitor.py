@@ -22,7 +22,7 @@ class Validate(unittest.TestCase):
                     {"type": "wireguard", "name": "x", "host": "192.0.2.9", "ssh_user": "a b"}, {"type": "wireguard", "name": "x", "host": "192.0.2.9", "ssh_user": "root", "port": 0},
                     {"type": "wireguard", "name": "x", "host": "192.0.2.9", "ssh_user": "root", "aliases": "nokey Name"},
                     {"type": "openvpn", "name": "x", "host": "192.0.2.9", "ssh_user": "root", "status_path": "/etc/../shadow"},
-                    {"type": "openvpn", "name": "x", "host": "192.0.2.9", "ssh_user": "root", "status_path": "/tmp/a b; reboot"}):
+                    {"type": "openvpn", "name": "x", "host": "192.0.2.9", "ssh_user": "root", "status_path": "/run/a b; reboot"}):
             with self.subTest(bad=bad), self.assertRaises(ValueError): m.validate(bad)
     def test_type_fixed_and_secret_kept(self):
         cur = m.validate({"type": "tailscale", "name": "ts", "api_key": "tskey-api-abc12345"}); cur["id"] = "a"
@@ -79,7 +79,7 @@ class Ssh(unittest.TestCase):
                           ("::ffff:190.1.2.3:44444", "190.1.2.3"), ("udp6:[::ffff:190.1.2.3]:1194", "190.1.2.3"), ("2001:db8::1", "2001:db8::1")):
             self.assertEqual(m._ovpn_ip(raw), want, raw)
     def test_sudo_option_prefixes_only_the_fixed_command(self):
-        for typ, extra, want in (("openvpn", {"status_path": "/tmp/ovpn_status_2_result"}, "sudo -n cat /tmp/ovpn_status_2_result"),
+        for typ, extra, want in (("openvpn", {"status_path": "/run/ovpn-status"}, "sudo -n cat /run/ovpn-status"),
                                  ("wireguard", {}, "sudo -n " + m.CMD_WG)):
             cfg = m.validate({"type": typ, "name": "x", "host": "192.0.2.9", "ssh_user": "gonzalo", "use_sudo": True, **extra})
             self.assertTrue(cfg["use_sudo"])
