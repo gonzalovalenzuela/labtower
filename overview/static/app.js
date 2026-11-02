@@ -412,6 +412,7 @@ async function refresh(){
   if(R.net)sevs.push(R.net.status==='fulfilled'?renderNet(R.net.value,R.sw&&R.sw.status==='fulfilled'?R.sw.value:null):fail('c-net',T('net')));
   if(R.sys.status==='fulfilled')sevs.push(renderPi(R.sys.value));
   if(R.ev.status==='fulfilled')renderEvents(R.ev.value.events||[]);
+  if(window.rulesUpdate){try{await rulesUpdate();sevs.push(rulesEval(R))}catch(e){}}   // reglas de alerta del administrador / admin alert rules
   fitGrid();   // ES: con el contenido ya pintado (el mosaico del kiosko mide las tarjetas) / EN: with the content painted (kiosk masonry measures the cards)
   const g=sevs.reduce((m,x)=>worst(m,x),'ok');
   const gp=$('gpill');gp.className='pill '+g;$('gtxt').textContent=g==='ok'?T('allok'):g==='warn'?T('attn'):T('fail');
@@ -463,6 +464,7 @@ function applyLang(){
   $('bl').textContent=lang==='es'?'EN':'ES';riFill();
   paintSort();
   if(window.linksLang)linksLang();
+  if(window.rulesLang)rulesLang();
   if(window.discoverLang)discoverLang();
   $('lu').placeholder=lang==='es'?'Usuario':'User';$('lp').placeholder=lang==='es'?'Contraseña':'Password';
 }

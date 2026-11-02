@@ -184,6 +184,36 @@ def load_bookmarks():
     return out if out is not None else []
 
 
+# ─── Reglas de alerta / alert rules ───
+# Umbrales que el administrador define sobre las métricas que el Resumen ya lee de los módulos (temperatura, CPU, batería, etc.). La página
+# los evalúa en cada actualización y los que se cumplen aparecen en el panel de atención. Se guardan enteras en rules.json:
+# [{"m": métrica, "o": ">" o "<", "v": número, "lv": "warn" o "crit", "on": true/false}].
+# EN: Thresholds the administrator defines on the metrics the Overview already reads from the modules (temperature, CPU, battery, ...). The page
+#     evaluates them on every refresh and the ones that hold show in the attention panel. Stored whole in rules.json.
+RULES_FILE = DATA_DIR / "rules.json"
+RULE_METRICS = ("pi_temp", "pi_cpu", "pi_mem", "pi_disk", "ups_charge", "ups_load", "ups_temp", "ups_runtime", "nas_cpu", "nas_mem", "nas_vol",
+                "nas_temp", "pve_cpu", "pve_ram", "dns_pct", "wan_rtt", "wan_loss")
+RULES_MAX = 40
+_rules_lock = threading.Lock()
+
+def clean_rules(d):
+    """Return (list, error). Strict like the bookmarks: a wrong rule rejects the whole save."""
+    if not isinstance(d, list): return None, "Invalid rules"
+    if len(d) > RULES_MAX: return None, f"At most {RULES_MAX} rules"
+    out = []
+    for x in d:
+        if not isinstance(x, dict): return None, "Invalid rules"
+        m, o, v, lv, on = x.get("m"), x.get("o"), x.get("v"), x.get("lv"), x.get("on", True)
+        if m not in RULE_METRICS or o not in (">", "<") or lv not in ("warn", "crit") or not isinstance(on, bool): return None, "Invalid rule"
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or abs(v) > 1e9: return None, "Invalid value"
+        out.append({"m": m, "o": o, "v": v, "lv": lv, "on": on})
+    return out, ""
+
+def load_rules():
+    out, err = clean_rules(auth.read_json(RULES_FILE, [], list))
+    return out if out is not None else []
+
+
 # ─── Salud ───────────────────────────────────────────────────────────────────
 # Chequeos comunes (usuarios, sesiones, disco) y que el archivo de eventos se pueda leer y escribir.
 # EN: ─── Health ──────────────────────────────────────────────────────────────
@@ -280,6 +310,9 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/bookmarks":
             return self._json(200, {"bookmarks": load_bookmarks(), "can_edit": is_admin(tok)})
 
+        if path == "/api/rules":
+            return self._json(200, {"rules": load_rules(), "can_edit": is_admin(tok)})
+
         # Eventos: solo los de módulos sobre los que el usuario tiene al menos «solo lectura».
         # EN: Events: only those of modules where the user has at least "readonly".
         if path == "/api/events":
@@ -315,6 +348,14 @@ class H(BaseHTTPRequestHandler):
             who = (auth.get_session(tok) or {}).get("username", "?")
             auth.audit(who, "bookmarks_saved", "", f"{len(items)} links", auth.client_ip(self), module="overview")
             return self._json(200, {"ok": True, "bookmarks": items})
+        if path == "/api/rules":
+            if not is_admin(tok): return self._json(403, {"error": "Admin permission required"})
+            items, err = clean_rules(body.get("rules"))
+            if items is None: return self._json(400, {"error": err})
+            with _rules_lock: auth.write_json(RULES_FILE, items)
+            who = (auth.get_session(tok) or {}).get("username", "?")
+            auth.audit(who, "alert_rules_saved", "", f"{len(items)} rules", auth.client_ip(self), module="overview")
+            return self._json(200, {"ok": True, "rules": items})
         self._json(404, {"error": "Not found"})
 
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.4l — 2026-11-02
+
+- **Resumen:** nueva tarjeta «Reglas de alerta». Los administradores definen umbrales sobre las métricas del servidor, UPS, NAS, Proxmox, DNS e internet (por ejemplo, «temperatura del servidor > 65 °C» o «batería del UPS < 50 %»), como aviso o crítico. Las reglas que se cumplen aparecen en el panel de atención y en el estado general. Se evalúan mientras el Resumen está abierto; todos los usuarios ven los avisos de los módulos que pueden ver.
+
 ## 2.1.4k — 2026-11-02
 
 - **Gráficos:** ahora todos los gráficos de detalle (UPS, NAS, DNS, WAN y los de switches en Net Monitor) se ven y funcionan igual: mismos colores, ejes, etiquetas de fecha y ventana con valores al pasar el mouse.
