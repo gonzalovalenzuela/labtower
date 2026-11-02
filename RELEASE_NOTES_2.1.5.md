@@ -46,6 +46,7 @@
 - **Mejora:** El aviso de versión nueva muestra los comandos para actualizar (`wget` y `sudo apt install`) con un botón para copiarlos.
 
 **Instalador**
+- **Nueva Funcionalidad:** Instalación en un contenedor (CT) de Proxmox: el script `scripts/labtower-ct` crea el CT con Debian 12 e instala LabTower, y la guía `docs/CT.md` explica también el paso a paso desde la interfaz de Proxmox.
 - **Mejora:** Al terminar ya no recomienda activar el HTTPS si ya está activado; muestra que está habilitado.
 
 **Interno**
