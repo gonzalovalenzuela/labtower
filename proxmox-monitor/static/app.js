@@ -778,13 +778,9 @@ function buildVMSection(items, type, running, nodeName){
           return `<div class="vm-row">
             <span class="vm-dot ${dotCls}"></span>
             <span class="vm-id">${esc(v.vmid)}</span>
-            <span class="vm-name" title="${esc(v.name||'')}">${esc(v.name||'—')}${v.lock==='migrate'?' <span title="migrating" style="color:var(--orange)">⇄</span>':''}</span>
+            <span class="vm-main"><span class="vm-name" title="${esc(v.name||'')}">${esc(v.name||'—')}${v.lock==='migrate'?' <span title="migrating" style="color:var(--orange)">⇄</span>':''}</span>${v.status==='running'?`<span class="vm-meta">${cpuPct}% · ${fmtBytes(v.mem||0)} · ${fmtUptime(v.uptime)}</span>`:''}</span>
             <span class="vm-type ${esc(String(type).toLowerCase().replace(/[^a-z0-9_-]/g,''))}">${esc(type)}</span>
-            ${v.status==='running'?`
-              <span class="vm-cpu">${cpuPct}%</span>
-              <span class="vm-mem">${fmtBytes(v.mem||0)}</span>
-              <span class="vm-uptime">${fmtUptime(v.uptime)}</span>
-            `:`<span style="font-size:10px;color:var(--text-dim);flex:1;text-align:right">${esc(v.status)}</span>`}
+            ${v.status==='running'?'':`<span class="vm-state">${esc(v.status)}</span>`}
           </div>`;
         }).join('')}
       </div>

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.4t — 2026-11-02
+
+- **Mejora:** Proxmox Monitor: los nombres de las VM y contenedores ya no se cortan («PL…», «Re…»). Las métricas (CPU, RAM y tiempo encendida) pasan a una segunda línea bajo el nombre, que ahora tiene todo el ancho de la fila.
+
 ## 2.1.4s — 2026-11-02
 
 - **Nueva Funcionalidad:** Net Monitor: las VM y contenedores de Proxmox se reconocen en la tabla de equipos. Aparece una insignia «VM 100» o «CT 200» junto al nombre (al pasar el mouse muestra cluster, nodo, nombre y estado), el detalle del equipo indica a qué VM/CT corresponde y la búsqueda encuentra «proxmox», «vm», «ct» o el número. Se cruza por MAC y, si no hay, por IP.
