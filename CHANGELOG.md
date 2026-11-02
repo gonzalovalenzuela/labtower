@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.5f — 2026-11-02
+
+- **Corregido:** el paquete 2.1.5e no incluía la carpeta del VPN Monitor, así que el servicio no arrancaba (502 Bad Gateway en `/vpn/`). Ahora el paquete la incluye.
+
 ## 2.1.5e — 2026-11-02
 
 - **Nuevo:** VPN Monitor (puerto 8089, `/vpn/`): muestra quién está conectado a Tailscale, OpenVPN y WireGuard, desde cuándo, con qué dirección y cuánto tráfico. Tailscale se lee por su API (clave de solo lectura); OpenVPN (archivo de estado, versiones 1, 2 y 3) y WireGuard (`wg show all dump`) se leen por SSH, de solo lectura, con una llave propia que LabTower genera y que se recomienda restringir en `authorized_keys` con `command="…"`. WireGuard no tiene usuarios: los peers se nombran con alias por clave pública. Lleva el registro de sesiones recientes, avisa en la línea de tiempo del Resumen cuando alguien se conecta o se desconecta, tiene su tarjeta en el Resumen, su permiso propio (Admin Panel → usuarios), servicio con usuario propio y entra en los respaldos (`vpn.json` y `state.json`; la llave SSH no se respalda: tras restaurar, créala de nuevo y vuelve a instalarla en el servidor VPN).
