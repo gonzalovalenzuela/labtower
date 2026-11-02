@@ -125,6 +125,10 @@ labtower-health
 - **Network:** hosts online, known and offline, last scan, device types and new hosts from the last 48 h.
 - **Raspberry Pi:** temperature, CPU, memory, disk, uptime and power supply status. On a Raspberry Pi only, it adds a 24 h temperature chart with under-voltage and throttling marks (kept 7 days in `metrics.db`).
 - **Event timeline:** important changes with their time (UPS on battery, node down, Ceph change, new or vanished hosts). The modules record them even when nobody has the page open: last 300 events or 30 days.
+- **Global search** (top bar or the `/` key): Net Monitor hosts, UPS, Proxmox VMs and containers, NAS, DNS servers and WOL devices; it only shows what each user can see.
+- **Alert rules** (admins): thresholds on server, UPS, NAS, Proxmox, DNS and internet metrics, as warning or critical; they are evaluated while the Overview is open and the ones that trigger show in the attention panel.
+- **Suggested monitors:** if Net Monitor sees a host with typical ports of Proxmox, a UPS server, Pi-hole/AdGuard Home or Synology that is not configured yet, it suggests it (admins of that module only; each suggestion can be dismissed).
+- **Detail charts** (UPS, NAS, DNS, WAN and switches): same look everywhere, 1-week range, "vs previous" button (dotted previous period) and event marks.
 - Everyone sees only the modules they can access.
 - **Refresh:** interval selector (10 s, 30 s, 1, 2, 5 min or manual with ↻), per browser. A hidden tab makes no requests.
 
@@ -147,6 +151,7 @@ labtower-health
 - **MAC and vendor**, in this order: Pi-hole, local ARP, SNMP (ARP table of a router or switch). Vendors come from the Wireshark `manuf` list (weekly download) or `ieee-data`.
 - **Device types:** computer, phone, tablet, router, switch, access point, storage, TV, camera, printer, game console, server, IP phone, UPS, smart speaker and other. OS, type and group can be edited by hand.
 - **Trash button** to remove a host from the list (admins only). If it is still connected, the next scan discovers it again.
+- **Proxmox:** VMs and containers are recognised in the table ("VM 100" / "CT 200" badge) by matching MAC, IP and, with no other clue, an identical name. The Hosts / Online / Offline cards filter the table.
 - Hovering (or tapping on iPad) an IP in UPS, Proxmox, WOL or Overview shows a card with the host's data.
 - SNMP credentials and the Pi-hole password are stored with 600 permissions and the API never returns them.
 
@@ -171,6 +176,7 @@ labtower-health
 - When adding a cluster you must confirm its certificate SHA-256 fingerprint, which is then pinned. If the certificate changes, the token is not sent.
 - **Cluster diagnostics** (panel below the nodes): node reboots with a common timeline (those less than 10 minutes apart are flagged as *simultaneous*, and they are detected even if LabTower was stopped), corosync quorum state, down OSDs and Ceph warnings, and the SMART data of each node's disks (health, wear, temperature, errors, sectors and, on NVMe, *Unsafe Shutdowns*) read every 15 minutes (`PVE_SMART_EVERY`, in seconds; 0 disables it). Everything creates events on the Overview timeline. The API token needs the `Sys.Audit` privilege on `/nodes` (role `PVEAuditor`) to read the disks.
 - **Backups (vzdump):** for each VM and CT, its last backup, read from the content of the storages that allow *backup* (a shared storage is queried once; on Proxmox Backup Server its verification state is shown), with its age, size and number of copies. It flags **No backup** or **Too old** (over 36 h by default; change it with the `/api/clusters/<id>/backup` API) and records an Overview event when a guest enters that state, and another when it is back to normal. Failed `vzdump` tasks of the last 7 days are listed and raise a critical event. Test VMs can be **ignored** from the panel (admins only). If a storage cannot be read, the VMs are not accused of having no backup. Read every 10 minutes (`PVE_BACKUP_EVERY`, in seconds; 0 disables it). The token needs `Datastore.Audit` on the storages (role `PVEAuditor`).
+- **VMs and containers in Net Monitor:** each VM/CT's MAC (from its configuration) and IP (container static IP, guest agent on VMs, container interface) are read every 5 min. A VM/CT name links to its detail in Net Monitor.
 
 ### NAS Monitor
 - Works like UPS Monitor: a **NAS Summary** table with every NAS (status, model, CPU, RAM, temperature, disks and fullest volume). Each row opens and shows its detail right below; the first one opens by default. You can also pick one from the side menu.

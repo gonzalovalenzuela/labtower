@@ -125,6 +125,10 @@ labtower-health
 - **Red:** equipos en línea, conocidos y apagados, último escaneo, reparto por tipo y equipos nuevos de las últimas 48 h.
 - **Raspberry Pi:** temperatura, CPU, memoria, disco, tiempo encendida y estado de la fuente de poder. Solo en una Raspberry Pi agrega el gráfico de 24 h de temperatura con marcas de bajo voltaje y limitación (se guarda 7 días en `metrics.db`).
 - **Línea de tiempo:** cambios importantes con hora (UPS a batería, nodo caído, cambio de Ceph, equipos nuevos o que dejaron de responder). Los guardan los módulos, aunque nadie tenga la página abierta: últimos 300 eventos o 30 días.
+- **Búsqueda global** (barra superior o tecla `/`): equipos de Net Monitor, UPS, VMs y contenedores de Proxmox, NAS, servidores DNS y equipos WOL; solo muestra lo que cada usuario puede ver.
+- **Reglas de alerta** (administradores): umbrales sobre métricas del servidor, UPS, NAS, Proxmox, DNS e internet, como aviso o crítico; se evalúan con el Resumen abierto y las que se cumplen aparecen en el panel de atención.
+- **Monitores sugeridos:** si Net Monitor ve un equipo con puertos típicos de Proxmox, un servidor UPS, Pi-hole/AdGuard Home o Synology y no está configurado, lo sugiere (solo administradores de ese módulo; se puede descartar).
+- **Gráficos de detalle** (UPS, NAS, DNS, WAN y switches): mismo aspecto en todos, rango de 1 semana, botón «vs anterior» (período previo punteado) y marcas de eventos.
 - Cada persona ve solo los módulos a los que tiene acceso.
 - **Actualización:** selector de intervalo (10 s, 30 s, 1, 2, 5 min o manual con ↻), por navegador. Con la pestaña oculta no consulta.
 
@@ -147,6 +151,7 @@ labtower-health
 - **MAC y fabricante**, en este orden: Pi-hole, ARP local, SNMP (ARP de un router o switch). El fabricante sale de la base `manuf` de Wireshark (descarga semanal) o de `ieee-data`.
 - **Tipos de equipo:** computador, teléfono, tablet, router, switch, punto de acceso, almacenamiento, TV, cámara, impresora, consola de juegos, servidor, teléfono IP, UPS, altavoz inteligente y otros. SO, tipo y grupo se pueden editar a mano.
 - **Basurero** para quitar un equipo de la lista (solo administradores). Si sigue conectado, el próximo escaneo lo vuelve a descubrir.
+- **Proxmox:** las VM y contenedores se reconocen en la tabla (insignia «VM 100» / «CT 200») cruzando MAC, IP y, si no hay otra pista, nombre idéntico. Las tarjetas Hosts / Online / Offline filtran la tabla.
 - Al pasar el mouse (o tocar en iPad) por una IP en UPS, Proxmox, WOL o Resumen aparece una tarjeta con los datos del equipo.
 - Las credenciales SNMP y la clave de Pi-hole se guardan con permisos 600 y la API nunca las devuelve.
 
@@ -171,6 +176,7 @@ labtower-health
 - Al agregar un cluster hay que confirmar la huella SHA-256 de su certificado, que queda fijada. Si el certificado cambia, no se envía el token.
 - **Diagnóstico del cluster** (panel bajo los nodos): reinicios de nodos con línea de tiempo común (los que ocurren con menos de 10 minutos de diferencia se marcan como *simultáneos*, y se detectan aunque LabTower estuviera parado), estado del quórum de corosync, OSD caídos y avisos de Ceph, y SMART de los discos de cada nodo (salud, desgaste, temperatura, errores, sectores y, en NVMe, *Unsafe Shutdowns*) leído cada 15 minutos (`PVE_SMART_EVERY`, en segundos; 0 lo desactiva). Todo genera eventos en la línea de tiempo del Resumen. El token de API necesita el privilegio `Sys.Audit` sobre `/nodes` (rol `PVEAuditor`) para leer los discos.
 - **Respaldos (vzdump):** para cada VM y CT, su último respaldo, leído del contenido de los storages que admiten *backup* (un storage compartido se consulta una sola vez; si es Proxmox Backup Server se muestra su verificación), con su antigüedad, tamaño y número de copias. Marca **Sin respaldo** o **Muy viejo** (más de 36 h por defecto; se cambia con la API `/api/clusters/<id>/backup`) y anota un evento en el Resumen al pasar a ese estado, y otro cuando se normaliza. Las tareas `vzdump` fallidas de los últimos 7 días se listan y generan un evento crítico. Las VMs de prueba se pueden **ignorar** desde el panel (solo administradores). Si un storage no se puede leer, no se acusa a las VMs de no tener respaldo. Se lee cada 10 minutos (`PVE_BACKUP_EVERY`, en segundos; 0 lo desactiva). El token necesita `Datastore.Audit` sobre los storages (rol `PVEAuditor`).
+- **VM y contenedores en Net Monitor:** se lee la MAC de cada VM/CT (configuración) y su IP (fija del contenedor, agente de invitado en las VM, interfaz del contenedor) cada 5 min. El nombre de cada VM/CT lleva a su detalle en Net Monitor.
 
 ### NAS Monitor
 - Funciona como UPS Monitor: una tabla **Resumen de NAS** con todos los NAS (estado, modelo, CPU, RAM, temperatura, discos y volumen más lleno). Cada fila se abre y muestra su detalle debajo; por defecto se abre el primero. También se elige desde el menú lateral.

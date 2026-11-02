@@ -1,111 +1,62 @@
 # Changelog
 
-## 2.1.4v — 2026-11-02
+## 2.1.5 — 2026-11-02
 
-- **Nueva Funcionalidad:** Proxmox Monitor: al hacer click en el nombre de una VM o contenedor te lleva a su detalle en Net Monitor (como en UPS Monitor), y al pasar el mouse muestra la tarjeta con sus datos. El equipo se busca por IP, luego por MAC y, si no hay ninguna, por nombre.
-- **Mejora:** Instalador: al terminar ya no recomienda activar el HTTPS si ya está activado; en su lugar muestra que está habilitado.
+Reúne todos los cambios desde 2.1.4 (builds 2.1.4a a 2.1.4v).
 
-## 2.1.4u — 2026-11-02
+**Resumen**
+- **Nueva Funcionalidad:** Búsqueda global en la barra superior (también con la tecla `/`). Busca equipos de Net Monitor, UPS, VMs y contenedores de Proxmox, NAS, servidores DNS y equipos de Wake-on-LAN. Solo muestra lo que cada usuario tiene permiso de ver.
+- **Nueva Funcionalidad:** Tarjeta «Reglas de alerta»: los administradores definen umbrales sobre las métricas del servidor, UPS, NAS, Proxmox, DNS e internet (por ejemplo, «temperatura del servidor > 65 °C» o «batería del UPS < 50 %»), como aviso o crítico. Las reglas que se cumplen aparecen en el panel de atención y en el estado general. Se evalúan mientras el Resumen está abierto.
+- **Nueva Funcionalidad:** Tarjeta «Monitores sugeridos»: si Net Monitor ve un equipo con puertos típicos de un servicio que LabTower puede monitorear (Proxmox, servidor UPS, Pi-hole o AdGuard Home, Synology) y aún no está configurado, lo sugiere con un enlace al módulo. Solo la ven los administradores de ese módulo y cada sugerencia se puede descartar.
+- **Nueva Funcionalidad:** Se puede pausar y reanudar el bloqueo de Pi-hole / AdGuard desde la tarjeta DNS (5 min, 30 min, 1 hora o hasta reanudar). Requiere nivel «ejecutar» en DNS Monitor.
+- **Mejora:** En modo kiosko no se muestran los controles para pausar el bloqueo de Pi-hole.
 
-- **Mejora:** Net Monitor: si un equipo no se puede asociar a su VM/CT de Proxmox por MAC ni por IP (por ejemplo, una red enrutada donde no se ve la MAC, o una VM sin agente), ahora se asocia por nombre cuando el nombre o alias del equipo es idéntico al de la VM/CT.
-- **Mejora:** Proxmox Monitor: `/api/guests` informa cuántas VM/CT tienen MAC y cuántas tienen IP, para diagnosticar permisos o falta del agente de invitado.
+**Gráficos (UPS, NAS, DNS, WAN y switches)**
+- **Mejora:** Todos los gráficos de detalle se ven y funcionan igual: mismos colores, ejes, etiquetas de fecha y ventana con valores al pasar el mouse.
+- **Nueva Funcionalidad:** Rango de 1 semana en UPS, NAS, DNS y WAN.
+- **Nueva Funcionalidad:** Botón «vs anterior», que dibuja con línea punteada el período justo anterior para comparar.
+- **Nueva Funcionalidad:** Los eventos importantes (cortes de energía, cambios de IP, caídas) aparecen como marcas sobre el gráfico del módulo correspondiente.
 
-## 2.1.4t — 2026-11-02
+**Net Monitor**
+- **Nueva Funcionalidad:** Las VM y contenedores de Proxmox se reconocen en la tabla de equipos: insignia «VM 100» / «CT 200» junto al nombre, detalle con la VM/CT correspondiente y búsqueda por «proxmox», «vm», «ct» o número. Se cruza por MAC, luego por IP y, si no hay ninguna, por nombre idéntico.
+- **Nueva Funcionalidad:** Opción «Quitar sin conexión tras N días» para eliminar solos los equipos que dejaron de responder (0 = nunca). Solo la ven y la cambian los administradores.
+- **Nueva Funcionalidad:** Switch Monitor: los switches se listan en la barra lateral y se puede elegir uno para verlo solo.
+- **Nueva Funcionalidad:** Switch Monitor: la velocidad de cada puerto tiene color (10G, 2.5G, 1G, 100M, 10M) en el panel, en la tabla y en una leyenda.
+- **Nueva Funcionalidad:** El panel de Pi-hole muestra cuántos dispositivos, concesiones DHCP y registros de DNS local leyó, y avisa si alguno no se pudo leer.
+- **Mejora:** Las tarjetas «Hosts descubiertos», «Online» y «Offline» se pueden tocar y filtran la tabla igual que los botones; tocar de nuevo la activa vuelve a mostrar todos.
+- **Mejora:** Los nombres de Pi-hole incluyen los registros de «Local DNS» y las concesiones DHCP, con prioridad sobre el DNS inverso. Se actualizan cada 5 minutos (antes 30) y al empezar cada escaneo; si Pi-hole no responde, se conservan los que ya había.
+- **Mejora:** Los nombres también se piden directo al DNS de Pi-hole (puerto 53), sin contraseña ni API, así aparecen aunque la contraseña de aplicación no pueda leer la configuración.
+- **Fix:** Los equipos apagados o sin respuesta (por ejemplo la interfaz AMT de un servidor apagado) no recibían nombre de Pi-hole ni del DNS; ahora sí.
+- **Fix:** La purga de equipos offline no borra nada si en el escaneo no respondió ningún equipo (por ejemplo, si el servidor perdió la red).
+- **Seguridad:** Los nombres que vienen de Pi-hole o del DNS se limpian de caracteres de control y se limitan a 80 caracteres. La consulta directa al DNS aplica la misma regla anti-SSRF que la API de Pi-hole.
 
-- **Mejora:** Proxmox Monitor: los nombres de las VM y contenedores ya no se cortan («PL…», «Re…»). Las métricas (CPU, RAM y tiempo encendida) pasan a una segunda línea bajo el nombre, que ahora tiene todo el ancho de la fila.
+**Proxmox Monitor**
+- **Nueva Funcionalidad:** Click en el nombre de una VM o contenedor lleva a su detalle en Net Monitor (como en UPS Monitor), con tarjeta de datos al pasar el mouse.
+- **Nueva Funcionalidad:** Lee la MAC y las IP de cada VM/CT (fijas del contenedor, agente de invitado en las VM, interfaz del contenedor), cada 5 minutos, en `/api/guests`.
+- **Nueva Funcionalidad:** Botón «Ocultar detenidas» para esconder las VM y contenedores apagados (se recuerda en el navegador).
+- **Mejora:** Los días para marcar un respaldo como viejo se configuran por cluster (solo administradores). Por defecto son 7 días (antes 36 horas).
+- **Mejora:** Los nombres de las VM y contenedores ya no se cortan; las métricas pasan a una segunda línea bajo el nombre.
+- **Fix:** Corregido un error que impedía cargar la página.
 
-## 2.1.4s — 2026-11-02
+**UPS Monitor**
+- **Mejora:** Los equipos conectados al UPS muestran el nombre que Net Monitor conoce; si no tiene, la IP.
+- **Mejora:** Si la batería tiene menos de 1 año, la edad se muestra en meses.
+- **Mejora de rendimiento:** El estado de envejecimiento de la batería se calcula en segundo plano (antes frenaba la página más de un segundo) y se guardan unos segundos las pruebas de batería y la fecha de cambio para no leer disco y base de datos en cada consulta.
 
-- **Nueva Funcionalidad:** Net Monitor: las VM y contenedores de Proxmox se reconocen en la tabla de equipos. Aparece una insignia «VM 100» o «CT 200» junto al nombre (al pasar el mouse muestra cluster, nodo, nombre y estado), el detalle del equipo indica a qué VM/CT corresponde y la búsqueda encuentra «proxmox», «vm», «ct» o el número. Se cruza por MAC y, si no hay, por IP.
-- **Nueva Funcionalidad:** Proxmox Monitor: lee la MAC de cada VM/CT desde su configuración y sus IP (las fijas del contenedor, las del agente de invitado en las VM y la interfaz del contenedor). Se actualiza cada 5 minutos y se consulta en `/api/guests`. Si falta algún permiso o el agente no corre, queda solo la MAC.
-- **Mejora:** Net Monitor: las tarjetas «Hosts descubiertos», «Online» y «Offline» ahora se pueden tocar y filtran la tabla igual que los botones de arriba; volver a tocar la tarjeta activa vuelve a mostrar todos.
+**WAN Monitor**
+- **Mejora:** El aviso de cambio de IP pública indica la IP anterior, dura 24 horas y queda en la línea de tiempo del Resumen. La IP pública aparece también en la barra lateral.
 
-## 2.1.4r — 2026-11-02
+**Admin Panel**
+- **Nueva Funcionalidad:** La tabla de usuarios tiene la columna «Última conexión».
+- **Fix:** «Última conexión» ya no sale vacía para quien tiene una sesión abierta.
+- **Mejora:** El aviso de versión nueva muestra los comandos para actualizar (`wget` y `sudo apt install`) con un botón para copiarlos.
 
-- **Resumen:** se quitó la tarjeta «Enlaces» (la 2.1.4h la agregó): era solo una lista de marcadores y no aportaba nada que el navegador no haga. La búsqueda global sigue igual, sin los enlaces. Si guardaste enlaces, el archivo `bookmarks.json` queda sin uso en la carpeta de datos del Resumen y se puede borrar.
+**Instalador**
+- **Mejora:** Al terminar ya no recomienda activar el HTTPS si ya está activado; muestra que está habilitado.
 
-## 2.1.4q — 2026-11-02
-
-- **Limpieza de código:** los scripts de respaldo, HTTPS e instalación quedan sin avisos de `shellcheck` (variables declaradas por separado, `if/else` en vez de `&&`/`||` encadenados, búsqueda de respaldos con `find`, y protección extra para que una variable vacía nunca borre `/etc`). Se quitó código que ya no se usaba (funciones sueltas de Python y de las páginas). No cambia ningún comportamiento.
-
-## 2.1.4p — 2026-11-02
-
-- **Net Monitor, seguridad:** los nombres de equipos que vienen de Pi-hole o del DNS se limpian de caracteres de control y se limitan a 80 caracteres antes de guardarlos. La consulta directa al DNS de Pi-hole aplica la misma regla anti-SSRF que la API de Pi-hole (no consulta este mismo equipo ni direcciones link-local).
-
-## 2.1.4o — 2026-11-02
-
-- **Net Monitor:** los equipos apagados o sin respuesta (por ejemplo la interfaz AMT de un servidor apagado) ahora también reciben su nombre de Pi-hole o del DNS. Antes solo se les pedía el nombre a los equipos que respondían al ping, así que los registros de «Local DNS» de equipos apagados nunca aparecían.
-
-## 2.1.4n — 2026-11-02
-
-- **Net Monitor:** los nombres de los equipos ahora también se piden directamente al servidor DNS de Pi-hole (puerto 53), sin contraseña ni API. Los registros de «Local DNS» responden ahí, así que aparecen aunque la contraseña de aplicación no pueda leer la configuración de Pi-hole. Solo hace falta tener el host de Pi-hole en la configuración de Net Monitor.
-
-## 2.1.4m — 2026-11-02
-
-- **Net Monitor:** el panel de Pi-hole ahora muestra cuántos dispositivos, concesiones DHCP y registros de DNS local leyó la última vez, y avisa si alguno no se pudo leer (por ejemplo, el DNS local con una contraseña de aplicación sin permiso). Así se ve por qué un nombre no aparece.
-
-## 2.1.4l — 2026-11-02
-
-- **Resumen:** nueva tarjeta «Reglas de alerta». Los administradores definen umbrales sobre las métricas del servidor, UPS, NAS, Proxmox, DNS e internet (por ejemplo, «temperatura del servidor > 65 °C» o «batería del UPS < 50 %»), como aviso o crítico. Las reglas que se cumplen aparecen en el panel de atención y en el estado general. Se evalúan mientras el Resumen está abierto; todos los usuarios ven los avisos de los módulos que pueden ver.
-
-## 2.1.4k — 2026-11-02
-
-- **Gráficos:** ahora todos los gráficos de detalle (UPS, NAS, DNS, WAN y los de switches en Net Monitor) se ven y funcionan igual: mismos colores, ejes, etiquetas de fecha y ventana con valores al pasar el mouse.
-- **Gráficos:** nuevo rango de **1 semana** en UPS, NAS, DNS y WAN.
-- **Gráficos:** nuevo botón «vs anterior» que dibuja con una línea punteada el período justo anterior para comparar.
-- **Gráficos:** los eventos importantes (cortes de energía, cambios de IP, caídas) aparecen como marcas sobre el gráfico del módulo correspondiente.
-
-## 2.1.4j — 2026-11-02
-
-- **Net Monitor:** los nombres de Pi-hole ahora incluyen los registros de «Local DNS» y las concesiones DHCP, y tienen prioridad sobre el nombre deducido por DNS inverso. Antes solo se usaba la lista de dispositivos de red de Pi-hole, y por eso no aparecían los nombres recién configurados.
-- **Net Monitor:** los nombres de Pi-hole se actualizan cada 5 minutos (antes 30) y al empezar cada escaneo. Si Pi-hole no responde, se conservan los nombres que ya había en vez de borrarlos.
-
-## 2.1.4i — 2026-11-02
-
-- **Resumen:** nueva tarjeta «Monitores sugeridos». Si Net Monitor ve un equipo en línea con puertos típicos de un servicio que LabTower puede monitorear (Proxmox, servidor UPS, Pi-hole o AdGuard Home, Synology) y todavía no está configurado, lo sugiere con un enlace al módulo. Solo la ven los administradores de ese módulo y se puede descartar cada sugerencia.
-
-## 2.1.4h — 2026-11-02
-
-- **Resumen:** búsqueda global en la barra superior (también con la tecla `/`). Busca equipos de Net Monitor, UPS, VMs y contenedores de Proxmox, NAS, servidores DNS, equipos de Wake-on-LAN y tus enlaces. Solo muestra lo que cada usuario tiene permiso de ver.
-
-## 2.1.4g — 2026-11-02
-
-- **Net Monitor:** la purga de equipos offline no borra nada si en el escaneo no respondió ningún equipo (por ejemplo, si el servidor perdió la red).
-- **DNS Monitor:** se quitó código que ya no se usaba en los gráficos.
-
-## 2.1.4f — 2026-10-31
-
-- **UPS Monitor:** el cálculo del estado de envejecimiento de la batería ya no frena las páginas. Antes se hacía al abrir la página (tardaba más de un segundo con mucho historial, cada 6 horas y después de cada reinicio); ahora se calcula en segundo plano y la página responde al tiro.
-- **UPS Monitor:** se guardan unos segundos las pruebas de batería y la fecha de cambio de batería, para no leer la base de datos y el disco en cada consulta.
-
-## 2.1.4e — 2026-10-31
-
-- **Admin Panel:** «Última conexión» ya no sale vacía para quien tiene una sesión abierta; usa la actividad de su sesión si no hay un inicio de sesión registrado.
-
-## 2.1.4d — 2026-10-31
-
-- **Proxmox Monitor:** los días para marcar un respaldo como viejo ahora se configuran (por cluster, solo administradores). Por defecto son 7 días (antes 36 horas).
-- **Admin Panel:** la tabla de usuarios tiene la columna «Última conexión».
-- **UPS Monitor:** los equipos conectados al UPS muestran el nombre que Net Monitor conoce; si no tiene, siguen mostrando la IP.
-- **WAN Monitor:** el aviso de cambio de IP pública indica la IP anterior y dura 24 horas; además queda en la línea de tiempo del Resumen. La IP pública aparece también en la barra lateral.
-- **Net Monitor:** en «Switch Monitor» los switches se listan en la barra lateral y se puede elegir uno para verlo solo.
-
-## 2.1.4c — 2026-10-31
-
-- **Proxmox Monitor:** corregido un error de la 2.1.4b que impedía cargar la página.
-- **Resumen:** en modo kiosko no se muestran los controles para pausar el bloqueo de Pi-hole.
-
-## 2.1.4b — 2026-10-31
-
-- **Net Monitor:** opción «Quitar sin conexión tras N días» para eliminar solos los equipos que dejaron de responder (0 = nunca). Solo la ven y la cambian los administradores.
-- **Net Monitor, switches:** la velocidad de cada puerto tiene color (10G, 2.5G, 1G, 100M, 10M) en el panel, en la tabla y en una leyenda.
-- **UPS Monitor:** si la batería tiene menos de 1 año, la edad se muestra en meses.
-- **Proxmox Monitor:** botón «Ocultar detenidas» para esconder las VM y contenedores apagados (se recuerda en el navegador).
-- **Resumen:** se puede pausar y reanudar el bloqueo de Pi-hole / AdGuard desde la tarjeta DNS (5 min, 30 min, 1 hora o hasta reanudar). Requiere nivel «ejecutar» en DNS Monitor.
-
-## 2.1.4a — 2026-10-31
-
-- **Mejora:** El aviso de versión nueva ahora muestra los comandos para actualizar (`wget` con enlace directo al .deb de la última versión y `sudo apt install`), con un botón para copiarlos.
+**Interno**
+- **Mejora:** Scripts de respaldo, HTTPS e instalación sin avisos de `shellcheck` (incluye una protección para que una variable vacía nunca borre `/etc`) y se quitó código que ya no se usaba. No cambia comportamientos.
+- **Mejora:** Los escaneos de seguridad de GitHub (bandit y gitleaks) quedan en verde.
 
 ## 2.1.4 — 2026-10-30
 
