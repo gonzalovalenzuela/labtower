@@ -60,12 +60,12 @@ def split_metrics(src, outdir):
                         for tbl, sql in indexes:
                             if tbl in tables: d.execute(sql)
                         for t in tables:
-                            cur = s.execute(f"SELECT * FROM {t}")
+                            cur = s.execute(f"SELECT * FROM {t}")  # nosec B608 - table names come from sqlite_master, not user input
                             marks = ",".join("?" * len(cur.description))
                             while True:
                                 rows = cur.fetchmany(5000)
                                 if not rows: break
-                                d.executemany(f"INSERT INTO {t} VALUES ({marks})", rows)
+                                d.executemany(f"INSERT INTO {t} VALUES ({marks})", rows)  # nosec B608 - table names come from sqlite_master, not user input
                         d.commit()
                     finally:
                         d.close()

@@ -48,7 +48,7 @@ class UsersSanitized(unittest.TestCase):
 class TargetCheck(unittest.TestCase):
     def test_real_valid_target(self):
         v = support.real_valid_target
-        for bad in ("127.0.0.1", "localhost", "foo.localhost", "::1", "0.0.0.0", "169.254.169.254", "[::1]", "::ffff:127.0.0.1", "127.1.2.3", "-x"):
+        for bad in ("127.0.0.1", "localhost", "foo.localhost", "::1", "0.0.0.0", "169.254.169.254", "[::1]", "::ffff:127.0.0.1", "127.1.2.3", "-x"):  # nosec B104 - test data
             with self.subTest(bad=bad): self.assertFalse(v(bad))
         for good in ("192.0.2.5", "10.1.2.3", "2001:db8::1", "no-such-host.invalid"):
             with self.subTest(good=good): self.assertTrue(v(good))

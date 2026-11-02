@@ -87,7 +87,7 @@ def check_huawei(c, http):
         s, t = http.request("/api/ntwk/wandetect")
         d = _json(t, "wandetect")
         if s != 200 or not isinstance(d, dict) or "Status" not in d: raise RouterError("the router did not report the WAN status (unexpected answer)")
-        ip = d.get("ExternalIPAddress"); ip = None if ip in (None, "", "-", "0.0.0.0") else str(ip)
+        ip = d.get("ExternalIPAddress"); ip = None if ip in (None, "", "-", "0.0.0.0") else str(ip)  # nosec B104 - compares the router answer, does not bind
         up = d.get("Uptime"); up = int(up) if isinstance(up, (int, float)) or str(up).isdigit() else None
         return _res(str(d.get("Status")) == "Connected", ip, up, "Status=" + str(d.get("Status")))
     finally:
@@ -131,11 +131,11 @@ def parse_ddwrt(text):
     if st:
         s = st.lower()
         up = ("connected" in s or "up" == s) and "disconnected" not in s and "not connected" not in s
-    elif "wan_ipaddr" in kv: up = bool(ip) and ip != "0.0.0.0"
+    elif "wan_ipaddr" in kv: up = bool(ip) and ip != "0.0.0.0"  # nosec B104 - compares the router answer, does not bind
     else: return None, None, None, ""
     upt = re.match(r"\s*(?:(\d+) days?,\s*)?(\d+):(\d+):(\d+)", kv.get("wan_uptime", "") or "")
     secs = (int(upt.group(1) or 0) * 86400 + int(upt.group(2)) * 3600 + int(upt.group(3)) * 60 + int(upt.group(4))) if upt else None
-    return up, (ip if ip not in ("", "0.0.0.0") else None), secs, "wan_status=" + st if st else "wan_ipaddr=" + kv.get("wan_ipaddr", "")
+    return up, (ip if ip not in ("", "0.0.0.0") else None), secs, "wan_status=" + st if st else "wan_ipaddr=" + kv.get("wan_ipaddr", "")  # nosec B104 - compares the router answer, does not bind
 
 def check_ddwrt(c, http):
     last = ""
@@ -157,7 +157,7 @@ def parse_tplink(text):
     toks = [x.strip().strip('"\'') for x in m.group(1).split(",")]
     ip = next((x for x in toks[:6] if _IP4.match(x)), None)
     if ip is None: return None, None
-    return ip != "0.0.0.0", (None if ip == "0.0.0.0" else ip)
+    return ip != "0.0.0.0", (None if ip == "0.0.0.0" else ip)  # nosec B104 - compares the router answer, does not bind
 
 def check_tplink(c, http):
     s, t = http.request("/userRpm/StatusRpm.htm", headers={"Referer": http.base + "/userRpm/MenuRpm.htm"})

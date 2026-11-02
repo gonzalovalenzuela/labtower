@@ -1,0 +1,9 @@
+# ES: los únicos hallazgos son contraseñas inventadas dentro de tests (incluso en commits antiguos). EN: the only findings are made-up passwords inside tests (also in old commits).
+title = "LabTower gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "fake credentials used by the test suite"
+paths = ['''^tests/''']

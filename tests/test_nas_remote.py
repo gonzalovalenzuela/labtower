@@ -89,7 +89,7 @@ class TnMock:
             self.log.append(("GET", lines[0].split(" ")[1]))
             if lines[0].split(" ")[1] != "/api/current":
                 s.sendall(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"); return
-            acc = base64.b64encode(hashlib.sha1((hdr["sec-websocket-key"] + GUID).encode()).digest()).decode()
+            acc = base64.b64encode(hashlib.sha1((hdr["sec-websocket-key"] + GUID).encode()).digest()).decode()  # nosec B324 - WebSocket handshake (RFC 6455)
             s.sendall(f"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {acc}\r\n\r\n".encode())
             authed = False
             while True:

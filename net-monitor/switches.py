@@ -48,7 +48,7 @@ class SessionExpired(Exception):
 
 
 def md5(s):
-    return hashlib.md5(s.encode()).hexdigest()
+    return hashlib.md5(s.encode()).hexdigest()  # nosec B324 - md5 is the switch web API login format, not a security use
 
 
 def speed_mbps(link):
@@ -873,7 +873,7 @@ class Manager:
             conn = self._db()
             try:
                 for t in ("sw_sys", "sw_port", "sw_sys_agg", "sw_port_agg", "sw_total"):
-                    conn.execute(f"DELETE FROM {t} WHERE sw=?", (sid,))
+                    conn.execute(f"DELETE FROM {t} WHERE sw=?", (sid,))  # nosec B608 - fixed table names
                 conn.commit()
             finally:
                 conn.close()
@@ -1412,10 +1412,10 @@ class Manager:
             try:
                 st = int(AGG_STEP)          # constante, no viene de la red / a constant, not from the network
                 conn.execute(f"""INSERT OR REPLACE INTO sw_sys_agg
-                    SELECT (ts/{st})*{st}, sw, AVG(up), AVG(temp), AVG(scrape), AVG(ports_up) FROM sw_sys WHERE ts<? GROUP BY ts/{st}, sw""", (cutoff,))
+                    SELECT (ts/{st})*{st}, sw, AVG(up), AVG(temp), AVG(scrape), AVG(ports_up) FROM sw_sys WHERE ts<? GROUP BY ts/{st}, sw""", (cutoff,))  # nosec B608 - integer constant
                 conn.execute(f"""INSERT OR REPLACE INTO sw_port_agg
                     SELECT (ts/{st})*{st}, sw, port, MAX(link), MAX(speed), AVG(rxp), AVG(txp), AVG(rxb), AVG(txb), MAX(err)
-                    FROM sw_port WHERE ts<? GROUP BY ts/{st}, sw, port""", (cutoff,))
+                    FROM sw_port WHERE ts<? GROUP BY ts/{st}, sw, port""", (cutoff,))  # nosec B608 - integer constant
                 conn.execute("DELETE FROM sw_sys WHERE ts<?", (cutoff,))
                 conn.execute("DELETE FROM sw_port WHERE ts<?", (cutoff,))
                 conn.execute("DELETE FROM sw_sys_agg WHERE ts<?", (now - KEEP,))
@@ -1462,7 +1462,7 @@ class Manager:
             conn = self._db()
             try:
                 def q(table, cols, extra, args, lo, hi):
-                    sql = f"SELECT ts, {', '.join(cols)} FROM {table} WHERE sw=? {extra} AND ts>=?" + (" AND ts<?" if hi else "") + " ORDER BY ts"
+                    sql = f"SELECT ts, {', '.join(cols)} FROM {table} WHERE sw=? {extra} AND ts>=?" + (" AND ts<?" if hi else "") + " ORDER BY ts"  # nosec B608 - table and columns are fixed in code
                     return [dict(r) for r in conn.execute(sql, (*args, lo, *((hi,) if hi else ())))]
                 sysr = q("sw_sys_agg", sys_f, "", (sid,), since, edge) + q("sw_sys", sys_f, "", (sid,), since, 0)
                 portr = (q("sw_port_agg", port_f, "AND port=?", (sid, int(port)), since, edge) +

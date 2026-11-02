@@ -126,7 +126,7 @@ class WsClient:
         for l in lines[1:]:
             k, _, v = l.partition(":")
             hdr[k.strip().lower()] = v.strip()
-        want = base64.b64encode(hashlib.sha1((key + GUID).encode()).digest()).decode()
+        want = base64.b64encode(hashlib.sha1((key + GUID).encode()).digest()).decode()  # nosec B324 - SHA-1 is mandated by the WebSocket handshake (RFC 6455), not a security use
         if hdr.get("sec-websocket-accept") != want:
             self.close(); raise RemoteError("Invalid WebSocket handshake answer")
         return self

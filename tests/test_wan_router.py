@@ -73,7 +73,7 @@ class FakeRouter:
     def get_ddwrt(self, h):
         if not h.basic_ok(): return h.send(401, "", headers=[("WWW-Authenticate", 'Basic realm="x"')])
         if h.path == "/Status_Router.live.asp":
-            h.send(200, "{wan_status::%s}{wan_ipaddr::%s}{wan_uptime:: 1 day, 02:03:04}" % ("Connected" if self.wan else "Disconnected", "203.0.113.7" if self.wan else "0.0.0.0"))
+            h.send(200, "{wan_status::%s}{wan_ipaddr::%s}{wan_uptime:: 1 day, 02:03:04}" % ("Connected" if self.wan else "Disconnected", "203.0.113.7" if self.wan else "0.0.0.0"))  # nosec B104 - test data
         else: h.send(404, "")
     def post_ddwrt(self, h, t): h.send(404, "")
 
@@ -81,7 +81,7 @@ class FakeRouter:
     def get_tplink(self, h):
         if not h.basic_ok(): return h.send(401, "")
         if h.path == "/userRpm/StatusRpm.htm":
-            ip = "203.0.113.11" if self.wan else "0.0.0.0"
+            ip = "203.0.113.11" if self.wan else "0.0.0.0"  # nosec B104 - test data
             h.send(200, 'var wanPara = new Array(\n1, "00-11-22-33-44-55", "%s", 1, "255.255.255.0", "203.0.113.1", "8.8.8.8 , 1.1.1.1", 0);\n' % ip)
         else: h.send(404, "")
     def post_tplink(self, h, t): h.send(404, "")
