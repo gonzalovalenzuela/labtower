@@ -450,11 +450,18 @@ def load_history() -> int:
 RANGE_SECS = {"1h": 3600, "1d": 86400, "1w": 604800, "1mo": 2592000}
 RANGE_POINTS = 600
 
-def history_range(sid: str, range_: str) -> list:
-    since = int(time.time()) - RANGE_SECS[range_] if range_ in RANGE_SECS else 0
+def history_window(range_: str, prev: bool = False):
+    """(since, until) of a range. prev=True gives the period just before it (same length) so charts can compare the two; "all" has none."""
+    now, span = int(time.time()), RANGE_SECS.get(range_)
+    if prev: return ((now - 2 * span, now - span) if span else None)
+    return (now - span if span else 0, now + 1)
+
+def history_range(sid: str, range_: str, prev: bool = False) -> list:
+    win = history_window(range_, prev)
+    if win is None: return []
     c = auth.metrics_conn()
     try:
-        rows = c.execute("SELECT ts,total,blocked,pct,ms FROM dns_samples WHERE sid = ? AND ts >= ? ORDER BY ts", (sid, since)).fetchall()
+        rows = c.execute("SELECT ts,total,blocked,pct,ms FROM dns_samples WHERE sid = ? AND ts >= ? AND ts < ? ORDER BY ts", (sid, win[0], win[1])).fetchall()
     finally: c.close()
     step = 1 if len(rows) <= RANGE_POINTS else -(-len(rows) // RANGE_POINTS)
     out = []
@@ -644,7 +651,8 @@ class H(BaseHTTPRequestHandler):
             if not any(n.get("id") == mh.group(1) for n in load_servers()): return self._json(404, {"error": "Server not found"})
             rng = parse_qs(urlparse(self.path).query).get("range", ["1d"])[0]
             if rng not in RANGE_SECS and rng != "all": return self._json(400, {"error": "Invalid range"})
-            try: return self._json(200, {"range": rng, "history": history_range(mh.group(1), rng)})
+            prev = parse_qs(urlparse(self.path).query).get("prev", ["0"])[0] == "1"
+            try: return self._json(200, {"range": rng, "prev": prev, "history": history_range(mh.group(1), rng, prev)})
             except Exception as e:
                 log.warning(f"history query failed: {e}"); return self._json(500, {"error": "Could not read the history"})
         self._json(404, {"error": "Not found"})

@@ -443,7 +443,7 @@ def db_insert(srv_id, ups, entry, urgent=False):
 # cada uno. Es el único acceso de lectura al historial.
 # EN: History of one UPS reduced to about `limit` points: groups by equal time intervals and averages
 #     each one. It is the only read access to the history.
-def db_query(srv_id, ups, since_ts=0, limit=4320):
+def db_query(srv_id, ups, since_ts=0, limit=4320, until_ts=None):
     """Historial de un UPS reducido a como máximo ~`limit` puntos.
 
     Agrupa por intervalos de tiempo iguales y promedia cada uno (el último punto
@@ -458,12 +458,13 @@ def db_query(srv_id, ups, since_ts=0, limit=4320):
     (Picking rows with `id % step` left a UPS with no points at all when there were two or more
     and the step was even.)
     """
+    until = until_ts if until_ts is not None else 2 ** 62
     with _db_lock:
         conn = db_connect()
         try:
             lo, hi = conn.execute(
-                "SELECT MIN(ts), MAX(ts) FROM history WHERE srv_id=? AND ups=? AND ts>=?",
-                (srv_id, ups, since_ts)).fetchone()
+                "SELECT MIN(ts), MAX(ts) FROM history WHERE srv_id=? AND ups=? AND ts>=? AND ts<?",
+                (srv_id, ups, since_ts, until)).fetchone()
             if lo is None:
                 return []
             bucket = max(1, -(-(hi - lo) // max(1, limit - 1)))   # techo de span/(limit-1)
@@ -472,10 +473,10 @@ def db_query(srv_id, ups, since_ts=0, limit=4320):
                        AVG(load) AS load, AVG(vin) AS vin, AVG(vout) AS vout,
                        AVG(watts) AS watts, AVG(NULLIF(temp, 0)) AS temp
                 FROM history
-                WHERE srv_id=? AND ups=? AND ts>=?
+                WHERE srv_id=? AND ups=? AND ts>=? AND ts<?
                 GROUP BY (ts - ?) / ?
                 ORDER BY ts ASC
-            """, (srv_id, ups, since_ts, lo, bucket)).fetchall()
+            """, (srv_id, ups, since_ts, until, lo, bucket)).fetchall()
             return [dict(r) for r in rows]
         finally:
             conn.close()
@@ -1027,8 +1028,13 @@ class H(BaseHTTPRequestHandler):
             ups    = qs.get("ups", ["ups"])[0]
             range_ = qs.get("range", ["all"])[0]
             range_secs = {"1h":3600,"1d":86400,"1w":604800,"1mo":2592000}
-            since = int(time.time()) - range_secs[range_] if range_ in range_secs else 0
-            rows  = db_query(sid, ups, since_ts=since, limit=RANGE_LIMIT.get(range_, 4320))
+            now = int(time.time()); until = None
+            if qs.get("prev", ["0"])[0] == "1":        # the period just before the range (same length), to compare the two
+                if range_ not in range_secs: return self._json(200, {"history": []})
+                since, until = now - 2 * range_secs[range_], now - range_secs[range_]
+            else:
+                since = now - range_secs[range_] if range_ in range_secs else 0
+            rows  = db_query(sid, ups, since_ts=since, limit=RANGE_LIMIT.get(range_, 4320), until_ts=until)
             self._json(200, {"history": rows})
         # Exporta el historial de un UPS como archivo CSV descargable (hasta 8640 puntos).
         # EN: Export a UPS history as a downloadable CSV file (up to 8640 points).

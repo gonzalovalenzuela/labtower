@@ -78,7 +78,7 @@ Object.assign(LANG.es, {
 });
 
 const $ = id => document.getElementById(id);
-const SW = { sub: 'status', tot: null, macs: null, q: '', msw: '', known: false, pos: {}, drag: null, view: 'hosts', data: null, hash: '', sel: null, range: '1d', hist: {}, charts: {}, showAll: {}, timer: null, busy: false, cfg: null, only: '' };
+const SW = { sub: 'status', tot: null, macs: null, q: '', msw: '', known: false, pos: {}, drag: null, view: 'hosts', data: null, hash: '', sel: null, range: '1d', hist: {}, showAll: {}, timer: null, busy: false, cfg: null, only: '' };
 const POLLS = [30, 60, 120, 300, 600];
 
 async function api(path, opts) {
@@ -108,10 +108,6 @@ const num = v => v == null ? '—' : Number(v).toLocaleString(_lang === 'es' ? '
 const dateOf = ts => new Date(ts * 1000).toLocaleDateString(_lang === 'es' ? 'es-CL' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 function ago(sec) { return sec == null ? '—' : sec < 60 ? Math.round(sec) + ' ' + t('swSec') : Math.floor(sec / 60) + ' ' + t('swMin'); }
 function clock(ts, secs) { const d = new Date(ts * 1000); return typeof PCT !== 'undefined' ? PCT.time(d, secs) : d.toLocaleTimeString(); }
-function dayTime(ts) {
-  const d = new Date(ts * 1000), day = d.toLocaleDateString(_lang === 'es' ? 'es-CL' : 'en-GB', { day: '2-digit', month: '2-digit' });
-  return SW.range === '1h' || SW.range === '1d' ? clock(ts) : day + ' ' + clock(ts);
-}
 const nameOf = n => (n.name || n.ip || n.mac || '').toString();
 
 // ── Vistas / views ───────────────────────────────────────────────────────────────────────
@@ -165,75 +161,34 @@ async function loadHistory(force) {
   drawCharts();
 }
 
-// Gráfico de líneas en SVG con cuadrícula, cortes donde faltan datos y cursor con valores.
-// EN: SVG line chart with grid, breaks where data is missing and a hover cursor with values.
-function lineChart(id, rows, series, o) {
-  const W = 900, H = o.h || 130, L = 46, R = 8, T = 8, B = 22;
+// Gráfico de líneas: el mismo motor (charts.js) que usan los demás módulos. Los ceros/ausencias cortan la línea.
+// EN: Line chart: the same engine (charts.js) the other modules use. Missing values break the line.
+let swChartSeq = 0;
+function lineChart(el, rows, series, o) {
   rows = rows.filter(r => series.some(s => r[s.k] != null));
-  if (rows.length < 2) return '<div class="sw-nodata">' + esc(t('swNoData')) + '</div>';
-  const x0 = rows[0].ts, x1 = rows[rows.length - 1].ts, xs = ts => L + (ts - x0) / Math.max(1, x1 - x0) * (W - L - R);
-  let lo = Infinity, hi = -Infinity;
-  rows.forEach(r => series.forEach(s => { const v = r[s.k]; if (v != null) { lo = Math.min(lo, v * (s.mul || 1)); hi = Math.max(hi, v * (s.mul || 1)); } }));
-  if (o.zero) lo = 0;
-  if (o.line != null) { hi = Math.max(hi, o.line * 1.05); lo = Math.min(lo, o.line * 0.9); }
-  if (hi === lo) { hi += 1; lo = Math.max(0, lo - 1); }
-  const pad = (hi - lo) * 0.08; hi += pad; if (!o.zero) lo = Math.max(lo - pad, o.min != null ? o.min : -Infinity); else lo = 0;
-  const ys = v => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
-  const gaps = rows.map((r, i) => i ? r.ts - rows[i - 1].ts : 0).filter(Boolean).sort((a, b) => a - b), med = gaps.length ? gaps[gaps.length >> 1] : 60;
-  let g = '';
-  for (let i = 0; i <= 3; i++) {
-    const v = lo + (hi - lo) * i / 3, y = ys(v);
-    g += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" class="sw-grid"/><text x="${L - 5}" y="${y + 3}" text-anchor="end" class="sw-ax">${esc(o.fmtAxis(v))}</text>`;
-  }
-  for (let i = 0; i <= 4; i++) { const ts = x0 + (x1 - x0) * i / 4; g += `<text x="${xs(ts)}" y="${H - 6}" text-anchor="${i === 0 ? 'start' : i === 4 ? 'end' : 'middle'}" class="sw-ax">${esc(dayTime(ts))}</text>`; }
-  if (o.line != null) g += `<line x1="${L}" x2="${W - R}" y1="${ys(o.line)}" y2="${ys(o.line)}" class="sw-warnline"/>`;
-  series.forEach(s => {
-    let d = '', pen = false;
-    rows.forEach((r, i) => {
-      const v = r[s.k];
-      if (v == null) { pen = false; return; }
-      if (i && r.ts - rows[i - 1].ts > med * 4) pen = false;
-      d += (pen ? 'L' : 'M') + xs(r.ts).toFixed(1) + ' ' + ys(v * (s.mul || 1)).toFixed(1) + ' ';
-      pen = true;
-    });
-    g += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="1.6" stroke-linejoin="round"/>`;
-  });
-  SW.charts[id] = { rows, series, x0, x1, W, L, R, fmt: o.fmtVal };
-  const leg = series.length > 1 || o.legend ? '<div class="sw-legend">' + series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.label)}</span>`).join('') + '</div>' : '';
-  return `<div class="sw-chartbox" data-chart="${id}">${leg}<svg viewBox="0 0 ${W} ${H}" class="sw-svg">${g}<line class="sw-cursor" x1="0" x2="0" y1="${T}" y2="${H - B}" style="display:none"/></svg></div>`;
+  if (rows.length < 2) { el.innerHTML = '<div class="sw-nodata">' + esc(t('swNoData')) + '</div>'; return; }
+  const n = ++swChartSeq, cid = 'swc-' + n, tid = 'swt-' + n;
+  const pts = rows.map(r => { const q = { ts: r.ts }; series.forEach(s => { if (r[s.k] != null) q[s.k] = r[s.k] * (s.mul || 1); }); return q; });
+  const leg = series.map(s => `<div class="vchart-legend-item"><div class="vchart-legend-dot" style="background:${esc(s.color)}"></div>${esc(s.label)}</div>`).join('');
+  el.innerHTML = `<div class="vchart-section"><div class="vchart-header"><span class="vchart-legend" style="grid-area:title;justify-content:flex-start">${leg}</span></div>` +
+    `<div class="vchart-body"><div class="vchart-wrap"><div class="vchart-tooltip" id="${tid}"></div><canvas class="vchart" id="${cid}" style="--chart-h:${o.h || 130}px"></canvas></div></div></div>`;
+  VC.draw(document.getElementById(cid), { pts, range: SW.range, tipId: tid, axis: o.fmtAxis, hline: o.line, min: o.min, pl: 46, pr: 10,
+    series: series.map(s => ({ k: s.k, c: s.color, l: s.label, f: o.fmtVal })),
+    scale: vals => { let lo = o.zero ? 0 : Math.min(...vals), hi = Math.max(...vals); if (o.line != null) { hi = Math.max(hi, o.line * 1.05); lo = Math.min(lo, o.line * 0.9); } if (hi === lo) { hi += 1; lo = Math.max(0, lo - 1); } const pad = (hi - lo) * 0.08; hi += pad; lo = o.zero ? 0 : Math.max(lo - pad, o.min != null ? o.min : -Infinity); return [lo, hi]; } });
 }
 
 function chartFor(el) {
   const key = el.dataset.key, kind = el.dataset.kind, c = SW.hist[key];
   if (!c) { el.innerHTML = '<div class="sw-nodata">…</div>'; return; }
   const id = key + '|' + kind, d = c.d, sw = (SW.data.switches.find(s => s.id === key.split('|')[0]) || {});
-  if (kind === 'temp') el.innerHTML = lineChart(id, d.sys, [{ k: 'temp', color: '#ef4444', label: t('swTempChart'), mul: 1 }], { h: 110, fmtAxis: v => Math.round(v) + '°', fmtVal: v => v.toFixed(1) + ' °C', line: SW.data.temp_warn, min: 0 });
+  if (kind === 'temp') lineChart(el, d.sys, [{ k: 'temp', color: '#ef4444', label: t('swTempChart'), mul: 1 }], { h: 110, fmtAxis: v => Math.round(v) + '°', fmtVal: v => v.toFixed(1) + ' °C', line: SW.data.temp_warn, min: 0 });
   else if (kind === 'traffic') {
-    if (sw.has_bytes) el.innerHTML = lineChart(id, d.port, [{ k: 'rxb', color: '#22c55e', label: 'rx', mul: 1e-6 }, { k: 'txb', color: '#4361ee', label: 'tx', mul: 1e-6 }], { h: 130, zero: true, fmtAxis: v => v.toFixed(v < 10 ? 1 : 0) + ' M', fmtVal: v => v.toFixed(2) + ' Mb/s' });
-    else el.innerHTML = lineChart(id, d.port, [{ k: 'rxp', color: '#22c55e', label: 'rx', mul: 1 }, { k: 'txp', color: '#4361ee', label: 'tx', mul: 1 }], { h: 130, zero: true, fmtAxis: v => pps(v), fmtVal: v => v.toFixed(1) + ' pkt/s' });
-  } else if (kind === 'errs') el.innerHTML = lineChart(id, d.port, [{ k: 'err', color: '#f59e0b', label: t('swErrChart') }], { h: 90, legend: true, fmtAxis: v => Math.round(v), fmtVal: v => Math.round(v) + '' });
+    if (sw.has_bytes) lineChart(el, d.port, [{ k: 'rxb', color: '#22c55e', label: 'rx', mul: 1e-6 }, { k: 'txb', color: '#4361ee', label: 'tx', mul: 1e-6 }], { h: 130, zero: true, fmtAxis: v => v.toFixed(v < 10 ? 1 : 0) + ' M', fmtVal: v => v.toFixed(2) + ' Mb/s' });
+    else lineChart(el, d.port, [{ k: 'rxp', color: '#22c55e', label: 'rx', mul: 1 }, { k: 'txp', color: '#4361ee', label: 'tx', mul: 1 }], { h: 130, zero: true, fmtAxis: v => pps(v), fmtVal: v => v.toFixed(1) + ' pkt/s' });
+  } else if (kind === 'errs') lineChart(el, d.port, [{ k: 'err', color: '#f59e0b', label: t('swErrChart') }], { h: 90, legend: true, fmtAxis: v => Math.round(v), fmtVal: v => Math.round(v) + '' });
 }
 function drawCharts() { document.querySelectorAll('#view-switches .sw-chart').forEach(chartFor); }
 
-// Cursor con valores al pasar el mouse. / Hover cursor with values.
-function onMove(e) {
-  const box = e.target.closest && e.target.closest('.sw-chartbox');
-  const tip = $('sw-tip');
-  if (!box) { if (tip) tip.style.display = 'none'; return; }
-  const m = SW.charts[box.dataset.chart], svg = box.querySelector('svg'), cur = box.querySelector('.sw-cursor');
-  if (!m || !svg) return;
-  const r = svg.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * m.W;
-  const ts = m.x0 + (x - m.L) / Math.max(1, m.W - m.L - m.R) * (m.x1 - m.x0);
-  let best = null;
-  m.rows.forEach(p => { if (best === null || Math.abs(p.ts - ts) < Math.abs(best.ts - ts)) best = p; });
-  if (!best) return;
-  const bx = m.L + (best.ts - m.x0) / Math.max(1, m.x1 - m.x0) * (m.W - m.L - m.R);
-  cur.setAttribute('x1', bx); cur.setAttribute('x2', bx); cur.style.display = '';
-  tip.innerHTML = '<b>' + esc(dayTime(best.ts)) + '</b>' + m.series.filter(s => best[s.k] != null).map(s => `<div><i style="background:${s.color}"></i>${esc(s.label)}: ${esc(m.fmt(best[s.k] * (s.mul || 1)))}</div>`).join('');
-  tip.style.display = 'block';
-  tip.style.left = Math.min(window.innerWidth - tip.offsetWidth - 8, e.clientX + 14) + 'px';
-  tip.style.top = (e.clientY + 14) + 'px';
-}
 
 // ── Dibujo de la pestaña / drawing the tab ──────────────────────────────────────────────
 function updateStamp() {
@@ -518,7 +473,6 @@ function init() {
     side.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(e); } });
   }
   document.addEventListener('click', e => { if (e.target.closest && e.target.closest('#sw-modal')) onClick(e); });
-  root.addEventListener('mousemove', onMove); root.addEventListener('mouseleave', () => { const tip = $('sw-tip'); if (tip) tip.style.display = 'none'; });
   const refreshMac = () => { const b = macBody(), body = $('sw-macbody'); if (body) body.innerHTML = b.html; const c = $('sw-maccount'); if (c) c.textContent = b.count; };
   root.addEventListener('input', e => { if (e.target.id === 'sw-q') { SW.q = e.target.value; refreshMac(); } });
   root.addEventListener('change', e => {

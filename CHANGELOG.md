@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.4k — 2026-11-02
+
+- **Gráficos:** ahora todos los gráficos de detalle (UPS, NAS, DNS, WAN y los de switches en Net Monitor) se ven y funcionan igual: mismos colores, ejes, etiquetas de fecha y ventana con valores al pasar el mouse.
+- **Gráficos:** nuevo rango de **1 semana** en UPS, NAS, DNS y WAN.
+- **Gráficos:** nuevo botón «vs anterior» que dibuja con una línea punteada el período justo anterior para comparar.
+- **Gráficos:** los eventos importantes (cortes de energía, cambios de IP, caídas) aparecen como marcas sobre el gráfico del módulo correspondiente.
+
 ## 2.1.4j — 2026-11-02
 
 - **Net Monitor:** los nombres de Pi-hole ahora incluyen los registros de «Local DNS» y las concesiones DHCP, y tienen prioridad sobre el nombre deducido por DNS inverso. Antes solo se usaba la lista de dispositivos de red de Pi-hole, y por eso no aparecían los nombres recién configurados.

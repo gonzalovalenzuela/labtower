@@ -286,6 +286,8 @@ class H(BaseHTTPRequestHandler):
             try: limit = max(1, min(200, int(parse_qs(u.query).get("limit", ["60"])[0])))
             except ValueError: limit = 60
             allowed = [m for m in EVENT_MODULES if auth.LEVELS.get(sess["permissions"].get(m, ""), 0) >= auth.LEVELS["readonly"]]
+            only = parse_qs(u.query).get("m", [""])[0]          # optional: events of ONE module (chart annotations)
+            if only: allowed = [m for m in allowed if m == only]
             return self._json(200, {"events": auth.read_events(allowed, limit)})
         self._json(404, {"error": "Not found"})
 

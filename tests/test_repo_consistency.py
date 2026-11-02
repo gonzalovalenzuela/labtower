@@ -32,7 +32,7 @@ class License(unittest.TestCase):
 
 class SharedAssets(unittest.TestCase):
     """Estos archivos se copian a mano a varias carpetas: si una copia cambia sola, la página se comporta distinto según el módulo."""
-    SHARED = ["timefmt.js", "csp-bind.js", "footer.js", "ipcard.js", "ipcard.css", "theme.js", "theme.css"]
+    SHARED = ["charts.js", "timefmt.js", "csp-bind.js", "footer.js", "ipcard.js", "ipcard.css", "theme.js", "theme.css"]
     def test_copies_are_identical(self):
         for name in self.SHARED:
             with self.subTest(file=name):

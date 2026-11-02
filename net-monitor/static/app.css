@@ -311,14 +311,9 @@ body.view-sw #sw-side{display:block}
 .sw-portform input[type=text],.sw-portform input:not([type]),.sw-dlg input:not([type=checkbox]),.sw-dlg select{background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--r-sm);color:var(--text);font:13px var(--sans);padding:7px 9px}
 label.chk{flex-direction:row!important;align-items:center;gap:6px!important}
 .sw-charttitle,.sw-sechead{font:600 11px var(--sans);text-transform:uppercase;letter-spacing:.05em;color:var(--text-dim)}
-.sw-svg{width:100%;height:auto;display:block}
-.sw-grid{stroke:var(--border);stroke-width:1}.sw-ax{font:10px var(--mono);fill:var(--text-dim)}
-.sw-warnline{stroke:var(--yellow);stroke-dasharray:4 4;stroke-width:1}.sw-cursor{stroke:var(--text-dim);stroke-width:1}
 .sw-node{font:600 11px var(--sans);fill:var(--text)}
 .sw-topo{width:100%;max-width:520px;height:auto;align-self:center}
-.sw-legend{display:flex;gap:12px;font-size:11px;color:var(--text-mid);margin-bottom:2px}.sw-legend i,.sw-tip i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
 .sw-nodata,.sw-note{font-size:12px;color:var(--text-dim);padding:6px 0}
-.sw-tip{position:fixed;z-index:60;background:var(--surface);border:1px solid var(--border-b);border-radius:var(--r-sm);box-shadow:var(--shadow-md);padding:7px 10px;font:11.5px var(--mono);pointer-events:none}
 .sw-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:80;display:flex;align-items:center;justify-content:center;padding:16px}
 .sw-dlg{background:var(--surface);border:1px solid var(--border-b);border-radius:var(--r);box-shadow:var(--shadow-md);padding:20px;width:100%;max-width:440px;display:flex;flex-direction:column;gap:12px;max-height:92vh;overflow:auto}
 .sw-dlg h3{margin:0;font-size:16px}.m-web,.m-snmp{display:flex;flex-direction:column;gap:12px}
@@ -336,3 +331,23 @@ label.chk{flex-direction:row!important;align-items:center;gap:6px!important}
 .spd-pill{display:inline-block;padding:1px 8px;border-radius:10px;border:1px solid var(--spd,var(--border-b));color:var(--spd,var(--text-mid));font-size:11px;font-weight:700;white-space:nowrap}
 .sw-leg-spd{margin-top:6px}
 .sw-leg-spd span:before{background:var(--spd);border-color:var(--spd);border-radius:50%}
+/* Charts (same block in every module / mismo bloque en cada módulo) */
+.vchart-tooltip{position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:7px 10px;font-size:11px;font-family:var(--mono);color:var(--text);pointer-events:none;z-index:100;box-shadow:var(--shadow-md);white-space:nowrap;display:none}
+.vchart-tooltip.show{display:block}
+.vchart-wrap{position:relative}
+.vchart-header{padding:7px 12px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"title legend filters";align-items:center;column-gap:14px;row-gap:6px}
+.vchart-title{grid-area:title;font-size:12px;font-weight:600;color:var(--text);white-space:nowrap}
+.vchart-legend{grid-area:legend;display:flex;gap:14px;flex-wrap:wrap;justify-content:flex-end;min-width:0}
+.vchart-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-dim);font-weight:500;white-space:nowrap}
+.vchart-legend-dot{width:10px;height:3px;border-radius:99px}
+.vchart-filters{grid-area:filters;display:flex;gap:4px}
+.vchart-filter{font-size:11px;font-weight:500;padding:3px 9px;min-width:34px;border-radius:99px;border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer;transition:all .15s}
+.vchart-filter:hover{border-color:var(--border-b);color:var(--text)}
+.vchart-filter.active{background:var(--blue);border-color:var(--blue);color:#fff}
+/* Same layout in both charts on narrow screens: title + ranges on the first line, legend below */
+@media(max-width:700px){
+  .vchart-header{grid-template-columns:1fr auto;grid-template-areas:"title filters" "legend legend"}
+  .vchart-legend{justify-content:flex-start}
+}
+.vchart-body{padding:6px 12px 8px}
+canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}

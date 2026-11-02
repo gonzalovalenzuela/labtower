@@ -358,7 +358,7 @@ const CPU_W=70,CPU_C=85,MEM_W=80,MEM_C=90,VOL_W=80,VOL_C=90,DISK_HOT=55;
 
 // ── Gráficos de detalle (como los de UPS Monitor): canvas con rangos 1h / 1d / 1mo / todo, cuadrícula, valores actuales y cursor con tooltip ──
 // EN: Detail charts (like UPS Monitor's): canvas with 1h / 1d / 1mo / all ranges, grid, current values and a hover cursor with tooltip.
-const RANGES=['1h','1d','1mo','all'];
+const RANGES=VC.RANGES;
 const CHARTS={
   cm:{title:'histCpuMem',max:100,series:[{k:'cpu',c:'#f97316',l:'cpu',f:v=>v.toFixed(1)+'%'},{k:'mem',c:'#8b5cf6',l:'RAM',f:v=>v.toFixed(1)+'%'}],axis:v=>Math.round(v)+'%',h:140},
   tp:{title:'histTemp',min:null,series:[{k:'temp',c:'#ef4444',l:'temp',f:v=>v.toFixed(1)+' °C'}],axis:v=>Math.round(v)+'°',h:120},
@@ -370,12 +370,12 @@ const _cid=(id,kind)=>'nch-'+kind+'-'+String(id).replace(/[^a-z0-9]/gi,'-');
 
 // Pide al servidor el historial de un NAS y rango; se reutiliza 30 s (1h) o 2 min (el resto).
 // EN: Ask the server for one NAS and range history; reused for 30 s (1h) or 2 min (the rest).
-async function loadRange(id,range,force){
-  const key=id+'|'+range,c=_rangeData[key],ttl=range==='1h'?30000:120000;
+async function loadRange(id,range,force,prev){
+  const key=id+'|'+range+(prev?'|prev':''),c=_rangeData[key],ttl=range==='1h'?30000:120000;
   if(!force&&c&&Date.now()-c.ts<ttl)return;
   if(_rangeBusy[key])return;_rangeBusy[key]=true;
   try{
-    const r=await fetch('api/nas/'+encodeURIComponent(id)+'/history?range='+range);
+    const r=await fetch('api/nas/'+encodeURIComponent(id)+'/history?range='+range+(prev?'&prev=1':''));
     if(r.ok){const d=await r.json();_rangeData[key]={ts:Date.now(),pts:d.history||[]};drawCharts(id);}
   }catch(e){console.error(e);}
   finally{_rangeBusy[key]=false;}
@@ -386,18 +386,18 @@ function ensureRanges(){
 }
 function setRange(btn,kind,range){
   chartRange[kind]=range;
-  btn.parentNode.querySelectorAll('.vchart-filter').forEach(b=>b.classList.toggle('active',b===btn));
+  btn.parentNode.querySelectorAll('.vchart-filter:not(.vchart-cmp)').forEach(b=>b.classList.toggle('active',b===btn));
   const n=items.find(x=>x.id===activeId);if(!n)return;
   if(_rangeData[n.id+'|'+range])drawCharts(n.id);
   loadRange(n.id,range,true);
+  if(VC.cmp[kind]&&range!=='all')loadRange(n.id,range,true,true);
 }
+function toggleCmp(btn,kind){VC.cmp[kind]=!VC.cmp[kind];btn.classList.toggle('active',!!VC.cmp[kind]);const n=items.find(x=>x.id===activeId);if(!n)return;const range=chartRange[kind];if(VC.cmp[kind]&&range!=='all')loadRange(n.id,range,false,true);drawCharts(n.id);}
+const serL=x=>x.l==='cpu'?t('cpu'):x.l==='temp'?t('temp'):x.l==='rx'?'↓ '+t('rx'):x.l==='tx'?'↑ '+t('tx'):x.l;
 function chartSections(n){
   return Object.keys(CHARTS).map(k=>{
     const C=CHARTS[k],id=_cid(n.id,k);
-    const leg=C.series.map(x=>`<div class="vchart-legend-item"><div class="vchart-legend-dot" style="background:${x.c}"></div>${esc(x.l==='cpu'?t('cpu'):x.l==='temp'?t('temp'):x.l==='rx'?'↓ '+t('rx'):x.l==='tx'?'↑ '+t('tx'):x.l)}</div>`).join('');
-    const flt=RANGES.map(r=>`<button class="vchart-filter${chartRange[k]===r?' active':''}" data-on-click="setRange" data-on-click-args="${jsargs([{'@':'this'},k,r])}">${r==='all'?esc(t('filterAll')):r}</button>`).join('');
-    return `<div class="vchart-section"><div class="vchart-header"><span class="vchart-title">${esc(t(C.title))}</span><div class="vchart-legend">${leg}</div><div class="vchart-filters">${flt}</div></div>
-      <div class="vchart-body" style="position:relative"><div class="vchart-tooltip" id="${id}-tip"></div><canvas class="vchart" id="${id}" style="--chart-h:${C.h}px"></canvas></div></div>`;
+    return VC.section({title:t(C.title),legend:C.series.map(x=>({c:x.c,l:serL(x)})),filters:VC.filters(chartRange[k],r=>`data-on-click="setRange" data-on-click-args="${jsargs([{'@':'this'},k,r])}"`,`data-on-click="toggleCmp" data-on-click-args="${jsargs([{'@':'this'},k])}"`,VC.cmp[k]),canvasId:id,tipId:id+'-tip',h:C.h});
   }).join('');
 }
 function drawCharts(id){
@@ -406,56 +406,10 @@ function drawCharts(id){
 }
 function drawChart(id,kind,hover){
   const C=CHARTS[kind],cv=document.getElementById(_cid(id,kind));if(!cv)return;
-  const range=chartRange[kind],pts=((_rangeData[id+'|'+range]||{}).pts||[]).filter(p=>p&&typeof p.ts==='number');
-  const dpr=window.devicePixelRatio||1,W=cv.offsetWidth||600,H=Math.round(cv.getBoundingClientRect().height)||C.h;
-  if(cv.width!==W*dpr||cv.height!==H*dpr){cv.width=W*dpr;cv.height=H*dpr;}
-  const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
-  const css=k=>getComputedStyle(document.documentElement).getPropertyValue(k).trim();
-  const cBg=css('--bg')||'#f0f2f5',cBorder=css('--border')||'#e3e8ef',cDim=css('--text-dim')||'#94a3b8',cSurface=css('--surface')||'#fff';
-  ctx.fillStyle=cBg;ctx.fillRect(0,0,W,H);
-  ctx.font='11px DM Mono,monospace';ctx.textAlign='center';
-  if(pts.length<2){ctx.fillStyle=cDim;ctx.fillText(t(pts.length?'accumulating':'noDataChart'),W/2,H/2);cv._pts=[];return;}
-  const N=pts.length,PL=C.series[0].k==='rx'?64:38,PR=10,PT=8,PB=18,W2=W-PL-PR,H2=H-PT-PB;
-  const vals=[];pts.forEach(p=>C.series.forEach(x=>{const v=Number(p[x.k]);if(p[x.k]!=null&&isFinite(v))vals.push(v);}));
-  if(!vals.length){ctx.fillStyle=cDim;ctx.fillText(t('noDataChart'),W/2,H/2);cv._pts=[];return;}
-  let lo=0,hi=C.max===100?100:Math.max(...vals);
-  if(kind==='tp'){lo=Math.max(0,Math.floor(Math.min(...vals)-3));hi=Math.ceil(Math.max(...vals)+3);}
-  else if(!C.max)hi=Math.max(hi,1)*1.1;
-  const rg=hi-lo||1,xOf=i=>PL+(i/(N-1))*W2,yOf=v=>PT+H2-((v-lo)/rg)*H2;
-  ctx.strokeStyle=cBorder;ctx.lineWidth=.5;ctx.fillStyle=cDim;ctx.font='9px DM Mono,monospace';ctx.textAlign='right';
-  for(let i=0;i<=4;i++){const v=lo+rg/4*i,y=yOf(v);ctx.beginPath();ctx.moveTo(PL,y);ctx.lineTo(W-PR,y);ctx.stroke();ctx.fillText(C.axis(v),PL-3,y+3);}
-  C.series.forEach((x,si)=>{
-    const line=()=>{ctx.beginPath();let pen=false;pts.forEach((p,i)=>{const v=Number(p[x.k]);if(p[x.k]==null||!isFinite(v)){pen=false;return;}pen?ctx.lineTo(xOf(i),yOf(v)):ctx.moveTo(xOf(i),yOf(v));pen=true;});};
-    if(si===0){line();ctx.lineTo(xOf(N-1),PT+H2);ctx.lineTo(PL,PT+H2);ctx.closePath();const g=ctx.createLinearGradient(0,PT,0,PT+H2);g.addColorStop(0,x.c+'33');g.addColorStop(1,x.c+'00');ctx.fillStyle=g;ctx.fill();}
-    line();ctx.strokeStyle=x.c;ctx.lineWidth=1.8;ctx.stroke();
-  });
-  ctx.fillStyle=cDim;ctx.font='9px DM Mono,monospace';ctx.textAlign='center';
-  const step=Math.max(1,Math.floor(N/5));
-  for(let i=0;i<N;i+=step){const d=new Date(pts[i].ts*1000);ctx.fillText(range==='1mo'||range==='all'?d.toLocaleDateString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit'}):PCT.time(d),xOf(i),H-3);}
-  if(hover>=0&&hover<N){
-    const cx=xOf(hover),p=pts[hover];
-    ctx.beginPath();ctx.moveTo(cx,PT);ctx.lineTo(cx,PT+H2);ctx.strokeStyle='rgba(100,116,139,.4)';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([]);
-    C.series.forEach(x=>{if(p[x.k]==null)return;ctx.beginPath();ctx.arc(cx,yOf(Number(p[x.k])),4,0,2*Math.PI);ctx.fillStyle=x.c;ctx.fill();ctx.strokeStyle=cSurface;ctx.lineWidth=1.5;ctx.stroke();});
-  }
-  cv._pts=pts;cv._geo={PL,W2,N};
-  if(!cv._bound){
-    cv._bound=true;
-    cv.addEventListener('mousemove',e=>{
-      const g=cv._geo,ps=cv._pts;if(!g||!ps||!ps.length)return;
-      const r=cv.getBoundingClientRect(),x=e.clientX-r.left;
-      const i=Math.max(0,Math.min(g.N-1,Math.round((x-g.PL)/g.W2*(g.N-1))));
-      drawChart(id,kind,i);
-      const tip=document.getElementById(_cid(id,kind)+'-tip');if(!tip)return;
-      const p=ps[i],d=new Date(p.ts*1000);
-      tip.replaceChildren();
-      const hd=document.createElement('div');hd.style.color='var(--text-dim)';hd.textContent=d.toLocaleDateString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit'})+' '+PCT.time(d,true);tip.appendChild(hd);
-      C.series.forEach(sx=>{const row=document.createElement('div');const dot=document.createElement('span');dot.style.cssText='display:inline-block;width:8px;height:3px;border-radius:2px;margin-right:6px;background:'+sx.c;
-        row.appendChild(dot);row.appendChild(document.createTextNode((sx.l==='cpu'?t('cpu'):sx.l==='temp'?t('temp'):sx.l==='rx'?'↓ '+t('rx'):sx.l==='tx'?'↑ '+t('tx'):sx.l)+': '+(p[sx.k]==null?'—':sx.f(Number(p[sx.k])))));tip.appendChild(row);});
-      tip.classList.add('show');
-      const tw=tip.offsetWidth,px=e.clientX-r.left+14;tip.style.left=Math.max(0,Math.min(r.width-tw,px>r.width-tw?e.clientX-r.left-tw-14:px))+'px';tip.style.top='6px';
-    });
-    cv.addEventListener('mouseleave',()=>{const tip=document.getElementById(_cid(id,kind)+'-tip');if(tip)tip.classList.remove('show');drawChart(id,kind,-1);});
-  }
+  const range=chartRange[kind];
+  VC.draw(cv,{pts:(_rangeData[id+'|'+range]||{}).pts||[],prev:VC.cmp[kind]?((_rangeData[id+'|'+range+'|prev']||{}).pts||[]):null,
+    series:C.series.map(x=>({k:x.k,c:x.c,l:serL(x),f:x.f})),range,hover,h:C.h,pl:C.series[0].k==='rx'?64:38,max:C.max===100?100:0,axis:C.axis,mod:'nas',
+    scale:kind==='tp'?vals=>[Math.max(0,Math.floor(Math.min(...vals)-3)),Math.ceil(Math.max(...vals)+3)]:null});
 }
 window.addEventListener('resize',()=>{fitDetail();if(activeId)drawCharts(activeId);});
 
@@ -626,4 +580,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ closeModals, confirmDelete, doLogin, httpsChanged, levelChanged, logout, openNasForm, saveNas, setLang, setRange, setTheme, testNas, toggleNas, toggleNav, typeChanged, versionChanged });
+if (window.cspRegister) cspRegister({ closeModals, confirmDelete, doLogin, httpsChanged, levelChanged, logout, openNasForm, saveNas, setLang, setRange, toggleCmp, setTheme, testNas, toggleNas, toggleNav, typeChanged, versionChanged });

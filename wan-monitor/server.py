@@ -443,9 +443,16 @@ def store_sample(r):
     try: _db("INSERT OR REPLACE INTO wan_samples (ts,up,rtt,loss,jitter,gw,dns) VALUES (?,?,?,?,?,?,?)", (r["ts"], 1 if r["up"] else 0, r["rtt"], r["loss"], r["jitter"], r["gw"], r["dns"]))
     except Exception as e: log.warning(f"could not store the sample: {e}")
 
-def history_range(range_: str) -> list:
-    since = int(time.time()) - RANGE_SECS[range_] if range_ in RANGE_SECS else 0
-    rows = _db("SELECT ts,up,rtt,loss,jitter,gw,dns FROM wan_samples WHERE ts >= ? ORDER BY ts", (since,), fetch=True)
+def history_window(range_: str, prev: bool = False):
+    """(since, until) of a range. prev=True gives the period just before it (same length) so charts can compare the two; "all" has none."""
+    now, span = int(time.time()), RANGE_SECS.get(range_)
+    if prev: return ((now - 2 * span, now - span) if span else None)
+    return (now - span if span else 0, now + 1)
+
+def history_range(range_: str, prev: bool = False) -> list:
+    win = history_window(range_, prev)
+    if win is None: return []
+    rows = _db("SELECT ts,up,rtt,loss,jitter,gw,dns FROM wan_samples WHERE ts >= ? AND ts < ? ORDER BY ts", (win[0], win[1]), fetch=True)
     step = 1 if len(rows) <= RANGE_POINTS else -(-len(rows) // RANGE_POINTS)
     out = []
     for i in range(0, len(rows), step):
@@ -746,7 +753,8 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/wan/history":
             rng = parse_qs(urlparse(self.path).query).get("range", ["1d"])[0]
             if rng not in RANGE_SECS and rng != "all": return self._json(400, {"error": "Invalid range"})
-            try: return self._json(200, {"range": rng, "history": history_range(rng)})
+            prev = parse_qs(urlparse(self.path).query).get("prev", ["0"])[0] == "1"
+            try: return self._json(200, {"range": rng, "prev": prev, "history": history_range(rng, prev)})
             except Exception as e:
                 log.warning(f"history query failed: {e}"); return self._json(500, {"error": "Could not read the history"})
         self._json(404, {"error": "Not found"})
