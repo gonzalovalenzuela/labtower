@@ -991,7 +991,8 @@ class H(BaseHTTPRequestHandler):
         # VM y contenedores con sus MAC e IP, para que Net Monitor los asocie a los equipos de la red.
         # EN: VMs and containers with their MACs and IPs, so Net Monitor can match them to the devices on the network.
         elif path == "/api/guests":
-            self._json(200, {"guests": [g for c in load_clusters() for g in _gnets.get(c["id"], [])]})
+            gs = [g for c in load_clusters() for g in _gnets.get(c["id"], [])]
+            self._json(200, {"guests": gs, "with_mac": sum(1 for g in gs if g["macs"]), "with_ip": sum(1 for g in gs if g["ips"])})
 
         # Resumen técnico del estado de cada cluster, útil para diagnosticar.
         # EN: Technical summary of each cluster's state, useful for diagnosis.

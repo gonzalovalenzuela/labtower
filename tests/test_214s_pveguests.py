@@ -60,7 +60,7 @@ class Api(unittest.TestCase):
             m._guest_round({"id": "c1", "name": "Lab"}, Fake(), Cache())
             self.assertIn(srv.call("GET", "/api/guests")[0], (401, 403))
             code, j = srv.call("GET", "/api/guests", token=ro)
-            self.assertEqual(code, 200); self.assertEqual(len(j["guests"]), 4)
+            self.assertEqual(code, 200); self.assertEqual((len(j["guests"]), j["with_mac"], j["with_ip"]), (4, 4, 3))
             self.assertNotIn("token_value", str(j))
         finally: m.load_clusters = old
 

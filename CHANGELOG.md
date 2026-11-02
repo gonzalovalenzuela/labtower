@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.4u — 2026-11-02
+
+- **Mejora:** Net Monitor: si un equipo no se puede asociar a su VM/CT de Proxmox por MAC ni por IP (por ejemplo, una red enrutada donde no se ve la MAC, o una VM sin agente), ahora se asocia por nombre cuando el nombre o alias del equipo es idéntico al de la VM/CT.
+- **Mejora:** Proxmox Monitor: `/api/guests` informa cuántas VM/CT tienen MAC y cuántas tienen IP, para diagnosticar permisos o falta del agente de invitado.
+
 ## 2.1.4t — 2026-11-02
 
 - **Mejora:** Proxmox Monitor: los nombres de las VM y contenedores ya no se cortan («PL…», «Re…»). Las métricas (CPU, RAM y tiempo encendida) pasan a una segunda línea bajo el nombre, que ahora tiene todo el ancho de la fila.

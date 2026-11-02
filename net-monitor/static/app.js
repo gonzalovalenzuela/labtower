@@ -99,7 +99,7 @@ function setLang(l){
 // Enlace profundo desde otras páginas: /net/?ip=192.168.0.10 abre ese equipo expandido.
 // EN: Deep link from other pages: /net/?ip=192.168.0.10 opens that device expanded.
 let _deepIp=(()=>{try{const v=new URLSearchParams(location.search).get('ip')||'';return /^\d{1,3}(\.\d{1,3}){3}$/.test(v)?v:null}catch(e){return null}})();
-let pveByMac=new Map(), pveByIp=new Map(), pveTs=0;
+let pveByMac=new Map(), pveByIp=new Map(), pveByName=new Map(), pveTs=0;
 let ME=null, scanNetwork='', scanRunning=false, hosts=[], filterOs='ALL', filterType='ALL', filterStatus='ALL', searchQ='', expanded=null, pollTimer=null;
 let sortKeyName=null, sortDir=1;   // null = orden por defecto (online primero, luego IP)
 try{const sv=JSON.parse(localStorage.getItem('pi-net-sort')||'null');if(sv&&['status','ip','os','vendor','ports','latency','seen'].includes(sv.k)){sortKeyName=sv.k;sortDir=sv.d===-1?-1:1;}}catch(e){}
@@ -342,14 +342,25 @@ async function fetchPveGuests(){
     const r=await fetch('/pve/api/guests');
     if(!r.ok)return;
     const d=await r.json();
-    pveByMac=new Map();pveByIp=new Map();
-    (d.guests||[]).forEach(g=>{(g.macs||[]).forEach(m=>pveByMac.set(m,g));(g.ips||[]).forEach(i=>pveByIp.set(i,g))});
+    pveByMac=new Map();pveByIp=new Map();pveByName=new Map();
+    (d.guests||[]).forEach(g=>{(g.macs||[]).forEach(m=>pveByMac.set(m,g));(g.ips||[]).forEach(i=>pveByIp.set(i,g));if(g.name)pveByName.set(g.name.toLowerCase(),g)});
     renderTable();
   }catch(e){}
 }
-// Invitado de Proxmox que corresponde a un equipo: primero por MAC (más fiable), luego por IP.
-// EN: Proxmox guest matching a device: by MAC first (more reliable), then by IP.
-function pveOf(h){return (h.mac&&pveByMac.get(String(h.mac).toLowerCase()))||pveByIp.get(h.ip)||null}
+// Invitado de Proxmox que corresponde a un equipo: por MAC (lo más fiable), luego por IP y, si no hay otra pista
+// (red enrutada sin MAC, VM sin agente), por nombre idéntico al de la VM/CT.
+// EN: Proxmox guest matching a device: by MAC (most reliable), then by IP and, with no other clue (routed network
+//     without MACs, VM without agent), by a name identical to the VM/CT name.
+function pveOf(h){
+  const byNet=(h.mac&&pveByMac.get(String(h.mac).toLowerCase()))||pveByIp.get(h.ip);
+  if(byNet)return byNet;
+  for(const n of [h.alias,h.hostname]){
+    if(!n)continue;const k=String(n).toLowerCase();
+    const g=pveByName.get(k)||pveByName.get(k.split('.')[0]);
+    if(g)return g;
+  }
+  return null;
+}
 function pveBadge(h){
   const g=pveOf(h);if(!g)return '';
   return `<span class="pve-badge" title="${esc(t('pveTip',g))}">${g.type==='lxc'?t('pveCt'):t('pveVm')} ${esc(g.vmid)}</span>`;
