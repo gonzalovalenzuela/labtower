@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.4n — 2026-11-02
+
+- **Net Monitor:** los nombres de los equipos ahora también se piden directamente al servidor DNS de Pi-hole (puerto 53), sin contraseña ni API. Los registros de «Local DNS» responden ahí, así que aparecen aunque la contraseña de aplicación no pueda leer la configuración de Pi-hole. Solo hace falta tener el host de Pi-hole en la configuración de Net Monitor.
+
 ## 2.1.4m — 2026-11-02
 
 - **Net Monitor:** el panel de Pi-hole ahora muestra cuántos dispositivos, concesiones DHCP y registros de DNS local leyó la última vez, y avisa si alguno no se pudo leer (por ejemplo, el DNS local con una contraseña de aplicación sin permiso). Así se ve por qué un nombre no aparece.

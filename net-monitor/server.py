@@ -396,6 +396,54 @@ def resolve_dns(ip: str) -> str:
     except Exception:
         return ""
 
+# Pregunta el nombre de una IP (registro PTR) directamente al servidor DNS de Pi-hole por el puerto 53, sin contraseña ni API. Los registros de
+# «Local DNS» de Pi-hole también responden aquí, así que sirve aunque la contraseña de aplicación no pueda leer la configuración.
+# EN: Ask a DNS server for the name of an IP (PTR record) straight on port 53, no password or API. Pi-hole's "Local DNS" records answer here too, so
+#     it works even when the app password cannot read the configuration.
+def ptr_query(server: str, ip: str, port: int = 53, timeout: float = 1.5) -> str:
+    import struct, os as _os
+    try:
+        parts = str(ipaddress.IPv4Address(ip)).split(".")
+        qname = ".".join(reversed(parts)) + ".in-addr.arpa"
+        qid = struct.unpack(">H", _os.urandom(2))[0]
+        pkt = struct.pack(">HHHHHH", qid, 0x0100, 1, 0, 0, 0) + b"".join(bytes([len(l)]) + l.encode() for l in qname.split(".")) + b"\x00" + struct.pack(">HH", 12, 1)
+        fam, _, _, _, sa = socket.getaddrinfo(server, port, socket.AF_INET, socket.SOCK_DGRAM)[0]
+        with socket.socket(fam, socket.SOCK_DGRAM) as sk:
+            sk.settimeout(timeout); sk.sendto(pkt, sa)
+            data, frm = sk.recvfrom(1500)
+        if frm[0] != sa[0] or len(data) < 12: return ""
+        rid, flags, qd, an = struct.unpack(">HHHH", data[:8])
+        if rid != qid or flags & 0x000F or not an: return ""        # wrong id, error code (NXDOMAIN…) or no answer
+        def name(o, depth=0):
+            labels = []
+            while o < len(data) and depth < 10:
+                n = data[o]
+                if n == 0: return ".".join(labels), o + 1
+                if n & 0xC0 == 0xC0:
+                    t, _ = name(((n & 0x3F) << 8) | data[o + 1], depth + 1); labels.append(t) if t else None
+                    return ".".join(labels), o + 2
+                labels.append(data[o + 1:o + 1 + n].decode("ascii", "ignore")); o += 1 + n
+            return "", o
+        o = 12
+        for _ in range(qd):
+            _, o = name(o); o += 4
+        for _ in range(an):
+            _, o = name(o)
+            typ, _cls, _ttl, rl = struct.unpack(">HHIH", data[o:o + 10]); o += 10
+            if typ == 12: return name(o)[0].rstrip(".")
+            o += rl
+    except Exception:
+        pass
+    return ""
+
+# Nombre por DNS: primero los servidores de Pi-hole configurados (sin API), luego el resolvedor del sistema.
+# EN: Name by DNS: first the configured Pi-hole servers (no API), then the system resolver.
+def resolve_name(ip: str) -> str:
+    for h in [x.strip() for x in PIHOLE_HOSTS.split(",") if x.strip()]:
+        n = ptr_query(h.partition(":")[0], ip)
+        if n: return re.sub(r"(\.local)?\.?$", "", n)
+    return resolve_dns(ip)
+
 # ─── mDNS hint (sin librería externa) ────────────────────────────────────────
 # Pista barata de que el nombre corresponde a un equipo Apple.
 # EN: Cheap hint that the name belongs to an Apple device.
@@ -953,7 +1001,7 @@ def scan_host(ip: str) -> dict | None:
 
     # Pi-hole lookup primero (más confiable que DNS inverso)
     ph        = pihole_lookup(ip_str)
-    hostname  = ph.get("hostname") or resolve_dns(ip_str)
+    hostname  = ph.get("hostname") or resolve_name(ip_str)
     vendor    = ph.get("vendor", "")
     mac       = ph.get("mac", "")
 

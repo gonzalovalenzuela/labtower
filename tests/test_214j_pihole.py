@@ -61,3 +61,37 @@ class Refresh(unittest.TestCase):
         finally: net._pihole_busy.release()
 
 if __name__ == "__main__": unittest.main()
+
+class PtrDirect(unittest.TestCase):
+    """2.1.4m: the name comes straight from Pi-hole's DNS (port 53, no API), so Local DNS records work without the app-password permission."""
+    def _server(self, answer):
+        import socket, struct, threading
+        sk = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); sk.bind(("127.0.0.1", 0)); sk.settimeout(5)
+        def run():
+            try:
+                data, a = sk.recvfrom(512)
+                q = data[12:]; end = q.index(b"\x00") + 5; question = q[:end]
+                if answer is None: resp = data[:2] + b"\x81\x83" + struct.pack(">HHH", 1, 0, 0) + b"\x00\x00" + question     # NXDOMAIN
+                else:
+                    rd = b"".join(bytes([len(l)]) + l.encode() for l in answer.split(".")) + b"\x00"
+                    resp = data[:2] + b"\x81\x80" + struct.pack(">HHHH", 1, 1, 0, 0) + question + b"\xc0\x0c" + struct.pack(">HHIH", 12, 1, 60, len(rd)) + rd
+                sk.sendto(resp, a)
+            finally: sk.close()
+        threading.Thread(target=run, daemon=True).start()
+        return sk.getsockname()[1]
+    def test_ptr_answer(self):
+        port = self._server("my-nas.lan")
+        self.assertEqual(net.ptr_query("127.0.0.1", "192.0.2.5", port=port), "my-nas.lan")
+    def test_nxdomain_and_bad_input(self):
+        port = self._server(None)
+        self.assertEqual(net.ptr_query("127.0.0.1", "192.0.2.5", port=port), "")
+        self.assertEqual(net.ptr_query("127.0.0.1", "not-an-ip"), "")
+        self.assertEqual(net.ptr_query("127.0.0.1", "192.0.2.5", port=1, timeout=0.2), "")
+    def test_resolve_name_prefers_pihole_dns(self):
+        old = (net.PIHOLE_HOSTS, net.ptr_query, net.resolve_dns)
+        try:
+            net.PIHOLE_HOSTS = "192.0.2.2:443"; seen = []
+            net.ptr_query = lambda h, ip, **k: (seen.append(h), "nas01.local")[1]; net.resolve_dns = lambda ip: "sys"
+            self.assertEqual(net.resolve_name("192.0.2.5"), "nas01"); self.assertEqual(seen, ["192.0.2.2"])   # web port dropped, ".local" cleaned
+            net.ptr_query = lambda h, ip, **k: ""; self.assertEqual(net.resolve_name("192.0.2.5"), "sys")
+        finally: net.PIHOLE_HOSTS, net.ptr_query, net.resolve_dns = old
