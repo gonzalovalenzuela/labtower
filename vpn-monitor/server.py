@@ -212,6 +212,18 @@ def _hms_epoch(s: str):
     try: return int(time.mktime(time.strptime(re.sub(r"\s+", " ", s.strip()), "%a %b %d %H:%M:%S %Y")))
     except ValueError: return None
 
+def _ovpn_ip(real: str) -> str:
+    """Address part of OpenVPN's "Real Address": "1.2.3.4:5", "[v6]:5", "::ffff:1.2.3.4[:5]" or a bare IPv6 (no port)."""
+    a = re.sub(r"^(udp|tcp)[46]?:", "", real.strip())
+    m = re.fullmatch(r"\[([^\]]+)\](?::\d+)?", a)
+    if m: a = m.group(1)
+    else:
+        m = re.fullmatch(r"(\d+\.\d+\.\d+\.\d+):\d+", a)
+        if m: return m.group(1)
+        if a.count(":") == 1: a = a.rsplit(":", 1)[0]
+    m = re.fullmatch(r"::ffff:(\d+\.\d+\.\d+\.\d+)(?::\d+)?", a, re.I)
+    return m.group(1) if m else a
+
 def parse_openvpn(text: str) -> list:
     """OpenVPN status file, versions 1, 2 and 3."""
     out, v1 = [], False
@@ -225,7 +237,7 @@ def parse_openvpn(text: str) -> list:
             if len(f) > 9 and f[9] and f[9] != "UNDEF": name = f"{f[9]} ({f[1]})" if f[9] != f[1] else f[1]
             try: rx, tx, since = int(f[5]), int(f[6]), int(f[8])
             except ValueError: continue
-            ip = f[2].rsplit(":", 1)[0].strip("[]") if f[2] else None
+            ip = _ovpn_ip(f[2]) if f[2] else None
             out.append({"key": f[1] + "@" + f[2], "name": name, "id": f[1], "ip": ip, "virtual": f[3] or None, "rx": rx, "tx": tx,
                         "last": None, "online": True, "since": since})
             continue
@@ -236,7 +248,7 @@ def parse_openvpn(text: str) -> list:
             if len(f) < 5: continue
             try: rx, tx = int(f[2]), int(f[3])
             except ValueError: continue
-            out.append({"key": f[0] + "@" + f[1], "name": f[0], "id": f[0], "ip": f[1].rsplit(":", 1)[0], "virtual": None, "rx": rx, "tx": tx,
+            out.append({"key": f[0] + "@" + f[1], "name": f[0], "id": f[0], "ip": _ovpn_ip(f[1]), "virtual": None, "rx": rx, "tx": tx,
                         "last": None, "online": True, "since": _hms_epoch(f[4])})
     return out
 

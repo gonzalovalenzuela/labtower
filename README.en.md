@@ -23,6 +23,7 @@
 | **NAS Monitor** | `/nas/` | 8086 | One or more NAS (Synology over SNMP, TrueNAS and OpenMediaVault over their API): disks, volumes, temperature, CPU, memory and network |
 | **DNS Monitor** | `/dns/` | 8087 | Pi-hole (v5 and v6) and AdGuard Home: queries, % blocked, top lists, upstream DNS and pausing the blocking |
 | **WAN Monitor** | `/wan/` | 8088 | Internet uplink: latency, loss, outages (local or on the line, by asking the router), public IP and a scheduled speed test |
+| **VPN Monitor** | `/vpn/` | 8089 | Who is connected to Tailscale, OpenVPN and WireGuard: since when, from which address and how much traffic, with connect / disconnect alerts |
 | **WOL Console** | `/wol/` | 8080 | Powers on machines with Wake-on-LAN |
 | **Admin Panel** | `/admin/` | 8082 | Users, permissions, 2FA, sessions, audit log, backups and system health |
 
@@ -210,6 +211,27 @@ labtower-health
 - The **Connection** card shows how long the WAN has been connected according to the router and how many outages LabTower recorded in that period, so you can compare both.
 - Public IP with change alert, scheduled speed test (built-in engine, Ookla or LibreSpeed) and history charts.
 
+### VPN Monitor
+- Shows the clients connected to each VPN server: name, real and virtual address, time connected, traffic, recent sessions and connect / disconnect alerts in the Overview timeline. Read-only: it never changes anything on the VPN server. Up to 16 servers.
+- **Permission:** give users the **vpn** permission in *Admin Panel → Users*.
+- **Tailscale:** read through the Tailscale API. Create an **API key** in the Tailscale admin console and paste it with your tailnet name (or `-` for the default). A device counts as connected if Tailscale sees it online.
+- **OpenVPN and WireGuard:** read over **SSH** on the VPN server, which can be another VM, CT or a NAS. LabTower generates its own SSH key and only runs two fixed commands: `cat <status file>` (OpenVPN) and `wg show all dump` (WireGuard).
+
+  1. In *Add VPN* choose the type, enter host, SSH user and port, and press **Create / show key**.
+  2. Copy the public key to the SSH user's `~/.ssh/authorized_keys` on the VPN server. Restricting it is recommended; the form shows the ready-made line, for example `command="cat /path/to/status",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding ssh-ed25519 AAAA…`.
+  3. Press **Test**. The server's host key is accepted the first time and enforced afterwards.
+
+  The SSH key is **not** included in backups: after a restore, create it again and reinstall it on the VPN server.
+- **OpenVPN:** the server must write its status file with `status <file> 2` (or `3`) in its configuration, and that file is the one that goes in *Status file*. Find the path with `grep -rn "^status" /etc/openvpn/`. On Debian it is usually `/run/openvpn-server/status-server.log`; a relative path is relative to `/etc/openvpn/server/`. If there is no `status` line, add it and restart the service (`sudo systemctl restart openvpn-server@server`). The list is empty when nobody is connected.
+- **WireGuard:** WireGuard has no users, so peers are named with **aliases**: one `<public key> Name` line per peer. A peer counts as connected if its last handshake is under 180 seconds old. `wg show` needs root: use `root` or tick "Run with sudo".
+- **Run with sudo:** for when the status file or `wg show` are root-only. LabTower prefixes `sudo -n` (it never asks for a password) and only to those two fixed commands. On the VPN server allow **only** that command for the SSH user, with **both** paths of `cat`: over SSH without a terminal the `PATH` is shorter and `cat` usually resolves to `/usr/bin/cat`, not `/bin/cat`. If one path is missing the error is "sudo: a password is required". Check with `sudo -l -U <user>` and, from LabTower, with `ssh <user>@<server> 'command -v cat; sudo -n cat <status file>'`. Sudo's log (`/var/log/auth.log`) shows the exact command it received.
+- **Synology (VPN Server with OpenVPN):** the status file is `/tmp/ovpn_status_2_result` (confirm it with `grep -n "^status" /usr/syno/etc/packages/VPNCenter/openvpn/openvpn.conf`); it is root-owned with mode 600 and refreshed every 30 s. It needs SSH enabled (*Control Panel → Terminal & SNMP*) and an administrator user. Use "Run with sudo" with this rule (in `/etc/sudoers.d/labtower-vpn`, mode 440; Synology has no `visudo`, check with `sudo -l -U <user>`):
+
+  ```
+  user ALL=(root) NOPASSWD: /bin/cat /tmp/ovpn_status_2_result, /usr/bin/cat /tmp/ovpn_status_2_result
+  ```
+  If SSH fails with "Permission denied" it is almost always permissions: `chmod 755 ~`, `chmod 700 ~/.ssh` and `chmod 600 ~/.ssh/authorized_keys`. With certificate-only authentication the user column is empty and LabTower shows the certificate's *Common Name*.
+
 ### WOL Console
 - Sends magic packets (at most 10 per minute per IP).
 - Picks hosts found by Net Monitor (name, MAC, IP and category) and uses the latest IP if DHCP changed it.
@@ -288,7 +310,7 @@ sudo labtower-sftp-backup status      # result of the last run
 ```bash
 labtower-health         # summary: exit 0 = ok, 1 = degraded, 2 = failed (-j for JSON)
 labtower-resources      # memory and CPU per service (-w refreshes every 2 s)
-systemctl status wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor labtower-overview
+systemctl status wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor labtower-overview
 journalctl -u net-monitor -f        # logs of one service
 sudo systemctl restart net-monitor  # restart one
 ```
@@ -305,6 +327,7 @@ Each module answers `GET /api/health` (200 = ok or degraded, 503 = failed). With
 | `nas-monitor` | NAS Monitor |
 | `dns-monitor` | DNS Monitor |
 | `wan-monitor` | WAN Monitor |
+| `vpn-monitor` | VPN Monitor |
 | `labtower-overview` | Overview |
 
 **Uninstall:** `sudo apt remove labtower` stops the services and saves a copy of the data in `/var/backups/labtower`. `sudo apt purge labtower` also removes the code, services, nginx site and the `labtower-*` users. In both cases `/var/lib/labtower` and `/var/backups/labtower` are **not deleted**; remove them by hand for a clean machine.
@@ -317,7 +340,7 @@ The defaults suit most setups. To change them, write `NAME=value` in `/etc/defau
 
 ```bash
 echo 'NUT_POLL=5' | sudo tee -a /etc/default/labtower
-sudo systemctl restart wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor labtower-overview
+sudo systemctl restart wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor labtower-overview
 ```
 
 | Variable | Module | Default | Purpose |
@@ -361,7 +384,7 @@ Designed for a **trusted local network**. Do not expose port 80 to the internet.
 - **Device credentials:** to connect to Proxmox, NAS, Pi-hole/AdGuard and switches, LabTower stores their users and passwords **readable** (they cannot be hashed because they are needed to log in) in files under `/var/lib/labtower/` with 600 permissions. Use **read-only** accounts on those devices (the exception is OpenMediaVault, which has no such role: LabTower needs an administrator account, so use a dedicated one) and, if you can, a management VLAN; whoever reads those files (or an unencrypted backup) gets those credentials.
 - **Connection targets:** Proxmox, NAS, DNS, Pi-hole and switches do not accept the machine itself (loopback) or link-local addresses as a target, so LabTower cannot be used as a bridge to its own internal services. If a name is later changed to point there, the check is only repeated when the device is edited.
 - **DNS servers with their own certificate:** if you turn "Verify the TLS certificate" off, the fingerprint is pinned on the first connection and a change is refused (saving the server again clears it).
-- **Isolation between modules:** every service runs as its own system user (`labtower-wol`, `-nut`, `-net`, `-pve`, `-nas`, `-dns`, `-wan`, `-overview`) and can only write its own folder `/var/lib/labtower/<module>/` (mode 700, with its own `metrics.db`); systemd denies it the rest of the disk. Users, sessions, attempt counters and the event timeline belong to the **authentication service** (the Admin Panel, user `labtower-auth`, folder `auth/`), which the other modules query through a Unix socket (`/run/labtower/auth.sock`) that identifies the caller with the kernel (`SO_PEERCRED`). The socket only lets a module check a session, log in or out (the password is verified there, a module never sees a hash) and record events under the caller's own name; there is no operation to create a session without a password or to read users. A compromised module can no longer forge sessions, take password hashes away or read or delete another module's data. The only shared items are two read-only files (`wol-console/devices.json` and `net-monitor/hosts.json`, mode 640 for the `labtower` group) that each module reads from the other as untrusted input. Remaining limits: a compromised module can still **try** passwords against the authentication service (same per-account brake; it can dodge the per-IP brake by claiming another IP), and the Admin Panel keeps the only `sudo` into Teleporter.
+- **Isolation between modules:** every service runs as its own system user (`labtower-wol`, `-nut`, `-net`, `-pve`, `-nas`, `-dns`, `-wan`, `-vpn`, `-overview`) and can only write its own folder `/var/lib/labtower/<module>/` (mode 700, with its own `metrics.db`); systemd denies it the rest of the disk. Users, sessions, attempt counters and the event timeline belong to the **authentication service** (the Admin Panel, user `labtower-auth`, folder `auth/`), which the other modules query through a Unix socket (`/run/labtower/auth.sock`) that identifies the caller with the kernel (`SO_PEERCRED`). The socket only lets a module check a session, log in or out (the password is verified there, a module never sees a hash) and record events under the caller's own name; there is no operation to create a session without a password or to read users. A compromised module can no longer forge sessions, take password hashes away or read or delete another module's data. The only shared items are two read-only files (`wol-console/devices.json` and `net-monitor/hosts.json`, mode 640 for the `labtower` group) that each module reads from the other as untrusted input. Remaining limits: a compromised module can still **try** passwords against the authentication service (same per-account brake; it can dodge the per-IP brake by claiming another IP), and the Admin Panel keeps the only `sudo` into Teleporter.
 
 ---
 
@@ -377,6 +400,7 @@ labtower/
 ├── nas-monitor/       # NAS Monitor (Synology over SNMP, TrueNAS and OpenMediaVault over API)
 ├── dns-monitor/       # DNS Monitor (Pi-hole / AdGuard Home)
 ├── wan-monitor/       # WAN Monitor (internet and router check)
+├── vpn-monitor/       # VPN Monitor (Tailscale, OpenVPN, WireGuard)
 ├── overview/          # Overview
 ├── home/              # home page and icons
 ├── etc/               # nginx, backup.conf, cron

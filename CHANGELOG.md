@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.5h — 2026-11-02
+
+- **Corregido:** VPN Monitor mostraba «::ffff» como dirección de un cliente OpenVPN conectado por IPv4 a un servidor de doble pila (Synology): ahora muestra la IPv4 real.
+- **Documentación:** README (es/en) y ayuda del formulario: cómo agregar OpenVPN y WireGuard, la opción «Ejecutar con sudo» (con las dos rutas de `cat`) y la guía de Synology.
+
 ## 2.1.5g — 2026-11-02
 
 - **Nuevo:** VPN Monitor: opción «Ejecutar con sudo» para servidores donde el archivo de estado de OpenVPN o `wg show` son solo de root (por ejemplo Synology). Usa `sudo -n` (nunca pide contraseña) y solo con los dos comandos fijos.
