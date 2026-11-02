@@ -48,9 +48,9 @@ Todas las pantallas (tema claro y oscuro, 4 tamaños) están en [`docs/screensho
 - **Instalar en un contenedor de Proxmox (CT):** [guía y script](docs/CT.md) (`scripts/labtower-ct` crea el CT e instala LabTower).
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.5/labtower_2.1.5_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.6/labtower_2.1.6_all.deb
 sudo apt-get update
-sudo apt-get install -y ./labtower_2.1.5_all.deb
+sudo apt-get install -y ./labtower_2.1.6_all.deb
 ```
 
 Usa `apt-get install ./archivo.deb` y no `dpkg -i`, para que `apt` instale las dependencias. Luego abre `http://<ip-de-labtower>/`.
@@ -99,8 +99,8 @@ librespeed-cli --version
 ## Actualizar
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.5/labtower_2.1.5_all.deb
-sudo apt-get install -y ./labtower_2.1.5_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.6/labtower_2.1.6_all.deb
+sudo apt-get install -y ./labtower_2.1.6_all.deb
 labtower-health
 ```
 
@@ -130,7 +130,6 @@ labtower-health
 - **Línea de tiempo:** cambios importantes con hora (UPS a batería, nodo caído, cambio de Ceph, equipos nuevos o que dejaron de responder). Los guardan los módulos, aunque nadie tenga la página abierta: últimos 300 eventos o 30 días.
 - **Búsqueda global** (barra superior o tecla `/`): equipos de Net Monitor, UPS, VMs y contenedores de Proxmox, NAS, servidores DNS y equipos WOL; solo muestra lo que cada usuario puede ver.
 - **Reglas de alerta** (administradores): umbrales sobre métricas del servidor, UPS, NAS, Proxmox, DNS e internet, como aviso o crítico; se evalúan con el Resumen abierto y las que se cumplen aparecen en el panel de atención.
-- **Monitores sugeridos:** si Net Monitor ve un equipo con puertos típicos de Proxmox, un servidor UPS, Pi-hole/AdGuard Home o Synology y no está configurado, lo sugiere (solo administradores de ese módulo; se puede descartar).
 - **Gráficos de detalle** (UPS, NAS, DNS, WAN y switches): mismo aspecto en todos, rango de 1 semana, botón «vs anterior» (período previo punteado) y marcas de eventos.
 - Cada persona ve solo los módulos a los que tiene acceso.
 - **Actualización:** selector de intervalo (10 s, 30 s, 1, 2, 5 min o manual con ↻), por navegador. Con la pestaña oculta no consulta.

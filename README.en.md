@@ -48,9 +48,9 @@ All screens (light and dark, 4 sizes) are in [`docs/screenshots/`](docs/screensh
 - **Install in a Proxmox container (CT):** [guide and script](docs/CT.md) (`scripts/labtower-ct` creates the CT and installs LabTower).
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.5/labtower_2.1.5_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.6/labtower_2.1.6_all.deb
 sudo apt-get update
-sudo apt-get install -y ./labtower_2.1.5_all.deb
+sudo apt-get install -y ./labtower_2.1.6_all.deb
 ```
 
 Use `apt-get install ./file.deb`, not `dpkg -i`, so `apt` installs the dependencies. Then open `http://<pi-ip>/`.
@@ -99,8 +99,8 @@ librespeed-cli --version
 ## Update
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.5/labtower_2.1.5_all.deb
-sudo apt-get install -y ./labtower_2.1.5_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.6/labtower_2.1.6_all.deb
+sudo apt-get install -y ./labtower_2.1.6_all.deb
 labtower-health
 ```
 
@@ -130,7 +130,6 @@ labtower-health
 - **Event timeline:** important changes with their time (UPS on battery, node down, Ceph change, new or vanished hosts). The modules record them even when nobody has the page open: last 300 events or 30 days.
 - **Global search** (top bar or the `/` key): Net Monitor hosts, UPS, Proxmox VMs and containers, NAS, DNS servers and WOL devices; it only shows what each user can see.
 - **Alert rules** (admins): thresholds on server, UPS, NAS, Proxmox, DNS and internet metrics, as warning or critical; they are evaluated while the Overview is open and the ones that trigger show in the attention panel.
-- **Suggested monitors:** if Net Monitor sees a host with typical ports of Proxmox, a UPS server, Pi-hole/AdGuard Home or Synology that is not configured yet, it suggests it (admins of that module only; each suggestion can be dismissed).
 - **Detail charts** (UPS, NAS, DNS, WAN and switches): same look everywhere, 1-week range, "vs previous" button (dotted previous period) and event marks.
 - Everyone sees only the modules they can access.
 - **Refresh:** interval selector (10 s, 30 s, 1, 2, 5 min or manual with ↻), per browser. A hidden tab makes no requests.

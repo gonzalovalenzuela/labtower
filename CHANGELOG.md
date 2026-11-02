@@ -1,47 +1,20 @@
 # Changelog
 
-## 2.1.5j — 2026-11-02
+## 2.1.6 — 2026-11-02
 
-- **Mejora:** la portada muestra el estado de cada módulo junto a la flecha de su tarjeta (Resumen, UPS, Net, Proxmox, NAS, DNS, WAN, VPN, WOL y Admin), no solo WOL y NUT en el pie. Cada uno consulta su `/api/health` público: verde «activo», amarillo «con avisos», rojo «con fallas» y gris «sin respuesta». En pantallas angostas se ve solo el punto. Antes «activo» solo significaba que el servicio contestaba.
-
-## 2.1.5i — 2026-11-02
-
-- **Nuevo:** comando `sudo labtower-resetpw [usuario]` para recuperar el acceso desde la consola: genera una contraseña aleatoria (cambio obligatorio en el próximo inicio), cierra las sesiones de ese usuario, quita su bloqueo por intentos y lo anota en la auditoría. Opciones: `--ask` (tú escribes la contraseña), `--disable-2fa` (perdiste el teléfono) y `--list`.
-
-## 2.1.5h — 2026-11-02
-
-- **Corregido:** VPN Monitor mostraba «::ffff» como dirección de un cliente OpenVPN conectado por IPv4 a un servidor de doble pila (Synology): ahora muestra la IPv4 real.
-- **Documentación:** README (es/en) y ayuda del formulario: cómo agregar OpenVPN y WireGuard, la opción «Ejecutar con sudo» (con las dos rutas de `cat`) y la guía de Synology.
-
-## 2.1.5g — 2026-11-02
-
-- **Nuevo:** VPN Monitor: opción «Ejecutar con sudo» para servidores donde el archivo de estado de OpenVPN o `wg show` son solo de root (por ejemplo Synology). Usa `sudo -n` (nunca pide contraseña) y solo con los dos comandos fijos.
-
-## 2.1.5f — 2026-11-02
-
-- **Corregido:** el paquete 2.1.5e no incluía la carpeta del VPN Monitor, así que el servicio no arrancaba (502 Bad Gateway en `/vpn/`). Ahora el paquete la incluye.
-
-## 2.1.5e — 2026-11-02
-
-- **Nuevo:** VPN Monitor (puerto 8089, `/vpn/`): muestra quién está conectado a Tailscale, OpenVPN y WireGuard, desde cuándo, con qué dirección y cuánto tráfico. Tailscale se lee por su API (clave de solo lectura); OpenVPN (archivo de estado, versiones 1, 2 y 3) y WireGuard (`wg show all dump`) se leen por SSH, de solo lectura, con una llave propia que LabTower genera y que se recomienda restringir en `authorized_keys` con `command="…"`. WireGuard no tiene usuarios: los peers se nombran con alias por clave pública. Lleva el registro de sesiones recientes, avisa en la línea de tiempo del Resumen cuando alguien se conecta o se desconecta, tiene su tarjeta en el Resumen, su permiso propio (Admin Panel → usuarios), servicio con usuario propio y entra en los respaldos (`vpn.json` y `state.json`; la llave SSH no se respalda: tras restaurar, créala de nuevo y vuelve a instalarla en el servidor VPN).
-
-## 2.1.5d — 2026-11-02
-
-- **Mejora:** WAN Monitor: nuevos ajustes «Bajada contratada» y «Subida contratada» (Mb/s). La tarjeta de velocidad muestra el porcentaje entregado respecto a lo contratado en la última prueba y su promedio de 7 días (verde desde 90 %, naranja desde 70 %, rojo bajo eso).
-- **Mejora:** Proxmox Monitor: el panel «Diagnóstico del cluster» tiene un botón «Expandir todo / Contraer todo» para abrir o cerrar de una vez reinicios, respaldos y SMART.
-
-## 2.1.5c — 2026-11-02
-
-- **Mejora:** NAS Monitor: los umbrales de espacio de los volúmenes ahora se configuran por NAS (Editar NAS → «Aviso de volumen» y «Crítico de volumen», por defecto 90 % / 95 %). Antes las alertas usaban 90/95 pero los colores de la página NAS y del Resumen usaban 80/90 fijos, y un volumen al 84 % salía en naranja/rojo sin alerta. Ahora todo usa los mismos valores.
-- **Quitado:** Resumen: se elimina la tarjeta «Monitores sugeridos» (generaba demasiados falsos positivos).
-
-## 2.1.5b — 2026-11-02
-
-- **Fix:** Instalación en un contenedor (CT de Proxmox): restaurar un respaldo desde el Admin Panel fallaba con «The "no new privileges" flag is set» porque systemd activaba ese indicador en el servicio del panel y `sudo` no podía subir a root. En un contenedor, el servicio `admin-panel` (el único que usa `sudo`) ahora se instala sin las opciones de seguridad que lo activan. En una VM no cambia nada.
-
-## 2.1.5a — 2026-11-02
-
-- **Fix:** Admin Panel, subir respaldo: el selector de archivos solo dejaba elegir `.gz` y los respaldos descargados del panel salen cifrados (`.gpg`), así que no se podía importar un respaldo de otro LabTower sin cambiar a «Todos los archivos». Ahora acepta también `.gpg`.
+- **Nuevo:** VPN Monitor (`/vpn/`, puerto 8089): quién está conectado a Tailscale, OpenVPN y WireGuard, desde cuándo, con qué dirección y cuánto tráfico.
+  - Tailscale se lee por su API (clave de solo lectura). OpenVPN (archivo de estado, versiones 1, 2 y 3) y WireGuard (`wg show all dump`) se leen por SSH, de solo lectura, con una llave propia que LabTower genera y que se recomienda restringir en `authorized_keys` con `command="…"`.
+  - La opción «Ejecutar con sudo» sirve para servidores donde el archivo de estado o `wg show` son solo de root (por ejemplo Synology). Usa `sudo -n` y solo con los dos comandos fijos.
+  - Los peers de WireGuard se nombran con alias por clave pública.
+  - Incluye sesiones recientes, avisos de conexión y desconexión en el Resumen, tarjeta en el Resumen, permiso propio (Admin Panel → usuarios), servicio con usuario propio y respaldo de `vpn.json` y `state.json`. La llave SSH no se respalda: tras restaurar, créala de nuevo y vuelve a instalarla en el servidor VPN.
+- **Nuevo:** `sudo labtower-resetpw [usuario]` para recuperar el acceso desde la consola: genera una contraseña aleatoria (cambio obligatorio en el próximo inicio), cierra las sesiones de ese usuario, quita su bloqueo por intentos y lo anota en la auditoría. Opciones: `--ask` (tú escribes la contraseña), `--disable-2fa` (perdiste el teléfono) y `--list`.
+- **Mejora:** la portada muestra el estado de cada módulo junto a la flecha de su tarjeta, con el `/api/health` público de cada uno: verde «activo», amarillo «con avisos», rojo «con fallas» y gris «sin respuesta». Antes solo había dos indicadores (WOL y NUT) y «activo» solo significaba que el servicio contestaba.
+- **Mejora:** WAN Monitor: ajustes «Bajada contratada» y «Subida contratada» (Mb/s). La tarjeta de velocidad muestra el porcentaje entregado en la última prueba y su promedio de 7 días (verde desde 90 %, naranja desde 70 %, rojo bajo eso).
+- **Mejora:** NAS Monitor: los umbrales de espacio de los volúmenes se configuran por NAS (Editar NAS → «Aviso de volumen» y «Crítico de volumen», por defecto 90 % / 95 %). Antes las alertas usaban 90/95 pero los colores de la página NAS y del Resumen usaban 80/90 fijos, y un volumen al 84 % salía en naranja/rojo sin alerta.
+- **Mejora:** Proxmox Monitor: botón «Expandir todo / Contraer todo» en Diagnóstico del cluster.
+- **Quitado:** tarjeta «Monitores sugeridos» del Resumen (demasiados falsos positivos).
+- **Fix:** en un CT de Proxmox, restaurar un respaldo desde el Admin Panel fallaba con «The "no new privileges" flag is set». El servicio `admin-panel` ahora se instala sin las opciones que lo activan; en una VM no cambia nada.
+- **Fix:** Admin Panel, subir respaldo: el selector aceptaba solo `.gz`, pero los respaldos del panel salen cifrados (`.gpg`). Ahora acepta también `.gpg`.
 
 ## 2.1.5 — 2026-11-02
 
