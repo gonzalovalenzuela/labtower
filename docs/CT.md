@@ -50,7 +50,7 @@ apt install ./labtower_X.Y.Z_all.deb
 4. Abre `http://IP-DEL-CT/`. El usuario es `admin`; la contraseña inicial sale al final de la instalación.
 
 ### Después de instalar
-- **HTTPS:** `pct exec ID -- labtower-https enable --redirect`.
+- **HTTPS:** `pct exec ID -- /usr/local/bin/labtower-https enable --redirect` (con la ruta completa, porque `pct exec` no incluye `/usr/local/bin` en el PATH).
 - **Actualizar:** dentro del CT, `apt install ./labtower_NUEVA_all.deb` con el `.deb` nuevo.
 - **Respaldo:** usa los respaldos de Proxmox (vzdump) del CT además del Teleporter de LabTower.
 - **Net Monitor:** el CT debe estar en el mismo bridge que tu LAN para ver las MAC de los equipos. Si el ping falla, revisa el firewall del CT y del bridge.
@@ -77,4 +77,4 @@ The script downloads the Debian 12 template, creates the CT (2 cores, 1 GB RAM, 
 Create an unprivileged **debian-12-standard** CT (1 GB RAM, 2 cores, 8 GB disk) on your LAN bridge, enable **Nesting** and *Start at boot*, start it and install the `.deb` from the latest release with `apt install ./labtower_X.Y.Z_all.deb`. Then open `http://CT-IP/`.
 
 ### After installing
-Enable HTTPS with `pct exec ID -- labtower-https enable --redirect`; update by installing the new `.deb` inside the CT; back the CT up with Proxmox (vzdump) as well as LabTower's Teleporter. Keep the CT on the same bridge as your LAN so Net Monitor can see MAC addresses.
+Enable HTTPS with `pct exec ID -- /usr/local/bin/labtower-https enable --redirect`; update by installing the new `.deb` inside the CT; back the CT up with Proxmox (vzdump) as well as LabTower's Teleporter. Keep the CT on the same bridge as your LAN so Net Monitor can see MAC addresses.

@@ -121,5 +121,5 @@ if [ "$DRY" != 1 ]; then
   echo "LabTower is ready in CT $CTID"
   echo "  URL:  http://${IP:-<CT-IP>}/"
   [ -z "$PW" ] || { echo "  User: admin"; echo "  Initial password: $PW  (you must change it at the first login)"; }
-  echo "  HTTPS: pct exec $CTID -- labtower-https enable --redirect"
+  echo "  HTTPS: pct exec $CTID -- /usr/local/bin/labtower-https enable --redirect"
 fi
