@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.4i — 2026-11-02
+
+- **Resumen:** nueva tarjeta «Monitores sugeridos». Si Net Monitor ve un equipo en línea con puertos típicos de un servicio que LabTower puede monitorear (Proxmox, servidor UPS, Pi-hole o AdGuard Home, Synology) y todavía no está configurado, lo sugiere con un enlace al módulo. Solo la ven los administradores de ese módulo y se puede descartar cada sugerencia.
+
 ## 2.1.4h — 2026-11-02
 
 - **Resumen:** nueva tarjeta «Enlaces» para tus propias páginas (el router, un servidor de medios, etc.), agrupadas. Todos los usuarios las ven; los administradores las editan con el botón «Editar». Solo se aceptan enlaces http(s) o rutas internas como `/dns/`.
