@@ -334,7 +334,7 @@ def _refresh_pihole_cache():
                 vendor = dev.get("macVendor", "")
                 for ip_entry in dev.get("ips", []):
                     ip   = ip_entry.get("ip", "")
-                    name = re.sub(r"(\.local)?\.?$", "", ip_entry.get("name", "") or "")
+                    name = _clean_name(ip_entry.get("name"))
                     if ip:
                         new_cache[ip] = {
                             "hostname": name,
@@ -440,9 +440,11 @@ def ptr_query(server: str, ip: str, port: int = 53, timeout: float = 1.5) -> str
 # EN: Name by DNS: first the configured Pi-hole servers (no API), then the system resolver.
 def resolve_name(ip: str) -> str:
     for h in [x.strip() for x in PIHOLE_HOSTS.split(",") if x.strip()]:
-        n = ptr_query(h.partition(":")[0], ip)
-        if n: return re.sub(r"(\.local)?\.?$", "", n)
-    return resolve_dns(ip)
+        srv = h.partition(":")[0]
+        if not auth.valid_target(srv): continue            # same rule as the Pi-hole API: not this machine, no link-local addresses
+        n = _clean_name(ptr_query(srv, ip))
+        if n: return n
+    return _clean_name(resolve_dns(ip))
 
 # ─── mDNS hint (sin librería externa) ────────────────────────────────────────
 # Pista barata de que el nombre corresponde a un equipo Apple.

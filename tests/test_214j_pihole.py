@@ -88,13 +88,16 @@ class PtrDirect(unittest.TestCase):
         self.assertEqual(net.ptr_query("127.0.0.1", "not-an-ip"), "")
         self.assertEqual(net.ptr_query("127.0.0.1", "192.0.2.5", port=1, timeout=0.2), "")
     def test_resolve_name_prefers_pihole_dns(self):
-        old = (net.PIHOLE_HOSTS, net.ptr_query, net.resolve_dns)
+        old = (net.PIHOLE_HOSTS, net.ptr_query, net.resolve_dns, net.auth.valid_target)
         try:
             net.PIHOLE_HOSTS = "192.0.2.2:443"; seen = []
             net.ptr_query = lambda h, ip, **k: (seen.append(h), "nas01.local")[1]; net.resolve_dns = lambda ip: "sys"
             self.assertEqual(net.resolve_name("192.0.2.5"), "nas01"); self.assertEqual(seen, ["192.0.2.2"])   # web port dropped, ".local" cleaned
             net.ptr_query = lambda h, ip, **k: ""; self.assertEqual(net.resolve_name("192.0.2.5"), "sys")
-        finally: net.PIHOLE_HOSTS, net.ptr_query, net.resolve_dns = old
+            net.ptr_query = lambda h, ip, **k: "evil\x07name\x1b[31m.local"; self.assertEqual(net.resolve_name("192.0.2.5"), "evilname[31m")   # control characters never reach the page or the events
+            seen.clear(); net.PIHOLE_HOSTS = "127.0.0.1"; net.auth.valid_target = support.real_valid_target
+            self.assertEqual(net.resolve_name("192.0.2.5"), "sys"); self.assertEqual(seen, [])   # this machine is never queried
+        finally: net.PIHOLE_HOSTS, net.ptr_query, net.resolve_dns, net.auth.valid_target = old
 
 class OfflineNames(unittest.TestCase):
     """2.1.4n: devices that are switched off (AMT interfaces…) also get their Pi-hole / DNS name."""

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.4p — 2026-11-02
+
+- **Net Monitor, seguridad:** los nombres de equipos que vienen de Pi-hole o del DNS se limpian de caracteres de control y se limitan a 80 caracteres antes de guardarlos. La consulta directa al DNS de Pi-hole aplica la misma regla anti-SSRF que la API de Pi-hole (no consulta este mismo equipo ni direcciones link-local).
+
 ## 2.1.4o — 2026-11-02
 
 - **Net Monitor:** los equipos apagados o sin respuesta (por ejemplo la interfaz AMT de un servidor apagado) ahora también reciben su nombre de Pi-hole o del DNS. Antes solo se les pedía el nombre a los equipos que respondían al ping, así que los registros de «Local DNS» de equipos apagados nunca aparecían.
