@@ -420,6 +420,7 @@ async function refresh(){
   $('attnl').innerHTML=issues.map(i=>`<li><b class="${i.lv}" style="background:none">${esc(String(i.m).toUpperCase())}</b>${i.href?`<a href="${esc(i.href)}">${esc(i.t)}</a>`:esc(i.t)}</li>`).join('');
   $('upd').textContent=T('updated')+' '+PCT.time(new Date(),true);
   decorate();
+  if(window.linksUpdate)linksUpdate(R).catch(()=>{});
 }
 // Intervalo de actualización elegible (se guarda en este navegador). Solo cambia cuánto se redibuja ESTA pantalla: los módulos siguen vigilando y anotando eventos en el servidor aunque nadie mire, y los eventos quedan en la línea de tiempo.
 // EN: Selectable refresh interval (stored in this browser). It only changes how often THIS screen redraws: the modules keep watching and recording events on the server even when nobody looks, and events stay in the timeline.
@@ -460,6 +461,7 @@ function applyLang(){
   document.querySelectorAll('[data-i]').forEach(e=>e.textContent=T(e.dataset.i));
   $('bl').textContent=lang==='es'?'EN':'ES';riFill();
   paintSort();
+  if(window.linksLang)linksLang();
   $('lu').placeholder=lang==='es'?'Usuario':'User';$('lp').placeholder=lang==='es'?'Contraseña':'Password';
 }
 $('ri').onchange=e=>{riSec=parseInt(e.target.value,10);try{localStorage.setItem('pi-refresh',String(riSec))}catch(x){}if(me&&me.username){riNext();if(riSec>0&&Date.now()-lastRef>riSec*1000)loop()}};

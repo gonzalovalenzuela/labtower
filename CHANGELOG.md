@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.4h — 2026-11-02
+
+- **Resumen:** nueva tarjeta «Enlaces» para tus propias páginas (el router, un servidor de medios, etc.), agrupadas. Todos los usuarios las ven; los administradores las editan con el botón «Editar». Solo se aceptan enlaces http(s) o rutas internas como `/dns/`.
+- **Resumen:** búsqueda global en la barra superior (también con la tecla `/`). Busca equipos de Net Monitor, UPS, VMs y contenedores de Proxmox, NAS, servidores DNS, equipos de Wake-on-LAN y tus enlaces. Solo muestra lo que cada usuario tiene permiso de ver.
+
 ## 2.1.4g — 2026-11-02
 
 - **Net Monitor:** la purga de equipos offline no borra nada si en el escaneo no respondió ningún equipo (por ejemplo, si el servidor perdió la red).

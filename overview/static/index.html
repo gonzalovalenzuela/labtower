@@ -26,6 +26,7 @@
   <div class="top">
     <h1><img class="logo" src="/logo.png" width="30" height="30" alt=""><span data-i="title">Overview</span></h1>
     <span class="pill none" id="gpill"><i></i><span id="gtxt">…</span></span>
+    <span class="gs-wrap nokiosk hide" id="gs-wrap"><input id="gs" type="search" class="btn" autocomplete="off" spellcheck="false" placeholder="Search…"><div id="gsr" class="gsr hide"></div></span>
     <span class="spacer"></span>
     <span class="upd" id="upd"></span>
     <select class="btn nokiosk" id="ri" aria-label="Refresh interval"></select><button class="btn nokiosk" id="rr" aria-label="Refresh now">↻</button>
@@ -47,6 +48,7 @@
     <section class="card" id="c-pi"></section>
   </div>
   <!-- ES: La línea de tiempo va FUERA de la grilla: dentro, al ocupar todas las columnas (1/-1), dejaba una columna vacía a la derecha de las tarjetas. EN: The timeline sits OUTSIDE the grid: inside it, spanning every column (1/-1) left an empty column to the right of the cards. -->
+  <section class="card wide hide" id="c-bm"></section>
   <section class="card wide" id="c-ev"></section>
 </div>
 <div id="kbar"><button class="btn hide" id="ka" data-i="ascroll" aria-pressed="false">Auto-scroll</button><button class="btn" id="kx" data-i="exitk">Exit kiosk</button></div>
@@ -54,6 +56,7 @@
 <script src="timefmt.js"></script>
 <script src="app.js"></script>
 <script src="pidetail.js"></script>
+<script src="links.js"></script>
 <script src="ipcard.js"></script>
 </body>
 </html>
