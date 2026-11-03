@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.6e — 2026-11-03
+
+- **Mejora:** el ícono de la barra superior vuelve a ser el original de LabTower.
+- **Mejora:** si algún módulo tiene avisos o fallas, un aviso con enlaces aparece arriba del contenido, bajo el menú, en todos los módulos.
+- **Mejora:** el Resumen muestra solo la cantidad de clientes conectados en VPN; el detalle queda dentro del VPN Monitor.
+- **Nuevo:** asistente para elegir el tipo de menú, la primera vez que entras: barra superior con selector (nuevo) o menú lateral clásico. Se puede cambiar después en «Tipo de menú…». Se guarda en el navegador.
+
 ## 2.1.6d — 2026-11-03
 
 - **Mejora:** nueva navegación. En escritorio y iPad hay una barra superior con el logo (Inicio), el grupo actual y un selector del módulo (con su estado) que abre un panel con todos los módulos agrupados; se cierra con Esc o al hacer clic fuera. En móvil hay una barra inferior (Inicio, Resumen, Módulos, Opciones) y los módulos se eligen en una hoja desde abajo. El estado se indica con forma y texto, no solo con color. Se oculta en modo kiosco. El menú lateral de cada módulo queda solo con lo propio del módulo.

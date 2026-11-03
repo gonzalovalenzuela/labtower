@@ -29,8 +29,16 @@
     {es: 'Sistema', en: 'System', items: ['admin']}
   ];
   var T = {
-    es: {mods: 'Módulos', opts: 'Opciones', main: 'Principal', switchTo: 'Cambiar de módulo', up: 'Activo', mid: 'Con avisos', down: 'Con fallas', home: 'Inicio de LabTower'},
-    en: {mods: 'Modules', opts: 'Options', main: 'Main', switchTo: 'Switch module', up: 'Active', mid: 'Warnings', down: 'Failing', home: 'LabTower home'}
+    es: {mods: 'Módulos', opts: 'Opciones', main: 'Principal', switchTo: 'Cambiar de módulo', up: 'Activo', mid: 'Con avisos', down: 'Con fallas', home: 'Inicio de LabTower',
+      warn: 'Atención', menuType: 'Tipo de menú…', wizTitle: 'Elige cómo quieres navegar',
+      wizText: 'Puedes cambiarlo cuando quieras desde «Tipo de menú…». Se guarda en este navegador.',
+      optBar: 'Barra superior con selector', optBarD: 'Un selector con todos los módulos y su estado. En el móvil, una barra inferior.',
+      optSide: 'Menú lateral clásico', optSideD: 'Los módulos agrupados en el panel lateral, como antes.', current: 'Actual', ok: 'Listo'},
+    en: {mods: 'Modules', opts: 'Options', main: 'Main', switchTo: 'Switch module', up: 'Active', mid: 'Warnings', down: 'Failing', home: 'LabTower home',
+      warn: 'Attention', menuType: 'Menu type…', wizTitle: 'Choose how you want to navigate',
+      wizText: 'You can change it any time from “Menu type…”. It is saved in this browser.',
+      optBar: 'Top bar with switcher', optBarD: 'One switcher with every module and its status. On phones, a bottom bar.',
+      optSide: 'Classic side menu', optSideD: 'Modules grouped in the side panel, as before.', current: 'Current', ok: 'Done'}
   };
   var SHAPE = {
     up:   '<circle cx="5" cy="5" r="4.5" fill="#15803d"/>',
@@ -39,6 +47,10 @@
   };
   var LV = {readonly: 1, execute: 2, admin: 3};
   var health = null, timer = null, st = null;      // st: {box parts, opts, me}
+  var MODE_KEY = 'lt-nav-mode';                    // 'bar' (nuevo / new) | 'side' (clásico / classic)
+  function getMode() { try { var m = localStorage.getItem(MODE_KEY); return m === 'side' || m === 'bar' ? m : null; } catch (e) { return null; } }
+  function setMode(m) { try { localStorage.setItem(MODE_KEY, m); } catch (e) {} }
+  function mode() { return getMode() || 'bar'; }
 
   function visible(id, me) {
     if (id === 'home' || id === 'overview') return true;
@@ -72,8 +84,36 @@
       sv.innerHTML = SHAPE[lv];                                                   // constante propia / own constant
       box.appendChild(sv); box.appendChild(document.createTextNode(tr[lv]));
     });
+    document.querySelectorAll('.nav-item[data-nav-id] .nav-dot, .nav-chip[data-nav-id] .nav-dot').forEach(function (d) {
+      var lv = level(d.parentNode.getAttribute('data-nav-id'));
+      d.className = 'nav-dot' + (lv ? ' ' + lv : ''); d.title = lv ? tr[lv] : '';
+    });
+    warnStrip();
     var cur = document.querySelector('.gsw-st');
     if (cur) { var l2 = level(st.opts.self); cur.className = 'gsw-st' + (l2 ? ' ' + l2 : ''); cur.title = l2 ? tr[l2] : ''; }
+  }
+  // Aviso arriba del contenido, bajo el menú / notice at the top of the content, under the menu
+  function warnStrip() {
+    var host = st.opts.self === 'overview' ? null : document.querySelector('.main'), box = document.getElementById('gwarn'), tr = T[st.lang];
+    var bad = [];
+    if (host && health) Object.keys(I).forEach(function (id) {
+      var lv = level(id);
+      if ((lv === 'mid' || lv === 'down') && visible(id, st.me)) bad.push([id, lv]);
+    });
+    if (!bad.length) { if (box) box.remove(); return; }
+    if (!box) { box = el('div', 'gwarn'); box.id = 'gwarn'; box.setAttribute('role', 'status'); }
+    if (box.parentNode !== host || host.firstChild !== box) host.insertBefore(box, host.firstChild);
+    box.className = 'gwarn ' + (bad.some(function (b) { return b[1] === 'down'; }) ? 'down' : 'mid');
+    box.textContent = '';
+    box.appendChild(el('b', 'gwarn-t', tr.warn));
+    bad.forEach(function (b) {
+      var a = el('a', 'gwarn-i'); a.href = I[b[0]].href;
+      var sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      sv.setAttribute('width', '11'); sv.setAttribute('height', '11'); sv.setAttribute('viewBox', '0 0 10 10'); sv.setAttribute('aria-hidden', 'true');
+      sv.innerHTML = SHAPE[b[1]];                                                 // constante propia / own constant
+      a.appendChild(sv); a.appendChild(document.createTextNode(name(b[0], st.lang) + ' · ' + tr[b[1]]));
+      box.appendChild(a);
+    });
   }
   function loadHealth() {
     try { var c = JSON.parse(sessionStorage.getItem('lt-nav-health') || 'null'); if (c && Date.now() - c.t < 45000) { health = c.m; paint(); return; } } catch (e) {}
@@ -90,7 +130,7 @@
   function ensure() {
     if (st && st.bar && document.body.contains(st.bar)) return;
     var bar = el('header', 'gbar'), nav = el('nav', 'gbar-in');
-    nav.appendChild(el('a', 'gbar-logo', 'LT')); nav.lastChild.href = '/';
+    var lg = el('a', 'gbar-logo'), im = el('img'); im.src = '/logo.png'; im.alt = ''; im.width = 30; im.height = 30; lg.appendChild(im); lg.href = '/'; nav.appendChild(lg);
     nav.appendChild(el('span', 'gbar-sep', '/'));
     var crumb = el('span', 'gbar-grp'); nav.appendChild(crumb);
     var sw = el('button', 'gsw'); sw.type = 'button'; sw.setAttribute('aria-haspopup', 'dialog'); sw.setAttribute('aria-expanded', 'false'); sw.setAttribute('aria-controls', 'gpanel');
@@ -157,6 +197,9 @@
       });
       wrap.appendChild(grid); st.panel.appendChild(wrap);
     });
+    var ft = el('div', 'gfoot'), mb = el('button', 'gfoot-b', tr.menuType); mb.type = 'button';
+    mb.addEventListener('click', function () { toggle(false); wizard(false); });
+    ft.appendChild(mb); st.panel.appendChild(ft);
     // barra inferior (móvil) / bottom bar (phones)
     st.tab.textContent = ''; st.tab.setAttribute('aria-label', tr.main);
     function tabItem(id, label, svgPath, href, on) {
@@ -175,8 +218,94 @@
       var op = tabItem('opts', tr.opts, '<line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/>', null, false);
       op.addEventListener('click', function () { toggle(false); var b = document.getElementById('nav-toggle'); if (b) b.click(); });
     }
-    // el menú lateral viejo ya no se usa / the old side menu is gone
-    var old = document.getElementById('nav-items'); if (old) { var sec = old.closest('.sb-sec'); (sec || old).hidden = true; }
+  }
+
+  // ── Menú clásico (lateral; tira en el Resumen) / classic menu (side; strip in the Overview) ──
+  function classic() {
+    var o = st.opts, me = st.me, es = st.lang === 'es', tr = T[st.lang];
+    var box = document.getElementById('nav-items'), strip = false;
+    if (!box && o.self === 'overview') {
+      box = document.getElementById('navstrip');
+      if (!box) { box = el('nav', 'navstrip nokiosk'); box.id = 'navstrip'; var w = document.getElementById('app'); if (w) w.insertBefore(box, document.getElementById('attn') || w.children[1] || null); }
+      strip = true;
+    }
+    if (!box) return;
+    var sec = box.closest('.sb-sec'); (sec || box).hidden = false; box.hidden = false;
+    box.textContent = '';
+    var first = true;
+    G.forEach(function (g) {
+      var ids = g.items.filter(function (id) { return visible(id, me); });
+      if (!ids.length) return;
+      if (strip) { if (!first) box.appendChild(el('span', 'nav-sep')); }
+      else if (g.es) box.appendChild(el('div', 'nav-group-lbl', es ? g.es : g.en));
+      first = false;
+      ids.forEach(function (id) {
+        var it = I[id], self = id === o.self;
+        var a = el('a', (strip ? 'nav-chip' : 'nav-item') + (self ? ' active' : ''));
+        a.href = it.href; a.setAttribute('data-nav-id', id);
+        if (self) a.setAttribute('aria-current', 'page');
+        a.appendChild(icon(it.svg, strip ? 14 : null));
+        a.appendChild(document.createTextNode(it.label || (es ? it.es : it.en)));
+        if (it.label && id !== 'admin') a.appendChild(el('span', 'nav-dot'));
+        box.appendChild(a);
+      });
+    });
+    var mt = el('button', strip ? 'nav-chip' : 'nav-item nav-menutype', tr.menuType); mt.type = 'button';
+    mt.addEventListener('click', function () { wizard(false); });
+    box.appendChild(mt);
+  }
+  function unclassic() {
+    var box = document.getElementById('nav-items'), strip = document.getElementById('navstrip');
+    if (box) { box.textContent = ''; var sec = box.closest('.sb-sec'); (sec || box).hidden = true; }
+    if (strip) strip.remove();
+  }
+
+  // ── Asistente: elegir el tipo de menú / wizard: choose the menu type ──
+  var PREV = {
+    bar:  '<rect x="1" y="1" width="118" height="78" rx="6" fill="none" stroke="currentColor" stroke-width="2"/><rect x="1" y="1" width="118" height="14" rx="6" fill="currentColor" opacity=".18"/><rect x="8" y="5" width="8" height="6" rx="2" fill="currentColor"/><rect x="22" y="4.5" width="34" height="7" rx="3.5" fill="currentColor" opacity=".55"/><rect x="8" y="24" width="48" height="20" rx="4" fill="currentColor" opacity=".25"/><rect x="62" y="24" width="48" height="20" rx="4" fill="currentColor" opacity=".25"/><rect x="8" y="50" width="102" height="22" rx="4" fill="currentColor" opacity=".15"/>',
+    side: '<rect x="1" y="1" width="118" height="78" rx="6" fill="none" stroke="currentColor" stroke-width="2"/><rect x="1" y="1" width="30" height="78" rx="6" fill="currentColor" opacity=".18"/><rect x="6" y="10" width="20" height="5" rx="2.5" fill="currentColor" opacity=".6"/><rect x="6" y="20" width="20" height="5" rx="2.5" fill="currentColor" opacity=".35"/><rect x="6" y="30" width="20" height="5" rx="2.5" fill="currentColor" opacity=".35"/><rect x="6" y="40" width="20" height="5" rx="2.5" fill="currentColor" opacity=".35"/><rect x="38" y="10" width="34" height="22" rx="4" fill="currentColor" opacity=".25"/><rect x="78" y="10" width="34" height="22" rx="4" fill="currentColor" opacity=".25"/><rect x="38" y="40" width="74" height="30" rx="4" fill="currentColor" opacity=".15"/>'
+  };
+  function wizard(firstRun) {
+    if (document.getElementById('gwiz')) return;
+    var tr = T[st.lang], cur = mode(), prev = document.activeElement;
+    var ov = el('div', 'gwiz'); ov.id = 'gwiz';
+    var dlg = el('div', 'gwiz-box'); dlg.setAttribute('role', 'dialog'); dlg.setAttribute('aria-modal', 'true'); dlg.setAttribute('aria-labelledby', 'gwiz-h');
+    var h = el('h2', null, tr.wizTitle); h.id = 'gwiz-h';
+    dlg.appendChild(h); dlg.appendChild(el('p', 'gwiz-p', tr.wizText));
+    var opts = el('div', 'gwiz-opts'), sel = cur;
+    function close() { setMode(sel); ov.remove(); document.removeEventListener('keydown', key, true); apply(); try { if (prev && prev.focus) prev.focus(); } catch (e) {} }
+    function key(e) {
+      if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+      if (e.key === 'Tab') {                                                      // el foco no sale del diálogo / keep focus inside
+        var f = dlg.querySelectorAll('button'), a = f[0], z = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); }
+        else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+      }
+    }
+    [['bar', tr.optBar, tr.optBarD], ['side', tr.optSide, tr.optSideD]].forEach(function (o) {
+      var b = el('button', 'gwiz-opt' + (o[0] === sel ? ' on' : '')); b.type = 'button'; b.setAttribute('aria-pressed', o[0] === sel ? 'true' : 'false');
+      var sv = icon(PREV[o[0]], null); sv.setAttribute('viewBox', '0 0 120 80'); sv.setAttribute('class', 'gwiz-prev'); sv.removeAttribute('aria-hidden');
+      b.appendChild(sv); b.appendChild(el('b', null, o[1])); b.appendChild(el('span', null, o[2]));
+      if (o[0] === cur && !firstRun) b.appendChild(el('i', 'gwiz-cur', tr.current));
+      b.addEventListener('click', function () {
+        sel = o[0]; opts.querySelectorAll('.gwiz-opt').forEach(function (x) { var on = x === b; x.className = 'gwiz-opt' + (on ? ' on' : ''); x.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+      });
+      opts.appendChild(b);
+    });
+    dlg.appendChild(opts);
+    var ok = el('button', 'gwiz-ok', tr.ok); ok.type = 'button'; ok.addEventListener('click', close);
+    dlg.appendChild(ok); ov.appendChild(dlg); document.body.appendChild(ov);
+    document.addEventListener('keydown', key, true);
+    opts.querySelector('.on').focus();
+  }
+
+  // aplica el tipo de menú elegido / apply the chosen menu type
+  function apply() {
+    var m = mode();
+    document.body.classList.toggle('has-gbar', m === 'bar');
+    document.documentElement.setAttribute('data-navmode', m);
+    if (m === 'bar') { fill(); } else { toggle(false); classic(); }
+    if (m === 'bar') unclassic();
     paint(); loadHealth();
     if (!timer) timer = setInterval(function () { try { sessionStorage.removeItem('lt-nav-health'); } catch (e) {} loadHealth(); }, 60000);
   }
@@ -188,10 +317,11 @@
       ensure();
       st.opts = o; st.lang = o.lang === 'es' ? 'es' : 'en'; st.me = o.me || st.me || null;
       document.documentElement.setAttribute('data-gbar', '1');
-      fill();
+      apply();
+      if (!getMode() && st.me && (st.me.username || st.me.permissions) && !document.body.classList.contains('kiosk')) wizard(true);
       if (!o.me && o.fetchMe && !st.me && !st.fetching) {
         st.fetching = true;
-        fetch('api/me').then(function (r) { return r.json(); }).then(function (m) { st.fetching = false; if (m && m.permissions) { st.me = m; fill(); } }).catch(function () { st.fetching = false; });
+        fetch('api/me').then(function (r) { return r.json(); }).then(function (m) { st.fetching = false; if (m && m.permissions) { st.me = m; apply(); if (!getMode() && !document.body.classList.contains('kiosk')) wizard(true); } }).catch(function () { st.fetching = false; });
       }
     }
   };
