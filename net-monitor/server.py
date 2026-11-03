@@ -46,6 +46,7 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
 sys.path.insert(0, str(Path(__file__).parent))
+import hostwatch as hw
 import switches as swmod      # Switch Monitor: drivers, sondeo, historial / drivers, polling, history
 
 # Solo loopback; el acceso desde la red pasa por nginx. hosts.json: equipos descubiertos. config.json: ajustes (SNMP, Pi-hole, intervalo).
@@ -91,6 +92,11 @@ SCAN_PORTS    = os.environ.get("SCAN_PORTS",     "21,22,23,25,53,80,111,135,139,
 SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL", 3600))
 PORT_TIMEOUT  = float(os.environ.get("PORT_TIMEOUT", 0.5))
 MAX_WORKERS   = int(os.environ.get("MAX_WORKERS", 30))
+# Vigilancia de equipos críticos: segundos entre sondeos (0 la desactiva) y días de historial de latencia.
+# EN: Watch of critical devices: seconds between probes (0 disables it) and days of latency history.
+WATCH_EVERY   = float(os.environ.get("NET_WATCH_EVERY", 30))
+WATCH_MAX     = 40
+LAT_KEEP      = auth.keep_days("NET_LATENCY_KEEP_DAYS", 30) * 86400
 
 logging.basicConfig(level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
@@ -1109,6 +1115,14 @@ def init_runtime():
                 _c = load_config(); _c["scan_interval"] = 0; save_config(_c)
         except Exception as _e:
             log.warning(f"could not save the default manual scan mode: {_e}")
+    # Equipos descubiertos antes de que existiera el concepto de «conocido» cuentan como conocidos; solo los nuevos quedan sin revisar.
+    # EN: Devices discovered before the "known" concept existed count as known; only new ones are left unreviewed.
+    if "known_baseline" not in _saved:
+        try:
+            with _cfg_lock:
+                _c = load_config(); _c.setdefault("known_baseline", int(time.time())); save_config(_c); _saved = _c
+        except Exception as _e:
+            log.warning(f"could not save the known-devices baseline: {_e}")
     # Cargar credenciales Pi-hole guardadas
     # Credenciales de Pi-hole guardadas desde la página; una variable de entorno tiene prioridad.
     # EN: Pi-hole credentials saved from the page; an environment variable takes priority.
@@ -1210,6 +1224,7 @@ def run_scan(network: str = None, single_ip: str = None):
 
     _scan_status.update({"total": len(ips)})
     log.info(f"Starting scan: {len(ips)} hosts in {network or NETWORK}")
+    _sec_events = []                     # MAC changes and new ports found by this scan
     _scan_events = []                    # changes found by this scan: ("new"|"up"|"down", ip, host)
     first_inventory = not hosts          # first scan ever: every host is "new", so it is summarised instead
 
@@ -1254,6 +1269,16 @@ def run_scan(network: str = None, single_ip: str = None):
                             if existing.get("os_manual"):
                                 result["os"]        = existing["os"]
                                 result["os_manual"] = True
+                            # Lo editado a mano y las marcas de este módulo sobreviven al escaneo
+                            for k in ("group", "known", "watch", "mac_prev", "mac_changed"):
+                                if k in existing and k not in result: result[k] = existing[k]
+                            result["ports_seen"], newp = hw.port_news(existing, result)
+                            if existing and not first_inventory:
+                                mc = hw.mac_change(existing, result)
+                                if mc:
+                                    result["mac_prev"], result["mac_changed"] = mc["old"], int(time.time())
+                                    _sec_events.append(("mac", ip_str, result, mc))
+                                if newp: _sec_events.append(("port", ip_str, result, newp))
                             # Historial de disponibilidad: registrar evento si cambió estado
                             history = existing.get("uptime_history", [])
                             was_online = existing.get("online", False)
@@ -1262,6 +1287,7 @@ def run_scan(network: str = None, single_ip: str = None):
                             history = history[-200:]  # max 200 eventos
                             result["uptime_history"] = history
                             hosts[ip_str] = result
+                            _flaky_check(ip_str, result)
                             if is_new:
                                 _scan_events.append(("new", ip_str, result))
                             elif not was_online and result["online"]:
@@ -1274,6 +1300,7 @@ def run_scan(network: str = None, single_ip: str = None):
                                     history = hosts[ip_str].get("uptime_history", [])
                                     history.append({"ts": int(time.time()), "event": "down"})
                                     hosts[ip_str]["uptime_history"] = history[-200:]
+                                    _flaky_check(ip_str, hosts[ip_str])
                                 hosts[ip_str]["online"] = False
                                 hosts[ip_str]["last_seen_offline"] = int(time.time())
                 except Exception as e:
@@ -1295,6 +1322,7 @@ def run_scan(network: str = None, single_ip: str = None):
             _live_hosts = None
         online = sum(1 for h in hosts.values() if h.get("online"))
         _record_scan_events(_scan_events, first_inventory, online, single_ip)
+        _record_security_events(_sec_events)
         _scan_status.update({"running": False, "finished": int(time.time())})
         log.info(f"Scan finished: {online} hosts online out of {len(ips)} scanned")
 
@@ -1307,6 +1335,105 @@ def run_scan(network: str = None, single_ip: str = None):
         _scan_status["running"] = False                   # never leave the scanner "running"
         if not single_ip:                                 # a one-host rescan must not stack another timer
             _schedule_next_scan()
+
+# Seguridad y estabilidad de cada equipo: cambio de MAC en una IP conectada, puertos que nunca había mostrado y equipos que se caen seguido.
+# EN: Security and stability of each device: MAC change on an online IP, ports it had never shown and devices that drop often.
+_PORT_TXT = lambda ports: ", ".join(f"{p} {PORT_NAMES.get(p, '')}".strip() + (" ⚠" if p in hw.RISKY else "") for p in ports[:6])
+
+def _record_security_events(items):
+    if not items: return
+    macs = [i for i in items if i[0] == "mac"]; ports = [i for i in items if i[0] == "port"]
+    try:
+        for _, ip, h, mc in macs[:5]:
+            auth.record_event("net", "warn", f"MAC changed on {ip}: {mc['old']} → {mc['new']}", "net_mac_changed", ip=ip, n=h.get("alias") or h.get("hostname") or "", a=str(mc["old"]), b=str(mc["new"]))
+        if len(macs) > 5: auth.record_event("net", "warn", f"MAC changed on {len(macs)} hosts", "net_mac_changed_n", n=len(macs))
+        for _, ip, h, newp in ports[:8]:
+            risky = any(p in hw.RISKY for p in newp)
+            auth.record_event("net", "warn" if risky else "info", f"New open port on {ip}: {_PORT_TXT(newp)}", "net_port_new", ip=ip, n=h.get("alias") or h.get("hostname") or "", p=_PORT_TXT(newp))
+        if len(ports) > 8: auth.record_event("net", "info", f"New open ports on {len(ports)} hosts", "net_port_new_n", n=len(ports))
+    except Exception as e:
+        log.debug(f"security events: {e}")
+
+FLAKY_DROPS = 4              # drops in 24 h that make a device "unstable"
+def _flaky_check(ip, h):
+    try:
+        now = int(time.time())
+        n = sum(1 for e in h.get("uptime_history", []) if e.get("event") == "down" and e.get("ts", 0) >= now - 86400)
+        ch = auth.state_changed(f"net-flaky:{ip}", "flaky" if n >= FLAKY_DROPS else "ok")
+        if ch and ch[1] == "flaky":
+            auth.record_event("net", "warn", f"{ip} dropped {n} times in 24 h", "net_flaky", ip=ip, n=h.get("alias") or h.get("hostname") or "", c=n)
+    except Exception as e:
+        log.debug(f"flaky check: {e}")
+
+# ─── Equipos vigilados ────────────────────────────────────────────────────────
+# Los equipos marcados con «vigilar» se sondean cada WATCH_EVERY s (mucho más seguido que el escaneo completo): cada resultado guarda
+# su latencia, y tras 2 fallos seguidos se anota un evento crítico (y otro al volver). El estado vive en memoria; la latencia, en la base.
+# EN: Devices marked "watch" are probed every WATCH_EVERY s (far more often than the full scan): each result stores its latency,
+#     and after 2 failures in a row a critical event is recorded (and another when it is back). State lives in memory; latency in the database.
+_watch: dict = {}            # ip -> {"fails", "down", "since", "rtt", "ts"}
+
+def _watch_round():
+    now = int(time.time())
+    try: hosts = load_hosts()
+    except Exception: return
+    ips = [ip for ip, h in hosts.items() if isinstance(h, dict) and h.get("watch")][:WATCH_MAX]
+    for ip in list(_watch):
+        if ip not in ips: _watch.pop(ip, None)
+    rows = []
+    results = {}
+    def one(ip): results[ip] = ping_ttl(ip)
+    th = [threading.Thread(target=one, args=(ip,), daemon=True) for ip in ips]
+    for t in th: t.start()
+    for t in th: t.join(15)
+    for ip in ips:
+        alive, _ttl, ms = results.get(ip, (False, 0, 0.0))
+        w = _watch.setdefault(ip, {"fails": 0, "down": False, "since": None, "rtt": None, "ts": now})
+        w["ts"] = now
+        rows.append((ip, now, float(ms) if alive else None, 1 if alive else 0))
+        if alive:
+            w["fails"], w["rtt"] = 0, ms
+            if w["down"]:
+                w["down"], w["since"] = False, None
+        else:
+            w["fails"] += 1
+            if w["fails"] >= 2 and not w["down"]:
+                w["down"], w["since"] = True, now - int(WATCH_EVERY)
+        h = hosts.get(ip, {})
+        ch = auth.state_changed(f"net-watch:{ip}", "down" if w["down"] else "up")
+        nm = h.get("alias") or h.get("hostname") or ""
+        if ch and ch[1] == "down": auth.record_event("net", "crit", f"Watched device {ip}{' (' + nm + ')' if nm else ''} is not responding", "net_watch_down", ip=ip, n=nm)
+        elif ch: auth.record_event("net", "info", f"Watched device {ip}{' (' + nm + ')' if nm else ''} is responding again", "net_watch_up", ip=ip, n=nm)
+    if rows:
+        try:
+            c = auth.metrics_conn()
+            try: c.executemany("INSERT OR REPLACE INTO net_latency (ip,ts,ms,ok) VALUES (?,?,?,?)", rows); c.commit()
+            finally: c.close()
+        except Exception as e: log.warning(f"could not store the watch samples: {e}")
+
+def _watch_loop():
+    last_prune = 0
+    while True:
+        t0 = time.time()
+        try:
+            _watch_round()
+            if t0 - last_prune > 3600:
+                last_prune = t0
+                c = auth.metrics_conn()
+                try: c.execute("DELETE FROM net_latency WHERE ts < ?", (int(t0) - LAT_KEEP,)); c.commit()
+                finally: c.close()
+        except Exception as e:
+            log.warning(f"watch round: {e}")
+        time.sleep(max(5.0, WATCH_EVERY - (time.time() - t0)))
+
+def start_watch():
+    if WATCH_EVERY > 0: threading.Thread(target=_watch_loop, daemon=True, name="net-watch").start()
+
+def latency_points(ip, secs):
+    now = int(time.time())
+    c = auth.metrics_conn()
+    try: rows = c.execute("SELECT ts,ms,ok FROM net_latency WHERE ip=? AND ts>=? ORDER BY ts", (ip, now - secs)).fetchall()
+    finally: c.close()
+    return [(r[0], r[1], r[2]) for r in rows]
 
 # Arma el único temporizador de escaneo automático (cancela el anterior). Con intervalo 0 el modo es manual.
 # EN: Arm the single automatic-scan timer (cancelling the previous one). With interval 0 the mode is manual.
@@ -1449,11 +1576,33 @@ class H(BaseHTTPRequestHandler):
                 for h in out:
                     k = _mac_key(h.get("mac"))
                     if k and k in wol: h["wol"] = True
+            now = int(time.time()); base = load_config().get("known_baseline")
+            for h in out:
+                h["known"] = hw.known(h, base)
+                if h.get("watch"):
+                    w = _watch.get(h.get("ip"))
+                    h["watch_state"] = {"down": bool(w and w["down"]), "since": w and w["since"], "rtt": w and w["rtt"]} if w else None
+                hist = h.get("uptime_history") or []
+                h["conn"] = hw.conn_stats(hist, h.get("first_seen"), h.get("online"), now)
+                h["week"] = hw.week_bar(hist, h.get("first_seen"), h.get("online"), now) if h["conn"]["7d"]["observed"] >= 3600 else []
+                h["unstable"] = h["conn"]["7d"]["drops"] >= FLAKY_DROPS * 2
             self._json(200, {
                 "hosts":   out,
                 "scan":    _scan_status,
                 "network": NETWORK,
             })
+        # Latencia de un equipo vigilado: puntos (reducidos a ~300) y resumen. Parámetros: ip y range (1d, 7d, 30d).
+        # EN: Latency of a watched device: points (reduced to ~300) and a summary. Parameters: ip and range (1d, 7d, 30d).
+        elif path == "/api/hosts/latency":
+            q = parse_qs(urlparse(self.path).query)
+            ip = q.get("ip", [""])[0]; rng = q.get("range", ["1d"])[0]
+            if rng not in ("1d", "7d", "30d") or not re.fullmatch(r"[0-9.]{7,15}", ip): return self._json(400, {"error": "Invalid request"})
+            pts = latency_points(ip, {"1d": 86400, "7d": 604800, "30d": 2592000}[rng])
+            step = max(1, -(-len(pts) // 300)); out = []
+            for i in range(0, len(pts), step):
+                g = pts[i:i + step]; v = [m for _, m, ok in g if ok and m is not None]
+                out.append({"ts": g[len(g) // 2][0], "ms": round(sum(v) / len(v), 1) if v else None, "fail": sum(1 for _, _, ok in g if not ok)})
+            return self._json(200, {"ip": ip, "range": rng, "points": out, "summary": hw.latency_summary(pts)})
         # Switch Monitor: estado de todos los switches, resumen para el Resumen, configuración (sin secretos) e historial.
         # EN: Switch Monitor: state of all switches, summary for the Overview, configuration (no secrets) and history.
         elif path == "/api/switches":
@@ -1680,6 +1829,13 @@ class H(BaseHTTPRequestHandler):
             if not auth.check_permission(tok, "net", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
             ip = str(body.get("ip") or "").strip()
+            if body.get("known_all") is True:                 # mark every device as known (admin reviewed the list)
+                with _hosts_lock:
+                    hosts = _live_hosts if _live_hosts is not None else load_hosts()
+                    for hh in hosts.values():
+                        if isinstance(hh, dict): hh["known"] = True
+                    save_hosts(hosts)
+                return self._json(200, {"ok": True})
             if not ip: return self._json(400, {"error": "IP required"})
             dt = None
             if "device_type" in body:
@@ -1704,6 +1860,13 @@ class H(BaseHTTPRequestHandler):
                     else:
                         h["device_type"] = dt
                         h["type_manual"] = True
+                if "known" in body: h["known"] = bool(body["known"])
+                if "watch" in body:
+                    on = bool(body["watch"])
+                    if on and sum(1 for x in hosts.values() if isinstance(x, dict) and x.get("watch") and x is not h) >= WATCH_MAX:
+                        return self._json(400, {"error": f"At most {WATCH_MAX} watched devices"})
+                    h["watch"] = on
+                    if not on: _watch.pop(ip, None)
                 if "group" in body:
                     grp = str(body["group"]).strip()[:20]
                     if grp and not re.fullmatch(r"[\w .+/()-]{1,20}", grp):
@@ -1777,6 +1940,7 @@ if __name__ == "__main__":
     log.info(f"Network: {NETWORK} | Workers: {MAX_WORKERS} | Auto-scan: {_current_interval//60}min (0 = manual)")
     log.info("Detection: TTL + Python ports + HTTP banner (no nmap)")
     start_auto_scan()
+    start_watch()
     try: sw_manager().start()
     except Exception as e: log.warning(f"Switch Monitor did not start: {e}")
     try:

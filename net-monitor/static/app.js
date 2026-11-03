@@ -25,6 +25,10 @@ const LANG={
     noResults:'No results',noHosts2:'No hosts discovered',filterHint:'Try a different filter.',
     startScanHint:'Start a scan to discover hosts on the network.',
     initialScanNet:(n)=>`Nothing has been scanned yet. Network detected: ${n}`,initialScanBtn:'Run initial scan',
+unrev:'Unreviewed',unrevMsg:(n,names,more)=>`${n} device${n>1?'s':''} not reviewed yet: ${names}${more?' and more':''}`,markAllKnown:'Mark all as known',markKnown:'Mark as known',markUnknown:'Mark as unreviewed',knownDone:'Marked as known',
+    watchBtn:'Watch this device',unwatchBtn:'Stop watching',watching:'Watched',watchDown:'Watched device not responding',watchHint:'Probed every 30 s; an alert is raised after 2 failures',watchMax:'Watch limit reached',
+    unstableB:'Unstable',unstableTip:'It has dropped many times this week',macChg:'MAC changed',macChgTip:(a)=>`The MAC of this IP changed (before: ${a}). Could be a duplicate IP, a replaced device or spoofing.`,
+    connTitle:'Connectivity',conn7:'Online 7 d',conn30:'Online 30 d',drops7:'Drops 7 d',weekBar:'Last 7 days',latTitle:'Latency (watched)',latNone:'Collecting latency…',latSum:(a,p,m,l)=>`avg ${a} ms · p95 ${p} ms · max ${m} ms · loss ${l}%`,
     uptimeEmpty:'No events recorded yet',uptimeStats:(h,d)=>`${h} monitored · ${d} outage${d!==1?'s':''}`,
     availHistory:'Availability history',
     chartMonitoring:'Monitoring — data will appear after several scans',
@@ -57,6 +61,10 @@ const LANG={
     noResults:'Sin resultados',noHosts2:'Sin hosts descubiertos',filterHint:'Prueba otro filtro.',
     startScanHint:'Inicia un escaneo para descubrir hosts en la red.',
     initialScanNet:(n)=>`Aún no se ha escaneado nada. Red detectada: ${n}`,initialScanBtn:'Hacer escaneo inicial',
+unrev:'Sin revisar',unrevMsg:(n,names,more)=>`${n} equipo${n>1?'s':''} sin revisar: ${names}${more?' y más':''}`,markAllKnown:'Marcar todos como conocidos',markKnown:'Marcar como conocido',markUnknown:'Marcar como sin revisar',knownDone:'Marcado como conocido',
+    watchBtn:'Vigilar este equipo',unwatchBtn:'Dejar de vigilar',watching:'Vigilado',watchDown:'Equipo vigilado sin respuesta',watchHint:'Se sondea cada 30 s; avisa tras 2 fallos',watchMax:'Se alcanzó el límite de equipos vigilados',
+    unstableB:'Inestable',unstableTip:'Se ha caído muchas veces esta semana',macChg:'MAC cambió',macChgTip:(a)=>`La MAC de esta IP cambió (antes: ${a}). Puede ser una IP duplicada, un equipo reemplazado o una suplantación.`,
+    connTitle:'Conectividad',conn7:'Conectado 7 d',conn30:'Conectado 30 d',drops7:'Caídas 7 d',weekBar:'Últimos 7 días',latTitle:'Latencia (vigilado)',latNone:'Recopilando latencia…',latSum:(a,p,m,l)=>`prom ${a} ms · p95 ${p} ms · máx ${m} ms · pérdida ${l}%`,
     uptimeEmpty:'Sin eventos registrados aún',uptimeStats:(h,d)=>`${h} monitoreado · ${d} caída${d!==1?'s':''}`,
     availHistory:'Historial de disponibilidad',
     chartMonitoring:'Monitoreando — los datos aparecerán tras varios escaneos',
@@ -349,7 +357,7 @@ async function fetchData(){
 function quickHash(hosts, scan){
   // Hash liviano: IPs online + conteo de puertos + estado del scan
   const onlineKey = hosts.filter(h=>h.online).map(h=>h.ip+h.ports?.length+h.os+h.device_type).sort().join('|');
-  const metaKey   = hosts.map(h=>h.ip+h.online+h.os+h.device_type+h.type_manual+h.alias).join('|');
+  const metaKey   = hosts.map(h=>h.ip+h.online+h.os+h.device_type+h.type_manual+h.alias+h.known+h.watch+(h.watch_state&&h.watch_state.down)+h.unstable+(h.mac_changed||'')+((h.conn&&h.conn['7d'].pct)||'')).join('|');
   const scanKey   = scan?.running+':'+scan?.progress+':'+scan?.finished;
   return onlineKey + '||' + metaKey + '||' + scanKey;
 }
@@ -599,6 +607,7 @@ function renderTable(){
   const newTbody=document.createElement('tbody');
   newTbody.id='hosts-tbody';
 
+  renderReviewBar();
   // Detectar nuevos dispositivos
   const newDevices = list.filter(h=>h.new_device);
   const netBanner = document.getElementById('net-new-banner');
@@ -628,7 +637,10 @@ function renderTable(){
         ${sub!==name?`<span class="host-sub">${esc(sub)}</span>`:''}
         ${pveBadge(h)}
         ${h.wol?`<span title="WOL Console" style="margin-left:5px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:rgba(42,157,143,.15);color:var(--teal);vertical-align:middle">WOL</span>`:''}
-        ${h.new_device?`<span style="margin-left:5px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:rgba(67,97,238,.15);color:var(--blue);vertical-align:middle">${t('newDevice')}</span>`:''}
+        ${!h.known?`<span title="${esc(t('unrev'))}" style="margin-left:5px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:rgba(67,97,238,.15);color:var(--blue);vertical-align:middle">${esc(t('unrev'))}</span>`:''}
+        ${h.watch?`<span title="${esc(h.watch_state&&h.watch_state.down?t('watchDown'):t('watchHint'))}" style="margin-left:5px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:${h.watch_state&&h.watch_state.down?'rgba(239,68,68,.18)':'rgba(34,197,94,.15)'};color:${h.watch_state&&h.watch_state.down?'var(--red)':'var(--green)'};vertical-align:middle">👁 ${esc(h.watch_state&&h.watch_state.down?t('watchDown'):t('watching'))}</span>`:''}
+        ${h.unstable?`<span title="${esc(t('unstableTip'))}" style="margin-left:5px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:rgba(249,115,22,.15);color:var(--orange);vertical-align:middle">${esc(t('unstableB'))}</span>`:''}
+        ${h.mac_changed&&Date.now()/1000-h.mac_changed<7*86400?`<span title="${esc(t('macChgTip',h.mac_prev||'?'))}" style="margin-left:5px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:rgba(239,68,68,.15);color:var(--red);vertical-align:middle">${esc(t('macChg'))}</span>`:''}
       </td>
       <td data-on-click="@stop">
         <span class="os-badge" style="cursor:pointer" data-on-click="editOs" data-on-click-args="${jsargs([h.ip])}" title="${esc(t('editDevice'))}">
@@ -703,6 +715,22 @@ function renderTable(){
             return '<div class="detail-value">Uptime: <span style="font-family:var(--mono);font-weight:700;color:'+color+'">'+pct+'%</span></div>';
           })()}
         </div>
+        <div class="detail-section" style="grid-column:1/-1">
+          <div class="detail-label">${esc(t('connTitle'))}</div>
+          ${(()=>{const c=h.conn;if(!c)return '';const col=p=>p==null?'':p>=99?'var(--green)':p>=95?'var(--yellow)':'var(--red)';
+            const cell=(k,v,c2)=>`<span style="margin-right:16px"><span style="color:var(--text-dim)">${esc(k)}:</span> <b style="font-family:var(--mono);color:${c2||'inherit'}">${v}</b></span>`;
+            return `<div class="detail-value">${cell(t('conn7'),c['7d'].pct==null?'—':c['7d'].pct+'%',col(c['7d'].pct))}${cell(t('conn30'),c['30d'].pct==null?'—':c['30d'].pct+'%',col(c['30d'].pct))}${cell(t('drops7'),c['7d'].drops,c['7d'].drops>=8?'var(--orange)':'')}</div>`
+              +((h.week||[]).length?`<div style="display:flex;gap:1px;height:14px;margin-top:6px" title="${esc(t('weekBar'))}">${h.week.map(v=>`<div style="flex:1;border-radius:1px;background:${v==null?'var(--border)':v>=.99?'var(--green)':v>=.5?'var(--yellow)':'var(--red)'}"></div>`).join('')}</div><div style="font-size:10px;color:var(--text-dim);margin-top:2px">${esc(t('weekBar'))}</div>`:'');})()}
+          ${canAdmin()?`<div class="detail-value" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
+            <button class="btn-edit-host" data-on-click="setHostFlag" data-on-click-args="${jsargs([h.ip,'known',!h.known])}" data-on-click-stop="1">${esc(h.known?t('markUnknown'):t('markKnown'))}</button>
+            <button class="btn-edit-host" data-on-click="setHostFlag" data-on-click-args="${jsargs([h.ip,'watch',!h.watch])}" data-on-click-stop="1" title="${esc(t('watchHint'))}">👁 ${esc(h.watch?t('unwatchBtn'):t('watchBtn'))}</button>
+          </div>`:''}
+        </div>
+        ${h.watch?`<div class="detail-section" style="grid-column:1/-1">
+          <div class="detail-label" style="display:flex;justify-content:space-between;align-items:center"><span>${esc(t('latTitle'))}</span><span data-on-click-stop="1">${['1d','7d','30d'].map(r=>`<button class="btn-edit-host" style="padding:1px 8px;margin-left:4px${(_latRange[h.ip]||'1d')===r?';font-weight:700':''}" data-on-click="loadLatency" data-on-click-args="${jsargs([h.ip,r])}" data-on-click-stop="1">${r}</button>`).join('')}</span></div>
+          <canvas id="lat-${esc(h.ip.replace(/\./g,'-'))}" height="60" style="width:100%;height:60px;display:block;border-radius:var(--r-sm);background:var(--bg);border:1px solid var(--border)"></canvas>
+          <div id="latsum-${esc(h.ip.replace(/\./g,'-'))}" style="font-size:11px;font-family:var(--mono);color:var(--text-dim);margin-top:3px">${esc(t('latNone'))}</div>
+        </div>`:''}
         <div class="detail-section" style="grid-column:1/-1">
           <div class="detail-label">${allPorts.length} puertos abiertos</div>
           ${allPorts.length?`<div class="ports-full">
@@ -1014,10 +1042,66 @@ function drawUptimeChart(ip, history){
 
 // Draw uptime charts when expanding a row
 const _origToggle = window._origToggle;
+// ── Equipos conocidos, vigilados y latencia ──────────────────────────────────
+// EN: Known and watched devices, and latency.
+const _latRange={},_latCache={};
+function renderReviewBar(){
+  const el=document.getElementById('review-bar');if(!el)return;
+  const un=hosts.filter(h=>!h.known);
+  if(!un.length){el.style.display='none';el.textContent='';return;}
+  const names=un.slice(0,3).map(h=>h.alias||h.hostname||h.ip).join(', ');
+  el.style.cssText='display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 16px;font-size:12px;border-bottom:1px solid var(--border);background:rgba(67,97,238,.07)';
+  el.textContent='';
+  const sp=document.createElement('span');sp.textContent='🔎 '+t('unrevMsg',un.length,names,un.length>3);el.appendChild(sp);
+  if(canAdmin()){const b=document.createElement('button');b.className='btn-edit-host';b.textContent=t('markAllKnown');b.setAttribute('data-on-click','markAllKnown');el.appendChild(b);}
+}
+async function markAllKnown(){
+  if(!canAdmin())return;
+  try{
+    const r=await fetch('api/hosts/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({known_all:true})});
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
+    toast(t('knownDone'));_lastDataHash='';await fetchData();
+  }catch(e){toast(e.message,true);}
+}
+async function setHostFlag(ip,field,value){
+  if(!canAdmin())return;
+  try{
+    const r=await fetch('api/hosts/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip,[field]:!!value})});
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
+    _lastDataHash='';await fetchData();
+  }catch(e){toast(e.message,true);}
+}
+function drawLatency(ip){
+  const id=ip.replace(/\./g,'-'),cv=document.getElementById('lat-'+id),c=_latCache[ip];
+  if(!cv||!c)return;
+  const dpr=window.devicePixelRatio||1,W=cv.offsetWidth||600,H=60;
+  cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);g.clearRect(0,0,W,H);
+  const pts=c.points,vals=pts.map(p=>p.ms).filter(v=>v!=null);
+  const sm=document.getElementById('latsum-'+id);
+  if(!pts.length||!vals.length){if(sm)sm.textContent=t('latNone');return;}
+  const mx=Math.max(10,...vals)*1.1;
+  const css=getComputedStyle(document.documentElement);const col=css.getPropertyValue('--blue').trim()||'#4361ee',red=css.getPropertyValue('--red').trim()||'#ef4444';
+  const X=i=>pts.length>1?i/(pts.length-1)*(W-8)+4:W/2,Y=v=>H-4-v/mx*(H-10);
+  g.strokeStyle=col;g.lineWidth=1.5;g.beginPath();let pen=false;
+  pts.forEach((p,i)=>{if(p.ms==null){pen=false;return;}pen?g.lineTo(X(i),Y(p.ms)):g.moveTo(X(i),Y(p.ms));pen=true;});g.stroke();
+  g.fillStyle=red;pts.forEach((p,i)=>{if(p.fail)g.fillRect(X(i)-1,H-5,2,5);});
+  const s=c.summary;if(sm)sm.textContent=t('latSum',s.avg==null?'—':s.avg,s.p95==null?'—':s.p95,s.max==null?'—':s.max,s.loss==null?'—':s.loss);
+}
+async function loadLatency(ip,range){
+  range=range||_latRange[ip]||'1d';_latRange[ip]=range;
+  try{
+    const r=await fetch('api/hosts/latency?ip='+encodeURIComponent(ip)+'&range='+range);
+    if(!r.ok)return;
+    _latCache[ip]=await r.json();drawLatency(ip);
+    if(range!==(_latCache[ip].range))return;
+    document.querySelectorAll('[data-on-click="loadLatency"]').forEach(b=>{try{const a=JSON.parse(b.getAttribute('data-on-click-args'));if(a[0]===ip)b.style.fontWeight=a[1]===range?'700':'';}catch(e){}});
+  }catch(e){console.error(e);}
+}
 function drawAllUptimeCharts(){
   if(!expanded) return;
   const h = filtered().find(h=>h.ip===expanded);
   if(h) requestAnimationFrame(()=>drawUptimeChart(h.ip, h.uptime_history||[]));
+  if(h&&h.watch){ if(_latCache[h.ip]) requestAnimationFrame(()=>drawLatency(h.ip)); loadLatency(h.ip); }
 }
 
 // ── Edit OS ───────────────────────────────────────────────────────────────────
@@ -1136,4 +1220,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ applyInterval, applyPurge, deleteHost, doLogin, editAlias, editOs, logout, rescanHost, saveOuiAuto, savePiholeConfig, saveSnmp, setLang, setOsFilter, setSort, setStatusFilter, setTheme, setTypeFilter, sortKey, startScan, testSnmp, toggleNav, togglePiholePanel, toggleSnmpPanel, updateOui });
+if (window.cspRegister) cspRegister({ loadLatency, markAllKnown, setHostFlag, applyInterval, applyPurge, deleteHost, doLogin, editAlias, editOs, logout, rescanHost, saveOuiAuto, savePiholeConfig, saveSnmp, setLang, setOsFilter, setSort, setStatusFilter, setTheme, setTypeFilter, sortKey, startScan, testSnmp, toggleNav, togglePiholePanel, toggleSnmpPanel, updateOui });

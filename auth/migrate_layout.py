@@ -21,7 +21,7 @@ OWNERS = {
     "nas_series": "nas-monitor",
     "pve_series": "proxmox-monitor",
     "dns_samples": "dns-monitor",
-    "wan_samples": "wan-monitor", "wan_speed": "wan-monitor", "wan_outages": "wan-monitor", "wan_targets": "wan-monitor",
+    "wan_samples": "wan-monitor", "wan_speed": "wan-monitor", "wan_outages": "wan-monitor", "wan_targets": "wan-monitor", "net_latency": "net-monitor",
 }
 MODULES = ("overview", "proxmox-monitor", "nas-monitor", "dns-monitor", "wan-monitor")
 
