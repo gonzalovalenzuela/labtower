@@ -569,6 +569,28 @@ def get_trace(start):
         return {"dest": rows[0][0], "text": rows[0][1]} if rows else None
     except Exception: return None
 
+# Recupera del registro de eventos los cambios de IP pública anteriores a la tabla de historial (el Resumen los guardaba como «wan_ipc»;
+# el registro conserva solo los últimos 30 días / 300 eventos). No duplica los que ya están (±5 s).
+# EN: Recover from the event log the public IP changes made before the history table existed (the Overview kept them as "wan_ipc";
+#     the log keeps only the last 30 days / 300 events). Does not duplicate the ones already there (±5 s).
+def backfill_ips():
+    try:
+        evs = auth.read_events(["wan"], 300)
+        have = [r[0] for r in _db("SELECT ts FROM wan_ips", fetch=True)]
+    except Exception as e:
+        log.warning(f"could not read the events: {e}"); return 0
+    added = 0
+    for e in evs:
+        p = e.get("p") if isinstance(e, dict) else None
+        if not isinstance(p, dict) or e.get("k") != "wan_ipc" or not isinstance(e.get("t"), int): continue
+        try: ip = str(ipaddress.ip_address(str(p.get("ip")))); prev = str(ipaddress.ip_address(str(p["prev"]))) if p.get("prev") else None
+        except ValueError: continue
+        if any(abs(t - e["t"]) <= 5 for t in have): continue
+        try: _db("INSERT OR REPLACE INTO wan_ips (ts,ip,prev) VALUES (?,?,?)", (e["t"], ip, prev)); have.append(e["t"]); added += 1
+        except Exception as ex: log.warning(f"could not store the IP change: {ex}")
+    if added: log.info(f"public IP history: {added} earlier change(s) recovered from the events")
+    return added
+
 def recent_ips(limit=20):
     try:
         rows = _db("SELECT ts,ip,prev FROM wan_ips ORDER BY ts DESC LIMIT ?", (limit,), fetch=True)
@@ -598,6 +620,7 @@ def load_history() -> int:
         if isinstance(st.get("prev"), str): S.ip_prev = st["prev"][:64]
         if S.ip and not _db("SELECT 1 FROM wan_ips LIMIT 1", fetch=True):        # first start with the history: seed it with the IP already known
             _db("INSERT OR REPLACE INTO wan_ips (ts,ip,prev) VALUES (?,?,?)", (S.ip_changed or int(time.time()), S.ip, S.ip_prev))
+        backfill_ips()
         return len(rows)
     except Exception as e:
         log.warning(f"could not load the history: {e}"); return 0

@@ -14,6 +14,24 @@ class Parsers(unittest.TestCase):
                                      {"ip": "nope", "name": "z"}, {"ip": "192.0.2.12", "name": "tv", "hwaddr": "no-mac"}, "x"])
         self.assertEqual(r, {"192.0.2.10": {"hostname": "laptop", "mac": "aa:bb:cc:dd:ee:ff"}, "192.0.2.12": {"hostname": "tv", "mac": ""}})
 
+class PinRenewal(unittest.TestCase):
+    def test_only_an_expired_pin_is_replaced_by_a_valid_cert(self):
+        now = 1_800_000_000
+        self.assertTrue(net._may_repin(now - 10, (now - 100, now + 1000), now))
+        self.assertFalse(net._may_repin(now + 10, (now - 100, now + 1000), now))      # pinned still valid: suspicious
+        self.assertFalse(net._may_repin(now - 10, (now - 100, now - 5), now))         # new one expired too
+        self.assertFalse(net._may_repin(now - 10, (now + 5, now + 1000), now))        # not valid yet
+        self.assertFalse(net._may_repin(0, (now - 100, now + 1000), now))             # unknown expiry: stay strict
+        self.assertFalse(net._may_repin(now - 10, None, now))
+    def test_cert_validity_reads_a_real_certificate(self):
+        import subprocess, tempfile, os
+        with tempfile.TemporaryDirectory() as d:
+            subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", d + "/k", "-out", d + "/c.pem", "-days", "2", "-subj", "/CN=t"], capture_output=True, check=True)
+            der = subprocess.run(["openssl", "x509", "-in", d + "/c.pem", "-outform", "DER"], capture_output=True, check=True).stdout
+        nb, na = net._cert_validity(der)
+        self.assertTrue(0 < na - nb <= 3 * 86400)
+        self.assertIsNone(net._cert_validity(b"junk"))
+
 class Refresh(unittest.TestCase):
     def setUp(self):
         self.old = (net._pihole_request, net._pihole_login, net._pihole_logout, net.PIHOLE_PASS, net.PIHOLE_HOSTS)

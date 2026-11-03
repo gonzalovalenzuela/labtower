@@ -194,6 +194,25 @@ def http_banner(ip: str, port: int = 80) -> str:
 # EN: Call to the Pi-hole API. Pi-hole uses its own certificate on the LAN, so it is not validated against a CA: its fingerprint is PINNED the
 #     first time it connects (TOFU) and if it later changes the connection is refused and the password is not sent. Saving the Pi-hole
 #     configuration again clears the pinned fingerprints (they are learned again on the next connection).
+# Vigencia (notBefore, notAfter) de un certificado DER, en epoch; None si no se puede leer.
+# EN: Validity window (notBefore, notAfter) of a DER certificate as epoch; None if it can't be read.
+def _cert_validity(der: bytes):
+    import calendar
+    try:
+        r = subprocess.run(["openssl", "x509", "-inform", "DER", "-noout", "-startdate", "-enddate"],
+                           input=der, capture_output=True, timeout=5)
+        v = dict(l.split("=", 1) for l in r.stdout.decode().splitlines() if "=" in l)
+        f = lambda t: calendar.timegm(time.strptime(" ".join(t.split()), "%b %d %H:%M:%S %Y GMT"))
+        return f(v["notBefore"]), f(v["notAfter"])
+    except Exception:
+        return None
+
+# Un certificado fijado que ya VENCIÓ puede reemplazarse solo por uno vigente (renovación normal de Pi-hole); si el fijado sigue vigente, un cambio es sospechoso y se rechaza.
+# EN: A pinned certificate that has already EXPIRED may be replaced by a currently valid one (normal Pi-hole renewal); if the pinned one is still valid, a change is suspicious and refused.
+def _may_repin(old_exp, new_validity, now=None) -> bool:
+    now = int(now if now is not None else time.time())
+    return bool(old_exp) and old_exp < now and bool(new_validity) and new_validity[0] <= now <= new_validity[1]
+
 PIHOLE_HOST_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?$")
 def _pihole_request(host: str, path: str, method: str = "GET",
                     data: bytes = None, sid: str = None) -> dict:
@@ -215,12 +234,18 @@ def _pihole_request(host: str, path: str, method: str = "GET",
         fp = hashlib.sha256(conn.sock.getpeercert(True)).hexdigest()
         with _cfg_lock:
             cfg = load_config()
-            pins = cfg.setdefault("pihole_pins", {})
+            pins = cfg.setdefault("pihole_pins", {}); exps = cfg.setdefault("pihole_pin_exp", {})
             if pins.get(host) is None:
-                pins[host] = fp; save_config(cfg)
+                pins[host] = fp; v = _cert_validity(conn.sock.getpeercert(True)); exps[host] = v[1] if v else 0; save_config(cfg)
                 log.info(f"Pi-hole {host}: certificate fingerprint pinned ({fp[:16]}…)")
             elif pins[host] != fp:
-                raise RuntimeError(f"Pi-hole {host}: the certificate changed (pinned fingerprint mismatch); nothing was sent")
+                v = _cert_validity(conn.sock.getpeercert(True))
+                if _may_repin(exps.get(host), v):
+                    pins[host] = fp; exps[host] = v[1]; save_config(cfg)
+                    log.warning(f"Pi-hole {host}: the pinned certificate had expired; pinned the renewed one ({fp[:16]}…)")
+                    auth.record_event("net", "warn", f"Pi-hole {host}: certificate renewed and re-pinned", "pihole_repin", host=host)
+                else:
+                    raise RuntimeError(f"Pi-hole {host}: the certificate changed and the pinned one is still valid (nothing was sent). Press Save in Pi-hole settings to accept the new certificate")
         conn.request(method, path, body=data, headers=headers)
         r = conn.getresponse()
         raw = r.read()
@@ -243,7 +268,7 @@ def _pihole_login(host: str, password: str) -> str | None:
         return sid
     except Exception as e:
         log.warning(f"Pi-hole login error {host}: {e}")
-        _pihole_last_err[host] = str(e)[:80]
+        _pihole_last_err[host] = str(e)[:200]
         return None
 
 # Cierra la sesión de Pi-hole para no dejar sesiones colgadas.
@@ -1715,8 +1740,9 @@ class H(BaseHTTPRequestHandler):
             if not auth.check_permission(tok, "net", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
             if path == "/api/oui":
-                cfg = load_config(); cfg.setdefault("oui", {})["auto"] = bool(body.get("auto", True))
-                save_config(cfg)
+                with _cfg_lock:
+                    cfg = load_config(); cfg.setdefault("oui", {})["auto"] = bool(body.get("auto", True))
+                    save_config(cfg)
                 return self._json(200, {"ok": True})
             try:
                 res = oui_update(); _oui_status["error"] = ""
@@ -1774,9 +1800,10 @@ class H(BaseHTTPRequestHandler):
                     return self._json(502, {"error": str(e)})
                 sample = [{"ip": k, "mac": v} for k, v in list(res.items())[:5]]
                 return self._json(200, {"ok": True, "count": len(res), "sample": sample})
-            allcfg = load_config()
-            allcfg["snmp"] = cfg
-            save_config(allcfg)
+            with _cfg_lock:
+                allcfg = load_config()
+                allcfg["snmp"] = cfg
+                save_config(allcfg)
             try: os.chmod(CONF_FILE, 0o600)
             except Exception: pass
             if cfg["enabled"]:
@@ -1807,7 +1834,7 @@ class H(BaseHTTPRequestHandler):
                 if "hosts" in body:
                     PIHOLE_HOSTS = body["hosts"]
                     cfg["pihole_hosts"] = body["hosts"]
-                cfg.pop("pihole_pins", None)          # saving again = the administrator accepts the current certificates
+                cfg.pop("pihole_pins", None); cfg.pop("pihole_pin_exp", None)          # saving again = the administrator accepts the current certificates
                 save_config(cfg)
             # Refrescar cache inmediatamente
             if PIHOLE_PASS:

@@ -121,9 +121,12 @@ class Service:
         return {"ok": True}
 
     def op_events(self, caller, r):
-        if caller not in ("overview", "root"): return {"error": "forbidden"}
-        mods = r.get("modules")
-        mods = [m for m in mods if isinstance(m, str)][:32] if isinstance(mods, list) else None
+        if caller == "wan":                         # WAN Monitor rebuilds its public-IP history from its own events, and only those
+            mods = ["wan"]
+        elif caller in ("overview", "root"):
+            mods = r.get("modules")
+            mods = [m for m in mods if isinstance(m, str)][:32] if isinstance(mods, list) else None
+        else: return {"error": "forbidden"}
         try: limit = max(1, min(300, int(r.get("limit", 100))))
         except (TypeError, ValueError): limit = 100
         return {"events": self.auth.read_events(mods, limit)}

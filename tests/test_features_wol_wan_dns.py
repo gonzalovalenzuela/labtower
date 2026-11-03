@@ -109,6 +109,29 @@ class WanTraceAndIps(unittest.TestCase):
         self.assertEqual(wan.recent_ips(), [{"ts": 1700000000, "ip": "198.51.100.9", "prev": "198.51.100.8"}])
         wan._db("DELETE FROM wan_ips")
 
+    def test_earlier_ip_changes_are_recovered_from_the_events(self):
+        wan._db("DELETE FROM wan_ips"); o = wan.auth.read_events
+        ev = [{"t": 1700000300, "m": "wan", "k": "wan_ipc", "p": {"ip": "198.51.100.3", "prev": "198.51.100.2"}},
+              {"t": 1700000100, "m": "wan", "k": "wan_ipc", "p": {"ip": "198.51.100.2", "prev": "198.51.100.1"}},
+              {"t": 1700000200, "m": "wan", "k": "wan_down_wan", "p": {}},                       # another event: ignored
+              {"t": 1700000400, "m": "wan", "k": "wan_ipc", "p": {"ip": "not-an-ip", "prev": "x"}}]   # junk: ignored
+        wan.auth.read_events = lambda mods, limit=100: ev
+        try:
+            self.assertEqual(wan.backfill_ips(), 2); self.assertEqual(wan.backfill_ips(), 0)          # twice: no duplicates
+        finally: wan.auth.read_events = o
+        self.assertEqual([(x["ip"], x["prev"]) for x in wan.recent_ips()],
+                         [("198.51.100.3", "198.51.100.2"), ("198.51.100.2", "198.51.100.1")])
+        wan._db("DELETE FROM wan_ips")
+
+    def test_wan_reads_only_its_own_events(self):
+        authrpc = support.load("auth/authrpc.py"); asked = []
+        class FA:
+            def read_events(self, mods, limit): asked.append((mods, limit)); return [{"m": "wan"}]
+        svc = authrpc.Service(FA(), identify=lambda uid: "wan")
+        self.assertEqual(svc.handle("wan", {"op": "events", "modules": ["wol", "auth"], "limit": 999})["events"], [{"m": "wan"}])
+        self.assertEqual(asked, [(["wan"], 300)])
+        self.assertEqual(svc.handle("wol", {"op": "events"}), {"error": "forbidden"})
+
     def test_trace_endpoint(self):
         srv = support.Server(wan.H); tok = support.make_user("wtr", READONLY)
         try:
