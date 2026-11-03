@@ -98,8 +98,13 @@ body.has-gbar .sidebar .sb-logo{display:none}
 body.gside-none .sidebar{display:none}
 body.gside-none .main{margin-left:0}
 body.gside-none .nav-toggle{display:none}
-.gbar-r{margin-left:auto;display:flex;align-items:center}
+.gbar-r{margin-left:auto;display:flex;align-items:center;gap:8px;min-width:0}
 .gbar-r .sb-footer{margin:0;padding:0;border:0;background:none}
 .gbar-r .user-badge{margin:0;padding:4px 8px;gap:8px}
+.gbar-r .gmt{margin-right:0}
+body.gtb-merged .topbar-title,body.gtb-merged .topbar-sub{display:none}
+body.gtb-none .topbar{display:none}
+body.gtb-none .main{min-height:0}
+@media(max-width:1200px){.gbar-r #clock,.gbar-r .theme-btn span,.gbar-r .topbar-user-info,.gbar-r .gmt-t{display:none}}
 @media(max-width:767px){.gbar-r{display:none}}
 #app .top .gmt-t{display:none}

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.6g — 2026-11-03
+
+- **Mejora:** la barra del módulo se fusionó con la barra superior: idioma, tema, reloj, usuario y «salir» (y «Tipo de menú») ahora están en una sola barra arriba a la derecha, junto al selector de módulo. Si a la barra del módulo no le queda nada propio (por ejemplo en el Admin Panel y en WAN Monitor), se oculta y el contenido sube. Los módulos con controles propios (por ejemplo Net Monitor con el escaneo) los conservan en una barra más delgada.
+
 ## 2.1.6f — 2026-11-03
 
 - **Mejora:** «Tipo de menú» pasó a la barra de opciones de cada pantalla, junto al idioma y el tema.

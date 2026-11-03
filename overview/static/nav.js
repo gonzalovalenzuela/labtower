@@ -143,7 +143,7 @@
     document.body.classList.add('has-gbar');
     st = {bar: bar, nav: nav, crumb: crumb, sw: sw, panel: panel, back: back, tab: tab, lang: 'en', opts: {}, me: null};
     sw.addEventListener('click', function () { toggle(); });
-    try { window.matchMedia('(min-width:768px)').addEventListener('change', function () { apply(); }); } catch (e) {}
+    ['(min-width:768px)', '(min-width:961px)'].forEach(function (q) { try { window.matchMedia(q).addEventListener('change', function () { apply(); }); } catch (e) {} });
     back.addEventListener('click', function () { toggle(false); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !st.panel.hidden) { toggle(false); st.sw.focus(); } });
     document.addEventListener('mousedown', function (e) {
@@ -297,7 +297,7 @@
   // Botón «Tipo de menú» junto a las demás opciones (idioma, tema) / the menu-type button next to the other options (language, theme)
   function placeBtn() {
     var tr = T[st.lang], b = document.getElementById('gmt');
-    var ref = document.querySelector('.topbar .lang-btns') || document.getElementById('bl');
+    var ref = document.querySelector('.lang-btns') || document.getElementById('bl');
     if (!ref) return;
     if (!b) {
       b = el('button', 'gmt' + (ref.id === 'bl' ? ' btn nokiosk' : '')); b.id = 'gmt'; b.type = 'button';
@@ -308,26 +308,47 @@
     b.querySelector('.gmt-t').textContent = tr.menuType; b.title = tr.menuType; b.setAttribute('aria-label', tr.menuType);
     if (b.nextSibling !== ref || b.parentNode !== ref.parentNode) ref.parentNode.insertBefore(b, ref);
   }
-  // Barra superior: el encabezado del panel lateral sobra; si el panel solo tenía el menú, se oculta y el usuario pasa a la barra
-  // EN: Top bar: the side panel header is redundant; if the panel only held the menu it is hidden and the user badge moves to the bar
+  // Barra superior: el encabezado del panel lateral sobra; si el panel solo tenía el menú, se oculta y el usuario pasa a la barra.
+  // Además, idioma, tema, reloj y usuario de la barra del módulo suben a esta barra y la del módulo se oculta si no le queda nada propio.
+  // EN: Top bar: the side panel header is redundant; if the panel only held the menu it is hidden and the user badge moves to the bar.
+  //     Also the module bar's language, theme, clock and user move up into this bar, and the module bar is hidden if nothing of its own is left.
+  var STD = '#gmt, .lang-btns, .theme-btns, #clock, div[style*="width:1px"], .topbar-user, .btn-logout';
+  function barRight() { var r = st.bar.querySelector('.gbar-r'); if (!r) { r = el('div', 'gbar-r'); st.bar.appendChild(r); } return r; }
   function sideLayout(bar) {
-    var sb = document.querySelector('.sidebar');
-    if (!sb) return;
-    var foot = sb.querySelector('.sb-footer') || document.querySelector('.gbar-r .sb-footer');
-    var own = Array.prototype.some.call(sb.querySelectorAll('.sb-sec'), function (x) {      // listas propias visibles / visible own lists
-      return !x.querySelector('#nav-items') && x.id !== 'sb-ip' && !x.hidden && x.style.display !== 'none';   // #sb-ip repite la tarjeta «IP pública» / repeats the Public IP card
-    });
-    if (!sb.gobs && window.MutationObserver) {                                  // las listas aparecen o se ocultan después / lists show or hide later
-      sb.gobs = new MutationObserver(function () { if (st) sideLayout(mode() === 'bar'); });
-      sb.gobs.observe(sb, {attributes: true, attributeFilter: ['hidden', 'style'], subtree: true});
+    var sb = document.querySelector('.sidebar'), tb = document.querySelector('.topbar');
+    var wide = window.matchMedia('(min-width:768px)').matches, full = window.matchMedia('(min-width:961px)').matches;
+    // 1) devolver lo movido / put back what was moved
+    (st.moved || []).reverse().forEach(function (m) { try { m.parent.insertBefore(m.node, m.next && m.next.parentNode === m.parent ? m.next : null); } catch (e) {} });
+    st.moved = [];
+    var oldR = st.bar.querySelector('.gbar-r'); if (oldR) oldR.remove();
+    document.body.classList.remove('gside-none', 'gtb-none', 'gtb-merged');
+    if (!bar) return;
+    // 2) panel lateral / side panel
+    var none = false, foot = null;
+    if (sb) {
+      var own = Array.prototype.some.call(sb.querySelectorAll('.sb-sec'), function (x) {       // listas propias visibles / visible own lists
+        return !x.querySelector('#nav-items') && x.id !== 'sb-ip' && !x.hidden && x.style.display !== 'none';   // #sb-ip repite la tarjeta «IP pública» / repeats the Public IP card
+      });
+      if (!sb.gobs && window.MutationObserver) {                                  // las listas aparecen o se ocultan después / lists show or hide later
+        sb.gobs = new MutationObserver(function () { if (st) sideLayout(mode() === 'bar'); });
+        sb.gobs.observe(sb, {attributes: true, attributeFilter: ['hidden', 'style'], subtree: true});
+      }
+      none = wide && !own; foot = sb.querySelector('.sb-footer');
+      if (none && foot) { st.moved.push({node: foot, parent: sb, next: foot.nextSibling}); barRight().appendChild(foot); }
     }
-    var none = bar && !own && window.matchMedia('(min-width:768px)').matches;
     document.body.classList.toggle('gside-none', none);
-    if (foot) {
-      var r = st.bar.querySelector('.gbar-r');
-      if (none) { if (!r) { r = el('div', 'gbar-r'); st.bar.appendChild(r); } if (foot.parentNode !== r) r.appendChild(foot); }
-      else { if (foot.parentNode !== sb) sb.appendChild(foot); if (r) r.remove(); }
+    // 3) barra del módulo / module bar
+    if (tb && (full || (wide && (none || !sb)))) {
+      var nodes = Array.prototype.slice.call(tb.querySelectorAll(STD)).filter(function (n, i, a) { return !a.some(function (o) { return o !== n && o.contains(n); }); });
+      if (nodes.length) {
+        var r = barRight();
+        nodes.forEach(function (n) { st.moved.push({node: n, parent: n.parentNode, next: n.nextSibling}); r.appendChild(n); });
+        document.body.classList.add('gtb-merged');
+        var mine = Array.prototype.some.call(tb.querySelectorAll('button, input, select, a'), function (n) { return !n.classList.contains('nav-toggle'); });
+        document.body.classList.toggle('gtb-none', !mine);
+      }
     }
+    var f2 = st.bar.querySelector('.gbar-r .sb-footer'); if (f2) f2.parentNode.appendChild(f2);   // el usuario al final / user badge last
   }
 
   // aplica el tipo de menú elegido / apply the chosen menu type
