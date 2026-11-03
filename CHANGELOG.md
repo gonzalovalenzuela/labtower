@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.6i — 2026-11-03
+
+- **Nuevo:** NAS Monitor muestra cuántos días faltan para que se llene cada volumen (según su crecimiento de los últimos 14 días, con aviso a 30 días y crítico a 7) y la temperatura máxima y promedio de 24 horas de cada disco.
+- **Nuevo:** NAS Monitor muestra el enlace caído y los errores de cada puerto de red (Synology) y anota en la línea de tiempo del Resumen: actualización disponible, falla de ventiladores, disco muy caliente, enlace de red caído, errores de red y reinicio del NAS.
+- **Arreglo:** Admin Panel, Net Monitor, Proxmox, NAS, DNS, WAN y VPN no tenían ícono en la pestaña del navegador; ahora todas las pantallas lo tienen.
+
 ## 2.1.6h — 2026-11-03
 
 - **Arreglo:** en WOL Console el reloj también sube a la barra superior junto al resto de las opciones.
