@@ -61,5 +61,10 @@ class Nav(unittest.TestCase):
         fn = ov[ov.index("function renderVPN"):ov.index("return sev;", ov.index("function renderVPN"))]
         self.assertNotIn("clients", fn); self.assertIn("x.online", fn); self.assertNotIn("x.total", fn)
 
+    def test_every_page_has_a_favicon(self):
+        for d in (*SIDE, "overview"):
+            self.assertIn('rel="icon"', (ROOT / d / "static" / "index.html").read_text(), d)
+        self.assertIn('rel="icon"', (ROOT / "home" / "index.html").read_text())
+
 if __name__ == "__main__":
     unittest.main()
