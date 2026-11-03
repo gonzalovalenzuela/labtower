@@ -41,6 +41,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
 sys.path.insert(0, str(Path(__file__).parent))
 import battery
+import power
 
 # Solo loopback; el acceso desde la red pasa por nginx.
 # EN: Loopback only; network access goes through nginx.
@@ -49,6 +50,9 @@ PORT        = 8081
 # Cada cuántos segundos se consulta a upsd (variable NUT_POLL, 10 por defecto).
 # EN: How often upsd is queried, in seconds (NUT_POLL variable, 10 by default).
 POLL_SEC    = int(os.environ.get("NUT_POLL", 10))
+# Tiempo que necesitan los equipos conectados para apagarse (s): si la autonomía útil es menor, se avisa.
+# EN: Time the connected machines need to shut down (s): if the usable runtime is shorter, a warning is raised.
+SHUTDOWN_SEC = int(os.environ.get("NUT_SHUTDOWN_SEC", 300))
 STATIC_DIR  = Path(__file__).parent / "static"
 # servers.json: lista de servidores NUT configurados. history.db: historial en SQLite.
 # EN: servers.json: list of configured NUT servers. history.db: history in SQLite.
@@ -664,6 +668,52 @@ def _status_event(sid, name, status, entry):
     elif new == "ol":    auth.record_event("nut", "info", f"{name}: mains power restored ({pct})", "ups_mains", n=name, pct=pct)
     else:                auth.record_event("nut", "warn", f"{name}: status {status}", "ups_other", n=name, st=status)
 
+# ─── Calidad de la red, banderas, alarmas y margen de apagado ─────────────────
+# Calidad: del historial de voltaje de entrada (7 días) se cuentan los bajones y subidas fuera de ±10 % del nominal y los cambios
+# a batería; se recalcula cada 5 minutos como máximo. Banderas, alarma y margen salen de las variables actuales y generan eventos.
+# EN: ─── Mains quality, flags, alarms and shutdown margin ─────────────────────
+#     Quality: from the input-voltage history (7 days) the sags and surges outside ±10 % of nominal and the transfers to battery
+#     are counted; recomputed at most every 5 minutes. Flags, alarm and margin come from the current variables and create events.
+_power_cache = {}
+
+def power_info(sid, ups, vars_):
+    k = (sid, ups); now = int(time.time())
+    c = _power_cache.get(k)
+    if c and now - c[0] < 300: q = c[1]
+    else:
+        conn = db_connect()
+        try:
+            rows = conn.execute("SELECT ts, vin FROM history WHERE srv_id=? AND ups=? AND ts>=? ORDER BY ts", (sid, ups, now - 7 * 86400)).fetchall()
+            tr = {lab: conn.execute("SELECT COUNT(*) FROM outages WHERE srv_id=? AND ups=? AND COALESCE(t_end, ?) >= ?", (sid, ups, now, now - w)).fetchone()[0]
+                  for lab, w in (("24h", 86400), ("7d", 604800))}
+        finally: conn.close()
+        q = power.quality(rows, vars_.get("input.voltage.nominal"), now)
+        for lab, n in tr.items():
+            if lab in q["w"]: q["w"][lab]["transfers"] = n
+            else: q["w"][lab] = {"n": 0, "min": None, "max": None, "avg": None, "low": 0, "high": 0, "transfers": n}
+        _power_cache[k] = (now, q)
+    return {"quality": q, "flags": power.flags(vars_.get("ups.status")), "alarm": power.alarm(vars_), "beeper": power.beeper(vars_),
+            "margin": power.margin(vars_, SHUTDOWN_SEC)}
+
+def _power_events(sid, name, vars_):
+    st = vars_.get("ups.status") or ""
+    on = {f["f"]: f["lv"] for f in power.flags(st)}
+    for f in power.FLAGS:
+        ch = auth.state_changed(f"nut-flag:{sid}:{name}:{f}", "on" if f in on else "off")
+        if not ch or f in ("CAL",) and ch[1] == "off": continue
+        if ch[1] == "on": auth.record_event("nut", on[f], f"{name}: status flag {f}", "ups_flag", n=name, f=f)
+        else:             auth.record_event("nut", "info", f"{name}: status flag {f} cleared", "ups_flag_off", n=name, f=f)
+    a = power.alarm(vars_)
+    ch = auth.state_changed(f"nut-alarm:{sid}:{name}", a)
+    if ch:
+        if a: auth.record_event("nut", "warn", f"{name}: UPS alarm: {a[:80]}", "ups_alarm", n=name, a=a[:80])
+        else: auth.record_event("nut", "info", f"{name}: UPS alarm cleared", "ups_alarm_ok", n=name)
+    m = power.margin(vars_, SHUTDOWN_SEC)
+    if m:
+        ch = auth.state_changed(f"nut-margin:{sid}:{name}", "ok" if m["ok"] else "low")
+        if ch and ch[1] == "low": auth.record_event("nut", "warn", f"{name}: runtime margin {m['margin_s'] // 60} min is below the {m['need'] // 60} min needed to shut down", "ups_margin", n=name, m=m["margin_s"] // 60, need=m["need"] // 60)
+        elif ch: auth.record_event("nut", "info", f"{name}: runtime margin is enough again", "ups_margin_ok", n=name)
+
 # ─── Cache en memoria (solo estado actual) ────────────────────────────────────
 # Estado actual en memoria de un servidor NUT: variables de cada UPS, clientes, último error y última lectura buena.
 # Solo guarda el «ahora»; el historial vive en SQLite.
@@ -713,6 +763,7 @@ class SCache:
             outage_track(self.id, name, status, entry["charge"], entry["ts"])
             selftest_track(self.id, name, vars_, entry["ts"])
             _status_event(self.id, name, status, entry)
+            _power_events(self.id, name, vars_)
         except Exception as e:
             log.debug(f"db_insert error: {e}")
 
@@ -731,6 +782,7 @@ class SCache:
             try:
                 out[n] = dict(ups_stats(self.id, n))        # a copy: the cached one is shared
                 out[n]["battery"] = battery_info(self.id, n, ups_snap[n])
+                out[n]["power"] = power_info(self.id, n, ups_snap[n])
             except Exception as e: log.debug(f"ups_stats: {e}")
         return out
 

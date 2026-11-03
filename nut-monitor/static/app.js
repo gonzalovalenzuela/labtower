@@ -27,6 +27,11 @@ const LANG={
     clientsLabel:'Clients',
     alertCritBatt:'Critical battery — connect to power immediately',
     alertOnBatt:'On battery —',alertMinLeft:'min left',
+    pwTitle:'Power & status',pwFlag_RB:'Replace battery',pwFlag_OVER:'Overload',pwFlag_BYPASS:'Bypass',pwFlag_OFF:'Output off',pwFlag_FSD:'Forced shutdown',pwFlag_ALARM:'Alarm',pwFlag_TRIM:'Trimming high voltage',pwFlag_BOOST:'Boosting low voltage',pwFlag_CAL:'Calibrating',
+    pwFlagTip_RB:'The UPS says its battery needs replacing',pwFlagTip_OVER:'The load exceeds what the UPS can supply',pwFlagTip_BYPASS:'The load is fed straight from the mains, without protection',pwFlagTip_OFF:'The UPS output is off',pwFlagTip_FSD:'The UPS ordered the connected machines to shut down',pwFlagTip_ALARM:'The UPS reports an alarm',pwFlagTip_TRIM:'The UPS is lowering a mains voltage that is too high',pwFlagTip_BOOST:'The UPS is raising a mains voltage that is too low',pwFlagTip_CAL:'Runtime calibration in progress',
+    pwAlarm:'UPS alarm',pwBeeper:'Beeper',pwBeep_enabled:'enabled',pwBeep_disabled:'disabled',pwBeep_muted:'muted',
+    pwMargin:'Shutdown margin',pwMarginOk:(m,n)=>`${m} min of runtime before shutdown (machines need ${n} min)`,pwMarginBad:(m,n)=>`Only ${m} min before shutdown, machines need ${n} min`,pwMarginFull:'at full charge',pwMarginNow:'now',
+    pwVolt:'Input voltage',pwVoltFmt:(a,b,c)=>`${a}–${b} V (nominal ${c})`,pwSag:'Sags',pwSurge:'Surges',pwXfer:'Transfers to battery',pwNone:'None',pwWindow:'last',pwNeedHist:'Collecting voltage history…',pwBand:(l,h)=>`Outside ${l}–${h} V (±10 %)`,
     batTitle:'Battery',batRuntime:'Runtime now',batFull:'Runtime at full charge',batPlus50:'If the load rises 50 %',batAge:'Battery age',batSetDateTip:'Set the date the battery was replaced',batSince:(d)=>`replaced ${d}`,batUnknown:'unknown',batAskDate:'Date the battery was replaced (YYYY-MM-DD). Leave empty to use the date the UPS reports:',batDateSaved:'Battery date saved',batYears:(y)=>`${y} years`,batMonths:(m)=>m<1?'less than 1 month':m===1?'1 month':`${m} months`,batAging:'Capacity trend',batAgingFmt:(c,w)=>`${c>0?'+':''}${c} % in ${w} weeks`,batCollecting:'collecting data (needs about a month)',batAgingWarn:'The battery holds noticeably less than before: consider replacing it',batOldWarn:'Battery older than 4 years: consider replacing it',batTests:'Self-tests',batTestNow:'Last result',batNoTests:'No self-test recorded yet (only changes are logged)',batApprox:'estimate',tkpassed:'passed',tkfailed:'failed',tkrunning:'running',tknone:'none',tkother:'other',
     avStreak:'Online streak',avSince:'since monitoring began',avOnBatt:'On battery now',av24:'Availability 24 h',av7:'Availability 7 d',av30:'Availability 30 d',avLast:'Last outage',avNone:'None recorded',avCount:'Outages (30 d)',avMin:'min. charge',
     chartTitle_voltage:'Input vs output voltage',
@@ -75,6 +80,11 @@ const LANG={
     clientsLabel:'Clientes',
     alertCritBatt:'Batería crítica — conectar a corriente inmediatamente',
     alertOnBatt:'En batería —',alertMinLeft:'min restantes',
+    pwTitle:'Energía y estado',pwFlag_RB:'Reemplazar batería',pwFlag_OVER:'Sobrecarga',pwFlag_BYPASS:'Bypass',pwFlag_OFF:'Salida apagada',pwFlag_FSD:'Apagado forzado',pwFlag_ALARM:'Alarma',pwFlag_TRIM:'Reduciendo voltaje alto',pwFlag_BOOST:'Elevando voltaje bajo',pwFlag_CAL:'Calibrando',
+    pwFlagTip_RB:'El UPS informa que su batería debe reemplazarse',pwFlagTip_OVER:'La carga supera lo que el UPS puede entregar',pwFlagTip_BYPASS:'La carga se alimenta directo de la red, sin protección',pwFlagTip_OFF:'La salida del UPS está apagada',pwFlagTip_FSD:'El UPS ordenó apagar los equipos conectados',pwFlagTip_ALARM:'El UPS informa una alarma',pwFlagTip_TRIM:'El UPS está bajando un voltaje de red demasiado alto',pwFlagTip_BOOST:'El UPS está subiendo un voltaje de red demasiado bajo',pwFlagTip_CAL:'Calibración de autonomía en curso',
+    pwAlarm:'Alarma del UPS',pwBeeper:'Beeper',pwBeep_enabled:'activado',pwBeep_disabled:'desactivado',pwBeep_muted:'silenciado',
+    pwMargin:'Margen de apagado',pwMarginOk:(m,n)=>`${m} min de autonomía antes del apagado (los equipos necesitan ${n} min)`,pwMarginBad:(m,n)=>`Solo ${m} min antes del apagado, los equipos necesitan ${n} min`,pwMarginFull:'a carga completa',pwMarginNow:'ahora',
+    pwVolt:'Voltaje de entrada',pwVoltFmt:(a,b,c)=>`${a}–${b} V (nominal ${c})`,pwSag:'Bajones',pwSurge:'Subidas',pwXfer:'Cambios a batería',pwNone:'Ninguno',pwWindow:'últimas',pwNeedHist:'Recopilando historial de voltaje…',pwBand:(l,h)=>`Fuera de ${l}–${h} V (±10 %)`,
     batTitle:'Batería',batRuntime:'Autonomía ahora',batFull:'Autonomía con batería llena',batPlus50:'Si la carga sube 50 %',batAge:'Edad de la batería',batSetDateTip:'Indicar la fecha en que se cambió la batería',batSince:(d)=>`cambiada ${d}`,batUnknown:'desconocida',batAskDate:'Fecha en que se cambió la batería (AAAA-MM-DD). Déjala vacía para usar la fecha que informa el UPS:',batDateSaved:'Fecha de la batería guardada',batYears:(y)=>`${y} años`,batMonths:(m)=>m<1?'menos de 1 mes':m===1?'1 mes':`${m} meses`,batAging:'Tendencia de capacidad',batAgingFmt:(c,w)=>`${c>0?'+':''}${c} % en ${w} semanas`,batCollecting:'reuniendo datos (hace falta cerca de un mes)',batAgingWarn:'La batería aguanta bastante menos que antes: conviene cambiarla',batOldWarn:'Batería de más de 4 años: conviene cambiarla',batTests:'Autotests',batTestNow:'Último resultado',batNoTests:'Aún no hay autotests registrados (solo se anotan los cambios)',batApprox:'estimación',tkpassed:'aprobado',tkfailed:'falló',tkrunning:'en curso',tknone:'ninguno',tkother:'otro',
     avStreak:'Tiempo en línea',avSince:'desde que se monitorea',avOnBatt:'En batería ahora',av24:'Disponibilidad 24 h',av7:'Disponibilidad 7 d',av30:'Disponibilidad 30 d',avLast:'Último corte',avNone:'Ninguno registrado',avCount:'Cortes (30 d)',avMin:'carga mín.',
     chartTitle_voltage:'Voltaje entrada vs salida',
@@ -516,6 +526,7 @@ function renderDashboard(){
         </div>
         ${availHtml(row.stats)}
         ${batHtml(row.stats,row.srv.id,row.upsName)}
+        ${powerHtml(row.stats)}
         <div class="vars-section">
           ${VARS.map(([k,l,u])=>{const val=row.v[k];return`<div class="var-cell"><span class="var-key">${l}</span><span class="var-val">${val?esc(val)+' '+u:'<span style="opacity:.3">—</span>'}</span></div>`;}).join('')}
         </div>
@@ -859,6 +870,31 @@ const TEST_ES={'done and passed':'Aprobado','done and warning':'Terminó con adv
 function testTxt(r){const k=String(r||'').trim().toLowerCase();return _lang==='es'&&TEST_ES[k]?TEST_ES[k]:r;}
 // Fecha y hora con el formato del idioma (día/mes/año), no el del navegador.
 function fdt(ts){return PCT.ls(new Date(ts*1000),_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+// Energía y estado: banderas del UPS, alarma, margen de apagado y calidad de la red (bajones, subidas y cambios a batería).
+// EN: Power & status: UPS flags, alarm, shutdown margin and mains quality (sags, surges and transfers to battery).
+function powerHtml(st){
+  const p=st&&st.power;if(!p)return'';
+  const cell=(k,v,c,tip)=>`<div class="var-cell"${tip?` title="${esc(tip)}"`:''}><span class="var-key">${esc(k)}</span><span class="var-val"${c?` style="color:${c}"`:''}>${v}</span></div>`;
+  const col={crit:'var(--red)',warn:'var(--orange)',info:'var(--blue)'};
+  const cells=[];
+  (p.flags||[]).forEach(f=>cells.push(cell(t('pwFlag_'+f.f),'●',col[f.lv],t('pwFlagTip_'+f.f))));
+  if(p.alarm)cells.push(cell(t('pwAlarm'),esc(p.alarm),'var(--orange)'));
+  if(p.beeper)cells.push(cell(t('pwBeeper'),esc(t('pwBeep_'+p.beeper))));
+  const m=p.margin;
+  if(m){const mm=Math.floor(m.margin_s/60),nn=Math.floor(m.need/60);
+    cells.push(cell(t('pwMargin'),esc((m.ok?t('pwMarginOk',mm,nn):t('pwMarginBad',mm,nn))+' · '+(m.basis==='full'?t('pwMarginFull'):t('pwMarginNow'))),m.ok?'':'var(--orange)'));}
+  const q=p.quality,w=q&&q.w||{},d=w['24h'],wk=w['7d'];
+  if(q&&q.nominal&&d&&d.n){
+    const tip=t('pwBand',q.lo,q.hi);
+    cells.push(cell(t('pwVolt')+' · 24 h',esc(t('pwVoltFmt',Math.round(d.min),Math.round(d.max),q.nominal)),(d.min<q.lo||d.max>q.hi)?'var(--orange)':'',tip));
+    [['24h',d],['7d',wk]].forEach(([lab,x])=>{if(!x)return;
+      cells.push(cell(t('pwSag')+' · '+(lab==='24h'?'24 h':'7 d'),x.low?String(x.low):esc(t('pwNone')),x.low?'var(--orange)':'',tip));
+      cells.push(cell(t('pwSurge')+' · '+(lab==='24h'?'24 h':'7 d'),x.high?String(x.high):esc(t('pwNone')),x.high?'var(--orange)':'',tip));
+      cells.push(cell(t('pwXfer')+' · '+(lab==='24h'?'24 h':'7 d'),x.transfers?String(x.transfers):esc(t('pwNone')),x.transfers?'var(--orange)':''));});
+  }else if(q&&!q.nominal)cells.push(cell(t('pwVolt'),'<span style="opacity:.55">'+esc(t('pwNeedHist'))+'</span>'));
+  if(!cells.length)return'';
+  return `<div style="grid-column:1 / -1"><div style="font-size:12px;font-weight:600;margin:8px 0 2px">${esc(t('pwTitle'))}</div><div class="vars-section bat">${cells.join('')}</div></div>`;
+}
 function batHtml(st,sid,upsName){
   const b=st&&st.battery;if(!b)return'';
   const cell=(k,v,c)=>`<div class="var-cell"><span class="var-key">${esc(k)}</span><span class="var-val"${c?` style="color:${c}"`:''}>${v}</span></div>`;
