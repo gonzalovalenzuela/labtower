@@ -27,7 +27,17 @@
 | **WOL Console** | `/wol/` | 8080 | Enciende equipos con Wake-on-LAN |
 | **Admin Panel** | `/admin/` | 8082 | Usuarios, permisos, 2FA, sesiones, auditoría, respaldos y salud del sistema |
 
-El menú se puede reordenar por usuario. La página de inicio (`/`) tiene una tarjeta por módulo.
+La página de inicio (`/`) tiene una tarjeta por módulo, agrupadas igual que el menú: Energía y servidores, Red, Herramientas y Sistema.
+
+### Navegación
+
+Todas las pantallas comparten la misma navegación, con el mismo orden y agrupación. Solo aparecen los módulos a los que tienes permiso y los que el admin no apagó.
+
+- **Barra superior con selector** (por defecto): el logo lleva al inicio, y el selector de módulo abre un panel con todos los módulos agrupados y su estado (activo, con avisos o con fallas, con forma y texto, no solo color). Se cierra con Esc o al hacer clic fuera. Idioma, tema, reloj, usuario y «Tipo de menú» van en la misma barra. En el móvil hay una barra inferior (Inicio, Resumen, Módulos y Opciones) y los módulos se eligen en una hoja desde abajo.
+- **Menú lateral clásico:** los módulos agrupados en el panel lateral y, en el Resumen, una tira arriba.
+- **Elegir el tipo de menú:** la primera vez que entras aparece un asistente con las dos opciones. Se cambia después en **Tipo de menú** (junto al idioma y el tema). La elección se guarda en el navegador.
+- **Avisos:** si algún módulo está con avisos o fallas, aparece un recuadro arriba del contenido, bajo el menú, con enlace a cada uno. El estado sale de un único GET público a `/admin/api/health`.
+- Los módulos conservan en su panel lateral solo lo propio (listas de servidores, filtros). Si no tienen nada propio, el panel se oculta. En modo kiosko no se muestra nada de esto.
 
 ## Capturas
 
@@ -125,6 +135,7 @@ labtower-health
 - **UPS:** estado, batería, carga, autonomía, consumo y gráficos de las últimas 24 h.
 - **Proxmox:** nodos en línea, VMs y CTs corriendo, CPU y memoria (gráfico de 12 h), salud de Ceph.
 - **NAS:** por cada NAS, estado, CPU y memoria (gráfico de 12 h con temperatura), discos sanos, temperatura y el volumen más lleno.
+- **VPN:** cuántos clientes hay conectados por servidor; el detalle (quién, desde dónde, tráfico) está en VPN Monitor.
 - **Red:** equipos en línea, conocidos y apagados, último escaneo, reparto por tipo y equipos nuevos de las últimas 48 h.
 - **Raspberry Pi:** temperatura, CPU, memoria, disco, tiempo encendida y estado de la fuente de poder. Solo en una Raspberry Pi agrega el gráfico de 24 h de temperatura con marcas de bajo voltaje y limitación (se guarda 7 días en `metrics.db`).
 - **Línea de tiempo:** cambios importantes con hora (UPS a batería, nodo caído, cambio de Ceph, equipos nuevos o que dejaron de responder). Los guardan los módulos, aunque nadie tenga la página abierta: últimos 300 eventos o 30 días.
@@ -435,6 +446,7 @@ labtower/
 ├── debian/            # empaquetado .deb
 ├── assets/icons/      # icono fuente y script que regenera los PNG
 ├── assets/brand/      # kit de marca: un icono por módulo y la paleta
+├── assets/nav.*       # navegación compartida (nav.js, nav.css); cada módulo tiene una copia idéntica en su static/
 ├── tests/             # pruebas automáticas (unittest)
 ├── docs/              # APT.md y capturas
 ├── CHANGELOG.md, RELEASE_NOTES_2.0.md, VERSION, LICENSE

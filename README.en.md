@@ -27,7 +27,17 @@
 | **WOL Console** | `/wol/` | 8080 | Powers on machines with Wake-on-LAN |
 | **Admin Panel** | `/admin/` | 8082 | Users, permissions, 2FA, sessions, audit log, backups and system health |
 
-Each user can reorder the menu. The home page (`/`) has one card per module.
+The home page (`/`) has one card per module, grouped like the menu: Power & servers, Network, Tools and System.
+
+### Navigation
+
+Every screen shares the same navigation, in the same order and grouping. Only the modules you have permission for, and that the admin did not turn off, are shown.
+
+- **Top bar with a switcher** (default): the logo goes to the home page, and the module switcher opens a panel with all the modules, grouped, with their status (active, warnings or failing, shown with a shape and text, not only colour). It closes with Esc or by clicking outside. Language, theme, clock, user and "Menu type" are in the same bar. On phones there is a bottom bar (Home, Overview, Modules and Options) and modules are picked from a sheet that slides up.
+- **Classic side menu:** the modules grouped in the side panel and, in the Overview, a strip at the top.
+- **Choosing the menu type:** the first time you sign in a wizard offers both options. You can change it later in **Menu type** (next to language and theme). The choice is saved in the browser.
+- **Notices:** if any module has warnings or is failing, a box appears at the top of the content, under the menu, with a link to each one. Status comes from a single public GET to `/admin/api/health`.
+- Modules keep only their own things in the side panel (server lists, filters). If they have none, the panel is hidden. Nothing of this shows in kiosk mode.
 
 ## Screenshots
 
@@ -126,6 +136,7 @@ labtower-health
 - **Proxmox:** nodes online, running VMs and CTs, CPU and memory (12 h chart), Ceph health.
 - **NAS:** per NAS, status, CPU and memory (12 h chart with temperature), healthy disks, temperature and the fullest volume.
 - **Network:** hosts online, known and offline, last scan, device types and new hosts from the last 48 h.
+- **VPN:** how many clients are connected per server; the detail (who, from where, traffic) is in VPN Monitor.
 - **Raspberry Pi:** temperature, CPU, memory, disk, uptime and power supply status. On a Raspberry Pi only, it adds a 24 h temperature chart with under-voltage and throttling marks (kept 7 days in `metrics.db`).
 - **Event timeline:** important changes with their time (UPS on battery, node down, Ceph change, new or vanished hosts). The modules record them even when nobody has the page open: last 300 events or 30 days.
 - **Global search** (top bar or the `/` key): Net Monitor hosts, UPS, Proxmox VMs and containers, NAS, DNS servers and WOL devices; it only shows what each user can see.
@@ -435,6 +446,7 @@ labtower/
 ├── debian/            # .deb packaging
 ├── assets/icons/      # source icon and the script that regenerates the PNGs
 ├── assets/brand/      # brand kit: one icon per module and the palette
+├── assets/nav.*       # shared navigation (nav.js, nav.css); every module has an identical copy in its static/
 ├── tests/             # automated tests (unittest)
 ├── docs/              # APT.md and screenshots
 ├── CHANGELOG.md, RELEASE_NOTES_2.0.md, VERSION, LICENSE
