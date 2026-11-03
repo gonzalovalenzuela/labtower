@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.6f — 2026-11-03
+
+- **Mejora:** «Tipo de menú» pasó a la barra de opciones de cada pantalla, junto al idioma y el tema.
+- **Mejora:** con la barra superior se quitó el encabezado repetido del panel lateral y, si el panel no tiene listas propias (Admin Panel, WAN Monitor), se oculta para usar todo el ancho; en el Admin Panel el usuario y «salir» pasan a la barra superior.
+
 ## 2.1.6e — 2026-11-03
 
 - **Mejora:** el ícono de la barra superior vuelve a ser el original de LabTower.

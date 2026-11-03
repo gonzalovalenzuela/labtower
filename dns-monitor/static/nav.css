@@ -55,10 +55,6 @@ body.kiosk.has-gbar{padding-top:0;padding-bottom:0}
   body.has-gbar #toast{bottom:86px!important}
 }
 
-.gfoot{margin-top:10px;padding-top:8px;border-top:1px solid var(--border,#e3e8ef);display:flex}
-.gfoot-b{background:none;border:0;font:inherit;font-size:12.5px;color:var(--text-mid,#5a6a85);cursor:pointer;padding:8px 6px;min-height:36px;border-radius:8px}
-.gfoot-b:hover{color:var(--blue,#0369a1);background:var(--bg,#f0f2f5)}
-.gfoot-b:focus-visible,.gwiz-opt:focus-visible,.gwiz-ok:focus-visible,.nav-menutype:focus-visible{outline:2px solid var(--blue,#0369a1);outline-offset:2px}
 /* aviso arriba del contenido / notice at the top of the content */
 .gwarn{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin:14px 24px 0;padding:10px 14px;border-radius:10px;border:1px solid var(--border,#e3e8ef);border-left:4px solid #b45309;background:var(--surface,#fff);color:var(--text,#1a2033);font-size:13.5px}
 .gwarn.down{border-left-color:#b91c1c}
@@ -83,7 +79,6 @@ body.kiosk .gwarn{display:none}
 .nav-group-lbl{font-size:10px;font-weight:600;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;padding:12px 10px 4px}
 .nav-dot{width:8px;height:8px;border-radius:50%;margin-left:auto;flex-shrink:0;background:var(--text-dim);opacity:.45}
 .nav-dot.up{background:#22c55e;opacity:1}.nav-dot.mid{background:#eab308;opacity:1}.nav-dot.down{background:#ef4444;opacity:1}
-.nav-menutype{width:100%;background:none;border:0;font:inherit;cursor:pointer;text-align:left;margin-top:6px;opacity:.8}
 .navstrip{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 14px}
 .nav-chip{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border:1px solid var(--border,#e3e8ef);border-radius:99px;font:inherit;font-size:13px;color:var(--text-mid,#5a6a85);text-decoration:none;background:var(--surface,#fff);cursor:pointer}
 .nav-chip svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
@@ -92,3 +87,19 @@ body.kiosk .gwarn{display:none}
 .nav-chip .nav-dot{margin-left:0}
 .nav-sep{width:1px;height:18px;background:var(--border,#e3e8ef);margin:0 4px}
 body.kiosk .navstrip{display:none}
+/* botón «Tipo de menú» junto a idioma y tema / menu-type button next to language and theme */
+.gmt{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--border,#e3e8ef);border-radius:8px;background:var(--surface,#fff);color:var(--text-mid,#5a6a85);font:inherit;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;margin-right:8px}
+.gmt:hover{color:var(--blue,#0369a1);border-color:var(--blue,#0369a1)}
+.gmt svg{stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+body.kiosk .gmt{display:none}
+@media(max-width:767px){.gmt-t{display:none}.gmt{padding:0 8px}}
+/* barra superior: sin encabezado duplicado en el panel lateral / no duplicated header in the side panel */
+body.has-gbar .sidebar .sb-logo{display:none}
+body.gside-none .sidebar{display:none}
+body.gside-none .main{margin-left:0}
+body.gside-none .nav-toggle{display:none}
+.gbar-r{margin-left:auto;display:flex;align-items:center}
+.gbar-r .sb-footer{margin:0;padding:0;border:0;background:none}
+.gbar-r .user-badge{margin:0;padding:4px 8px;gap:8px}
+@media(max-width:767px){.gbar-r{display:none}}
+#app .top .gmt-t{display:none}

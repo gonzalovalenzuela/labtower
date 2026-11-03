@@ -30,13 +30,13 @@
   ];
   var T = {
     es: {mods: 'Módulos', opts: 'Opciones', main: 'Principal', switchTo: 'Cambiar de módulo', up: 'Activo', mid: 'Con avisos', down: 'Con fallas', home: 'Inicio de LabTower',
-      warn: 'Atención', menuType: 'Tipo de menú…', wizTitle: 'Elige cómo quieres navegar',
-      wizText: 'Puedes cambiarlo cuando quieras desde «Tipo de menú…». Se guarda en este navegador.',
+      warn: 'Atención', menuType: 'Tipo de menú', wizTitle: 'Elige cómo quieres navegar',
+      wizText: 'Puedes cambiarlo cuando quieras desde «Tipo de menú». Se guarda en este navegador.',
       optBar: 'Barra superior con selector', optBarD: 'Un selector con todos los módulos y su estado. En el móvil, una barra inferior.',
       optSide: 'Menú lateral clásico', optSideD: 'Los módulos agrupados en el panel lateral, como antes.', current: 'Actual', ok: 'Listo'},
     en: {mods: 'Modules', opts: 'Options', main: 'Main', switchTo: 'Switch module', up: 'Active', mid: 'Warnings', down: 'Failing', home: 'LabTower home',
-      warn: 'Attention', menuType: 'Menu type…', wizTitle: 'Choose how you want to navigate',
-      wizText: 'You can change it any time from “Menu type…”. It is saved in this browser.',
+      warn: 'Attention', menuType: 'Menu type', wizTitle: 'Choose how you want to navigate',
+      wizText: 'You can change it any time from “Menu type”. It is saved in this browser.',
       optBar: 'Top bar with switcher', optBarD: 'One switcher with every module and its status. On phones, a bottom bar.',
       optSide: 'Classic side menu', optSideD: 'Modules grouped in the side panel, as before.', current: 'Current', ok: 'Done'}
   };
@@ -143,6 +143,7 @@
     document.body.classList.add('has-gbar');
     st = {bar: bar, nav: nav, crumb: crumb, sw: sw, panel: panel, back: back, tab: tab, lang: 'en', opts: {}, me: null};
     sw.addEventListener('click', function () { toggle(); });
+    try { window.matchMedia('(min-width:768px)').addEventListener('change', function () { apply(); }); } catch (e) {}
     back.addEventListener('click', function () { toggle(false); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !st.panel.hidden) { toggle(false); st.sw.focus(); } });
     document.addEventListener('mousedown', function (e) {
@@ -197,9 +198,6 @@
       });
       wrap.appendChild(grid); st.panel.appendChild(wrap);
     });
-    var ft = el('div', 'gfoot'), mb = el('button', 'gfoot-b', tr.menuType); mb.type = 'button';
-    mb.addEventListener('click', function () { toggle(false); wizard(false); });
-    ft.appendChild(mb); st.panel.appendChild(ft);
     // barra inferior (móvil) / bottom bar (phones)
     st.tab.textContent = ''; st.tab.setAttribute('aria-label', tr.main);
     function tabItem(id, label, svgPath, href, on) {
@@ -250,9 +248,6 @@
         box.appendChild(a);
       });
     });
-    var mt = el('button', strip ? 'nav-chip' : 'nav-item nav-menutype', tr.menuType); mt.type = 'button';
-    mt.addEventListener('click', function () { wizard(false); });
-    box.appendChild(mt);
   }
   function unclassic() {
     var box = document.getElementById('nav-items'), strip = document.getElementById('navstrip');
@@ -299,9 +294,46 @@
     opts.querySelector('.on').focus();
   }
 
+  // Botón «Tipo de menú» junto a las demás opciones (idioma, tema) / the menu-type button next to the other options (language, theme)
+  function placeBtn() {
+    var tr = T[st.lang], b = document.getElementById('gmt');
+    var ref = document.querySelector('.topbar .lang-btns') || document.getElementById('bl');
+    if (!ref) return;
+    if (!b) {
+      b = el('button', 'gmt' + (ref.id === 'bl' ? ' btn nokiosk' : '')); b.id = 'gmt'; b.type = 'button';
+      b.appendChild(icon('<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/>', 14));
+      b.appendChild(el('span', 'gmt-t'));
+      b.addEventListener('click', function () { wizard(false); });
+    }
+    b.querySelector('.gmt-t').textContent = tr.menuType; b.title = tr.menuType; b.setAttribute('aria-label', tr.menuType);
+    if (b.nextSibling !== ref || b.parentNode !== ref.parentNode) ref.parentNode.insertBefore(b, ref);
+  }
+  // Barra superior: el encabezado del panel lateral sobra; si el panel solo tenía el menú, se oculta y el usuario pasa a la barra
+  // EN: Top bar: the side panel header is redundant; if the panel only held the menu it is hidden and the user badge moves to the bar
+  function sideLayout(bar) {
+    var sb = document.querySelector('.sidebar');
+    if (!sb) return;
+    var foot = sb.querySelector('.sb-footer') || document.querySelector('.gbar-r .sb-footer');
+    var own = Array.prototype.some.call(sb.querySelectorAll('.sb-sec'), function (x) {      // listas propias visibles / visible own lists
+      return !x.querySelector('#nav-items') && x.id !== 'sb-ip' && !x.hidden && x.style.display !== 'none';   // #sb-ip repite la tarjeta «IP pública» / repeats the Public IP card
+    });
+    if (!sb.gobs && window.MutationObserver) {                                  // las listas aparecen o se ocultan después / lists show or hide later
+      sb.gobs = new MutationObserver(function () { if (st) sideLayout(mode() === 'bar'); });
+      sb.gobs.observe(sb, {attributes: true, attributeFilter: ['hidden', 'style'], subtree: true});
+    }
+    var none = bar && !own && window.matchMedia('(min-width:768px)').matches;
+    document.body.classList.toggle('gside-none', none);
+    if (foot) {
+      var r = st.bar.querySelector('.gbar-r');
+      if (none) { if (!r) { r = el('div', 'gbar-r'); st.bar.appendChild(r); } if (foot.parentNode !== r) r.appendChild(foot); }
+      else { if (foot.parentNode !== sb) sb.appendChild(foot); if (r) r.remove(); }
+    }
+  }
+
   // aplica el tipo de menú elegido / apply the chosen menu type
   function apply() {
     var m = mode();
+    placeBtn(); sideLayout(m === 'bar');
     document.body.classList.toggle('has-gbar', m === 'bar');
     document.documentElement.setAttribute('data-navmode', m);
     if (m === 'bar') { fill(); } else { toggle(false); classic(); }

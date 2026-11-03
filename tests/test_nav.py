@@ -53,8 +53,8 @@ class Nav(unittest.TestCase):
         self.assertIn("function warnStrip", nav); self.assertIn("document.querySelector('.main')", nav)
         self.assertIn("insertBefore(box, host.firstChild)", nav)                      # notice at the top of the content
         self.assertIn("=== 'overview' ? null", nav)                                 # the Overview has its own notice
-        for k in ("lt-nav-mode", "function wizard", "function classic", "aria-modal", "menuType"): self.assertIn(k, nav, k)
-        for k in (".gwiz", ".gwarn", ".nav-chip", "body:not(.has-gbar) .gbar"): self.assertIn(k, css, k)
+        for k in ("lt-nav-mode", "function wizard", "function classic", "aria-modal", "menuType", "function placeBtn", "function sideLayout"): self.assertIn(k, nav, k)
+        for k in (".gwiz", ".gwarn", ".nav-chip", ".gmt", "body.gside-none .sidebar", "body:not(.has-gbar) .gbar"): self.assertIn(k, css, k)
 
     def test_overview_vpn_card_shows_only_the_count(self):
         ov = (ROOT / "overview" / "static" / "app.js").read_text()
