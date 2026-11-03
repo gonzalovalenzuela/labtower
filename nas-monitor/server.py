@@ -291,6 +291,7 @@ def _learn_pin(cfg: dict):
 # ─── Lectura de un NAS ────────────────────────────────────────────────────────
 OID_SYNO = "1.3.6.1.4.1.6574"
 OID_IFX  = "1.3.6.1.2.1.31.1.1.1"
+OID_IF   = "1.3.6.1.2.1.2.2.1"          # ifTable: estado del enlace y errores / link state and errors
 SCALARS = {
     "descr": "1.3.6.1.2.1.1.1.0", "sysup": "1.3.6.1.2.1.1.3.0", "name": "1.3.6.1.2.1.1.5.0", "hrup": "1.3.6.1.2.1.25.1.1.0",
     "cpu_user": "1.3.6.1.4.1.2021.11.9.0", "cpu_sys": "1.3.6.1.4.1.2021.11.10.0", "cpu_idle": "1.3.6.1.4.1.2021.11.11.0",
@@ -328,11 +329,76 @@ def _idx_key(i): return [int(t) if t.isdigit() else 0 for t in str(i).split(".")
 # EN: A "Storage Pool" is full by design when its volumes take all the space: it raises no "nearly full" alert.
 _POOL_RE = re.compile(r"storage\s*pool|pool de almacenamiento|grupo de almacenamiento|reserva de almacenamiento", re.I)
 
+# ES: Series lentas (cada 15 min): uso de cada volumen y temperatura de cada disco. De ahí salen los días hasta llenarse y los máximos de temperatura.
+# EN: Slow series (every 15 min): usage of each volume and temperature of each disk. They give the days until full and the temperature peaks.
+SERIES_EVERY, SERIES_KEEP = 900, 45 * 86400
+_SER_LAST: dict = {}
+_DERIVED: dict = {}          # nid -> {"vol": {name: days|None}, "temp": {disk: {max24, avg24, max7}}}
+
+def days_to_full(points, free):
+    """points: [(ts, used_bytes)], oldest first. Days until `free` more bytes are used at the recent growth rate, or None when there is
+    not enough history (< 2 days), the volume is not growing, the trend is noisy (R² < 0.5) or it would take more than a year."""
+    n = len(points)
+    if n < 24 or not _num(free) or free < 0: return None
+    t0 = points[0][0]
+    if points[-1][0] - t0 < 2 * 86400: return None
+    xs = [(p[0] - t0) / 86400 for p in points]; ys = [float(p[1]) for p in points]
+    mx, my = sum(xs) / n, sum(ys) / n
+    sxx = sum((x - mx) ** 2 for x in xs); syy = sum((y - my) ** 2 for y in ys)
+    sxy = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    if sxx <= 0 or syy <= 0 or sxy <= 0 or (sxy * sxy) / (sxx * syy) < 0.5: return None
+    days = free / (sxy / sxx)
+    return round(days, 1) if days <= 365 else None
+
+def record_series(nid: str, snap: dict) -> bool:
+    now = int(time.time())
+    if now - _SER_LAST.get(nid, 0) < SERIES_EVERY: return False
+    rows = [(nid, "v:" + r["name"], now, float(r["total"] - r["free"])) for r in snap.get("raids", [])
+            if not r.get("pool") and _num(r.get("total")) and _num(r.get("free"))]
+    rows += [(nid, "t:" + d["name"], now, float(d["temp"])) for d in snap.get("disks", []) if _num(d.get("temp"))]
+    if not rows: return False
+    try:
+        c = auth.metrics_conn()
+        try:
+            c.executemany("INSERT OR REPLACE INTO nas_series (nid,k,ts,v) VALUES (?,?,?,?)", rows)
+            c.execute("DELETE FROM nas_series WHERE nid = ? AND ts < ?", (nid, now - SERIES_KEEP)); c.commit()
+        finally: c.close()
+    except Exception as e:
+        log.warning(f"could not store the slow series: {e}"); return False
+    _SER_LAST[nid] = now
+    return True
+
+def refresh_derived(nid: str, snap: dict):
+    now, out = int(time.time()), {"vol": {}, "temp": {}}
+    try:
+        c = auth.metrics_conn()
+        try:
+            for r in snap.get("raids", []):
+                if r.get("pool") or not _num(r.get("free")): continue
+                rows = c.execute("SELECT ts,v FROM nas_series WHERE nid=? AND k=? AND ts>=? ORDER BY ts", (nid, "v:" + r["name"], now - 14 * 86400)).fetchall()
+                out["vol"][r["name"]] = days_to_full(rows, r["free"])
+            for d in snap.get("disks", []):
+                rows = c.execute("SELECT ts,v FROM nas_series WHERE nid=? AND k=? AND ts>=? ORDER BY ts", (nid, "t:" + d["name"], now - 7 * 86400)).fetchall()
+                last = [v for ts, v in rows if ts >= now - 86400 and v is not None]
+                if last: out["temp"][d["name"]] = {"max24": round(max(last)), "avg24": round(sum(last) / len(last)), "max7": round(max(v for _, v in rows if v is not None))}
+        finally: c.close()
+    except Exception as e:
+        log.warning(f"could not compute the slow series: {e}"); return
+    _DERIVED[nid] = out
+
+def _attach(nid, snap: dict):
+    dv = _DERIVED.get(nid) or {}
+    for r in snap.get("raids", []): r["days_full"] = (dv.get("vol") or {}).get(r["name"])
+    for d in snap.get("disks", []):
+        t = (dv.get("temp") or {}).get(d["name"])
+        if t: d["t24"] = t
+
 def collect(cfg: dict, prev: dict) -> dict:
     typ = cfg.get("type") or "synology"
     if typ == "synology": return collect_synology(cfg, prev)
     snap = (remote.tn_collect if typ == "truenas" else remote.omv_collect)(cfg, prev, _learn_pin(cfg))
     snap["thr"] = dict(zip(("vol_warn", "vol_crit"), vol_thr(cfg)))
+    _attach(cfg.get("id"), snap)
     snap["alerts"] = compute_alerts(snap, vol_thr(cfg)) + snap.pop("extra_alerts", [])
     return snap
 
@@ -347,6 +413,8 @@ def collect_synology(cfg: dict, prev: dict) -> dict:
     except SnmpError as e: syn = {}; warnings.append(f"synology: {e}")
     try:    ifx = snmp_walk(cfg, OID_IFX)
     except SnmpError as e: ifx = {}; warnings.append(f"network: {e}")
+    try:    iff = snmp_walk(cfg, OID_IF)
+    except SnmpError as e: iff = {}; warnings.append(f"network link: {e}")
 
     S = lambda suffix: syn.get(f"{OID_SYNO}.{suffix}")
     system = {"name": g("name") or "", "descr": g("descr") or "", "uptime": g("hrup") if _num(g("hrup")) else g("sysup"),
@@ -407,7 +475,8 @@ def collect_synology(cfg: dict, prev: dict) -> dict:
     prev["io"], prev["io_ts"] = io_cnt, now
 
     n_name, n_in, n_out, n_speed = (_col(ifx, OID_IFX, c) for c in (1, 6, 10, 15))
-    net, counters = [], {}
+    n_oper, n_ein, n_eout = (_col(iff, OID_IF, c) for c in (8, 14, 20))
+    net, counters, errs = [], {}, {}
     for i in sorted(n_name, key=_idx_key):
         nm = n_name[i]
         if not IF_OK.match(nm) or not _num(n_in.get(i)) or not _num(n_out.get(i)): continue
@@ -417,12 +486,21 @@ def collect_synology(cfg: dict, prev: dict) -> dict:
         dt = now - prev.get("ts", 0)
         if p and 0 < dt < 600 and n_in[i] >= p[0] and n_out[i] >= p[1]:
             rx, tx = round((n_in[i] - p[0]) * 8 / dt), round((n_out[i] - p[1]) * 8 / dt)
-        net.append({"name": nm, "rx": rx, "tx": tx, "speed": n_speed.get(i), "rx_total": n_in[i], "tx_total": n_out[i]})
-    prev["net"], prev["ts"] = counters, now
+        ein, eout = n_ein.get(i), n_eout.get(i)
+        erate = None
+        if _num(ein) and _num(eout):
+            errs[nm] = (ein, eout)
+            pe = prev.get("errs", {}).get(nm)
+            if pe and 0 < dt < 600 and ein >= pe[0] and eout >= pe[1]: erate = round((ein - pe[0] + eout - pe[1]) / dt * 60, 1)
+        oper = n_oper.get(i)
+        net.append({"name": nm, "rx": rx, "tx": tx, "speed": n_speed.get(i), "rx_total": n_in[i], "tx_total": n_out[i],
+                    "up": (oper == 1) if _num(oper) else None, "err_in": ein if _num(ein) else None, "err_out": eout if _num(eout) else None, "err_rate": erate})
+    prev["net"], prev["ts"], prev["errs"] = counters, now, errs
 
     snap = {"system": system, "cpu": cpu, "mem": mem, "disks": disks, "raids": raids, "ups": ups, "io": io, "net": net,
             "synology": bool(syn), "warnings": warnings}
     snap["thr"] = dict(zip(("vol_warn", "vol_crit"), vol_thr(cfg)))
+    _attach(cfg.get("id"), snap)
     snap["alerts"] = compute_alerts(snap, vol_thr(cfg))
     return snap
 
@@ -445,6 +523,10 @@ def compute_alerts(s: dict, thr=None) -> list:
         if r["lv"] in ("warn", "crit"): a.append({"lv": r["lv"], "type": "raid", "item": r["name"], "value": r.get("status_text") or r["status"]})
         if r["pct"] is not None and r["pct"] >= vw and not r.get("pool"):
             a.append({"lv": "crit" if r["pct"] >= vc else "warn", "type": "vol_full", "item": r["name"], "value": r["pct"]})
+    for r in s["raids"]:                                    # se llena pronto por la tendencia / fills up soon by trend
+        d = r.get("days_full")
+        if _num(d) and d <= 30 and not r.get("pool") and not (r["pct"] is not None and r["pct"] >= vw):
+            a.append({"lv": "crit" if d <= 7 else "warn", "type": "vol_days", "item": r["name"], "value": d})
     if s["system"].get("upgrade") == 1: a.append({"lv": "info", "type": "upgrade"})
     return a
 
@@ -575,7 +657,7 @@ _glock = threading.Lock()
 
 # Eventos en la línea de tiempo del Resumen cuando cambia el estado de algo importante.
 # EN: Events on the Overview timeline when something important changes state.
-def _events(n: dict, snap: dict):
+def _events(n: dict, snap: dict, prev=None):
     nid, name = n["id"], n["name"]
     items = [(f"nas-sys:{nid}", "crit" if any(x["type"] in ("system", "power") for x in snap["alerts"] if x["lv"] == "crit") else "ok", "system", None)]
     for r in snap["raids"]:
@@ -591,6 +673,33 @@ def _events(n: dict, snap: dict):
             auth.record_event("nas", {"ok": "info", "info": "info"}.get(lv, lv), f"{name}/{obj['name']}: volume status {obj.get('status_text') or obj['status']}", "nas_raid", n=name, v=obj["name"], st=obj.get("status_text") or (obj["status"] if obj["status"] is not None else "?"))
         else:
             auth.record_event("nas", {"ok": "info", "info": "info"}.get(lv, lv), f"{name}/{obj['name']}: disk status {obj.get('status_text') or obj['status']}", "nas_disk", n=name, d=obj["name"], st=obj.get("status_text") or (obj["status"] if obj["status"] is not None else "?"))
+    # ES: Eventos nuevos: actualización de DSM, ventiladores, temperatura de cada disco, enlace y errores de red y reinicio del NAS.
+    # EN: New events: DSM update, fans, temperature of each disk, link and errors of each network port, and NAS restart.
+    sysd = snap.get("system") or {}
+    if auth.state_changed(f"nas-upg:{nid}", "info" if sysd.get("upgrade") == 1 else "ok") and sysd.get("upgrade") == 1:
+        auth.record_event("nas", "info", f"{name}: system update available", "nas_upgrade", n=name)
+    if auth.state_changed(f"nas-fan:{nid}", "warn" if 2 in (sysd.get("fan_sys"), sysd.get("fan_cpu")) else "ok"):
+        bad = 2 in (sysd.get("fan_sys"), sysd.get("fan_cpu"))
+        auth.record_event("nas", "warn" if bad else "info", f"{name}: fan " + ("failure" if bad else "back to normal"), "nas_fan" if bad else "nas_fan_ok", n=name)
+    for d in snap["disks"]:
+        hot = _num(d.get("temp")) and d["temp"] >= T_DISK_WARN
+        if auth.state_changed(f"nas-dt:{nid}:{d['idx']}", "warn" if hot else "ok"):
+            auth.record_event("nas", "warn" if hot else "info", f"{name}/{d['name']}: " + (f"disk at {d['temp']} °C" if hot else "disk temperature back to normal"),
+                              "nas_dtemp" if hot else "nas_dtemp_ok", n=name, d=d["name"], t=d["temp"] if hot else 0)
+    for x in snap.get("net", []):
+        if x.get("up") is not None and auth.state_changed(f"nas-link:{nid}:{x['name']}", "ok" if x["up"] else "warn"):
+            auth.record_event("nas", "info" if x["up"] else "warn", f"{name}: network {x['name']} link " + ("up" if x["up"] else "down"),
+                              "nas_link_ok" if x["up"] else "nas_link", n=name, i=x["name"])
+        if x.get("err_rate") is not None:
+            bad = x["err_rate"] >= 10
+            if auth.state_changed(f"nas-ne:{nid}:{x['name']}", "warn" if bad else "ok"):
+                auth.record_event("nas", "warn" if bad else "info", f"{name}: network {x['name']} " + (f"errors ({x['err_rate']}/min)" if bad else "errors stopped"),
+                                  "nas_neterr" if bad else "nas_neterr_ok", n=name, i=x["name"], e=x["err_rate"] if bad else 0)
+    up = sysd.get("uptime")
+    if prev is not None and _num(up):
+        old = prev.get("uptime")
+        if _num(old) and up < old: auth.record_event("nas", "warn", f"{name}: NAS restarted", "nas_reboot", n=name)
+        prev["uptime"] = up
 
 # Bucle del hilo de consulta de un NAS: vuelve a leer su configuración (si se borró, termina; si cambió, la adopta), consulta, guarda
 # la lectura y duerme según haya o no alguien mirando. Un error se anota y se reintenta: el hilo nunca muere por un fallo de red.
@@ -611,15 +720,15 @@ def _poll(nid: str):
                 snap = collect(n, prev)
                 snap["name"] = n["name"]
                 push_history(nid, snap)
+                if record_series(nid, snap): refresh_derived(nid, snap)
                 cache.update(snap)
-                _events(n, snap)
+                _events(n, snap, prev)
                 if auth.state_changed(f"nas-dn:{nid}", "up"):
                     auth.record_event("nas", "info", f"{n['name']}: reachable again", "nas_up", n=n["name"])
                 log.debug(f"[{n['name']}] read in {time.time() - t0:.2f}s")
             except Exception as e:
                 cache.set_error(str(e)[:200])
-                keep = prev.get("omv"); prev.clear()
-                if keep: prev["omv"] = keep
+                keep = {k: prev[k] for k in ("omv", "uptime") if k in prev}; prev.clear(); prev.update(keep)      # uptime survives so a reboot while unreachable is noticed
                 log.error(f"[{n['name']}] poll error: {e}")
                 if auth.state_changed(f"nas-dn:{nid}", "down"):
                     auth.record_event("nas", "crit", f"{n['name']}: unreachable", "nas_down", n=n["name"])

@@ -193,6 +193,9 @@ labtower-health
 
 ### NAS Monitor
 - Works like UPS Monitor: a **NAS Summary** table with every NAS (status, model, CPU, RAM, temperature, disks and fullest volume). Each row opens and shows its detail right below; the first one opens by default. You can also pick one from the side menu.
+- **Trends and reading alerts (Synology, TrueNAS and OpenMediaVault):** every 15 minutes the usage of each volume and the temperature of each disk are stored (45 days, in `metrics.db`). With that, every volume shows **how many days are left until it is full** from its growth over the last 14 days (only with 2 days of data or more, steady growth and less than a year; warning at 30 days, critical at 7) and every disk shows its **24 h maximum and average temperature** (and the 7-day maximum on hover).
+- **Network (Synology):** link state of each port ("Link down") and input and output errors.
+- **New events on the Overview timeline:** a system update is available, fan failure and recovery, a disk going over 55 °C and back to normal, a network link going down or up, sustained network errors (10 per minute or more) and a NAS restart (also when it happened while it was not answering).
 - Add as many NAS as you like (like Proxmox clusters or UPS servers). When adding one you pick its **type**: **Synology** (over **SNMP v3** —user, level `authPriv`/`authNoPriv`/`noAuthNoPriv`, auth and privacy keys— or v2c), **TrueNAS** (API key) or **OpenMediaVault** (user and password). The type cannot be changed later. *Test connection* checks the data before saving.
 - **Detail of each NAS:** gauges (CPU, RAM, volume, temperature, disks and uptime), system, volumes with their space, disks with status and temperature, network, attached UPS and disk activity.
 - **Charts** for CPU/RAM, temperature and network with **1h / 1d / 1mo / All** ranges; hovering shows the value at each moment. History is stored in `metrics.db` (`NAS_KEEP_DAYS`, 7 days by default).

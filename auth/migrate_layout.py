@@ -18,6 +18,7 @@ OWNERS = {
     "pi_samples":  "overview",
     "pve_samples": "proxmox-monitor",
     "nas_samples": "nas-monitor",
+    "nas_series": "nas-monitor",
     "dns_samples": "dns-monitor",
     "wan_samples": "wan-monitor", "wan_speed": "wan-monitor", "wan_outages": "wan-monitor",
 }

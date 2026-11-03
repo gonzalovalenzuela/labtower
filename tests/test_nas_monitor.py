@@ -42,6 +42,8 @@ FAKE = textwrap.dedent('''\
      ".1.3.6.1.2.1.31.1.1.1.1.2": 'STRING: "eth0"', ".1.3.6.1.2.1.31.1.1.1.6.2": "Counter64: %%d" %% (1000000 + step * 1250000),
      ".1.3.6.1.2.1.31.1.1.1.10.2": "Counter64: %%d" %% (2000000 + step * 625000), ".1.3.6.1.2.1.31.1.1.1.15.2": "Gauge32: 1000",
      ".1.3.6.1.2.1.31.1.1.1.1.3": 'STRING: "docker0"', ".1.3.6.1.2.1.31.1.1.1.6.3": "Counter64: 9", ".1.3.6.1.2.1.31.1.1.1.10.3": "Counter64: 9",
+     ".1.3.6.1.2.1.2.2.1.8.2": "INTEGER: 1", ".1.3.6.1.2.1.2.2.1.14.2": "Counter32: %%d" %% (3 + step * 120), ".1.3.6.1.2.1.2.2.1.20.2": "Counter32: 1",
+     ".1.3.6.1.2.1.2.2.1.8.3": "INTEGER: 2",
     }
     oids = [x if x.startswith(".") else "." + x for x in a[[i for i, x in enumerate(a) if x.startswith("udp")][0] + 1:]]
     if tool == "snmpget":
@@ -61,6 +63,77 @@ def fake_bin(tmp):
 
 CFG3 = {"name": "n", "host": "192.0.2.20", "port": 161, "version": "3", "user": "nasuser", "level": "authPriv", "auth_proto": "SHA",
         "auth_pass": "S3cretAuthKey!", "priv_proto": "AES", "priv_pass": "S3cretPrivKey!", "timeout": 3}
+
+class Trends(unittest.TestCase):
+    def pts(self, days, per_day, step_per_day, start=100):
+        now = int(time.time()); n = int(days * 96)
+        return [(now - int((n - i) * 900), start + (i / 96) * step_per_day) for i in range(n)]
+
+    def test_days_to_full_from_a_steady_growth(self):
+        d = m.days_to_full(self.pts(5, 96, 1.0), 10.0)               # 1 unit a day, 10 free
+        self.assertTrue(9 <= d <= 11, d)
+
+    def test_days_to_full_needs_history_and_real_growth(self):
+        self.assertIsNone(m.days_to_full(self.pts(1, 96, 1.0), 10.0))        # less than 2 days
+        self.assertIsNone(m.days_to_full(self.pts(5, 96, 0.0), 10.0))        # flat
+        self.assertIsNone(m.days_to_full(self.pts(5, 96, -1.0), 10.0))       # shrinking
+        self.assertIsNone(m.days_to_full(self.pts(5, 96, 0.01), 1000.0))     # more than a year
+        noisy = [(t, 100 + (50 if i % 2 else -50)) for i, (t, _) in enumerate(self.pts(5, 96, 0.0))]
+        self.assertIsNone(m.days_to_full(noisy, 10.0))                       # no trend
+
+    def test_series_are_stored_and_summarised(self):
+        nid = "trend1"; m._SER_LAST.pop(nid, None)
+        snap = {"raids": [{"name": "Volume 1", "total": 1000, "free": 400, "pool": False}, {"name": "Storage Pool 1", "total": 10, "free": 0, "pool": True}],
+                "disks": [{"name": "Disk 1", "temp": 40}, {"name": "Disk 2", "temp": None}]}
+        self.assertTrue(m.record_series(nid, snap)); self.assertFalse(m.record_series(nid, snap))   # every 15 min, not more
+        cn = support.auth.metrics_conn()
+        try:
+            now = int(time.time())
+            cn.executemany("INSERT OR REPLACE INTO nas_series (nid,k,ts,v) VALUES (?,?,?,?)",
+                           [(nid, "t:Disk 1", now - i * 900, 30.0 + (i % 5)) for i in range(1, 40)]
+                           + [(nid, "v:Volume 1", now - i * 900, 600.0 - i * 2) for i in range(1, 300)]); cn.commit()
+        finally: cn.close()
+        m.refresh_derived(nid, snap)
+        dv = m._DERIVED[nid]
+        self.assertEqual(set(dv["vol"]), {"Volume 1"}); self.assertEqual(set(dv["temp"]), {"Disk 1"})     # pools and disks without a reading are left out
+        self.assertTrue(dv["temp"]["Disk 1"]["max24"] >= 40 and dv["temp"]["Disk 1"]["max7"] >= dv["temp"]["Disk 1"]["max24"])
+        s2 = {"raids": [{"name": "Volume 1", "free": 400}], "disks": [{"name": "Disk 1"}]}
+        m._attach(nid, s2); self.assertEqual(s2["disks"][0]["t24"]["max24"], dv["temp"]["Disk 1"]["max24"]); self.assertIn("days_full", s2["raids"][0])
+
+    def test_alert_when_a_volume_fills_up_soon(self):
+        def al(days, pct=50, pool=False):
+            s = {"system": {}, "cpu": {}, "mem": None, "disks": [], "raids": [{"name": "V", "lv": "ok", "pct": pct, "pool": pool, "days_full": days}]}
+            return [x for x in m.compute_alerts(s) if x["type"] == "vol_days"]
+        self.assertEqual(al(20)[0]["lv"], "warn"); self.assertEqual(al(5)[0]["lv"], "crit")
+        self.assertEqual(al(60), []); self.assertEqual(al(None), [])
+        self.assertEqual(al(5, pool=True), []); self.assertEqual(al(5, pct=96), [])             # the plain «almost full» alert already covers it
+
+    def test_new_timeline_events(self):
+        seen = []
+        orig_rec, orig_chg = m.auth.record_event, m.auth.state_changed
+        m.auth.record_event = lambda mod, lv, text, kind, **kw: seen.append((lv, kind))
+        m.auth.state_changed = lambda key, lv: True
+        try:
+            snap = {"alerts": [], "raids": [], "disks": [{"idx": "1", "name": "Disk 1", "lv": "ok", "status": 1, "temp": 60}],
+                    "system": {"upgrade": 1, "fan_sys": 2, "uptime": 50},
+                    "net": [{"name": "eth0", "up": False, "err_rate": 30.0}, {"name": "eth1", "up": True, "err_rate": 0.0}]}
+            prev = {"uptime": 9000}
+            m._events({"id": "n1", "name": "NAS1"}, snap, prev)
+        finally:
+            m.auth.record_event, m.auth.state_changed = orig_rec, orig_chg
+        kinds = {k for _, k in seen}
+        self.assertTrue({"nas_upgrade", "nas_fan", "nas_dtemp", "nas_link", "nas_link_ok", "nas_neterr", "nas_neterr_ok", "nas_reboot"} <= kinds, kinds)
+        self.assertEqual(prev["uptime"], 50)
+
+    def test_synology_reports_link_state_and_error_rate(self):
+        tmp = tempfile.mkdtemp(); old = os.environ["PATH"]; step = os.path.join(tmp, "step")
+        os.environ["PATH"] = fake_bin(tmp) + os.pathsep + old; os.environ["FAKE_STEP"] = step
+        try:
+            prev = {}; Path(step).write_text("0"); m.collect(m.validate(CFG3), prev)
+            Path(step).write_text("1"); time.sleep(0.05); eth = [x for x in m.collect(m.validate(CFG3), prev)["net"] if x["name"] == "eth0"][0]
+            self.assertTrue(eth["up"]); self.assertEqual((eth["err_in"], eth["err_out"]), (123, 1)); self.assertTrue(eth["err_rate"] > 0)
+        finally:
+            os.environ["PATH"] = old; os.environ.pop("FAKE_STEP", None); shutil.rmtree(tmp, ignore_errors=True)
 
 class Parse(unittest.TestCase):
     def test_types_and_noise(self):

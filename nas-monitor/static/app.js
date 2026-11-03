@@ -25,11 +25,12 @@ const LANG={
     power:'Power supply',fans:'Fans',normal:'Normal',failed:'Failed',upgradeYes:'Update available',upgradeNo:'Up to date',upgradeUnk:'—',updates:'System update',
     volumes:'Volumes',disks:'Disks',network:'Network',ups:'UPS',diskLoad:'Disk activity',diskAllIdle:'All disks idle ({n})',diskIdleN:'Idle disks: {n}',history:'History (last hours)',histCpuMem:'CPU / RAM',histTemp:'Temperature',filterAll:'All',trend:'CPU / RAM',accumulating:'Collecting data…',noDataChart:'No data for this range',summary:'NAS Summary',colNas:'NAS',colModel:'Model',colAlerts:'Alerts',histNet:'Network traffic',
     noVolumes:'No volume data (is this a Synology with the Synology MIB enabled?)',noDisks:'No disk data',noNet:'No network data yet',noHist:'Collecting history…',
+    daysFull:'~{n} days until full',tempTip:'24 h: max {a} · avg {b} °C — 7 days: max {c} °C',linkDown:'Link down',netErrs:'Errors in/out',
     used:'used',free:'free',rx:'In',tx:'Out',model2:'Model',status:'Status',charge:'Battery',loadPct:'Load',
     disk:{1:'Normal',2:'Initialized',3:'Not initialized',4:'System partition failed',5:'Crashed',6:'Disconnected'},
     raid:{1:'Normal',2:'Repairing',3:'Migrating',4:'Expanding',5:'Deleting',6:'Creating',7:'Syncing',8:'Checking parity',9:'Assembling',10:'Canceling',11:'Degraded',12:'Crashed',13:'Scrubbing',14:'Deploying',15:'Undeploying',16:'Mounting cache',17:'Unmounting cache',18:'Expanding (SHR)',19:'Converting (SHR)',20:'Migrating (SHR)',21:'Unknown'},
     al:{system:'System partition failure',power:'Power supply failure',fan:'Fan failure',temp:v=>`High temperature (${v} °C)`,cpu:v=>`High CPU (${v}%)`,mem:v=>`High memory use (${v}%)`,
-        disk:(i,v)=>`${i}: ${LANG.en.disk[v]||v}`,disk_temp:(i,v)=>`${i}: ${v} °C`,raid:(i,v)=>`${i}: ${LANG.en.raid[v]||v}`,vol_full:(i,v)=>`${i} is ${v}% full`,remote:(i,v)=>`${i}: ${v}`,upgrade:'A system update is available'},
+        disk:(i,v)=>`${i}: ${LANG.en.disk[v]||v}`,disk_temp:(i,v)=>`${i}: ${v} °C`,raid:(i,v)=>`${i}: ${LANG.en.raid[v]||v}`,vol_full:(i,v)=>`${i} is ${v}% full`,vol_days:(i,v)=>`${i}: fills up in ~${v} days at the current growth`,remote:(i,v)=>`${i}: ${v}`,upgrade:'A system update is available'},
     sessionExpired:'Session expired'},
   es:{connecting:'Conectando…',connectingMsg:'Leyendo el NAS por SNMP.',loginTitle:'Iniciar sesión',loginSub:'Ingresa tus credenciales para continuar.',
     username:'Usuario',password:'Contraseña',loginBtn:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',
@@ -55,11 +56,12 @@ const LANG={
     power:'Fuente de poder',fans:'Ventiladores',normal:'Normal',failed:'Falla',upgradeYes:'Actualización disponible',upgradeNo:'Al día',upgradeUnk:'—',updates:'Actualización del sistema',
     volumes:'Volúmenes',disks:'Discos',network:'Red',ups:'UPS',diskLoad:'Actividad de disco',diskAllIdle:'Todos los discos en reposo ({n})',diskIdleN:'Discos en reposo: {n}',history:'Historial (últimas horas)',histCpuMem:'CPU / RAM',histTemp:'Temperatura',filterAll:'Todo',trend:'CPU / RAM',accumulating:'Reuniendo datos…',noDataChart:'Sin datos en este rango',summary:'Resumen de NAS',colNas:'NAS',colModel:'Modelo',colAlerts:'Avisos',histNet:'Tráfico de red',
     noVolumes:'Sin datos de volúmenes (¿es un Synology con la MIB de Synology habilitada?)',noDisks:'Sin datos de discos',noNet:'Aún sin datos de red',noHist:'Reuniendo historial…',
+    daysFull:'~{n} días para llenarse',tempTip:'24 h: máx {a} · prom {b} °C — 7 días: máx {c} °C',linkDown:'Enlace caído',netErrs:'Errores ent./sal.',
     used:'usado',free:'libre',rx:'Entrada',tx:'Salida',model2:'Modelo',status:'Estado',charge:'Batería',loadPct:'Carga',
     disk:{1:'Normal',2:'Inicializado',3:'Sin inicializar',4:'Falla de partición del sistema',5:'Dañado',6:'Desconectado'},
     raid:{1:'Normal',2:'Reparando',3:'Migrando',4:'Expandiendo',5:'Eliminando',6:'Creando',7:'Sincronizando',8:'Verificando paridad',9:'Ensamblando',10:'Cancelando',11:'Degradado',12:'Dañado',13:'Depurando datos',14:'Desplegando',15:'Retirando',16:'Montando caché',17:'Desmontando caché',18:'Expandiendo (SHR)',19:'Convirtiendo (SHR)',20:'Migrando (SHR)',21:'Desconocido'},
     al:{system:'Falla en la partición del sistema',power:'Falla en la fuente de poder',fan:'Falla en un ventilador',temp:v=>`Temperatura alta (${v} °C)`,cpu:v=>`CPU alta (${v}%)`,mem:v=>`Memoria alta (${v}%)`,
-        disk:(i,v)=>`${i}: ${LANG.es.disk[v]||v}`,disk_temp:(i,v)=>`${i}: ${v} °C`,raid:(i,v)=>`${i}: ${LANG.es.raid[v]||v}`,vol_full:(i,v)=>`${i} está al ${v}%`,remote:(i,v)=>`${i}: ${v}`,upgrade:'Hay una actualización del sistema disponible'},
+        disk:(i,v)=>`${i}: ${LANG.es.disk[v]||v}`,disk_temp:(i,v)=>`${i}: ${v} °C`,raid:(i,v)=>`${i}: ${LANG.es.raid[v]||v}`,vol_full:(i,v)=>`${i} está al ${v}%`,vol_days:(i,v)=>`${i}: se llena en ~${v} días al ritmo actual`,remote:(i,v)=>`${i}: ${v}`,upgrade:'Hay una actualización del sistema disponible'},
     sessionExpired:'Sesión vencida'}
 };
 let _lang=localStorage.getItem('pi-lang')||'en';
@@ -278,7 +280,7 @@ function buildDetail(n){
     const st=r.status_text||(LANG[_lang].raid||{})[r.status]||('#'+r.status);
     h+=`<div class="vol-row"><div class="vol-top"><span class="vol-name">${esc(r.name)}</span>${pill(r.lv,st)}</div>
       ${r.pct!=null?(r.pool?bar(r.pct,101,101):bar(r.pct,volW(d),volC(d))):''}
-      <div class="vol-size">${r.pct!=null?esc(r.pct)+'% '+esc(t('used'))+' · '+esc(fmtBytes(r.total-r.free))+' / '+esc(fmtBytes(r.total))+' · '+esc(fmtBytes(r.free))+' '+esc(t('free')):'—'}</div></div>`;
+      <div class="vol-size">${r.pct!=null?esc(r.pct)+'% '+esc(t('used'))+' · '+esc(fmtBytes(r.total-r.free))+' / '+esc(fmtBytes(r.total))+' · '+esc(fmtBytes(r.free))+' '+esc(t('free')):'—'}${r.days_full!=null&&!r.pool?` · <span class="${r.days_full<=30?'days-soon':''}">${esc(t('daysFull').replace('{n}',Math.round(r.days_full)))}</span>`:''}</div></div>`;
   });
   h+='</div>';
   // Discos
@@ -286,14 +288,14 @@ function buildDetail(n){
   if(!(d.disks||[]).length)h+=`<div class="nas-empty">${esc(t('noDisks'))}</div>`;
   (d.disks||[]).forEach(x=>{
     const st=x.status_text||(LANG[_lang].disk||{})[x.status]||('#'+x.status);
-    h+=`<div class="disk-row"><span class="dn">${esc(x.name)}</span><span class="dm">${esc(x.model||'—')}<small>${esc(x.type||'')}</small></span><span class="dt${x.temp>=DISK_HOT?' hot':''}">${x.temp==null?'—':esc(x.temp)+' °C'}</span>${pill(x.lv,st)}</div>`;
+    h+=`<div class="disk-row"><span class="dn">${esc(x.name)}</span><span class="dm">${esc(x.model||'—')}<small>${esc(x.type||'')}</small></span><span class="dt${x.temp>=DISK_HOT?' hot':''}"${x.t24?` title="${esc(t('tempTip').replace('{a}',x.t24.max24).replace('{b}',x.t24.avg24).replace('{c}',x.t24.max7))}"`:''}>${x.temp==null?'—':esc(x.temp)+' °C'}${x.t24?` <small>▲${esc(x.t24.max24)}</small>`:''}</span>${pill(x.lv,st)}</div>`;
   });
   h+='</div>';
   // Red
   h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('network'))}</div></div>`;
   if(!(d.net||[]).length)h+=`<div class="nas-empty">${esc(t('noNet'))}</div>`;
   (d.net||[]).forEach(x=>{
-    h+=`<div class="net-row"><span class="nn">${esc(x.name)}${x.speed?` <small style="color:var(--text-dim);font-weight:400">${esc(x.speed>=1000?x.speed/1000+' Gb/s':x.speed+' Mb/s')}</small>`:''}</span><span class="nv"><em>↓ ${esc(t('rx'))}</em>${esc(fmtBps(x.rx))}</span><span class="nv"><em>↑ ${esc(t('tx'))}</em>${esc(fmtBps(x.tx))}</span></div>`;
+    h+=`<div class="net-row"><span class="nn">${esc(x.name)}${x.up===false?` ${pill('warn',t('linkDown'))}`:''}${(x.err_in||x.err_out)?` <small class="net-err" title="${esc(t('netErrs'))}">⚠ ${esc(x.err_in||0)}/${esc(x.err_out||0)}</small>`:''}${x.speed?` <small style="color:var(--text-dim);font-weight:400">${esc(x.speed>=1000?x.speed/1000+' Gb/s':x.speed+' Mb/s')}</small>`:''}</span><span class="nv"><em>↓ ${esc(t('rx'))}</em>${esc(fmtBps(x.rx))}</span><span class="nv"><em>↑ ${esc(t('tx'))}</em>${esc(fmtBps(x.tx))}</span></div>`;
   });
   h+='</div>';
   // UPS del NAS
