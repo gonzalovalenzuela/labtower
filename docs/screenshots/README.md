@@ -2,7 +2,7 @@
 
 Capturas de LabTower con datos de demostración ficticios (direcciones del rango de documentación 192.0.2.0/24), en tema claro y oscuro y en cuatro resoluciones.
 
-Carpetas: `<resolución>/<tema>/<pantalla>.png`. En tablet y móvil la captura es de página completa; en escritorio, del área visible.
+Carpetas: `<resolución>/<tema>/<pantalla>.png`. En móvil y tablet la captura es de la página completa; en escritorio, del área visible.
 
 ## 1920x1080
 
@@ -13,8 +13,13 @@ Carpetas: `<resolución>/<tema>/<pantalla>.png`. En tablet y móvil la captura e
 | WOL Console | [wol.png](1920x1080/light/wol.png) | [wol.png](1920x1080/dark/wol.png) |
 | UPS Monitor | [ups.png](1920x1080/light/ups.png) | [ups.png](1920x1080/dark/ups.png) |
 | Net Monitor | [net.png](1920x1080/light/net.png) | [net.png](1920x1080/dark/net.png) |
+| Net Monitor (detalle de un equipo) | [net-detail.png](1920x1080/light/net-detail.png) | [net-detail.png](1920x1080/dark/net-detail.png) |
+| Switch Monitor | [switches.png](1920x1080/light/switches.png) | [switches.png](1920x1080/dark/switches.png) |
 | Proxmox Monitor | [proxmox.png](1920x1080/light/proxmox.png) | [proxmox.png](1920x1080/dark/proxmox.png) |
 | NAS Monitor | [nas.png](1920x1080/light/nas.png) | [nas.png](1920x1080/dark/nas.png) |
+| DNS Monitor | [dns.png](1920x1080/light/dns.png) | [dns.png](1920x1080/dark/dns.png) |
+| WAN Monitor | [wan.png](1920x1080/light/wan.png) | [wan.png](1920x1080/dark/wan.png) |
+| VPN Monitor | [vpn.png](1920x1080/light/vpn.png) | [vpn.png](1920x1080/dark/vpn.png) |
 | Admin Panel | [admin.png](1920x1080/light/admin.png) | [admin.png](1920x1080/dark/admin.png) |
 | Cambio de contraseña obligatorio | [password.png](1920x1080/light/password.png) | [password.png](1920x1080/dark/password.png) |
 | Net Monitor (sin escaneos aún) | [net-empty.png](1920x1080/light/net-empty.png) | [net-empty.png](1920x1080/dark/net-empty.png) |
@@ -28,8 +33,13 @@ Carpetas: `<resolución>/<tema>/<pantalla>.png`. En tablet y móvil la captura e
 | WOL Console | [wol.png](1366x768/light/wol.png) | [wol.png](1366x768/dark/wol.png) |
 | UPS Monitor | [ups.png](1366x768/light/ups.png) | [ups.png](1366x768/dark/ups.png) |
 | Net Monitor | [net.png](1366x768/light/net.png) | [net.png](1366x768/dark/net.png) |
+| Net Monitor (detalle de un equipo) | [net-detail.png](1366x768/light/net-detail.png) | [net-detail.png](1366x768/dark/net-detail.png) |
+| Switch Monitor | [switches.png](1366x768/light/switches.png) | [switches.png](1366x768/dark/switches.png) |
 | Proxmox Monitor | [proxmox.png](1366x768/light/proxmox.png) | [proxmox.png](1366x768/dark/proxmox.png) |
 | NAS Monitor | [nas.png](1366x768/light/nas.png) | [nas.png](1366x768/dark/nas.png) |
+| DNS Monitor | [dns.png](1366x768/light/dns.png) | [dns.png](1366x768/dark/dns.png) |
+| WAN Monitor | [wan.png](1366x768/light/wan.png) | [wan.png](1366x768/dark/wan.png) |
+| VPN Monitor | [vpn.png](1366x768/light/vpn.png) | [vpn.png](1366x768/dark/vpn.png) |
 | Admin Panel | [admin.png](1366x768/light/admin.png) | [admin.png](1366x768/dark/admin.png) |
 | Cambio de contraseña obligatorio | [password.png](1366x768/light/password.png) | [password.png](1366x768/dark/password.png) |
 | Net Monitor (sin escaneos aún) | [net-empty.png](1366x768/light/net-empty.png) | [net-empty.png](1366x768/dark/net-empty.png) |
@@ -43,12 +53,16 @@ Carpetas: `<resolución>/<tema>/<pantalla>.png`. En tablet y móvil la captura e
 | WOL Console | [wol.png](820x1180/light/wol.png) | [wol.png](820x1180/dark/wol.png) |
 | UPS Monitor | [ups.png](820x1180/light/ups.png) | [ups.png](820x1180/dark/ups.png) |
 | Net Monitor | [net.png](820x1180/light/net.png) | [net.png](820x1180/dark/net.png) |
+| Net Monitor (detalle de un equipo) | [net-detail.png](820x1180/light/net-detail.png) | [net-detail.png](820x1180/dark/net-detail.png) |
+| Switch Monitor | [switches.png](820x1180/light/switches.png) | [switches.png](820x1180/dark/switches.png) |
 | Proxmox Monitor | [proxmox.png](820x1180/light/proxmox.png) | [proxmox.png](820x1180/dark/proxmox.png) |
 | NAS Monitor | [nas.png](820x1180/light/nas.png) | [nas.png](820x1180/dark/nas.png) |
+| DNS Monitor | [dns.png](820x1180/light/dns.png) | [dns.png](820x1180/dark/dns.png) |
+| WAN Monitor | [wan.png](820x1180/light/wan.png) | [wan.png](820x1180/dark/wan.png) |
+| VPN Monitor | [vpn.png](820x1180/light/vpn.png) | [vpn.png](820x1180/dark/vpn.png) |
 | Admin Panel | [admin.png](820x1180/light/admin.png) | [admin.png](820x1180/dark/admin.png) |
 | Cambio de contraseña obligatorio | [password.png](820x1180/light/password.png) | [password.png](820x1180/dark/password.png) |
 | Net Monitor (sin escaneos aún) | [net-empty.png](820x1180/light/net-empty.png) | [net-empty.png](820x1180/dark/net-empty.png) |
-| Menú móvil | [menu.png](820x1180/light/menu.png) | [menu.png](820x1180/dark/menu.png) |
 
 ## 390x844
 
@@ -59,9 +73,14 @@ Carpetas: `<resolución>/<tema>/<pantalla>.png`. En tablet y móvil la captura e
 | WOL Console | [wol.png](390x844/light/wol.png) | [wol.png](390x844/dark/wol.png) |
 | UPS Monitor | [ups.png](390x844/light/ups.png) | [ups.png](390x844/dark/ups.png) |
 | Net Monitor | [net.png](390x844/light/net.png) | [net.png](390x844/dark/net.png) |
+| Net Monitor (detalle de un equipo) | [net-detail.png](390x844/light/net-detail.png) | [net-detail.png](390x844/dark/net-detail.png) |
+| Switch Monitor | [switches.png](390x844/light/switches.png) | [switches.png](390x844/dark/switches.png) |
 | Proxmox Monitor | [proxmox.png](390x844/light/proxmox.png) | [proxmox.png](390x844/dark/proxmox.png) |
 | NAS Monitor | [nas.png](390x844/light/nas.png) | [nas.png](390x844/dark/nas.png) |
+| DNS Monitor | [dns.png](390x844/light/dns.png) | [dns.png](390x844/dark/dns.png) |
+| WAN Monitor | [wan.png](390x844/light/wan.png) | [wan.png](390x844/dark/wan.png) |
+| VPN Monitor | [vpn.png](390x844/light/vpn.png) | [vpn.png](390x844/dark/vpn.png) |
 | Admin Panel | [admin.png](390x844/light/admin.png) | [admin.png](390x844/dark/admin.png) |
 | Cambio de contraseña obligatorio | [password.png](390x844/light/password.png) | [password.png](390x844/dark/password.png) |
 | Net Monitor (sin escaneos aún) | [net-empty.png](390x844/light/net-empty.png) | [net-empty.png](390x844/dark/net-empty.png) |
-| Menú móvil | [menu.png](390x844/light/menu.png) | [menu.png](390x844/dark/menu.png) |
+| Menú de módulos (móvil) | [menu.png](390x844/light/menu.png) | [menu.png](390x844/dark/menu.png) |

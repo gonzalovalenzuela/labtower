@@ -43,6 +43,8 @@ Todas las pantallas comparten la misma navegación, con el mismo orden y agrupac
 
 <img src="docs/screenshots/1920x1080/light/ups.png" width="290"> <img src="docs/screenshots/1920x1080/light/net.png" width="290"> <img src="docs/screenshots/1920x1080/dark/proxmox.png" width="290"> <img src="docs/screenshots/1920x1080/light/nas.png" width="290">
 
+<img src="docs/screenshots/1920x1080/dark/wan.png" width="290"> <img src="docs/screenshots/1920x1080/light/dns.png" width="290"> <img src="docs/screenshots/1920x1080/dark/vpn.png" width="290"> <img src="docs/screenshots/1920x1080/light/switches.png" width="290">
+
 Todas las pantallas (tema claro y oscuro, 4 tamaños) están en [`docs/screenshots/`](docs/screenshots/). Los datos son de demostración.
 
 ---
