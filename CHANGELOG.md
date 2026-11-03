@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.1.6j — 2026-11-03
+
+- **Nuevo:** Proxmox Monitor: capacidad y salud del cluster (días hasta llenarse, prueba N-1, HA, replicación, tareas fallidas, Ceph, datos de cada nodo, cambios de estado de invitados y bloqueos). El README indica ahora los privilegios que necesita el token de API.
+- **Nuevo:** UPS Monitor: estado detallado (banderas), alarmas y beeper, calidad de la red eléctrica y margen de apagado.
+- **Nuevo:** WAN Monitor: calidad por destino, percentiles de latencia, velocidad frente al plan, disponibilidad y MTBF, y eventos de calidad sostenida.
+- **Nuevo:** Net Monitor: cambio de MAC en una IP, dispositivos sin revisar, historial de conectividad por equipo, equipos vigilados con latencia, puertos nuevos y marca de equipo inestable.
+- **Seguridad:** al restablecer la contraseña de otra cuenta, el cambio en el siguiente inicio de sesión es siempre obligatorio, y los usuarios nuevos lo llevan marcado por defecto.
+- **Seguridad:** cambiar niveles de permiso de un usuario pide la contraseña actual.
+- **Seguridad:** las URLs https de WAN no pueden apuntar a esta máquina ni a direcciones link-local; NUT rechaza 0.0.0.0 y link-local; el servicio de autenticación limita los eventos y registros que cada módulo puede escribir.
+- **Arreglo:** un POST sin cuerpo ya no devuelve 400 en Net, NUT, Proxmox, NAS, VPN, WOL, Resumen y Panel.
+- **Arreglo:** el grupo de un equipo en Net Monitor se perdía en cada reescaneo.
+- **Arreglo:** el escape de HTML de Net, WOL y Panel ahora también cubre la comilla simple.
+
 ## 2.1.6i — 2026-11-03
 
 - **Nuevo:** NAS Monitor muestra cuántos días faltan para que se llene cada volumen (según su crecimiento de los últimos 14 días, con aviso a 30 días y crítico a 7) y la temperatura máxima y promedio de 24 horas de cada disco.
