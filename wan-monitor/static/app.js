@@ -572,23 +572,23 @@ async function toggleTrace(start){
 function outagesCard(){
   const o=W.outages||[];
   const rows=o.length?o.map(x=>{
-    const tr=x.trace?`<button class="btn-secondary" data-on-click="toggleTrace" data-on-click-args="${jsargs([x.start])}">${esc(t('traceBtn'))}</button>`:'';
-    let r=`<tr><td>${esc(fmtDate(x.start))}</td><td>${x.end?esc(fmtDur(x.end-x.start)):pill('crit',t('ongoing'))}</td><td>${esc(t(x.scope==='lan'?'scopeLan':x.scope==='wan'?'scopeWan':'scopeInternet'))}</td><td>${tr}</td></tr>`;
+    const tr=x.trace?`<br><button class="wan-link" data-on-click="toggleTrace" data-on-click-args="${jsargs([x.start])}">${esc(t('traceBtn'))}</button>`:'';
+    let r=`<tr><td>${esc(fmtDate(x.start))}</td><td>${x.end?esc(fmtDur(x.end-x.start)):pill('crit',t('ongoing'))}</td><td>${esc(t(x.scope==='lan'?'scopeLan':x.scope==='wan'?'scopeWan':'scopeInternet'))}${tr}</td></tr>`;
     if(x.trace&&OPEN_TRACE.has(x.start)){
       const d=TRACES[x.start];
-      r+=`<tr class="trace-row"><td colspan="4">${d?`<div class="wan-note">${esc(t('traceTo',d.dest))}</div><pre class="wan-trace">${esc(d.text)}</pre>`:`<div class="wan-note">${esc(t('traceNone'))}</div>`}</td></tr>`;
+      r+=`<tr class="trace-row"><td colspan="3">${d?`<div class="wan-note">${esc(t('traceTo',d.dest))}</div><pre class="wan-trace">${esc(d.text)}</pre>`:`<div class="wan-note">${esc(t('traceNone'))}</div>`}</td></tr>`;
     }
     return r;}).join('')
-    :`<tr><td colspan="4" class="wan-empty">${esc(t('noOutages'))}</td></tr>`;
-  return `<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('outages'))}</div></div><div class="tbl-wrap"><table class="wan-table"><thead><tr><th>${esc(t('colStart'))}</th><th>${esc(t('colDur'))}</th><th>${esc(t('colScope'))}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    :`<tr><td colspan="3" class="wan-empty">${esc(t('noOutages'))}</td></tr>`;
+  return `<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('outages'))}</div></div><div class="tbl-wrap"><table class="wan-table"><thead><tr><th>${esc(t('colStart'))}</th><th>${esc(t('colDur'))}</th><th>${esc(t('colScope'))}</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 // Historial de cambios de IP pública (el más reciente primero).
 // EN: Public IP change history (newest first).
 function ipHistoryCard(){
   const l=W.ips||[];
-  const rows=l.length?l.map((x,i)=>`<tr><td>${esc(fmtDate(x.ts))}</td><td>${esc(x.ip)}${i===0?' <span class="sum-sub">'+esc(t('ipNow'))+'</span>':''}</td><td>${x.prev?esc(x.prev):'—'}</td></tr>`).join('')
-    :`<tr><td colspan="3" class="wan-empty">${esc(t('noIpHistory'))}</td></tr>`;
-  return `<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('ipHistory'))}</div></div><div class="tbl-wrap"><table class="wan-table"><thead><tr><th>${esc(t('colStart'))}</th><th>IP</th><th>${esc(t('ipWas'))}</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  const rows=l.length?l.map((x,i)=>`<tr><td>${esc(fmtDate(x.ts))}</td><td>${esc(x.ip)}${i===0?' <span class="sum-sub">'+esc(t('ipNow'))+'</span>':''}${x.prev?'<br><span class="sum-sub">'+esc(t('ipWas'))+' '+esc(x.prev)+'</span>':''}</td></tr>`).join('')
+    :`<tr><td colspan="2" class="wan-empty">${esc(t('noIpHistory'))}</td></tr>`;
+  return `<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('ipHistory'))}</div></div><div class="tbl-wrap"><table class="wan-table"><thead><tr><th>${esc(t('colStart'))}</th><th>IP</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 function renderMain(){
   const s=W.snap,box=$('main-content');

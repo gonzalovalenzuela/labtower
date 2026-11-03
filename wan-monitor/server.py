@@ -596,6 +596,8 @@ def load_history() -> int:
         st = auth.read_json(STATE_FILE, {}, dict)
         if isinstance(st.get("ip"), str): S.ip, S.ip_changed = st["ip"], st.get("changed")
         if isinstance(st.get("prev"), str): S.ip_prev = st["prev"][:64]
+        if S.ip and not _db("SELECT 1 FROM wan_ips LIMIT 1", fetch=True):        # first start with the history: seed it with the IP already known
+            _db("INSERT OR REPLACE INTO wan_ips (ts,ip,prev) VALUES (?,?,?)", (S.ip_changed or int(time.time()), S.ip, S.ip_prev))
         return len(rows)
     except Exception as e:
         log.warning(f"could not load the history: {e}"); return 0

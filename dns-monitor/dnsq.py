@@ -1,6 +1,6 @@
 """Cliente DNS mínimo (UDP, sin dependencias) para sondear resolutores y probar nombres desde DNS Monitor."""
 # EN: Minimal DNS client (UDP, no dependencies) to probe resolvers and test names from DNS Monitor.
-import ipaddress, random, re, socket, struct, time
+import ipaddress, re, secrets, socket, struct, time
 
 TYPES = {"A": 1, "CNAME": 5, "AAAA": 28}
 NAME_RE = re.compile(r"^(?=.{1,253}$)([A-Za-z0-9_]([A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?\.)*[A-Za-z0-9_]([A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?\.?$")
@@ -11,7 +11,7 @@ def valid_name(n):
     return isinstance(n, str) and bool(NAME_RE.match(n)) and not n.startswith("-")
 
 def build_query(name, qtype, qid=None):
-    qid = random.randrange(1 << 16) if qid is None else qid
+    qid = secrets.randbelow(1 << 16) if qid is None else qid
     q = b"".join(bytes([len(p)]) + p.encode("ascii") for p in name.rstrip(".").split("."))
     return qid, struct.pack(">HHHHHH", qid, 0x0100, 1, 0, 0, 0) + q + b"\x00" + struct.pack(">HH", qtype, 1)
 

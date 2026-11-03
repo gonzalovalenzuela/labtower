@@ -18,7 +18,9 @@ Carpetas: `<resolución>/<tema>/<pantalla>.png`. En móvil y tablet la captura e
 | Proxmox Monitor | [proxmox.png](1920x1080/light/proxmox.png) | [proxmox.png](1920x1080/dark/proxmox.png) |
 | NAS Monitor | [nas.png](1920x1080/light/nas.png) | [nas.png](1920x1080/dark/nas.png) |
 | DNS Monitor | [dns.png](1920x1080/light/dns.png) | [dns.png](1920x1080/dark/dns.png) |
+| DNS Monitor (prueba de resolución) | [dns-resolve.png](1920x1080/light/dns-resolve.png) | [dns-resolve.png](1920x1080/dark/dns-resolve.png) |
 | WAN Monitor | [wan.png](1920x1080/light/wan.png) | [wan.png](1920x1080/dark/wan.png) |
+| WAN Monitor (cortes con traceroute e historial de IP) | [wan-trace.png](1920x1080/light/wan-trace.png) | [wan-trace.png](1920x1080/dark/wan-trace.png) |
 | VPN Monitor | [vpn.png](1920x1080/light/vpn.png) | [vpn.png](1920x1080/dark/vpn.png) |
 | Admin Panel | [admin.png](1920x1080/light/admin.png) | [admin.png](1920x1080/dark/admin.png) |
 | Cambio de contraseña obligatorio | [password.png](1920x1080/light/password.png) | [password.png](1920x1080/dark/password.png) |
@@ -38,7 +40,9 @@ Carpetas: `<resolución>/<tema>/<pantalla>.png`. En móvil y tablet la captura e
 | Proxmox Monitor | [proxmox.png](1366x768/light/proxmox.png) | [proxmox.png](1366x768/dark/proxmox.png) |
 | NAS Monitor | [nas.png](1366x768/light/nas.png) | [nas.png](1366x768/dark/nas.png) |
 | DNS Monitor | [dns.png](1366x768/light/dns.png) | [dns.png](1366x768/dark/dns.png) |
+| DNS Monitor (prueba de resolución) | [dns-resolve.png](1366x768/light/dns-resolve.png) | [dns-resolve.png](1366x768/dark/dns-resolve.png) |
 | WAN Monitor | [wan.png](1366x768/light/wan.png) | [wan.png](1366x768/dark/wan.png) |
+| WAN Monitor (cortes con traceroute e historial de IP) | [wan-trace.png](1366x768/light/wan-trace.png) | [wan-trace.png](1366x768/dark/wan-trace.png) |
 | VPN Monitor | [vpn.png](1366x768/light/vpn.png) | [vpn.png](1366x768/dark/vpn.png) |
 | Admin Panel | [admin.png](1366x768/light/admin.png) | [admin.png](1366x768/dark/admin.png) |
 | Cambio de contraseña obligatorio | [password.png](1366x768/light/password.png) | [password.png](1366x768/dark/password.png) |

@@ -107,7 +107,7 @@ class Db(unittest.TestCase):
     def test_battery_info_does_not_block_on_aging(self):
         import time as _t
         self._fill("old", 10, lambda w: 3000 - w * 150)
-        t0 = _t.time(); first = self.m.battery_info("s", "old", {})["aging"]
+        first = self.m.battery_info("s", "old", {})["aging"]
         self.assertIsNone(first)                                   # nothing computed yet: returned at once
         for _ in range(100):                                       # the background thread fills the cache
             if ("s", "old") in self.m._aging_cache: break
@@ -122,7 +122,7 @@ class Db(unittest.TestCase):
         self.assertEqual(len(m.selftest_log("s", "u")), 1)
 
     def test_battery_dates_cache_follows_the_file(self):
-        m = self.m; d0 = m.load_battery_dates()
+        m = self.m
         m.auth.write_json(m.BAT_FILE, {"s|u": "2024-01-02"})
         self.assertEqual(m.load_battery_dates().get("s|u"), "2024-01-02")
         m.auth.write_json(m.BAT_FILE, {}); self.assertNotIn("s|u", m.load_battery_dates())

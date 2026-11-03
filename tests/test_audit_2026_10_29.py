@@ -1,5 +1,5 @@
 """Correcciones de la revisión de seguridad del 2026-10-29 / Fixes from the 2026-10-29 security review."""
-import json, os, re, shutil, ssl, subprocess, tempfile, threading, time, unittest
+import re, shutil, ssl, subprocess, tempfile, threading, time, unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from tests import support

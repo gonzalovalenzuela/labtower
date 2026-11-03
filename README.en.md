@@ -43,7 +43,7 @@ Every screen shares the same navigation, in the same order and grouping. Only th
 
 <img src="docs/screenshots/1920x1080/light/ups.png" width="290"> <img src="docs/screenshots/1920x1080/light/net.png" width="290"> <img src="docs/screenshots/1920x1080/dark/proxmox.png" width="290"> <img src="docs/screenshots/1920x1080/light/nas.png" width="290">
 
-<img src="docs/screenshots/1920x1080/dark/wan.png" width="290"> <img src="docs/screenshots/1920x1080/light/dns.png" width="290"> <img src="docs/screenshots/1920x1080/dark/vpn.png" width="290"> <img src="docs/screenshots/1920x1080/light/switches.png" width="290">
+<img src="docs/screenshots/1920x1080/dark/wan-trace.png" width="290"> <img src="docs/screenshots/1920x1080/light/dns-resolve.png" width="290"> <img src="docs/screenshots/1920x1080/dark/vpn.png" width="290"> <img src="docs/screenshots/1920x1080/light/switches.png" width="290">
 
 All screens (light and dark, 4 sizes) are in [`docs/screenshots/`](docs/screenshots/). The data is demo data.
 

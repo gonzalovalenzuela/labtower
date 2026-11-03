@@ -1,5 +1,5 @@
 """2.1.3i: generador de QR propio (sin librerías) para el 2FA."""
-import re, sys, unittest
+import sys, unittest
 from tests.support import ROOT
 sys.path.insert(0, str(ROOT / "auth"))
 import qrsvg  # noqa: E402

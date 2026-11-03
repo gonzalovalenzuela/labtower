@@ -1,6 +1,5 @@
 """Proxmox Monitor: último respaldo por VM/CT, antigüedad, tareas vzdump fallidas y ajustes / last backup per guest, age, failed vzdump tasks and settings."""
-import json, tempfile, unittest
-from pathlib import Path
+import unittest
 from tests import support
 from tests.support import ADMIN, READONLY
 
@@ -151,8 +150,7 @@ class Api(unittest.TestCase):
     def test_config_endpoint_and_diag_payload(self):
         admin, ro = support.make_user("bk_admin", ADMIN), support.make_user("bk_ro", READONLY)
         srv = support.Server(m.H)
-        tmp = Path(tempfile.mkdtemp()) / "clusters.json"
-        orig_file, orig_load, orig_save = m.DATA_FILE, m.load_clusters, m.save_clusters
+        orig_load, orig_save = m.load_clusters, m.save_clusters
         store = [{"id": "c1", "name": "X", "host": "h", "user": "u", "token_name": "t", "token_value": "v"}]
         m.load_clusters = lambda: [dict(c) for c in store]
         m.save_clusters = lambda cl: (store.clear(), store.extend(cl))

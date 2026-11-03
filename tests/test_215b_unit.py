@@ -1,5 +1,5 @@
 """2.1.5b: en un contenedor, el servicio del panel (que usa sudo) no lleva las opciones de systemd que activan «no new privileges»."""
-import os, re, shutil, subprocess, tempfile, unittest
+import os, shutil, subprocess, tempfile, unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent

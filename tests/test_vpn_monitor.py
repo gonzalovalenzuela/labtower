@@ -1,5 +1,5 @@
 """VPN Monitor: validación, lectores (WireGuard, OpenVPN v1/v2/v3, Tailscale), sesiones y eventos, SSH con el comando fijo, secretos y permisos."""
-import json, os, tempfile, time, unittest
+import json, tempfile, time, unittest
 from pathlib import Path
 from unittest import mock
 from tests import support

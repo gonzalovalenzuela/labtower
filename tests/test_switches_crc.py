@@ -1,6 +1,5 @@
 """Switch Monitor: errores CRC/FCS por SNMP, aviso CRC, enlaces que rebotan y vigilancia de enlace por puerto."""
 import tempfile, unittest
-from tests import support
 from tests.test_switches import FakeSNMP, snmp_data, mk_snap, mk_port, sw
 
 DOT3 = "1.3.6.1.2.1.10.7.2.1"

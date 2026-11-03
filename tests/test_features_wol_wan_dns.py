@@ -101,6 +101,14 @@ class WanTraceAndIps(unittest.TestCase):
         self.assertEqual((l[0]["ip"], l[0]["prev"]), ("198.51.100.2", "198.51.100.1"))
         wan._db("DELETE FROM wan_ips")
 
+    def test_history_is_seeded_with_the_known_ip(self):
+        wan._db("DELETE FROM wan_ips"); o = (wan.S.ip, wan.S.ip_changed, wan.S.ip_prev, wan.auth.read_json)
+        wan.auth.read_json = lambda *a, **k: {"ip": "198.51.100.9", "changed": 1700000000, "prev": "198.51.100.8"}
+        try: wan.load_history()
+        finally: wan.S.ip, wan.S.ip_changed, wan.S.ip_prev, wan.auth.read_json = o
+        self.assertEqual(wan.recent_ips(), [{"ts": 1700000000, "ip": "198.51.100.9", "prev": "198.51.100.8"}])
+        wan._db("DELETE FROM wan_ips")
+
     def test_trace_endpoint(self):
         srv = support.Server(wan.H); tok = support.make_user("wtr", READONLY)
         try:
@@ -182,6 +190,17 @@ class DnsFeatures(unittest.TestCase):
             al = [a for a in dns.compute_alerts({"blocking": "enabled", "upstreams": snap["upstreams"][:2]}) if a["type"] == "upstream_down"]
             self.assertEqual(al[0]["lv"], "crit")
         finally: dnsq.query = o
+
+    def test_probe_ports_and_same_name_upstreams(self):
+        asked = []; o = dnsq.query
+        dnsq.query = lambda h, p, *a, **k: (asked.append((h, p)), {"ok": p == 5353, "ms": 1})[1]
+        try:
+            snap = {"upstreams": [{"name": "same", "ip": "192.0.2.60", "port": 5353}, {"name": "same", "ip": "192.0.2.60", "port": 53},
+                                  {"name": "ssh", "ip": "192.0.2.61", "port": 22}]}
+            dns.probe_upstreams(snap, {})
+        finally: dnsq.query = o
+        self.assertEqual(sorted(asked), [("192.0.2.60", 53), ("192.0.2.60", 5353)])           # port 22 is never probed
+        self.assertEqual([u.get("probe", {}).get("ok") for u in snap["upstreams"]], [True, False, None])   # same name, own result
 
     def test_probe_never_targets_this_machine(self):
         asked = []; o = (dnsq.query, dns.auth.valid_target)

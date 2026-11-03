@@ -1,5 +1,5 @@
 """Detalle de la Raspberry Pi: lectores de sesiones (utmp y logind), forma de la respuesta y reparto entre administradores y lectores."""
-import os, struct, tempfile, time, unittest
+import os, struct, tempfile, unittest
 from pathlib import Path
 from tests import support
 auth = support.auth

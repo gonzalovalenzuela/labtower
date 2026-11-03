@@ -1,5 +1,5 @@
 """Usuarios conectados: respaldo por la lista de procesos cuando no hay utmp ni logind (DietPi, Debian 13)."""
-import os, tempfile, unittest, pathlib, sys
+import tempfile, unittest, pathlib
 from tests import support
 
 auth = support.load("auth/auth.py")

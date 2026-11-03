@@ -1,8 +1,8 @@
 """Proxmox Monitor: reinicios, quórum de corosync, OSD de Ceph y SMART / reboots, corosync quorum, Ceph OSDs and SMART."""
-import json, os, tempfile, unittest
+import json, tempfile, unittest
 from pathlib import Path
 from tests import support
-from tests.support import ADMIN, READONLY
+from tests.support import ADMIN
 
 m = support.load("proxmox-monitor/server.py")
 diag = m.diag

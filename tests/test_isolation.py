@@ -1,5 +1,5 @@
 """Aislamiento entre módulos (2.1.3) / module isolation: authentication service, data layout, units and migration."""
-import contextlib, json, os, re, socket, sqlite3, subprocess, sys, tempfile, textwrap, threading, time, unittest
+import contextlib, json, os, re, socket, sqlite3, subprocess, sys, tempfile, textwrap, time, unittest
 from pathlib import Path
 from tests import support
 auth = support.auth

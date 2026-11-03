@@ -1,6 +1,6 @@
 """2.1.4k: gráficos unificados (charts.js) — periodo anterior en el backend, filtro de eventos y copias idénticas del motor.
 EN: unified charts (charts.js) — previous period in the backend, event filter and identical copies of the engine."""
-import re, time, unittest
+import time, unittest
 from pathlib import Path
 from tests import support
 

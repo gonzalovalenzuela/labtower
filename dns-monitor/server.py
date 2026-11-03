@@ -385,28 +385,27 @@ BLOCK_ANSWERS = ("0.0.0." + "0", "::")                       # addresses a DNS b
 COMPARE_DNS = os.environ.get("DNS_COMPARE", "1.1.1.1")     # outside resolver used by the resolution test
 
 # Pregunta «example.com» directamente a cada DNS de salida (cada 60 s) y anota si responde y en cuánto. Solo se sondean direcciones IP
-# permitidas (no esta máquina ni enlace local) y nunca DoH/DoT, que no se pueden consultar por UDP.
+# permitidas (no esta máquina ni enlace local, y solo el puerto 53 o puertos altos) y nunca DoH/DoT, que no se pueden consultar por UDP.
 # EN: Ask "example.com" directly to each upstream (every 60 s) and note whether it answers and how fast. Only allowed IP addresses
-#     are probed (not this machine or link-local) and never DoH/DoT, which cannot be queried over UDP.
+#     are probed (not this machine or link-local, and only port 53 or high ports) and never DoH/DoT, which cannot be queried over UDP.
 def probe_upstreams(snap: dict, st: dict):
     ups = snap.get("upstreams") or []
     pr = st.setdefault("probe", {"ts": 0.0, "res": {}})
+    def target(u):            # (address, port) of an upstream that may be probed, else None
+        hp = dnsq.split_upstream(u.get("ip") or u.get("name"), u.get("port"))
+        return hp if hp and (hp[1] == 53 or hp[1] >= 1024) and auth.valid_target(hp[0]) else None
     if time.time() - pr["ts"] >= PROBE_EVERY:
-        found = {}
-        for u in ups:
-            hp = dnsq.split_upstream(u.get("ip") or u.get("name"), u.get("port"))
-            if hp and auth.valid_target(hp[0]): found[(u.get("name") or u.get("ip") or "?", hp)] = None
         res, threads = {}, []
-        def work(k, hp):
+        def work(hp):
             r = dnsq.query(hp[0], hp[1], PROBE_NAME, "A", 2.0)
-            res[k] = {"ok": bool(r.get("ok")), "ms": r.get("ms"), "error": r.get("error")}
-        for (k, hp) in list(found)[:8]:
-            th = threading.Thread(target=work, args=(k, hp), daemon=True); th.start(); threads.append(th)
+            res[hp] = {"ok": bool(r.get("ok")), "ms": r.get("ms"), "error": r.get("error")}
+        for hp in list(dict.fromkeys(h for h in map(target, ups) if h))[:8]:
+            th = threading.Thread(target=work, args=(hp,), daemon=True); th.start(); threads.append(th)
         for th in threads: th.join(4)
         pr["res"], pr["ts"] = res, time.time()
     for u in ups:
-        p = pr["res"].get(u.get("name") or u.get("ip") or "?")
-        if p: u["probe"] = p
+        hp = target(u)
+        if hp and hp in pr["res"]: u["probe"] = pr["res"][hp]
 
 # Prueba de resolución: pregunta el mismo nombre a este servidor DNS y a un resolutor externo, y compara.
 # EN: Resolution test: ask the same name to this DNS server and to an outside resolver, and compare.

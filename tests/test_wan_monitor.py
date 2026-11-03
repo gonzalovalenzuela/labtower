@@ -266,7 +266,7 @@ class Http(WithFakePing):
         self.assertEqual(c("POST", "/api/wan/speedtest", {}, token=self.ro)[0], 403); self.assertEqual(c("POST", "/api/wan/speedtest", {})[0], 401)
 
     def test_status_payload(self):
-        cfg = m.load_config(); r = m.probe_round(m.validate({"dns_name": ""}), "192.168.0.1"); m.S.last, m.S.gw = r, "192.168.0.1"
+        r = m.probe_round(m.validate({"dns_name": ""}), "192.168.0.1"); m.S.last, m.S.gw = r, "192.168.0.1"
         s, j = self.srv.call("GET", "/api/wan", token=self.ro)
         self.assertEqual(s, 200); self.assertTrue(j["snap"]["up"]); self.assertEqual(j["snap"]["gateway_ip"], "192.168.0.1"); self.assertIn("config", j)
         self.assertIn("uptime", j); self.assertIn("speed", j); self.assertIn("outages", j); self.assertFalse(j["speed_running"])
