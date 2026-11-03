@@ -1808,6 +1808,8 @@ CREATE TABLE IF NOT EXISTS pve_samples (cid TEXT NOT NULL, node TEXT NOT NULL, t
                                         PRIMARY KEY (cid, node, ts)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS nas_samples (nid TEXT NOT NULL, ts INTEGER NOT NULL, cpu REAL, mem REAL, temp REAL, rx REAL, tx REAL,
                                         PRIMARY KEY (nid, ts)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS pve_series  (cid TEXT NOT NULL, k TEXT NOT NULL, ts INTEGER NOT NULL, v REAL,
+                                        PRIMARY KEY (cid, k, ts)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS nas_series  (nid TEXT NOT NULL, k TEXT NOT NULL, ts INTEGER NOT NULL, v REAL,
                                         PRIMARY KEY (nid, k, ts)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS dns_samples (sid TEXT NOT NULL, ts INTEGER NOT NULL, total INTEGER, blocked INTEGER, pct REAL, ms REAL,

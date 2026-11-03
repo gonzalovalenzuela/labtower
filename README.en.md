@@ -189,6 +189,19 @@ labtower-health
 - When adding a cluster you must confirm its certificate SHA-256 fingerprint, which is then pinned. If the certificate changes, the token is not sent.
 - **Cluster diagnostics** (panel below the nodes): node reboots with a common timeline (those less than 10 minutes apart are flagged as *simultaneous*, and they are detected even if LabTower was stopped), corosync quorum state, down OSDs and Ceph warnings, and the SMART data of each node's disks (health, wear, temperature, errors, sectors and, on NVMe, *Unsafe Shutdowns*) read every 15 minutes (`PVE_SMART_EVERY`, in seconds; 0 disables it). Everything creates events on the Overview timeline. The API token needs the `Sys.Audit` privilege on `/nodes` (role `PVEAuditor`) to read the disks.
 - **Backups (vzdump):** for each VM and CT, its last backup, read from the content of the storages that allow *backup* (a shared storage is queried once; on Proxmox Backup Server its verification state is shown), with its age, size and number of copies. It flags **No backup** or **Too old** (over 36 h by default; change it with the `/api/clusters/<id>/backup` API) and records an Overview event when a guest enters that state, and another when it is back to normal. Failed `vzdump` tasks of the last 7 days are listed and raise a critical event. Test VMs can be **ignored** from the panel (admins only). If a storage cannot be read, the VMs are not accused of having no backup. Read every 10 minutes (`PVE_BACKUP_EVERY`, in seconds; 0 disables it). The token needs `Datastore.Audit` on the storages (role `PVEAuditor`).
+- **Capacity & health** (section of the diagnostics panel, read every 5 minutes; `PVE_EXTRA_EVERY`, in seconds, 0 disables it): **days until full** for every storage and for Ceph (regression over 45 days of history, as in NAS Monitor; warns under 14 days, critical under 3), **capacity** (vCPU and RAM allocated to running VMs/CTs per node, RAM overcommit and the **N-1** test: whether everything still fits if the biggest node goes down), **HA** (services in error/fence and unresponsive managers), **replication** (failing jobs), **failed tasks** of any type (last 2 days), **Ceph** (throughput, recovery and PGs not clean) and per-node data (PVE version, flagged when nodes differ, kernel, load, swap, iowait and certificate expiry, warns at 21 days). The Overview timeline also records when a VM/CT starts, stops, is created or changes node (more than 5 at once become a single summary event; the tag `labtower-ignore` on a VM excludes it) and VMs/CTs holding a **lock** for over 1 hour (6 h for backups). Whatever the token cannot read is simply not shown and the panel says so.
+- **API token privileges:** create the token with **privilege separation** and give it read-only access. The simplest way is to assign the **`PVEAuditor`** role to the user *and* to the token on `/` (with *Propagate*). What each feature needs:
+
+  | Feature | Endpoint | Privilege |
+  |---|---|---|
+  | Nodes, VMs, CTs, storages, locks | `/cluster/resources` | `VM.Audit`, `Datastore.Audit`, `Sys.Audit` |
+  | Quorum, version, Ceph | `/cluster/status`, `/version`, `/cluster/ceph/status` | `Sys.Audit` |
+  | SMART, node status, certificates, replication | `/nodes/<n>/disks/*`, `/nodes/<n>/status`, `/nodes/<n>/certificates/info`, `/nodes/<n>/replication` | `Sys.Audit` on `/nodes` |
+  | HA | `/cluster/ha/status/current` | `Sys.Audit` on `/` |
+  | Backups | `/nodes/<n>/storage/<s>/content` | `Datastore.Audit` |
+  | Tasks, guest IPs (agent) | `/cluster/tasks`, `/nodes/<n>/qemu/<id>/agent/*` | `Sys.Audit` / `VM.Monitor` (or `VM.GuestAgent.Audit` on PVE 9) |
+
+  All of them are **read-only**; LabTower never writes anything to Proxmox. *Pending updates* (`apt/update`) are not queried because they require `Sys.Modify`. The table follows the Proxmox VE documentation; if a feature shows "no permission" in the panel, check that the privilege is assigned to the **token** too (with privilege separation the user's permissions are not inherited).
 - **VMs and containers in Net Monitor:** each VM/CT's MAC (from its configuration) and IP (container static IP, guest agent on VMs, container interface) are read every 5 min. A VM/CT name links to its detail in Net Monitor.
 
 ### NAS Monitor
@@ -396,6 +409,7 @@ sudo systemctl restart wol-console labtower-ups admin-panel net-monitor proxmox-
 | `NUT_DB_FLUSH` | UPS | `60` | Seconds between history writes |
 | `PVE_POLL_ACTIVE`, `PVE_POLL_IDLE` | Proxmox | `5`, `60` | Seconds between polls with the page open / idle |
 | `PVE_KEEP_DAYS` | Proxmox | `7` | Days of CPU and memory history |
+| `PVE_EXTRA_EVERY` | Proxmox | `300` | Seconds between capacity & health reads (HA, replication, certificates, tasks, trends); 0 disables them |
 | `NAS_POLL_ACTIVE`, `NAS_POLL_IDLE` | NAS | `15`, `60` | Seconds between polls with the page open / idle |
 | `NAS_KEEP_DAYS` | NAS | `7` | Days of history per NAS |
 | `LABTOWER_PI_KEEP_DAYS` | Overview | `7` | Days of Pi history |

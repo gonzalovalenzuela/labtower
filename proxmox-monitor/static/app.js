@@ -31,6 +31,13 @@ const LANG={
     deleteClusterConfirm:(name)=>`Delete cluster "${name}"?`,
     cpuAlert:(pct)=>`CPU at ${pct}%`,ramAlert:(pct)=>`RAM at ${pct}%`,
     bkSelAll:'Select all',bkSelNone:'Clear selection',bkSelPending:'Select those without backup or too old',bkIgnoreSel:n=>`Ignore selected (${n})`,bkUnignoreSel:n=>`Stop ignoring selected (${n})`,bkTitle:'Backups (vzdump)',bkWait:'Reading backups… (first read takes a minute)',bkNone:'No backup storage found. The API token needs Datastore.Audit on the storages.',bkOk:'Up to date',bkOld:'Too old',bkNever:'No backup',bkIgnored:'Ignored',bkUnknown:'Unknown',bkAge:(h)=>h<48?`${h} h ago`:`${Math.floor(h/24)} d ago`,bkProblems:(n)=>`${n} without a recent backup`,bkAllOk:'Backups up to date',bkMax:(h)=>`Marked old after ${Math.round(h/24*10)/10} days`,bkDays:'days',bkApply:'Apply',bkIgnore:'Ignore',bkUnignore:'Stop ignoring',bkFailedTasks:'Failed backup tasks',bkVerified:'verified',bkVerFail:'verification failed',bkSaved:'Saved',bkStorageErr:'Could not read storage',bkCopies:(n)=>`${n} copies`,
+    xTitle:'Capacity & health',xWait:'Collecting data…',xPerm:'Not available: the API token lacks permission (see the README)',
+    xDays:'Days until full',xDaysNone:'Not enough history or not growing',xDaysV:d=>d+' d',xCeph:'Ceph cluster',
+    xCap:'Allocation (running guests)',xVcpu:'vCPU',xMemAl:'RAM',xN1Ok:'Survives losing the biggest node',xN1Bad:(n,a,b)=>`Does not fit if ${n} goes down: needs ${a}, ${b} available`,
+    xHa:'High availability',xHaNone:'No HA services',xRepl:'Replication',xReplNone:'No replication jobs',xTasks:'Failed tasks (last 2 days)',xTasksNone:'No failed tasks',
+    xNodes:'Nodes',xLoad:'load',xSwap:'swap',xIow:'iowait',xCert:'certificate',xCertD:d=>d+' d left',xDrift:v=>'Different PVE versions: '+v,
+    xPg:'PGs not clean',xIo:'Ceph I/O',xRec:'recovering',xLocks:'Locked guests',xLockFor:(l,m)=>`${l} for ${m} min`,xFails:n=>n+' failures',
+    xAlLock:(n,l,m)=>`${n}: locked (${l}) for ${m} min`,
     diagTitle:'Cluster diagnostics',diagExpand:'Expand all',diagCollapse:'Collapse all',quorum:'Quorum',quorumOk:'Quorum OK',quorumLost:'NO QUORUM',membersOnline:(a,b)=>`${a}/${b} nodes in corosync`,
     cephOsdDown:(n)=>`${n} OSD down`,cephOsdOut:(n)=>`${n} OSD out`,cephChecks:'Ceph warnings',
     rebootsTitle:'Node reboots',noReboots:'No reboots recorded since this was enabled.',rebootAt:'booted',rebootWave:'simultaneous',
@@ -69,6 +76,13 @@ const LANG={
     deleteClusterConfirm:(name)=>`¿Eliminar el cluster "${name}"?`,
     cpuAlert:(pct)=>`CPU al ${pct}%`,ramAlert:(pct)=>`RAM al ${pct}%`,
     bkSelAll:'Seleccionar todas',bkSelNone:'Limpiar selección',bkSelPending:'Seleccionar las sin respaldo o muy viejas',bkIgnoreSel:n=>`Ignorar seleccionadas (${n})`,bkUnignoreSel:n=>`Dejar de ignorar seleccionadas (${n})`,bkTitle:'Respaldos (vzdump)',bkWait:'Leyendo respaldos… (la primera lectura tarda un minuto)',bkNone:'No hay storages de respaldo. El token de la API necesita Datastore.Audit en los storages.',bkOk:'Al día',bkOld:'Muy viejo',bkNever:'Sin respaldo',bkIgnored:'Ignorado',bkUnknown:'Desconocido',bkAge:(h)=>h<48?`hace ${h} h`:`hace ${Math.floor(h/24)} d`,bkProblems:(n)=>`${n} sin respaldo reciente`,bkAllOk:'Respaldos al día',bkMax:(h)=>`Se marca como vieja tras ${Math.round(h/24*10)/10} días`,bkDays:'días',bkApply:'Aplicar',bkIgnore:'Ignorar',bkUnignore:'Dejar de ignorar',bkFailedTasks:'Tareas de respaldo fallidas',bkVerified:'verificado',bkVerFail:'verificación fallida',bkSaved:'Guardado',bkStorageErr:'No se pudo leer el storage',bkCopies:(n)=>`${n} copias`,
+    xTitle:'Capacidad y salud',xWait:'Recopilando datos…',xPerm:'No disponible: el token de la API no tiene permiso (ver el README)',
+    xDays:'Días hasta llenarse',xDaysNone:'Sin historial suficiente o no crece',xDaysV:d=>d+' d',xCeph:'Cluster Ceph',
+    xCap:'Asignación (invitados encendidos)',xVcpu:'vCPU',xMemAl:'RAM',xN1Ok:'Resiste la caída del nodo más grande',xN1Bad:(n,a,b)=>`No caben si cae ${n}: necesitan ${a}, hay ${b} disponibles`,
+    xHa:'Alta disponibilidad',xHaNone:'Sin servicios HA',xRepl:'Replicación',xReplNone:'Sin trabajos de replicación',xTasks:'Tareas fallidas (últimos 2 días)',xTasksNone:'Sin tareas fallidas',
+    xNodes:'Nodos',xLoad:'carga',xSwap:'swap',xIow:'iowait',xCert:'certificado',xCertD:d=>'quedan '+d+' d',xDrift:v=>'Versiones de PVE distintas: '+v,
+    xPg:'PG no limpios',xIo:'E/S de Ceph',xRec:'recuperando',xLocks:'Invitados bloqueados',xLockFor:(l,m)=>`${l} hace ${m} min`,xFails:n=>n+' fallos',
+    xAlLock:(n,l,m)=>`${n}: bloqueado (${l}) hace ${m} min`,
     diagTitle:'Diagnóstico del cluster',diagExpand:'Expandir todo',diagCollapse:'Contraer todo',quorum:'Quórum',quorumOk:'Quórum OK',quorumLost:'SIN QUÓRUM',membersOnline:(a,b)=>`${a}/${b} nodos en corosync`,
     cephOsdDown:(n)=>`${n} OSD caído${n!==1?'s':''}`,cephOsdOut:(n)=>`${n} OSD fuera`,cephChecks:'Avisos de Ceph',
     rebootsTitle:'Reinicios de nodos',noReboots:'Sin reinicios registrados desde que se activó.',rebootAt:'arrancó',rebootWave:'simultáneo',
@@ -389,7 +403,7 @@ async function toggleBkIgnore(cid,vmid){
     _diagTs[cid]=0;renderDashboard();toast(t('bkSaved'));
   }catch(e){toast(e.message,true);}
 }
-const DIAG_KEYS=['reboots','backups','smart'];
+const DIAG_KEYS=['extra','reboots','backups','smart'];
 function toggleDiagAll(){if(DIAG_KEYS.every(k=>_diagShown.has(k)))_diagShown.clear();else DIAG_KEYS.forEach(k=>_diagShown.add(k));renderDashboard();}
 function toggleDiag(k){if(_diagShown.has(k))_diagShown.delete(k);else _diagShown.add(k);renderDashboard();}
 function pill(txt,col){const e=document.createElement('span');e.textContent=txt;e.style.cssText='font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;color:'+col+';background:color-mix(in srgb,'+col+' 14%,transparent);white-space:nowrap';return e;}
@@ -413,6 +427,12 @@ function buildDiag(cluster){
     if(cp.down>0)row.appendChild(pill(t('cephOsdDown',Number(cp.down)),'var(--red)'));
     if(cp.out>0)row.appendChild(pill(t('cephOsdOut',Number(cp.out)),'var(--orange)'));
   }
+  const ex=dg&&dg.extra;
+  if(ex){
+    const nbad=(ex.ha&&ex.ha.bad||[]).length;if(nbad)row.appendChild(pill(t('xHa')+': '+nbad,'var(--red)'));
+    const rb=(ex.repl&&ex.repl.bad||[]).length;if(rb)row.appendChild(pill(t('xRepl')+': '+rb,'var(--orange)'));
+    if(ex.cap&&ex.cap.n1&&!ex.cap.n1.ok)row.appendChild(pill('N-1 ✗','var(--orange)'));
+  }
   const bk=dg&&dg.backups;
   if(bk&&bk.rows){
     const bad=bk.rows.filter(r=>r.status==='old'||r.status==='never').length;
@@ -431,6 +451,44 @@ function buildDiag(cluster){
     h.textContent=(_diagShown.has(key)?'▾ ':'▸ ')+title;box.appendChild(h);
     if(_diagShown.has(key)){const b=document.createElement('div');b.style.cssText='margin-top:6px;font-size:12px';fill(b);box.appendChild(b);}
   };
+  sect('extra',t('xTitle'),b=>{
+    if(!ex){b.style.color='var(--text-dim)';b.textContent=t('xWait');return;}
+    const h=(txt)=>{const e=document.createElement('div');e.style.cssText='font-weight:600;margin:10px 0 3px;color:var(--text-mid)';e.textContent=txt;b.appendChild(e);};
+    const ln=(txt,col,mono)=>{const e=document.createElement('div');e.style.cssText='padding:1px 0;font-size:11px;'+(mono?'font-family:var(--mono);':'')+(col?'color:'+col+';':'');e.textContent=txt;b.appendChild(e);};
+    const er=ex.errors||{};
+    if(Object.values(er).includes('perm'))ln('ℹ '+t('xPerm')+' ('+Object.keys(er).filter(k=>er[k]==='perm').join(', ')+')','var(--text-dim)');
+    // days until full
+    const dk=Object.keys(ex.days||{});
+    if(dk.length){h(t('xDays'));dk.sort().forEach(k=>{const d=ex.days[k];const nm=k==='ceph'?t('xCeph'):k.slice(2);
+      ln(nm+' — '+(d==null?t('xDaysNone'):t('xDaysV',d)),d!=null&&d<=3?'var(--red)':d!=null&&d<=14?'var(--orange)':'');});}
+    // capacity
+    const cap=ex.cap;
+    if(cap&&cap.nodes&&cap.nodes.length){h(t('xCap'));
+      cap.nodes.forEach(p=>ln(p.node+' — '+t('xVcpu')+' '+p.vcpu+'/'+p.cpus+(p.cpu_ratio!=null?' ('+p.cpu_ratio+'×)':'')+' · '+t('xMemAl')+' '+fmtBytes(p.mem)+'/'+fmtBytes(p.maxmem)+(p.mem_ratio!=null?' ('+Math.round(p.mem_ratio*100)+'%)':''),p.mem_ratio>1?'var(--orange)':''));
+      if(cap.n1)ln(cap.n1.ok?'✓ '+t('xN1Ok'):'⚠ '+t('xN1Bad',cap.n1.node,fmtBytes(cap.n1.need),fmtBytes(cap.n1.have)),cap.n1.ok?'var(--green)':'var(--orange)');}
+    const lk=Object.entries(ex.locks||{});
+    if(lk.length){const now=Date.now()/1000;const old=lk.filter(([v,x])=>now-x.since>=1800);if(old.length){h(t('xLocks'));old.forEach(([v,x])=>ln(v+' — '+t('xLockFor',x.lock,Math.floor((now-x.since)/60)),'var(--orange)'));}}
+    // HA
+    const ha=ex.ha;if(ha&&ha.services&&ha.services.length){h(t('xHa'));ha.services.forEach(s=>ln(s.sid+' — '+s.state+(s.node?' @ '+s.node:''),['error','fence','recovery','freeze'].includes(s.state)?'var(--red)':'',true));}
+    // replication
+    const rp=ex.repl;if(rp&&rp.jobs&&rp.jobs.length){h(t('xRepl'));rp.jobs.forEach(j=>ln(j.id+' '+j.node+' → '+j.target+(j.last?' · '+dtFmt(j.last):'')+(j.fails?' · '+t('xFails',j.fails):'')+(j.error?' · '+j.error:''),j.fails||j.error?'var(--orange)':'',true));}
+    // ceph
+    const ci=ex.ceph;if(ci){h(t('xIo'));
+      ln('R '+fmtBytes(ci.read_bps)+'/s · W '+fmtBytes(ci.write_bps)+'/s · '+Math.round(ci.read_ops)+'/'+Math.round(ci.write_ops)+' IOPS'+(ci.recover_bps>0?' · '+t('xRec')+' '+fmtBytes(ci.recover_bps)+'/s':''),'',true);
+      if(ci.pgs&&ci.clean<ci.pgs)ln(t('xPg')+': '+(ci.pgs-ci.clean)+'/'+ci.pgs+' — '+ci.states.map(x=>x.n+' '+x.state).join(', '),'var(--orange)',true);}
+    // nodes
+    const nk=Object.keys(ex.nodes||{});
+    if(nk.length){h(t('xNodes'));nk.sort().forEach(k=>{const n=ex.nodes[k];const bits=[];
+      if(n.version)bits.push('PVE '+n.version);if(n.kernel)bits.push(n.kernel);if(n.load&&n.load.length)bits.push(t('xLoad')+' '+n.load.join(' / '));
+      if(n.swap_total)bits.push(t('xSwap')+' '+Math.round(n.swap_used/n.swap_total*100)+'%');if(n.iowait!=null)bits.push(t('xIow')+' '+(n.iowait*100).toFixed(1)+'%');
+      if(n.cert_days!=null)bits.push(t('xCert')+' '+t('xCertD',Math.floor(n.cert_days)));
+      ln(k+' — '+bits.join(' · '),n.cert_days!=null&&n.cert_days<=21?'var(--orange)':'',true);});
+      if((ex.drift||[]).length)ln('⚠ '+t('xDrift',ex.drift.join(', ')),'var(--orange)');}
+    // failed tasks
+    h(t('xTasks'));
+    if(!(ex.tasks||[]).length)ln(t('xTasksNone'),'var(--text-dim)');
+    (ex.tasks||[]).slice(0,10).forEach(x=>ln(dtFmt(x.start)+' '+x.node+' '+x.type+(x.id?' '+x.id:'')+' — '+x.status,'var(--orange)',true));
+  });
   sect('reboots',t('rebootsTitle')+(dg&&dg.reboots&&dg.reboots.length?' ('+dg.reboots.length+')':''),b=>{
     const rb=(dg&&dg.reboots)||[];
     if(!rb.length){b.style.color='var(--text-dim)';b.textContent=t('noReboots');return;}
@@ -730,7 +788,7 @@ function buildVMSection(items, type, running, nodeName){
           return `<div class="vm-row">
             <span class="vm-dot ${dotCls}"></span>
             <span class="vm-id">${esc(v.vmid)}</span>
-            <span class="vm-main"><span class="vm-name" title="${esc(v.name||'')}" data-nethost="${esc(guestHost(v))}" data-nethost-click="1">${esc(v.name||'—')}${v.lock==='migrate'?' <span title="migrating" style="color:var(--orange)">⇄</span>':''}</span>${v.status==='running'?`<span class="vm-meta">${cpuPct}% · ${fmtBytes(v.mem||0)} · ${fmtUptime(v.uptime)}</span>`:''}</span>
+            <span class="vm-main"><span class="vm-name" title="${esc(v.name||'')}" data-nethost="${esc(guestHost(v))}" data-nethost-click="1">${esc(v.name||'—')}${v.lock==='migrate'?' <span title="migrating" style="color:var(--orange)">⇄</span>':v.lock?' <span title="lock: '+esc(v.lock)+'" style="color:var(--orange)">🔒</span>':''}</span>${v.status==='running'?`<span class="vm-meta">${cpuPct}% · ${fmtBytes(v.mem||0)} · ${fmtUptime(v.uptime)}</span>`:''}</span>
             <span class="vm-type ${esc(String(type).toLowerCase().replace(/[^a-z0-9_-]/g,''))}">${esc(type)}</span>
             ${v.status==='running'?'':`<span class="vm-state">${esc(v.status)}</span>`}
           </div>`;

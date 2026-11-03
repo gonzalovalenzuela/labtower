@@ -43,6 +43,7 @@ import auth
 sys.path.insert(0, str(Path(__file__).parent))
 import diag
 import backups
+import extra
 
 # Solo loopback; el acceso desde la red pasa por nginx.
 # EN: Loopback only; network access goes through nginx.
@@ -78,6 +79,10 @@ BACKUP_EVERY = float(os.environ.get("PVE_BACKUP_EVERY", 600))
 # Cada cuántos segundos se leen las MAC e IP de las VM y contenedores (para mapearlos en Net Monitor).
 # EN: How often, in seconds, the MACs and IPs of VMs and containers are read (to map them in Net Monitor).
 GUEST_EVERY = float(os.environ.get("PVE_GUEST_EVERY", 300))
+# Información adicional (HA, replicación, certificados, tareas, tendencias): cada tanto; 0 la desactiva.
+# EN: Extra information (HA, replication, certificates, tasks, trends): this often; 0 turns it off.
+EXTRA_EVERY = float(os.environ.get("PVE_EXTRA_EVERY", 300))
+SERIES_EVERY, SERIES_KEEP = 900, 45 * 86400
 # Instante de la última petición de un navegador (decide el ritmo de consulta).
 # EN: Time of the last browser request (decides the polling rate).
 _last_view  = 0.0                                             # last time a browser asked for data
@@ -587,6 +592,160 @@ def _backup_loop(cluster, cache):
     if client: client.close()
     _backups.pop(cid, None); _bk_seen.pop(cid, None)
 
+# ─── Información adicional ────────────────────────────────────────────────────
+# Lo que se calcula con la lectura que ya hay (cambios de estado, bloqueos, capacidad) se hace en cada vuelta del poller; lo que
+# necesita más consultas a la API (HA, replicación, certificados, tareas, tendencias) va en un hilo aparte cada EXTRA_EVERY s.
+# Cada consulta que el token no pueda hacer se anota en `errors` y esa parte queda vacía: nada falla por falta de permisos.
+# EN: What is computed from the reading we already have (state changes, locks, capacity) happens on every poller pass; what
+#     needs more API queries (HA, replication, certificates, tasks, trends) runs in its own thread every EXTRA_EVERY s.
+#     Every query the token cannot make is noted in `errors` and that part stays empty: nothing fails for lack of permission.
+_extra: dict = {}             # cid -> result of the last extra round
+_extra_threads: dict = {}
+_live: dict = {}              # cid -> {"alerts": [...], "cap": {...}} from the last poller pass
+_xlock = threading.Lock()
+_guest_prev: dict = {}        # cid -> {vmid: {st, name, node, kind}} (absent before the first pass)
+_lock_state: dict = {}        # cid -> {vmid: {lock, since}}
+_task_seen: dict = {}         # cid -> set of failed task upids already reported (None before the first reading)
+_al_on: dict = {}             # cid -> set of alert keys active at the last pass (None before the first one)
+_ser_last: dict = {}
+
+_PVE_ACT = {"start": "started", "stop": "stopped", "new": "created", "moved": "moved"}
+
+def _guest_events(cluster, nodes_data):
+    cid, cname = cluster["id"], cluster["name"]
+    cur = extra.guest_state(nodes_data)
+    if any(n.get("status") != "online" for n in nodes_data or []) and cid in _guest_prev:
+        # a node that is not online hides its guests: keep what we knew about them so they do not look "new" when it returns
+        for v, g in _guest_prev[cid].items():
+            if v not in cur and not any(n.get("name") == g["node"] and n.get("status") == "online" for n in nodes_data): cur[v] = g
+    ch = extra.guest_changes(_guest_prev.get(cid), cur)
+    _guest_prev[cid] = cur
+    if not ch: return
+    if len(ch) > extra.MAX_CHANGES:
+        auth.record_event("pve", "info", f"{cname}: {len(ch)} VM/CT changed state", "pve_guest_many", c=cname, cnt=len(ch))
+        return
+    for g in ch:
+        what = g["what"]
+        params = dict(c=cname, n=g["name"], v=g["vmid"], nd=g["node"])
+        if what == "moved": params["f"] = g["from"]
+        auth.record_event("pve", "info" if what != "stop" else "warn", f"{cname}/{g['name']} ({g['vmid']}): {_PVE_ACT[what]} on {g['node']}", "pve_guest_" + what, **params)
+
+def _live_pass(cluster, nodes_data):
+    now = time.time()
+    st = _lock_state.setdefault(cluster["id"], {})
+    cap = extra.capacity(nodes_data)
+    al = extra.lock_alerts(st, nodes_data, now) + extra.capacity_alerts(cap)
+    with _xlock: _live[cluster["id"]] = {"alerts": al, "cap": cap, "locks": {v: dict(x) for v, x in st.items()}}
+    _guest_events(cluster, nodes_data)
+    _emit_alerts(cluster)
+
+def _alert_key(cid, a):
+    ident = a.get("name") or a.get("sid") or a.get("id") or a.get("vmid") or a.get("node") or ""
+    return f"{cid}:{a['type']}:{ident}"
+
+def all_alerts(cid):
+    with _xlock:
+        return list((_live.get(cid) or {}).get("alerts", [])) + list((_extra.get(cid) or {}).get("alerts", []))
+
+# Evento al aparecer cada alerta nueva (la primera vez solo se memoriza, para que reiniciar no repita lo ya conocido).
+# EN: One event when each new alert appears (the first time it only remembers, so a restart does not repeat what was already known).
+def _emit_alerts(cluster):
+    cid, cname = cluster["id"], cluster["name"]
+    if EXTRA_EVERY > 0 and cid not in _extra: return          # wait for the first extra round so everything is memorized together
+    al = {_alert_key(cid, a): a for a in all_alerts(cid)}
+    prev = _al_on.get(cid)
+    _al_on[cid] = set(al)
+    if prev is None: return
+    for k, a in al.items():
+        if k in prev: continue
+        params = {p: v for p, v in a.items() if p not in ("type", "lv") and isinstance(v, (int, float, str)) and not isinstance(v, bool)}
+        params["c"] = cname
+        auth.record_event("pve", a.get("lv", "warn"), f"{cname}: {a['type']} " + " ".join(f"{p}={v}" for p, v in sorted(params.items()) if p != "c"), "pve_al_" + a["type"], **params)
+
+def _series_store(cid, rows):
+    now = int(time.time())
+    try:
+        c = auth.metrics_conn()
+        try:
+            c.executemany("INSERT OR REPLACE INTO pve_series (cid,k,ts,v) VALUES (?,?,?,?)", [(cid, k, now, float(u)) for k, (u, _t) in rows.items()])
+            c.execute("DELETE FROM pve_series WHERE cid = ? AND ts < ?", (cid, now - SERIES_KEEP)); c.commit()
+        finally: c.close()
+        _ser_last[cid] = now
+    except Exception as e:
+        log.warning(f"could not store the slow series: {e}")
+
+def _series_days(cid, rows):
+    out, now = {}, int(time.time())
+    try:
+        c = auth.metrics_conn()
+        try:
+            for k, (used, tot) in rows.items():
+                pts = c.execute("SELECT ts,v FROM pve_series WHERE cid=? AND k=? AND ts>=? ORDER BY ts", (cid, k, now - 14 * 86400)).fetchall()
+                out[k] = extra.days_to_full([(r[0], r[1]) for r in pts], tot - used)
+        finally: c.close()
+    except Exception as e:
+        log.warning(f"could not read the slow series: {e}")
+    return out
+
+def _extra_round(cluster, client, cache):
+    from urllib.parse import quote
+    cid, cname = cluster["id"], cluster["name"]
+    now = time.time()
+    data = cache.snap().get("data") or {}
+    nodes = data.get("nodes") or []
+    errors = {}
+    def tryget(feat, path):
+        try:    return client.get(path).get("data")
+        except PVEHTTPError as e:
+            errors.setdefault(feat, "perm" if e.status in (401, 403) else str(e.status)); return None
+        except Exception as e:
+            errors.setdefault(feat, str(e)[:80]); return None
+    ninfo, repl_rows = {}, {}
+    for nd in nodes:
+        if nd.get("status") != "online": continue
+        q = quote(str(nd["name"]), safe="")
+        ninfo[nd["name"]] = extra.node_info(tryget("node", f"/nodes/{q}/status"), tryget("cert", f"/nodes/{q}/certificates/info"), now)
+        r = tryget("repl", f"/nodes/{q}/replication")
+        if isinstance(r, list) and r: repl_rows[nd["name"]] = r
+    ha = extra.ha_summary(tryget("ha", "/cluster/ha/status/current"))
+    repl = extra.repl_summary(repl_rows)
+    tasks = extra.failed_tasks(tryget("tasks", "/cluster/tasks"), now)
+    _task_seen[cid], new = extra.new_task_failures(_task_seen.get(cid), tasks)
+    for t in new[:5]:
+        auth.record_event("pve", "warn", f"{cname}/{t['node']}: task {t['type']} {t['id']} failed ({t['status'][:60]})", "pve_task_fail", c=cname, n=t["node"], w=t["type"] + (" " + t["id"] if t["id"] else ""), e=t["status"][:60])
+    io = extra.ceph_io(data.get("ceph"))
+    rows = extra.series_points(nodes, data.get("ceph"))
+    if rows and now - _ser_last.get(cid, 0) >= SERIES_EVERY: _series_store(cid, rows)
+    days = _series_days(cid, rows) if rows else {}
+    labels = {k: k.split(":", 1)[-1] for k in rows}
+    al = (extra.days_alerts(days, labels) + ha["bad"] + repl["bad"] + extra.ceph_alerts(io) + extra.node_alerts(ninfo))
+    res = {"ts": int(now), "nodes": ninfo, "ha": ha, "repl": repl, "tasks": tasks, "ceph": io, "days": days,
+           "drift": extra.version_drift(ninfo), "errors": errors, "alerts": al}
+    with _xlock: _extra[cid] = res
+    _emit_alerts(cluster)
+
+def _extra_loop(cluster, cache):
+    cid = cluster["id"]
+    client = None
+    time.sleep(min(25, EXTRA_EVERY))
+    while _cache.get(cid) is cache:
+        try:
+            cur = next((c for c in load_clusters() if c["id"] == cid), None)
+            if cur is None: break
+            if client is None:
+                client = PVEClient(host=cur["host"], port=cur.get("port", 8006), user=cur["user"], token_name=cur["token_name"],
+                                   token_value=cur["token_value"], verify_ssl=cur.get("verify_ssl", False), fingerprint=cur.get("fingerprint"))
+            else:
+                fp = _fp_norm(cur.get("fingerprint"))
+                if fp != client.fingerprint: client.fingerprint = fp; client.close()
+            _extra_round(cur, client, cache)
+        except Exception as e:
+            log.warning(f"[{cluster['name']}] extra round: {e}")
+            if client: client.close()
+        time.sleep(EXTRA_EVERY)
+    if client: client.close()
+    for d in (_extra, _live, _guest_prev, _lock_state, _task_seen, _al_on, _ser_last): d.pop(cid, None)
+
 # ─── Red de las VM y contenedores (para Net Monitor) ─────────────────────────
 # Por cada VM/CT se leen sus MAC (de la configuración) y sus IP: las fijas del contenedor, las que informa el agente de
 # invitado (VM) o la interfaz del contenedor. Si falta algún permiso o el agente no corre, queda solo lo que se pudo leer.
@@ -763,6 +922,8 @@ def _poll_cluster(cluster):
         _smart_threads[cid] = threading.Thread(target=_smart_loop, args=(cluster, cache), daemon=True); _smart_threads[cid].start()
     if BACKUP_EVERY > 0 and not (_backup_threads.get(cid) and _backup_threads[cid].is_alive()):
         _backup_threads[cid] = threading.Thread(target=_backup_loop, args=(cluster, cache), daemon=True); _backup_threads[cid].start()
+    if EXTRA_EVERY > 0 and not (_extra_threads.get(cid) and _extra_threads[cid].is_alive()):
+        _extra_threads[cid] = threading.Thread(target=_extra_loop, args=(cluster, cache), daemon=True); _extra_threads[cid].start()
     if GUEST_EVERY > 0 and not (_guest_threads.get(cid) and _guest_threads[cid].is_alive()):
         _guest_threads[cid] = threading.Thread(target=_guest_loop, args=(cluster, cache), daemon=True); _guest_threads[cid].start()
 
@@ -812,6 +973,8 @@ def _poll_cluster(cluster):
             _cluster_events(cluster, nodes_data, ceph)
             _observe_reboots(cluster, nodes_data)
             _diag_events(cluster, corosync, cephsum)
+            try:    _live_pass(cluster, nodes_data)
+            except Exception as e: log.warning(f"[{cluster['name']}] extra pass: {e}")
             log.debug(f"[{cluster['name']}] {len(nodes_data)} nodes in {time.time()-t0:.2f}s")
 
         except Exception as e:
@@ -973,6 +1136,7 @@ class H(BaseHTTPRequestHandler):
                             alerts.append({"node": nd["name"], "type": "cpu", "value": round(cpu_pct, 1)})
                         if mem_pct > 90:
                             alerts.append({"node": nd["name"], "type": "mem", "value": round(mem_pct, 1)})
+                alerts += all_alerts(c["id"])
                 pub = {k: v for k, v in c.items() if k != "token_value"}     # never send the API token to the browser
                 pub["pinned"] = bool(_fp_norm(c.get("fingerprint")))
                 pub.setdefault("layout", {"order": [], "pinned": []})
@@ -986,7 +1150,11 @@ class H(BaseHTTPRequestHandler):
             if not any(c["id"] == cid for c in load_clusters()): return self._json(404, {"error": "Not found"})
             with _diag_lock:
                 rb = diag.with_waves([r for r in _diag_load()["reboots"] if r.get("cid") == cid])
-            self._json(200, {"reboots": rb[:100], "smart": _smart.get(cid), "smart_every": SMART_EVERY, "backups": _backups.get(cid)})
+            with _xlock:
+                ex = dict(_extra.get(cid) or {}) or None
+                lv = _live.get(cid) or {}
+            if ex: ex["cap"] = lv.get("cap"); ex["locks"] = lv.get("locks", {})
+            self._json(200, {"reboots": rb[:100], "smart": _smart.get(cid), "smart_every": SMART_EVERY, "backups": _backups.get(cid), "extra": ex})
 
         # VM y contenedores con sus MAC e IP, para que Net Monitor los asocie a los equipos de la red.
         # EN: VMs and containers with their MACs and IPs, so Net Monitor can match them to the devices on the network.
