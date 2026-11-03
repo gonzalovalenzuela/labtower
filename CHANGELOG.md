@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.6l — 2026-11-03
+
+- **Arreglo:** en el modo de menú «barra superior» se perdía el botón «Ajustes» de WAN Monitor (la barra del módulo quedaba vacía u oculta). Ahora el botón vive fuera del texto que esa barra oculta y la barra se vuelve a evaluar cuando le aparecen botones después de cargar los datos. Se revisaron todos los módulos en 4 tamaños y no se perdía ningún otro control.
+- **Arreglo:** WAN Monitor: el historial de IP pública solo contaba desde la instalación de la tabla nueva. Al iniciar recupera los cambios anteriores desde el registro de eventos (los que sigan dentro de sus 30 días / 300 eventos); para eso el módulo WAN puede leer solo sus propios eventos.
+- **Arreglo:** Net Monitor: Pi-hole dejaba de conectar hasta pulsar «Guardar» sin cambiar nada. La huella fijada (TOFU) se rechazaba cuando Pi-hole renovaba su certificado. Ahora, si el certificado fijado ya venció y el nuevo está vigente, se fija el nuevo automáticamente (queda en el registro y en los eventos); si el fijado sigue vigente el cambio se sigue rechazando, y el mensaje de error ya no se corta a 80 caracteres e indica qué hacer.
+- **Arreglo:** Net Monitor: guardar OUI o SNMP podía borrar huellas de Pi-hole recién fijadas (escritura de configuración sin bloqueo).
+
 ## 2.1.6k — 2026-11-03
 
 - **Nuevo:** WOL Console: estado en vivo de cada equipo (ping desde el servidor) y confirmación de encendido: tras enviar el paquete avisa «encendió (N s)» o que no respondió en 3 minutos.
@@ -8,10 +15,6 @@
 - **Arreglo:** el esquema de métricas declaraba dos veces la tabla de destinos del WAN.
 - **Seguridad:** el sondeo de DNS de salida solo consulta el puerto 53 o puertos altos; el historial de IP pública se inicializa con la IP ya conocida.
 - **Arreglo:** avisos de pyflakes en las pruebas (importaciones y variables sin uso).
-- **Arreglo:** en el modo de menú «barra superior» se perdía el botón «Ajustes» de WAN Monitor (la barra del módulo quedaba vacía u oculta). Ahora el botón vive fuera del texto que esa barra oculta y la barra se vuelve a evaluar cuando le aparecen botones después de cargar los datos. Se revisaron todos los módulos en 4 tamaños y no se perdía ningún otro control.
-- **Arreglo:** WAN Monitor: el historial de IP pública solo contaba desde la instalación de la tabla nueva. Al iniciar recupera los cambios anteriores desde el registro de eventos (los que sigan dentro de sus 30 días / 300 eventos); para eso el módulo WAN puede leer solo sus propios eventos.
-- **Arreglo:** Net Monitor: Pi-hole dejaba de conectar hasta pulsar «Guardar» sin cambiar nada. La huella fijada (TOFU) se rechazaba cuando Pi-hole renovaba su certificado. Ahora, si el certificado fijado ya venció y el nuevo está vigente, se fija el nuevo automáticamente (queda en el registro y en los eventos); si el fijado sigue vigente el cambio se sigue rechazando, y el mensaje de error ya no se corta a 80 caracteres e indica qué hacer.
-- **Arreglo:** Net Monitor: guardar OUI o SNMP podía borrar huellas de Pi-hole recién fijadas (escritura de configuración sin bloqueo).
 
 ## 2.1.6j — 2026-11-03
 
