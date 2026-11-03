@@ -458,7 +458,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&me&&me.us
 
 // ───────── Sesión / session ─────────
 function showLogin(){clearTimeout(timer);$('app').classList.add('hide');$('loginbox').classList.remove('hide');$('lu').focus()}
-function renderNav(){if(window.labNav)labNav.render({self:'overview',mode:'strip',lang:lang,me:me&&me.username?me:null});}
+function renderNav(){if(window.labNav)labNav.render({self:'overview',lang:lang,me:me&&me.username?me:null});}
 async function start(){
   try{me=await jget('api/me')}catch(e){me={}}
   if(!me.username)return showLogin();

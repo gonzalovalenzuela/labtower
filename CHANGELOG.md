@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.6d — 2026-11-03
+
+- **Mejora:** nueva navegación. En escritorio y iPad hay una barra superior con el logo (Inicio), el grupo actual y un selector del módulo (con su estado) que abre un panel con todos los módulos agrupados; se cierra con Esc o al hacer clic fuera. En móvil hay una barra inferior (Inicio, Resumen, Módulos, Opciones) y los módulos se eligen en una hoja desde abajo. El estado se indica con forma y texto, no solo con color. Se oculta en modo kiosco. El menú lateral de cada módulo queda solo con lo propio del módulo.
+
 ## 2.1.6c — 2026-11-02
 
 - **Mejora:** navegación unificada. Todos los módulos comparten el mismo menú lateral, con «Inicio» y «Resumen» arriba y los módulos agrupados (Energía y servidores, Red, Herramientas, Sistema), el módulo actual resaltado y el estado de cada uno (verde, amarillo, rojo) junto al nombre. Solo aparecen los módulos a los que tienes permiso y los que el admin no apagó. El menú ya no se reordena arrastrando, así que el orden es el mismo en todas las pantallas y en la portada.

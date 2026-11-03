@@ -1,9 +1,11 @@
-// LabTower — navegación compartida (la misma en la portada de cada módulo y en el Resumen).
-// EN: LabTower — shared navigation (the same in every module and in the Overview).
-// ES: Un solo orden y agrupación en todas partes. Muestra solo los módulos a los que tienes permiso y los que el admin no apagó,
-//     con su estado junto al nombre (un único GET público a /admin/api/health, guardado 45 s en la pestaña).
-// EN: One order and grouping everywhere. Shows only the modules you may use and the ones the admin did not turn off, with their
-//     status next to the name (a single public GET to /admin/api/health, kept 45 s in the tab).
+// LabTower — navegación compartida: barra superior con selector de módulo (escritorio y tablet) y barra inferior (móvil).
+// EN: LabTower — shared navigation: top bar with a module switcher (desktop and tablet) and a bottom bar (phones).
+// ES: El mismo orden y agrupación en todos los módulos y en el Resumen. El selector muestra solo los módulos a los que tienes permiso y los
+//     que el admin no apagó, con su estado (forma + texto, nunca solo color). El estado sale de un único GET público a /admin/api/health,
+//     guardado 45 s en la pestaña. La barra del módulo (idioma, tema, usuario) y su panel lateral (listas del módulo) no cambian.
+// EN: Same order and grouping everywhere. The switcher lists only the modules you may use and the ones the admin did not turn off, with their
+//     status (shape + text, never colour alone). Status comes from one public GET to /admin/api/health, kept 45 s in the tab. The module's own
+//     bar (language, theme, user) and its side panel (module lists) are unchanged.
 (function () {
   'use strict';
   var I = {
@@ -26,8 +28,17 @@
     {es: 'Herramientas', en: 'Tools', items: ['wol']},
     {es: 'Sistema', en: 'System', items: ['admin']}
   ];
+  var T = {
+    es: {mods: 'Módulos', opts: 'Opciones', main: 'Principal', switchTo: 'Cambiar de módulo', up: 'Activo', mid: 'Con avisos', down: 'Con fallas', home: 'Inicio de LabTower'},
+    en: {mods: 'Modules', opts: 'Options', main: 'Main', switchTo: 'Switch module', up: 'Active', mid: 'Warnings', down: 'Failing', home: 'LabTower home'}
+  };
+  var SHAPE = {
+    up:   '<circle cx="5" cy="5" r="4.5" fill="#15803d"/>',
+    mid:  '<path d="M5 .5l4.5 8.5h-9z" fill="#b45309"/>',
+    down: '<rect x=".5" y=".5" width="9" height="9" rx="1.5" fill="#b91c1c"/>'
+  };
   var LV = {readonly: 1, execute: 2, admin: 3};
-  var health = null, last = null;
+  var health = null, timer = null, st = null;      // st: {box parts, opts, me}
 
   function visible(id, me) {
     if (id === 'home' || id === 'overview') return true;
@@ -37,13 +48,32 @@
     return !!LV[me.permissions[id]];
   }
   function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+  function icon(path, size) {
+    var s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true');
+    if (size) { s.setAttribute('width', size); s.setAttribute('height', size); }
+    s.innerHTML = path;                                                           // constante propia / own constant
+    return s;
+  }
+  function name(id, lang) { var it = I[id]; return it.label || (lang === 'es' ? it.es : it.en); }
+  function level(id) {
+    var s = health && health[id]; s = s && s.status;
+    return s === 'ok' ? 'up' : s === 'degraded' ? 'mid' : s ? 'down' : '';
+  }
   function paint() {
-    document.querySelectorAll('[data-nav-id] .nav-dot').forEach(function (d) {
-      var s = health && health[d.parentNode.getAttribute('data-nav-id')];
-      s = s && s.status;
-      d.className = 'nav-dot' + (s === 'ok' ? ' up' : s === 'degraded' ? ' mid' : s ? ' down' : '');
-      d.title = s === 'ok' ? '●' : s || '';
+    if (!st) return;
+    var tr = T[st.lang];
+    document.querySelectorAll('.gt[data-nav-id] .gt-st').forEach(function (box) {
+      var lv = level(box.parentNode.getAttribute('data-nav-id'));
+      box.textContent = '';
+      if (!lv) return;
+      var sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      sv.setAttribute('width', '10'); sv.setAttribute('height', '10'); sv.setAttribute('viewBox', '0 0 10 10'); sv.setAttribute('aria-hidden', 'true');
+      sv.innerHTML = SHAPE[lv];                                                   // constante propia / own constant
+      box.appendChild(sv); box.appendChild(document.createTextNode(tr[lv]));
     });
+    var cur = document.querySelector('.gsw-st');
+    if (cur) { var l2 = level(st.opts.self); cur.className = 'gsw-st' + (l2 ? ' ' + l2 : ''); cur.title = l2 ? tr[l2] : ''; }
   }
   function loadHealth() {
     try { var c = JSON.parse(sessionStorage.getItem('lt-nav-health') || 'null'); if (c && Date.now() - c.t < 45000) { health = c.m; paint(); return; } } catch (e) {}
@@ -55,40 +85,114 @@
         try { sessionStorage.setItem('lt-nav-health', JSON.stringify({t: Date.now(), m: health})); } catch (e) {}
       }).catch(function () {});
   }
-  function build(o, me) {
-    var box = o.el || document.getElementById(o.mode === 'strip' ? 'navstrip' : 'nav-items');
-    if (!box) return;
-    var es = o.lang === 'es', strip = o.mode === 'strip';
-    box.textContent = '';
-    var first = true;
+
+  // ── Estructura (se crea una vez) / structure (created once) ──
+  function ensure() {
+    if (st && st.bar && document.body.contains(st.bar)) return;
+    var bar = el('header', 'gbar'), nav = el('nav', 'gbar-in');
+    nav.appendChild(el('a', 'gbar-logo', 'LT')); nav.lastChild.href = '/';
+    nav.appendChild(el('span', 'gbar-sep', '/'));
+    var crumb = el('span', 'gbar-grp'); nav.appendChild(crumb);
+    var sw = el('button', 'gsw'); sw.type = 'button'; sw.setAttribute('aria-haspopup', 'dialog'); sw.setAttribute('aria-expanded', 'false'); sw.setAttribute('aria-controls', 'gpanel');
+    nav.appendChild(sw); bar.appendChild(nav);
+    var panel = el('div', 'gpanel'); panel.id = 'gpanel'; panel.setAttribute('role', 'dialog'); panel.hidden = true;
+    var back = el('div', 'gback'); back.hidden = true;
+    var tab = el('nav', 'gtab');
+    document.body.insertBefore(bar, document.body.firstChild);
+    document.body.appendChild(panel); document.body.appendChild(back); document.body.appendChild(tab);
+    document.body.classList.add('has-gbar');
+    st = {bar: bar, nav: nav, crumb: crumb, sw: sw, panel: panel, back: back, tab: tab, lang: 'en', opts: {}, me: null};
+    sw.addEventListener('click', function () { toggle(); });
+    back.addEventListener('click', function () { toggle(false); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !st.panel.hidden) { toggle(false); st.sw.focus(); } });
+    document.addEventListener('mousedown', function (e) {
+      if (st.panel.hidden) return;
+      if (st.panel.contains(e.target) || st.sw.contains(e.target) || st.tab.contains(e.target)) return;
+      toggle(false);
+    });
+  }
+  function toggle(on) {
+    var open = on === undefined ? st.panel.hidden : on;
+    st.panel.hidden = !open; st.back.hidden = !open;
+    st.sw.setAttribute('aria-expanded', open ? 'true' : 'false');
+    var m = st.tab.querySelector('[data-gtab="mods"]'); if (m) m.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) { var a = st.panel.querySelector('a[aria-current="page"]') || st.panel.querySelector('a'); if (a) a.focus(); }
+  }
+
+  function fill() {
+    var o = st.opts, lang = st.lang, tr = T[lang], me = st.me, self = o.self;
+    // barra superior: ruta + selector / top bar: crumb + switcher
+    st.nav.setAttribute('aria-label', tr.main);
+    st.nav.querySelector('.gbar-logo').setAttribute('aria-label', tr.home);
+    var grp = G.filter(function (g) { return g.es && g.items.indexOf(self) >= 0; })[0];
+    st.crumb.textContent = ''; st.crumb.hidden = !grp;
+    if (grp) { st.crumb.appendChild(document.createTextNode(lang === 'es' ? grp.es : grp.en)); st.crumb.appendChild(el('span', 'gbar-sep', '›')); }
+    st.sw.textContent = '';
+    st.sw.appendChild(icon(I[self] ? I[self].svg : I.overview.svg, 16));
+    st.sw.appendChild(document.createTextNode(I[self] ? name(self, lang) : ''));
+    st.sw.appendChild(el('span', 'gsw-st'));
+    st.sw.appendChild(icon('<path d="M6 9l6 6 6-6"/>', 12)); st.sw.lastChild.setAttribute('class', 'gsw-chev');
+    st.sw.setAttribute('aria-label', tr.switchTo + ': ' + (I[self] ? name(self, lang) : ''));
+    // panel / panel
+    st.panel.setAttribute('aria-label', tr.switchTo);
+    st.panel.textContent = '';
     G.forEach(function (g) {
       var ids = g.items.filter(function (id) { return visible(id, me); });
       if (!ids.length) return;
-      if (strip) { if (!first) box.appendChild(el('span', 'nav-sep')); }
-      else if (g.es) box.appendChild(el('div', 'nav-group-lbl', es ? g.es : g.en));
-      first = false;
+      var wrap = el('div', g.es ? 'gg' : 'gg gg-top');
+      if (g.es) wrap.appendChild(el('div', 'gg-lbl', lang === 'es' ? g.es : g.en));
+      var grid = el('div', g.es ? 'gg-grid' : 'gg-pills');
       ids.forEach(function (id) {
-        var it = I[id], self = id === o.self;
-        var a = el('a', (strip ? 'nav-chip' : 'nav-item') + (self ? ' active' : ''));
-        a.href = it.href; a.setAttribute('data-nav-id', id);
-        if (self) a.setAttribute('aria-current', 'page');
-        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.setAttribute('viewBox', '0 0 24 24'); svg.innerHTML = it.svg;          // constante propia / own constant
-        a.appendChild(svg);
-        a.appendChild(document.createTextNode(it.label || (es ? it.es : it.en)));
-        if (I[id].label && id !== 'admin') a.appendChild(el('span', 'nav-dot'));
-        box.appendChild(a);
+        var a = el('a', g.es ? 'gt' : 'gp' + (id === self ? ' on' : ''));
+        a.href = I[id].href; a.setAttribute('data-nav-id', id);
+        if (id === self) { a.setAttribute('aria-current', 'page'); if (g.es) a.className += ' on'; }
+        if (g.es) {
+          a.appendChild(icon(I[id].svg, 18));
+          a.appendChild(el('span', 'gt-n', name(id, lang)));
+          a.appendChild(el('span', 'gt-st'));
+        } else {
+          a.appendChild(icon(I[id].svg, 15)); a.appendChild(document.createTextNode(name(id, lang)));
+        }
+        grid.appendChild(a);
       });
+      wrap.appendChild(grid); st.panel.appendChild(wrap);
     });
+    // barra inferior (móvil) / bottom bar (phones)
+    st.tab.textContent = ''; st.tab.setAttribute('aria-label', tr.main);
+    function tabItem(id, label, svgPath, href, on) {
+      var a = el(href ? 'a' : 'button', 'gtab-i' + (on ? ' on' : ''));
+      if (href) a.href = href; else a.type = 'button';
+      if (on) a.setAttribute('aria-current', 'page');
+      var ic = el('span', 'gtab-ic'); ic.appendChild(icon(svgPath, 22)); a.appendChild(ic); a.appendChild(el('span', 'gtab-t', label));
+      st.tab.appendChild(a); return a;
+    }
+    tabItem('home', name('home', lang), I.home.svg, '/', false);
+    tabItem('overview', name('overview', lang), I.overview.svg, '/overview/', self === 'overview');
+    var m = tabItem('mods', tr.mods, '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>', null, false);
+    m.setAttribute('data-gtab', 'mods'); m.setAttribute('aria-haspopup', 'dialog'); m.setAttribute('aria-expanded', st.panel.hidden ? 'false' : 'true');
+    m.addEventListener('click', function () { toggle(); });
+    if (document.querySelector('.sidebar')) {                                       // módulos: abre el panel propio (listas, filtros) / modules: opens their own panel
+      var op = tabItem('opts', tr.opts, '<line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/>', null, false);
+      op.addEventListener('click', function () { toggle(false); var b = document.getElementById('nav-toggle'); if (b) b.click(); });
+    }
+    // el menú lateral viejo ya no se usa / the old side menu is gone
+    var old = document.getElementById('nav-items'); if (old) { var sec = old.closest('.sb-sec'); (sec || old).hidden = true; }
     paint(); loadHealth();
-    if (!last) last = setInterval(function () { try { sessionStorage.removeItem('lt-nav-health'); } catch (e) {} loadHealth(); }, 60000);
+    if (!timer) timer = setInterval(function () { try { sessionStorage.removeItem('lt-nav-health'); } catch (e) {} loadHealth(); }, 60000);
   }
+
   window.labNav = {
-    // opts: {self, lang, me, mode: 'side'|'strip', fetchMe, el}
+    // opts: {self, lang, me, fetchMe}
     render: function (o) {
       o = o || {};
-      build(o, o.me || null);
-      if (!o.me && o.fetchMe) fetch('api/me').then(function (r) { return r.json(); }).then(function (m) { if (m && m.permissions) build(o, m); }).catch(function () {});
+      ensure();
+      st.opts = o; st.lang = o.lang === 'es' ? 'es' : 'en'; st.me = o.me || st.me || null;
+      document.documentElement.setAttribute('data-gbar', '1');
+      fill();
+      if (!o.me && o.fetchMe && !st.me && !st.fetching) {
+        st.fetching = true;
+        fetch('api/me').then(function (r) { return r.json(); }).then(function (m) { st.fetching = false; if (m && m.permissions) { st.me = m; fill(); } }).catch(function () { st.fetching = false; });
+      }
     }
   };
 })();

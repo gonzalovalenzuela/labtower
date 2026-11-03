@@ -20,8 +20,8 @@ class Nav(unittest.TestCase):
             self.assertIn("labNav.render(", js, d)
             for old in ("_NAV_ITEMS", "_navDragSrc", "pi-nav-order"): self.assertNotIn(old, js, d)
         ov = (ROOT / "overview" / "static" / "app.js").read_text()
-        self.assertIn("self:'overview',mode:'strip'", ov)
-        self.assertIn('id="navstrip"', (ROOT / "overview" / "static" / "index.html").read_text())
+        self.assertIn("self:'overview'", ov); self.assertIn("labNav.render(", ov)
+        self.assertNotIn('id="navstrip"', (ROOT / "overview" / "static" / "index.html").read_text())
         self.assertNotIn('href="/" data-i="home"', (ROOT / "overview" / "static" / "index.html").read_text())
 
     def test_home_cards_follow_the_menu_order(self):
@@ -38,6 +38,14 @@ class Nav(unittest.TestCase):
         nav = (ROOT / "assets" / "nav.js").read_text()
         self.assertIn("me.disabled", nav); self.assertIn("LV[me.permissions[id]]", nav)
         self.assertIn("/admin/api/health", nav)                       # one public call for every status dot
+
+    def test_top_bar_switcher_and_bottom_bar(self):
+        nav = (ROOT / "assets" / "nav.js").read_text(); css = (ROOT / "assets" / "nav.css").read_text()
+        for k in ("gbar", "gsw", "gpanel", "gtab", 'aria-haspopup', 'aria-controls'): self.assertIn(k, nav, k)
+        self.assertIn("Escape", nav)                                  # panel closes with Esc
+        self.assertIn("max-width:767px", css)                         # bottom bar below 768 px
+        self.assertIn("body.kiosk .gbar", css)                        # hidden in kiosk mode
+        for s in ("up", "mid", "down"): self.assertIn("'" + s + "'", nav, s)   # status = shape + text, not only colour
 
 if __name__ == "__main__":
     unittest.main()

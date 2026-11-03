@@ -1,12 +1,55 @@
-/* LabTower — navegación compartida / shared navigation (nav.js) */
-.nav-group-lbl{font-size:10px;font-weight:600;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;padding:12px 10px 4px}
-.nav-dot{width:8px;height:8px;border-radius:50%;margin-left:auto;flex-shrink:0;background:var(--text-dim);opacity:.45}
-.nav-dot.up{background:#22c55e;opacity:1}.nav-dot.mid{background:#eab308;opacity:1}.nav-dot.down{background:#ef4444;opacity:1}
-.navstrip{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 14px}
-.nav-chip{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border:1px solid var(--border,#e3e8ef);border-radius:99px;font-size:13px;color:var(--text-mid,#5a6a85);text-decoration:none;background:var(--surface,#fff)}
-.nav-chip svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
-.nav-chip:hover{color:var(--text,#1a2033);border-color:var(--border-b,#cdd4e0)}
-.nav-chip.active{color:var(--text,#1a2033);font-weight:600;border-color:var(--text-mid,#5a6a85)}
-.nav-chip .nav-dot{margin-left:0}
-.nav-sep{width:1px;height:18px;background:var(--border,#e3e8ef);margin:0 4px}
-body.kiosk .navstrip{display:none}
+/* LabTower — navegación compartida / shared navigation (nav.js): barra superior + selector (≥768 px) y barra inferior (móvil) */
+:root{--gbar-h:52px}
+.gbar{position:fixed;top:0;left:0;right:0;height:var(--gbar-h);z-index:280;box-sizing:border-box;background:var(--surface,#fff);border-bottom:1px solid var(--border,#e3e8ef);display:flex;align-items:center;padding:0 16px}
+.gbar-in{display:flex;align-items:center;gap:8px;min-width:0}
+.gbar-logo{width:30px;height:30px;border-radius:8px;background:var(--text,#1a2033);color:var(--surface,#fff);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;text-decoration:none;flex-shrink:0}
+.gbar-sep{color:var(--text-dim,#94a3b8);font-size:15px}
+.gbar-grp{display:flex;align-items:center;gap:8px;color:var(--text-mid,#5a6a85);font-size:13px;white-space:nowrap}
+.gsw{display:flex;align-items:center;gap:8px;height:34px;padding:0 12px;border:0;border-radius:8px;background:var(--blue-dim,rgba(3,105,161,.12));color:var(--blue,#0369a1);font:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap}
+.gsw svg,.gt svg,.gp svg,.gtab-ic svg{stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.gsw .gsw-chev{opacity:.8}
+.gsw:focus-visible,.gt:focus-visible,.gp:focus-visible,.gtab-i:focus-visible,.gbar-logo:focus-visible{outline:2px solid var(--blue,#0369a1);outline-offset:2px}
+.gsw-st{display:inline-block;width:8px;height:8px;flex-shrink:0}
+.gsw-st.up,.gt-st .up{border-radius:50%;background:#15803d}
+.gsw-st.mid{background:#b45309;clip-path:polygon(50% 0,100% 100%,0 100%)}
+.gsw-st.down{background:#b91c1c;border-radius:2px}
+.gpanel{position:fixed;top:calc(var(--gbar-h) - 2px);left:16px;width:min(540px,calc(100vw - 32px));max-height:calc(100vh - var(--gbar-h) - 24px);overflow-y:auto;box-sizing:border-box;background:var(--surface,#fff);color:var(--text,#1a2033);border:1px solid var(--border,#e3e8ef);border-radius:14px;box-shadow:0 14px 36px rgba(10,15,60,.2);padding:14px;z-index:290}
+.gpanel[hidden],.gback[hidden]{display:none}
+.gg{margin-top:10px}.gg-top{margin-top:0}
+.gg-lbl{font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text-mid,#5a6a85);margin:0 4px 6px}
+.gg-pills{display:flex;gap:8px;flex-wrap:wrap}
+.gp{display:flex;align-items:center;gap:6px;min-height:36px;padding:0 14px;border-radius:99px;background:var(--bg,#f0f2f5);color:var(--text,#1a2033);font-size:13px;font-weight:600;text-decoration:none}
+.gp.on,.gt.on{background:var(--blue-dim,rgba(3,105,161,.12));color:var(--blue,#0369a1)}
+.gg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.gt{display:flex;flex-direction:column;gap:5px;min-height:44px;padding:10px;border-radius:10px;color:var(--text,#1a2033);text-decoration:none;box-sizing:border-box}
+.gt:hover,.gp:hover{background:var(--bg,#f0f2f5)}
+.gt.on:hover,.gp.on:hover{background:var(--blue-dim,rgba(3,105,161,.12))}
+.gt svg{color:var(--text-mid,#5a6a85)}.gt.on svg{color:inherit}
+.gt-n{font-size:13px;font-weight:600}.gt.on .gt-n{font-weight:700}
+.gt-st{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-mid,#5a6a85);min-height:14px}
+.gt.on .gt-st{color:inherit}
+.gback{display:none}
+.gtab{display:none}
+body.has-gbar{padding-top:var(--gbar-h)}
+body.has-gbar .sidebar{top:var(--gbar-h)}
+body.has-gbar .topbar{top:var(--gbar-h)}
+body.has-gbar .main{min-height:calc(100vh - var(--gbar-h))}
+body.kiosk .gbar,body.kiosk .gtab,body.kiosk .gpanel,body.kiosk .gback{display:none!important}
+body.kiosk.has-gbar{padding-top:0;padding-bottom:0}
+@media(max-width:1000px){.gbar-grp{display:none}}
+@media(max-width:767px){
+  .gbar{display:none}
+  body.has-gbar{padding-top:0;padding-bottom:64px}
+  body.has-gbar .sidebar,body.has-gbar .topbar{top:0}
+  body.has-gbar .main{min-height:calc(100vh - 64px)}
+  .gtab{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);position:fixed;left:0;right:0;bottom:0;height:64px;z-index:280;background:var(--surface,#fff);border-top:1px solid var(--border,#e3e8ef)}
+  .gtab-i{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:44px;background:none;border:0;font:inherit;font-size:11px;font-weight:500;color:var(--text-mid,#5a6a85);text-decoration:none;cursor:pointer}
+  .gtab-ic{display:flex;padding:3px 16px;border-radius:99px}
+  .gtab-i.on{color:var(--blue,#0369a1);font-weight:700}.gtab-i.on .gtab-ic{background:var(--blue-dim,rgba(3,105,161,.12))}
+  .gpanel{top:auto;left:0;right:0;bottom:64px;width:auto;max-height:70vh;border-radius:18px 18px 0 0;border-bottom:0;padding:16px 16px 12px}
+  .gg-grid{grid-template-columns:1fr;gap:0}
+  .gt{flex-direction:row;align-items:center;gap:12px;min-height:48px;padding:0 10px}
+  .gt-n{flex:1;font-size:14.5px}
+  .gback:not([hidden]){display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:285}
+  #toast{bottom:86px!important}
+}
