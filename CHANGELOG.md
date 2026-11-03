@@ -8,6 +8,7 @@
 - **Arreglo:** el esquema de métricas declaraba dos veces la tabla de destinos del WAN.
 - **Seguridad:** el sondeo de DNS de salida solo consulta el puerto 53 o puertos altos; el historial de IP pública se inicializa con la IP ya conocida.
 - **Arreglo:** avisos de pyflakes en las pruebas (importaciones y variables sin uso).
+- **Arreglo:** en el modo de menú «barra superior» se perdía el botón «Ajustes» de WAN Monitor (la barra del módulo quedaba vacía u oculta). Ahora el botón vive fuera del texto que esa barra oculta y la barra se vuelve a evaluar cuando le aparecen botones después de cargar los datos. Se revisaron todos los módulos en 4 tamaños y no se perdía ningún otro control.
 
 ## 2.1.6j — 2026-11-03
 

@@ -314,6 +314,10 @@
   //     Also the module bar's language, theme, clock and user move up into this bar, and the module bar is hidden if nothing of its own is left.
   var STD = '#gmt, .lang-btns, .theme-btns, #clock, #hclock, div[style*="width:1px"], .topbar-user, .btn-logout';
   function barRight() { var r = st.bar.querySelector('.gbar-r'); if (!r) { r = el('div', 'gbar-r'); st.bar.appendChild(r); } return r; }
+  // ¿Queda algo propio del módulo en su barra (botones, campos, enlaces)? / Is anything of the module's own left in its bar (buttons, fields, links)?
+  function ownControls(tb) {
+    return Array.prototype.some.call(tb.querySelectorAll('button, input, select, a'), function (n) { return !n.classList.contains('nav-toggle'); });
+  }
   function sideLayout(bar) {
     var sb = document.querySelector('.sidebar'), tb = document.querySelector('.topbar');
     var wide = window.matchMedia('(min-width:768px)').matches, full = window.matchMedia('(min-width:961px)').matches;
@@ -344,8 +348,15 @@
         var r = barRight();
         nodes.forEach(function (n) { st.moved.push({node: n, parent: n.parentNode, next: n.nextSibling}); r.appendChild(n); });
         document.body.classList.add('gtb-merged');
-        var mine = Array.prototype.some.call(tb.querySelectorAll('button, input, select, a'), function (n) { return !n.classList.contains('nav-toggle'); });
-        document.body.classList.toggle('gtb-none', !mine);
+        document.body.classList.toggle('gtb-none', !ownControls(tb));
+      }
+      // Los botones propios pueden crearse después (p. ej. «Ajustes» al llegar los datos): se vuelve a evaluar al cambiar la barra.
+      // EN: Own buttons may be created later (e.g. "Settings" once the data arrives): re-evaluate when the bar changes.
+      if (!tb.gobs && window.MutationObserver) {
+        tb.gobs = new MutationObserver(function () {
+          if (st && document.body.classList.contains('gtb-merged') && ownControls(tb) === document.body.classList.contains('gtb-none')) sideLayout(mode() === 'bar');
+        });
+        tb.gobs.observe(tb, {childList: true, subtree: true});
       }
     }
     var f2 = st.bar.querySelector('.gbar-r .sb-footer'); if (f2) f2.parentNode.appendChild(f2);   // el usuario al final / user badge last

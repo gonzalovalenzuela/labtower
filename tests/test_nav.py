@@ -61,6 +61,22 @@ class Nav(unittest.TestCase):
         fn = ov[ov.index("function renderVPN"):ov.index("return sev;", ov.index("function renderVPN"))]
         self.assertNotIn("clients", fn); self.assertIn("x.online", fn); self.assertNotIn("x.total", fn)
 
+    def test_top_bar_mode_keeps_the_module_buttons(self):
+        """En el modo de barra superior #tb-sub se oculta (solo texto): los botones de cada módulo no pueden vivir ahí, y la barra del módulo
+        se vuelve a evaluar cuando le aparecen botones después de cargar los datos."""
+        nav = (ROOT / "assets" / "nav.js").read_text()
+        self.assertIn("tb.gobs = new MutationObserver", nav); self.assertIn("function ownControls", nav)
+        for d in SIDE:
+            app = ROOT / d / "static" / "app.js"
+            if not app.exists(): continue
+            lines = app.read_text().splitlines()
+            for i, l in enumerate(lines):
+                if "tb-sub" in l:
+                    self.assertIsNone(re.search(r"\bsub\.appendChild\(b\w*\)", " ".join(lines[i:i + 3])), f"{d}: botón dentro de #tb-sub (línea {i + 1})")
+        wan = (ROOT / "wan-monitor" / "static")
+        self.assertIn('id="tb-actions"', (wan / "index.html").read_text())
+        self.assertIn("act.appendChild(b)", (wan / "app.js").read_text())
+
     def test_every_page_has_a_favicon(self):
         for d in (*SIDE, "overview"):
             self.assertIn('rel="icon"', (ROOT / d / "static" / "index.html").read_text(), d)
