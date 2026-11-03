@@ -271,7 +271,7 @@ class H(BaseHTTPRequestHandler):
         try:
             n = int(self.headers.get("Content-Length", 0))
             if n < 0 or n > 8192: return None
-            d = json.loads(self.rfile.read(n))
+            d = json.loads(self.rfile.read(n)) if n else {}
             return d if isinstance(d, dict) else None      # EN: a list/number would crash the handlers (500); reject it (400)
         except (ValueError, TypeError, OSError, RecursionError): return None
 

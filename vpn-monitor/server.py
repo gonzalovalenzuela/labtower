@@ -463,7 +463,7 @@ class H(BaseHTTPRequestHandler):
         try:
             n = int(self.headers.get("Content-Length", 0))
             if n < 0 or n > 16384: return None
-            d = json.loads(self.rfile.read(n))
+            d = json.loads(self.rfile.read(n)) if n else {}
             return d if isinstance(d, dict) else None
         except (ValueError, TypeError, OSError, RecursionError): return None
     def _tok(self):

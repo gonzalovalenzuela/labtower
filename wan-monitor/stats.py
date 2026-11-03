@@ -4,7 +4,7 @@ Funciones puras (sin red ni disco) para probarlas con datos de ejemplo.
 EN: WAN Monitor — latency percentiles, per-target quality, speed against the plan, availability / MTBF and sustained alerts.
     Pure functions (no network, no disk) so they can be tested with sample data.
 """
-import math, time
+import math
 
 LOW_PLAN = 0.70               # a speed test under 70 % of the plan counts as low
 LOW_STREAK = 3                # this many low tests in a row raise the warning

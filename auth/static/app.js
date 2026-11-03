@@ -756,7 +756,7 @@ function tpProgEnd(state) {
 // ── Helpers ────────────────────────────────────────────
 // Escapa HTML antes de insertar texto de usuarios, equipos o la red en la página: evita inyección de código (XSS).
 // EN: Escape HTML before inserting text from users, devices or the network into the page: prevents code injection (XSS).
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 // Valor seguro dentro de un handler on*="…": literal JS entre comillas, escapado también para HTML.
 // Lista de argumentos para data-on-*-args="…" (JSON escapado para HTML).
 function jsargs(a){return esc(JSON.stringify(a));}
