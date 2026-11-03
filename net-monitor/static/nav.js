@@ -312,7 +312,7 @@
   // Además, idioma, tema, reloj y usuario de la barra del módulo suben a esta barra y la del módulo se oculta si no le queda nada propio.
   // EN: Top bar: the side panel header is redundant; if the panel only held the menu it is hidden and the user badge moves to the bar.
   //     Also the module bar's language, theme, clock and user move up into this bar, and the module bar is hidden if nothing of its own is left.
-  var STD = '#gmt, .lang-btns, .theme-btns, #clock, div[style*="width:1px"], .topbar-user, .btn-logout';
+  var STD = '#gmt, .lang-btns, .theme-btns, #clock, #hclock, div[style*="width:1px"], .topbar-user, .btn-logout';
   function barRight() { var r = st.bar.querySelector('.gbar-r'); if (!r) { r = el('div', 'gbar-r'); st.bar.appendChild(r); } return r; }
   function sideLayout(bar) {
     var sb = document.querySelector('.sidebar'), tb = document.querySelector('.topbar');
