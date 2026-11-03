@@ -124,7 +124,7 @@ labtower-health
 
 1. Sign in as `admin` with the password the installer showed.
 2. You must choose a new password (minimum 8 characters) before using any module.
-3. Create your users in the Admin Panel. For any user you can tick "must change password" when creating them or resetting their password.
+3. Create your users in the Admin Panel. "Must change password" is ticked by default when creating a user, and when an admin resets another account's password the change is always mandatory. Creating users, resetting passwords and changing permission levels ask for your current password.
 
 ---
 

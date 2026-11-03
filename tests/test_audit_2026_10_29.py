@@ -88,6 +88,21 @@ class AdminReauth(unittest.TestCase):
         body = {"username": "victim", "new_password": "Brand-new-pass-1"}
         self.assertEqual(self.s.call("POST", "/api/change_password", body, self.tok)[0], 401)
         self.assertEqual(self.s.call("POST", "/api/change_password", {**body, "current_password": self.pw}, self.tok)[0], 200)
+    def test_admin_reset_forces_a_password_change(self):
+        support.make_user("victim2", READONLY)
+        r = self.s.call("POST", "/api/change_password", {"username": "victim2", "new_password": "Brand-new-pass-2", "current_password": self.pw}, self.tok)
+        self.assertEqual(r[0], 200)
+        self.assertTrue(auth.load_users()["victim2"]["must_change_password"])
+    def test_permission_change_needs_the_password(self):
+        support.make_user("victim3", READONLY)
+        body = {"wol_permission": "execute"}
+        self.assertEqual(self.s.call("PUT", "/api/users/victim3", body, self.tok)[0], 401)
+        self.assertEqual(self.s.call("PUT", "/api/users/victim3", {**body, "current_password": "wrong"}, self.tok)[0], 403)
+        self.assertNotEqual(auth.load_users()["victim3"]["permissions"].get("wol"), "execute")
+        self.assertEqual(self.s.call("PUT", "/api/users/victim3", {**body, "current_password": self.pw}, self.tok)[0], 200)
+        self.assertEqual(auth.load_users()["victim3"]["permissions"]["wol"], "execute")
+        same = {"wol_permission": "execute"}                          # saving without changing a level does not ask
+        self.assertEqual(self.s.call("PUT", "/api/users/victim3", same, self.tok)[0], 200)
     def test_restore_needs_the_password(self):
         code, _ = self.s.call("POST", "/api/teleporter/restore", {"name": "labtower-x.tar.gz", "confirm": True}, self.tok)
         self.assertIn(code, (401, 503))                                # 503 if teleporter.sh is not installed here; never 200

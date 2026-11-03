@@ -553,7 +553,7 @@ class H(BaseHTTPRequestHandler):
                     "password_hash": auth._hash(pwd),
                     "permissions": perms,
                     "created": int(time.time()),
-                    "must_change_password": bool(body.get("must_change_password", False)),
+                    "must_change_password": bool(body.get("must_change_password", True)),   # the administrator chose the first password: the owner changes it
                 }
                 auth.save_users(users)
             log.info(f"Usuario creado: {uname} por {me}")
@@ -599,7 +599,8 @@ class H(BaseHTTPRequestHandler):
                 if target != me and _outranks(sess["permissions"], users[target].get("permissions")):
                     return self._json(403, {"error": "You cannot change the password of a user with higher permissions than yours"})
                 users[target]["password_hash"] = auth._hash(new_pw)
-                users[target]["must_change_password"] = False
+                # A password set by an administrator is known to that administrator: the owner must choose their own at the next sign-in.
+                users[target]["must_change_password"] = target != me
                 auth.save_users(users)
             # every other session of that account is closed (the current one stays open)
             auth.delete_user_sessions(target, keep=tok if target == me else None)
@@ -638,6 +639,14 @@ class H(BaseHTTPRequestHandler):
             # EN: An admin cannot remove their own access to the panel (they would lock themselves out).
             if uname == me and (new.get("wol") == "none" or new.get("nut") == "none"):
                 return self._json(400, {"error": "You cannot remove your own admin permissions"})
+            # Cambiar un nivel pide la contraseña de quien lo hace (como crear un usuario): una sesión robada no puede darse un acceso de respaldo.
+            # Guardar sin cambiar ningún nivel no la pide.
+            # EN: Changing a level asks for the actor's password (like creating a user): a stolen session cannot plant a backdoor account.
+            #     Saving without changing any level does not.
+            cur_perms = (auth.load_users().get(uname) or {}).get("permissions") or {}
+            if any(cur_perms.get(k, "none") != v for k, v in new.items()):
+                e = self._reauth(me, body)
+                if e: return self._json(e[0], {"error": e[1]})
             with auth.users_lock():
                 users = auth.load_users()
                 if uname not in users:

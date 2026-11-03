@@ -28,6 +28,7 @@ MAX_REQUEST = 65536          # bytes of one request line
 MAX_REPLY   = 1 << 20        # bytes of one reply line (the event list is the biggest)
 TIMEOUT     = 5.0            # TOTAL seconds per connection, both sides (a slow client cannot keep a thread for longer)
 MAX_CONNS   = 64             # concurrent connections served; the rest are closed at once (bounded threads and memory)
+WRITE_LIMIT = 600           # event + audit writes per minute and module
 RESERVED    = frozenset({"module", "level", "text", "k", "self"})   # names a caller must not pass as event parameters
 USER_PREFIX = "labtower-"
 # Identidades que pueden hablar con el servicio: usuario del sistema «labtower-<id>». / Identities allowed to talk to the service.
@@ -65,6 +66,16 @@ class Service:
     def __init__(self, auth, identify=identify_by_uid):
         self.auth, self.identify = auth, identify
         self.slots = threading.BoundedSemaphore(MAX_CONNS)
+        self._writes, self._wlock = {}, threading.Lock()
+
+    def _budget(self, caller):
+        """Events and audit lines a module may write: WRITE_LIMIT per minute in total, so a compromised one cannot fill the SD card."""
+        now = time.monotonic()
+        with self._wlock:
+            t0, n = self._writes.get(caller, (now, 0))
+            if now - t0 >= 60: t0, n = now, 0
+            self._writes[caller] = (t0, n + 1)
+            return n < WRITE_LIMIT
 
     # Each handler gets (caller, request dict) and returns a JSON-able dict. Errors are {"error": "..."}.
     def op_session(self, caller, r):
@@ -92,6 +103,7 @@ class Service:
     def op_event(self, caller, r):
         # The module name of the event is the caller's own: a compromised module cannot write events as another one.
         if caller not in CALLERS: return {"error": "forbidden"}
+        if not self._budget(caller): return {"error": "rate limited"}
         text, level = r.get("text"), r.get("level")
         if not isinstance(text, str) or level not in ("info", "warn", "crit"): return {"error": "bad event"}
         k = r.get("k") if isinstance(r.get("k"), str) and len(r["k"]) <= 64 else None
@@ -103,6 +115,7 @@ class Service:
     def op_audit(self, caller, r):
         # The module recorded is the caller's own (taken from the operating-system user), like events.
         if caller not in CALLERS: return {"error": "forbidden"}
+        if not self._budget(caller): return {"error": "rate limited"}
         f = lambda k, n: r.get(k)[:n] if isinstance(r.get(k), str) else ""
         self.auth.audit(f("actor", 64), f("action", 48), f("target", 128), f("detail", 200), f("ip", 64), module=caller)
         return {"ok": True}

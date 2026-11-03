@@ -124,7 +124,7 @@ labtower-health
 
 1. Entra con `admin` y la contraseña que mostró el instalador.
 2. El sistema te obliga a elegir una contraseña nueva (mínimo 8 caracteres) antes de usar cualquier módulo.
-3. Crea tus usuarios en el Admin Panel. Para cualquier usuario se puede marcar «debe cambiar contraseña» al crearlo o al restablecer su clave.
+3. Crea tus usuarios en el Admin Panel. Al crear un usuario viene marcado «debe cambiar contraseña», y cuando un admin restablece la clave de otra cuenta ese cambio es siempre obligatorio. Crear usuarios, restablecer claves y cambiar niveles de permiso piden tu contraseña actual.
 
 ---
 

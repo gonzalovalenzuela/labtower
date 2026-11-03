@@ -1170,7 +1170,7 @@ class H(BaseHTTPRequestHandler):
             except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
             if not host or not name: return self._json(400, {"error": "host and name are required"})
             if not 1 <= port <= 65535: return self._json(400, {"error": "Invalid port"})
-            if not auth.valid_host(host): return self._json(400, {"error": "Invalid host"})
+            if not auth.valid_target(host, allow_loopback=True): return self._json(400, {"error": "Invalid host (link-local and 0.0.0.0 addresses are not allowed)"})
             if len(name) > 60 or re.search(r"[\x00-\x1f\x7f]", name): return self._json(400, {"error": "Invalid name"})
             import uuid
             with _srv_lock:
@@ -1206,13 +1206,13 @@ class H(BaseHTTPRequestHandler):
             host = str(body.get("host") or "").strip()
             try: port = int(body.get("port") or 3493)
             except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
-            if not auth.valid_host(host) or not 1 <= port <= 65535: return self._json(400, {"error": "Invalid host or port"})
+            if not auth.valid_target(host, allow_loopback=True) or not 1 <= port <= 65535: return self._json(400, {"error": "Invalid host or port"})
             try:
                 nut  = NUTClient(host, port, timeout=4)
                 ups  = nut.list_ups(); ver = nut.get_version()
                 self._json(200, {"ok": True, "ups_count": len(ups), "ups": ups, "version": ver})
             except Exception as e:
-                self._json(200, {"ok": False, "error": str(e)})
+                self._json(200, {"ok": False, "error": re.sub(r"[\x00-\x1f\x7f]", " ", str(e))[:120]})
         else:
             self._json(404, {"error": "Not found"})
 
@@ -1235,7 +1235,7 @@ class H(BaseHTTPRequestHandler):
         except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
         if not host or not name: return self._json(400, {"error": "host and name are required"})
         if not 1 <= port <= 65535: return self._json(400, {"error": "Invalid port"})
-        if not auth.valid_host(host): return self._json(400, {"error": "Invalid host"})
+        if not auth.valid_target(host, allow_loopback=True): return self._json(400, {"error": "Invalid host (link-local and 0.0.0.0 addresses are not allowed)"})
         if len(name) > 60 or re.search(r"[\x00-\x1f\x7f]", name): return self._json(400, {"error": "Invalid name"})
         with _srv_lock:
             srvs = load_servers()

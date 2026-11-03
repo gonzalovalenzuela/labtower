@@ -414,7 +414,7 @@ function openDrawer(user) {
   document.getElementById('d-username-orig').value = isEdit ? user.username : '';
   document.getElementById('d-username').value      = isEdit ? user.username : '';
   document.getElementById('d-password').value      = '';
-  document.getElementById('d-must-change').checked = isEdit ? user.must_change_password : false;
+  document.getElementById('d-must-change').checked = isEdit ? user.must_change_password : true;
 
   // Rebuild selects with translated options at current perm values
   ['d-wol','d-nut','d-net','d-pve','d-nas','d-dns','d-wan','d-vpn'].forEach(id=>{
@@ -489,10 +489,16 @@ async function saveUser() {
       const vpn   = document.getElementById('d-vpn').value;
       const newPw = document.getElementById('d-new-pw').value;
       // Actualizar permisos
-      const r = await fetch('api/users/'+uorig, {
+      let ppw = null;
+      const putPerms = pw => fetch('api/users/'+uorig, {
         method: 'PUT', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({wol_permission:wol, nut_permission:nut, net_permission:net, pve_permission:pve, nas_permission:nas, dns_permission:dns, wan_permission:wan, vpn_permission:vpn})
+        body: JSON.stringify({wol_permission:wol, nut_permission:nut, net_permission:net, pve_permission:pve, nas_permission:nas, dns_permission:dns, wan_permission:wan, vpn_permission:vpn, ...(pw ? {current_password: pw} : {})})
       });
+      let r = await putPerms(null);
+      if (r.status === 401 && (await r.clone().json()).error === 'Password confirmation required') {   // a level changes: confirm with the password
+        ppw = await askPassword(); if (!ppw) return;
+        r = await putPerms(ppw);
+      }
       const d = await r.json();
       if (!r.ok) { toast(d.error||'Error', true); return; }
       // Cambiar contraseña si se ingresó
@@ -500,7 +506,7 @@ async function saveUser() {
         let curPw = document.getElementById('d-cur-pw').value;
         const own = me && uorig === me.username;
         if (own && !curPw) { toast(t('curPwNeeded'), true); return; }
-        if (!own) { curPw = await askPassword(); if (!curPw) return; }
+        if (!own) { curPw = ppw || await askPassword(); if (!curPw) return; }
         const r2 = await fetch('api/change_password', {
           method: 'POST', headers: {'Content-Type':'application/json'},
           body: JSON.stringify({username:uorig, new_password:newPw, current_password:curPw})

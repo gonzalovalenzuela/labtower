@@ -954,16 +954,17 @@ def valid_host(h) -> bool:
 #     the machine itself (loopback, 0.0.0.0) nor a link-local address (169.254.x.x, e.g. a cloud metadata service), nor a name resolving to one of them. It keeps
 #     LabTower from being used as a "bridge" to its own internal services or to metadata (SSRF). Not applied to NUT or to ping/TCP targets, where looking at the
 #     own machine is legitimate.
-def valid_target(h) -> bool:
+# allow_loopback=True (NUT only): the own machine is accepted, link-local / 0.0.0.0 / multicast still are not.
+def valid_target(h, allow_loopback: bool = False) -> bool:
     import ipaddress, socket
     if not valid_host(h): return False
     name = h.strip("[]").lower()
-    if name == "localhost" or name.endswith(".localhost"): return False
+    if (name == "localhost" or name.endswith(".localhost")) and not allow_loopback: return False
     def bad(a):
         try: ip = ipaddress.ip_address(a.split("%")[0])
         except ValueError: return True
         if getattr(ip, "ipv4_mapped", None): ip = ip.ipv4_mapped
-        return ip.is_loopback or ip.is_unspecified or ip.is_link_local or ip.is_multicast
+        return (ip.is_loopback and not allow_loopback) or ip.is_unspecified or ip.is_link_local or ip.is_multicast
     try:
         ipaddress.ip_address(name); return not bad(name)
     except ValueError:

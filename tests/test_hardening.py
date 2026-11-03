@@ -37,6 +37,23 @@ class WanUrls(unittest.TestCase):
         self.assertEqual(wan._https_url("https://speed.cloudflare.com/__down", "url"), "https://speed.cloudflare.com/__down")
 
 
+class NutTarget(unittest.TestCase):
+    def test_loopback_allowed_only_when_asked(self):
+        v = support.real_valid_target
+        self.assertFalse(v("127.0.0.1")); self.assertTrue(v("127.0.0.1", allow_loopback=True)); self.assertTrue(v("localhost", allow_loopback=True))
+        for bad in ("0.0.0.0", "169.254.169.254", "-x"):  # nosec B104 - test data
+            self.assertFalse(v(bad, allow_loopback=True), bad)
+
+
+class RpcBudget(unittest.TestCase):
+    def test_a_module_cannot_flood_events_and_audit(self):
+        authrpc = support.load("auth/authrpc.py")
+        svc = authrpc.Service(support.auth, identify=lambda uid: "wol")
+        got = [svc._budget("wol") for _ in range(authrpc.WRITE_LIMIT + 5)]
+        self.assertTrue(all(got[:authrpc.WRITE_LIMIT])); self.assertFalse(any(got[authrpc.WRITE_LIMIT:]))
+        self.assertTrue(svc._budget("nut"))                          # each module has its own budget
+
+
 class Escape(unittest.TestCase):
     def test_esc_escapes_single_quotes(self):
         for rel in ("auth/static/app.js", "net-monitor/static/app.js", "wol-console/static/app.js"):

@@ -1636,8 +1636,8 @@ class H(BaseHTTPRequestHandler):
         elif path == "/api/scan/status":
             self._json(200, _scan_status)
 
-        # Configuración de Pi-hole y del intervalo (la primera definición es la que se usa; la siguiente nunca se alcanza).
-        # EN: Pi-hole and interval configuration (the first definition is the one used; the next is never reached).
+        # Configuración de Pi-hole y del intervalo.
+        # EN: Pi-hole and interval configuration.
         elif path == "/api/config":
             cfg = load_config()
             self._json(200, {
@@ -1651,15 +1651,6 @@ class H(BaseHTTPRequestHandler):
                 "pihole_diag":     dict(_pihole_diag),
             })
 
-        # Ruta duplicada heredada: queda inalcanzable, se conserva para no cambiar el código.
-        # EN: Inherited duplicate route: unreachable, kept so the code is not changed.
-        elif path == "/api/config":
-            self._json(200, {
-                "network":       NETWORK,
-                "scan_interval": _current_interval,
-                "scan_ports":    SCAN_PORTS,
-                "max_workers":   MAX_WORKERS,
-            })
         elif path == "/api/me":
             sess = auth.get_session(tok)
             self._json(200, {"username": sess["username"],
