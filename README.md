@@ -243,6 +243,9 @@ labtower-health
 - **Calidad y disponibilidad:** tarjeta con **percentiles de latencia** (mediana, p95 y p99) y disponibilidad en 24 h, 7 d y 30 d, con número de cortes, duración media, el más largo, **tiempo medio entre cortes (MTBF)** y desglose por causa (LAN / WAN / Internet). Un historial más corto que el período no se juzga como si lo cubriera. La tabla de destinos suma el **p95 de 24 h** y el **porcentaje de rondas fallidas de 24 h de cada destino**, para distinguir «cae solo uno» de «cae todo» (se guarda una muestra por destino y ronda, con la misma retención del historial, `WAN_KEEP_DAYS`).
 - **Velocidad contra el plan:** con la velocidad contratada indicada en *Ajustes*, la tarjeta muestra el porcentaje de la última prueba, el promedio de 7 y de 30 días, la **velocidad de bajada por hora del día** y la **tendencia diaria de 30 días**. Si **3 pruebas seguidas** quedan bajo el 70 % del plan, aparece un aviso (también en el Resumen) y se anota un evento al empezar y otro cuando se normaliza.
 - **Eventos de calidad:** pérdida de paquetes (≥ 5 %) o latencia (≥ 150 ms) que se mantienen **3 rondas seguidas** generan un evento al empezar y otro al terminar; un pico suelto no. Los cortes tienen sus propios eventos.
+- **Historial de IP pública:** tarjeta con cada cambio de IP (fecha, IP nueva y la anterior), además del aviso del Resumen.
+- **Traceroute en cada corte:** al abrirse un corte se ejecuta un `traceroute` (máx. 15 saltos) hacia el primer destino y se guarda con el corte; en la tabla de cortes, el botón *Traceroute* lo muestra y deja ver hasta qué salto llegaba la salida. Requiere el paquete `traceroute` (el instalador lo recomienda); sin él, simplemente no se guarda.
+
 
 ### VPN Monitor
 - Muestra los clientes conectados a cada servidor VPN: nombre, dirección real y virtual, tiempo conectado, tráfico, sesiones recientes y avisos de conexión / desconexión en la línea de tiempo del Resumen. Solo lectura: nunca cambia nada en el servidor VPN. Se permiten hasta 16 servidores.
@@ -265,10 +268,17 @@ labtower-health
   ```
   Si el SSH falla con «Permission denied» casi siempre son permisos: `chmod 755 ~`, `chmod 700 ~/.ssh` y `chmod 600 ~/.ssh/authorized_keys`. Con autenticación solo por certificado, la columna de usuario viene vacía y LabTower muestra el *Common Name*.
 
+### DNS Monitor
+- **Salud de los DNS de salida:** cada 60 s se le pregunta `example.com` directamente a cada DNS de salida que informa Pi-hole o AdGuard Home; la lista muestra si responde y en cuánto. Uno que no responde genera una alerta (crítica si ninguno responde) y un evento en la línea de tiempo del Resumen. No se sondean DoH/DoT, esta máquina ni direcciones link-local.
+- **Prueba de resolución** (nivel «ejecutar»): escribe un nombre y se pregunta al servidor DNS y a un resolutor externo (`1.1.1.1`, cambiable con `DNS_COMPARE`); muestra las respuestas de ambos y avisa si el nombre está **bloqueado** por tu DNS.
+
+
 ### WOL Console
 - Envía paquetes mágicos (máximo 10 por minuto por IP).
 - Toma equipos detectados por Net Monitor (nombre, MAC, IP y categoría) y usa la IP más reciente si cambió por DHCP.
 - Net Monitor marca con la etiqueta *WOL* los equipos registrados aquí.
+- **Estado en vivo:** el punto de cada equipo se pone verde cuando responde a ping (consultado desde el servidor cada 12 s, con la IP más reciente de Net Monitor).
+- **Confirmación de encendido:** tras enviar el paquete, el punto parpadea hasta que el equipo responde y avisa «encendió (N s)»; si no responde en 3 minutos, lo avisa.
 
 ### Admin Panel
 - Usuarios y permisos por módulo (ninguno, solo lectura, ejecutar, admin).
@@ -423,6 +433,7 @@ sudo systemctl restart wol-console labtower-ups admin-panel net-monitor proxmox-
 | `NAS_KEEP_DAYS` | NAS | `7` | Días de historial de cada NAS |
 | `LABTOWER_PI_KEEP_DAYS` | Resumen | `7` | Días de historial de Labtower |
 | `WOL_BROADCAST` | WOL | automático | Direcciones de broadcast separadas por coma |
+| `DNS_COMPARE` | DNS | `1.1.1.1` | Resolutor externo de la prueba de resolución |
 | `LABTOWER_SECURE_COOKIE` | todos | apagado | `1` marca la cookie como `Secure` (solo detrás de HTTPS) |
 
 ---

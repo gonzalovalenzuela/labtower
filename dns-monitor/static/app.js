@@ -96,6 +96,7 @@ const LANG={
  "topBlocked": "Top blocked",
  "topClients": "Top clients",
  "upstreams": "Upstream DNS",
+ "upOk": "answers", "upDown": "no answer", "resTitle": "Resolution test", "resName": "Domain name (e.g. example.com)", "resBtn": "Resolve", "resServer": "This DNS server", "resOutside": "Outside resolver", "resBlocked": "Blocked by this DNS (the outside resolver answers)", "resFailed": "This DNS server did not answer", "resSame": "Answers received", "resNone": "no answer records", "resErr": "Could not resolve",
  "hourly": "Queries per hour (last 24 h)",
  "info": "Server",
  "version": "Version",
@@ -116,7 +117,8 @@ const LANG={
   "blocking_off": "Blocking is paused",
   "blocking_failed": "Blocking failed",
   "no_lists": "No domains in the block lists",
-  "slow_upstream": "Slow upstream DNS ({0} ms)"
+  "slow_upstream": "Slow upstream DNS ({0} ms)",
+  "upstream_down": "Upstream DNS not answering: {0}"
  }
 },
   es:{
@@ -214,6 +216,7 @@ const LANG={
  "topBlocked": "Dominios más bloqueados",
  "topClients": "Clientes más activos",
  "upstreams": "DNS de salida",
+ "upOk": "responde", "upDown": "sin respuesta", "resTitle": "Prueba de resolución", "resName": "Nombre de dominio (ej. example.com)", "resBtn": "Resolver", "resServer": "Este servidor DNS", "resOutside": "Resolutor externo", "resBlocked": "Bloqueado por este DNS (el resolutor externo sí responde)", "resFailed": "Este servidor DNS no respondió", "resSame": "Respuestas recibidas", "resNone": "sin registros de respuesta", "resErr": "No se pudo resolver",
  "hourly": "Consultas por hora (últimas 24 h)",
  "info": "Servidor",
  "version": "Versión",
@@ -234,7 +237,8 @@ const LANG={
   "blocking_off": "El bloqueo está pausado",
   "blocking_failed": "El bloqueo falló",
   "no_lists": "No hay dominios en las listas de bloqueo",
-  "slow_upstream": "DNS de salida lento ({0} ms)"
+  "slow_upstream": "DNS de salida lento ({0} ms)",
+  "upstream_down": "DNS de salida sin respuesta: {0}"
  }
 }
 };
@@ -441,8 +445,12 @@ function buildDetail(n){
   h+='<div class="dns-grid">';
   h+=`<div class="node-card wide"><div class="node-hd"><div class="node-name">${esc(t('hourly'))}</div></div>${hourly(d.hourly)}</div>`;
   h+=topList(t('topDomains'),d.top_domains,'var(--dns)')+topList(t('topBlocked'),d.top_blocked,'var(--red)')+topList(t('topClients'),d.top_clients,'var(--blue)');
-  const ups=(d.upstreams||[]).map(u=>`<div class="top-row"><span class="tn" title="${esc(u.ip||'')}">${esc(u.name||u.ip||'—')}${u.port?`<small>:${esc(u.port)}</small>`:''}</span><span class="tc">${esc(fmtNum(u.count))}${u.ms!=null?' · '+esc(u.ms)+' ms':''}</span></div>`).join('');
+  const upState=u=>!u.probe?'':u.probe.ok?` <span class="up-ok" title="${esc(t('upOk'))}">●</span> `+esc(u.probe.ms)+' ms':` <span class="up-bad" title="${esc(t('upDown'))}">●</span> `+esc(t('upDown'));
+  const ups=(d.upstreams||[]).map(u=>`<div class="top-row"><span class="tn" title="${esc(u.ip||'')}">${esc(u.name||u.ip||'—')}${u.port?`<small>:${esc(u.port)}</small>`:''}</span><span class="tc">${esc(fmtNum(u.count))}${u.ms!=null?' · '+esc(u.ms)+' ms':''}${upState(u)}</span></div>`).join('');
   h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('upstreams'))}</div></div>${ups||`<div class="dns-empty">${esc(t('noData'))}</div>`}</div>`;
+  if(canExec())h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('resTitle'))}</div></div>
+    <div class="res-form"><input type="text" id="res-name" maxlength="253" placeholder="${esc(t('resName'))}" value="${esc(RES.name)}" data-on-change="saveRes"><select id="res-type" data-on-change="saveRes"><option>A</option><option${RES.type==='AAAA'?' selected':''}>AAAA</option></select><button class="btn-secondary" data-on-click="runResolve" data-on-click-args="${jsargs([n.id])}">${esc(t('resBtn'))}</button></div>
+    <div id="res-out">${resultHtml(RES.out)}</div></div>`;
   const cachedPct=d.cached!=null&&d.queries?Math.round(d.cached/d.queries*100):null;
   h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('info'))}</div></div>
     ${kv(t('colProt'),protPill(d)+(d.timer?` <span class="sum-sub">${esc(fmtDur(d.timer))}</span>`:''))}
@@ -591,6 +599,27 @@ function updateClock(){const el=document.getElementById('clock');if(el)el.textCo
 function closeModals(){document.querySelectorAll('.overlay').forEach(o=>o.classList.remove('show'));}
 let _tt;
 function toast(msg,isErr=false){const el=document.getElementById('toast');el.textContent=msg;el.style.background=isErr?'var(--red)':'var(--text)';void el.offsetWidth;el.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>el.classList.remove('show'),3200);}
+// ── Prueba de resolución ───────────────────────────────
+// El resultado se guarda para que sobreviva al repintado periódico de la página.
+// EN: The result is kept so it survives the page's periodic repaint.
+const RES={name:'',type:'A',out:null};
+function resultHtml(o){
+  if(!o)return '';
+  if(o.error)return `<div class="alerts"><div class="alert crit">${esc(o.error)}</div></div>`;
+  const line=(label,r)=>`<div class="top-row"><span class="tn">${esc(label)} <small>${esc(r.addr||'')}</small></span><span class="tc">${r.ok?esc(r.ms)+' ms':esc(r.error||('rcode '+r.rcode))}</span></div>`
+    +(r.ok?`<div class="res-ans">${(r.answers||[]).length?(r.answers).map(a=>`<span class="tag">${esc(a.type)}</span> ${esc(a.value)}`).join('<br>'):esc(t('resNone'))}</div>`:'');
+  const v=o.verdict==='blocked'?`<div class="alerts"><div class="alert warn">${esc(t('resBlocked'))}</div></div>`:o.verdict==='failed'?`<div class="alerts"><div class="alert crit">${esc(t('resFailed'))}</div></div>`:'';
+  return v+line(t('resServer'),o.server)+line(t('resOutside'),o.outside);
+}
+function saveRes(){const n=$('res-name'),y=$('res-type');if(n)RES.name=n.value.trim();if(y)RES.type=y.value;}
+async function runResolve(id){
+  const nameEl=$('res-name'),typeEl=$('res-type');if(!nameEl)return;
+  RES.name=nameEl.value.trim();RES.type=typeEl.value;if(!RES.name)return;
+  RES.out={error:'…'};$('res-out').innerHTML=resultHtml(RES.out);
+  const r=await post('api/dns/'+encodeURIComponent(id)+'/resolve',{name:RES.name,type:RES.type});
+  RES.out=r.ok?r.d:{error:t('resErr')+': '+((r.d&&r.d.error)||'')};
+  const out=$('res-out');if(out)out.innerHTML=resultHtml(RES.out);
+}
 async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>({}));return {ok:r.ok,status:r.status,d};}
 function pill(lv,text){return `<span class="pill ${esc(lv)}">${esc(text)}</span>`;}
 function barColor(p,w,c){return p>=c?'var(--red)':p>=w?'var(--orange)':'var(--green)';}
@@ -637,4 +666,4 @@ _i18nReady=true;
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ closeModals, confirmDelete, doLogin, logout, openForm, openPause, resumeBlocking, saveServer, setLang, setRange, toggleCmp, setTheme, testServer, toggleNav, toggleServer, typeChanged });
+if (window.cspRegister) cspRegister({ runResolve, saveRes, closeModals, confirmDelete, doLogin, logout, openForm, openPause, resumeBlocking, saveServer, setLang, setRange, toggleCmp, setTheme, testServer, toggleNav, toggleServer, typeChanged });

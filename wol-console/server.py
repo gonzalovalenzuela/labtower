@@ -21,9 +21,10 @@
 #       · device list (devices.json) and data shared with Net Monitor
 #       · health (/api/health) and HTTP handler (GET, POST, DELETE)
 import json, os, socket, re, sys, time, logging, threading
+from concurrent.futures import ThreadPoolExecutor
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 from pathlib import Path
 
 # El módulo compartido de autenticación está en la carpeta hermana /auth.
@@ -118,6 +119,29 @@ def ping_host(ip: str, timeout: float = 1.0) -> bool:
         return r.returncode == 0
     except Exception:
         return False
+
+# Estado en línea con caché corta: varios navegadores abiertos no multiplican los ping. La clave es la IP.
+# EN: Online state with a short cache: several open browsers do not multiply the pings. The key is the IP.
+_probe_cache: dict = {}
+_probe_lock = threading.Lock()
+PROBE_TTL = 8            # seconds a result is reused by the list refresh
+PROBE_MAX = 64           # devices probed per request
+_pool = ThreadPoolExecutor(max_workers=16)
+
+# True/False según el ping, reutilizando un resultado de menos de max_age segundos.
+# EN: True/False from the ping, reusing a result younger than max_age seconds.
+def probe(ip, max_age=PROBE_TTL):
+    now = time.time()
+    with _probe_lock:
+        hit = _probe_cache.get(ip)
+        if hit and now - hit[0] < max_age: return hit[1]
+    up = ping_host(ip)
+    with _probe_lock:
+        _probe_cache[ip] = (time.time(), up)
+        if len(_probe_cache) > 512:                    # old IPs (DHCP changes) must not pile up
+            for k in [k for k, v in _probe_cache.items() if time.time() - v[0] > 300]:
+                _probe_cache.pop(k, None)
+    return up
 
 # ─── WOL ──────────────────────────────────────────────────────────────────────
 # Arma y envía el magic packet sin dependencias externas. Se manda al broadcast de la subred y a 255.255.255.255 por el
@@ -230,6 +254,22 @@ def validate_device(d):
     if ip not in (None, "") and not (isinstance(ip, str) and valid_host(ip.strip())):
         return False, "Invalid IP or host"
     return True, ""
+
+# IP con la que se sondea un equipo: la de Net Monitor (la más reciente) o la guardada; "" si no tiene ninguna.
+# EN: IP used to probe a device: Net Monitor's (the freshest) or the stored one; "" if it has none.
+def device_ip(dev, net=None):
+    n = (net or {}).get(mac_key(dev.get("mac")))
+    ip = ((n or {}).get("ip") or dev.get("ip") or "").strip()
+    return ip if valid_host(ip) else ""
+
+# Estado de los equipos pedidos: {id: True/False/None}; None = sin IP que sondear. Los ping corren en paralelo.
+# EN: State of the requested devices: {id: True/False/None}; None = no IP to probe. Pings run in parallel.
+def devices_status(devs, max_age=PROBE_TTL):
+    net = load_net_hosts() or {}
+    ips = {d["id"]: device_ip(d, net) for d in devs[:PROBE_MAX]}
+    uniq = sorted({ip for ip in ips.values() if ip})
+    res = dict(zip(uniq, _pool.map(lambda ip: probe(ip, max_age), uniq)))
+    return {i: (res[ip] if ip else None) for i, ip in ips.items()}
 
 # ─── Health ───────────────────────────────────────────────────────────────────
 # Chequeos de salud de WOL: archivos de datos, tabla de Net Monitor (opcional) y que la máquina tenga una IP de LAN.
@@ -347,6 +387,19 @@ class H(BaseHTTPRequestHandler):
             hosts = [{**h, "in_wol": k in have} for k, h in net.items()]
             hosts.sort(key=lambda h: (h["in_wol"], (h["name"] or h["ip"]).lower()))
             self._json(200, {"available": True, "hosts": hosts})
+
+        # Estado en línea (ping desde el servidor). Sin parámetros: todos los equipos; ?id=<uuid>: solo uno y sin caché,
+        # para confirmar un encendido. {id: true|false|null}; null = el equipo no tiene IP.
+        # EN: Online state (ping from the server). No parameters: all devices; ?id=<uuid>: just one and uncached,
+        #     to confirm a wake-up. {id: true|false|null}; null = the device has no IP.
+        elif path == "/api/status":
+            q = parse_qs(urlparse(self.path).query)
+            devs = load_devices()
+            one = (q.get("id") or [""])[0]
+            if one:
+                devs = [d for d in devs if d["id"] == one]
+                if not devs: return self._json(404, {"error": "Device not found"})
+            self._json(200, {"status": devices_status(devs, 1 if one else PROBE_TTL), "ts": int(time.time())})
 
         # Últimos 100 encendidos, del más reciente al más antiguo.
         # EN: Last 100 wake-ups, newest first.

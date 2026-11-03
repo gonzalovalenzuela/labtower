@@ -4,6 +4,7 @@
 const LANG = {
   en: {
     filterAll:'All', titleLogout:'Sign out', errLoad:'Error loading data', noPerm:'No permission', titEdit:'Edit', titDelete:'Delete',
+    wokeUp:(n,sec)=>`${n} is up (${sec} s)`, noReply:(n,m)=>`${n} did not answer after ${m} min`, noIpConfirm:n=>`${n} has no IP: cannot confirm the wake-up`, stOn:'Online', stOff:'Offline', stUnknown:'No IP to check',
     msgSent:n=>`Magic packet sent to "${n}"`, noVisible:'No visible devices', errDelete:'Error deleting', errHistory:'Error loading history', ago:x=>x+' ago',
     loginTitle:'Sign in', loginSub:'Enter your credentials to continue.',
     username:'Username', password:'Password', loginBtn:'Sign in',loginFill:'Fill in all fields',wakeAll:'Wake All',typeServer:'Server',typeOther:'Other',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',
@@ -44,6 +45,7 @@ const LANG = {
   },
   es: {
     filterAll:'Todos', titleLogout:'Cerrar sesión', errLoad:'Error al cargar', noPerm:'Sin permisos', titEdit:'Editar', titDelete:'Eliminar',
+    wokeUp:(n,sec)=>`${n} encendió (${sec} s)`, noReply:(n,m)=>`${n} no respondió tras ${m} min`, noIpConfirm:n=>`${n} no tiene IP: no se puede confirmar el encendido`, stOn:'En línea', stOff:'Apagado', stUnknown:'Sin IP para comprobar',
     msgSent:n=>`Paquete enviado a "${n}"`, noVisible:'No hay equipos visibles', errDelete:'Error al eliminar', errHistory:'Error cargando historial', ago:x=>'hace '+x,
     loginTitle:'Iniciar sesión', loginSub:'Ingresa tus credenciales para continuar.',
     username:'Usuario', password:'Contraseña', loginBtn:'Entrar',loginFill:'Completa todos los campos',wakeAll:'Wake All',typeServer:'Servidor',typeOther:'Otros',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',
@@ -206,10 +208,13 @@ function loadMeta(){try{return JSON.parse(localStorage.getItem(LOCAL_KEY)||'{}')
 function saveMeta(m){try{localStorage.setItem(LOCAL_KEY,JSON.stringify(m))}catch{}}
 let meta=loadMeta();
 
-let pollTimer=null;
+let pollTimer=null,statusMap={},watching=new Map();
 // La lista se refresca sola cada 5 segundos y al volver a la pestaña.
 // EN: The list refreshes itself every 5 seconds and when returning to the tab.
 const POLL_MS=5000;
+// El estado en línea (ping desde el servidor) se pide cada 12 s; el servidor reutiliza resultados de 8 s.
+// EN: The online state (ping from the server) is requested every 12 s; the server reuses results up to 8 s old.
+const STATUS_MS=12000;
 
 // Arranque tras iniciar sesión: relojes, búsqueda, primera carga de equipos y refresco periódico.
 // EN: Startup after login: clocks, search, first device load and periodic refresh.
@@ -220,6 +225,7 @@ async function initApp(){
   await refreshDevices(true);
   loadNetHosts();
   pollTimer=setInterval(()=>refreshDevices(false), POLL_MS);
+  refreshStatus();setInterval(()=>{if(!document.hidden)refreshStatus();},STATUS_MS);
   // Refrescar también al volver a la pestaña (vuelve de background/sleep)
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) refreshDevices(false);
@@ -297,7 +303,7 @@ function renderTable(){
     const canWake=canExecute();
     const canEdit=canAdmin();
     tr.innerHTML=`
-      <td class="col-st"><span class="ind" id="ind-${d.id}"></span></td>
+      <td class="col-st"><span class="${indClass(d.id)}" id="ind-${d.id}" title="${esc(indTitle(d.id))}"></span></td>
       <td><span class="dev-name">${esc(d.name)}</span><span class="dev-mac">${esc(d.mac)}${notes?' · <span style="color:var(--text-dim)">'+esc(notes)+'</span>':''}</span></td>
       <td><span class="tag tag-${String(d.tag).toLowerCase().replace(/[^a-z0-9_-]/g,'')}">${esc(d.tag)}</span></td>
       <td class="col-ip">${ipCell(d)}</td>
@@ -370,11 +376,42 @@ async function wakeDevice(id, force=false){
     const msg = res.message||t('msgSent',device.name);
     log('OK', msg);
     toast('Magic packet → '+device.name,false);
-    if(ind)ind.className='ind sent';
-    setTimeout(()=>{if(ind)ind.className='ind';},9000);
+    confirmWake(device);
     updateStats();renderTable();
   }catch(e){log('ERR','Error WOL: '+e.message);toast(e.message,true);if(ind)ind.className='ind';}
   finally{if(btn){btn.disabled=!canExecute();btn.textContent='Wake';}}
+}
+// ── Estado en línea y confirmación de encendido ────────
+// Clase y texto del indicador: naranja parpadeante mientras se espera que el equipo responda, verde si responde, gris si no.
+// EN: Indicator class and text: blinking orange while waiting for the device to answer, green if it answers, grey if not.
+function indClass(id){return watching.has(id)?'ind waking':statusMap[id]===true?'ind on':'ind';}
+function indTitle(id){return statusMap[id]===true?t('stOn'):statusMap[id]===false?t('stOff'):t('stUnknown');}
+// Pide el estado de todos los equipos y repinta solo si algo cambió.
+// EN: Ask for the state of all devices and repaint only if something changed.
+async function refreshStatus(){
+  try{
+    const r=await apiFetch('api/status');
+    const next=r.status||{};
+    if(JSON.stringify(next)!==JSON.stringify(statusMap)){statusMap=next;renderTable();}
+  }catch(e){}
+}
+// Tras enviar el paquete, pregunta cada 4 s al servidor si el equipo ya responde (máx. 3 min) y avisa el resultado.
+// EN: After sending the packet, ask the server every 4 s whether the device answers (3 min max) and report the result.
+async function confirmWake(device){
+  if(watching.has(device.id))return;
+  const t0=Date.now(),MAX=180000;
+  watching.set(device.id,t0);renderTable();
+  try{
+    while(Date.now()-t0<MAX){
+      await sleep(4000);
+      let up;
+      try{up=(await apiFetch('api/status?id='+encodeURIComponent(device.id))).status[device.id];}catch(e){continue;}
+      if(up===null||up===undefined){log('WARN',t('noIpConfirm',device.name));toast(t('noIpConfirm',device.name),true);return;}
+      statusMap[device.id]=up;
+      if(up){const sec=Math.round((Date.now()-t0)/1000);log('OK',t('wokeUp',device.name,sec));toast(t('wokeUp',device.name,sec),false);return;}
+    }
+    log('WARN',t('noReply',device.name,3));toast(t('noReply',device.name,3),true);
+  }finally{watching.delete(device.id);renderTable();}
 }
 function showAlreadyOnlineModal(id, name){
   document.getElementById('aol-name').textContent = name;

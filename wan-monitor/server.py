@@ -520,8 +520,8 @@ def wan_stats(cfg):
 
 def recent_outages(limit=15):
     try:
-        rows = _db("SELECT start,end,scope FROM wan_outages ORDER BY start DESC LIMIT ?", (limit,), fetch=True)
-        return [{"start": a, "end": b, "scope": s} for a, b, s in rows]
+        rows = _db("SELECT o.start,o.end,o.scope,t.start IS NOT NULL FROM wan_outages o LEFT JOIN wan_traces t ON t.start = o.start ORDER BY o.start DESC LIMIT ?", (limit,), fetch=True)
+        return [{"start": a, "end": b, "scope": s, "trace": bool(tr)} for a, b, s, tr in rows]
     except Exception: return []
 
 def recent_speed(limit=40):
@@ -530,12 +530,59 @@ def recent_speed(limit=40):
         return [{"ts": a, "down": b, "up": c, "ping": d, "server": e, "error": f} for a, b, c, d, e, f in reversed(rows)]
     except Exception: return []
 
+# ─── Traceroute al abrirse un corte e historial de IP pública ────────────────
+TRACE_MAX = 3000                  # characters kept per traceroute
+
+# Destino del traceroute: el primer destino configurado que sea una IP; si todos son nombres, el primero que se resuelva.
+# Nunca se pasa texto del usuario al comando: solo una dirección ya validada por ipaddress.
+# EN: Traceroute destination: the first configured target that is an IP; if all are names, the first that resolves.
+#     No user text is ever passed to the command: only an address already validated by ipaddress.
+def trace_dest(cfg):
+    names = []
+    for t in cfg.get("targets", []):
+        h = str(t.get("host") or "")
+        try: return str(ipaddress.ip_address(h))
+        except ValueError: names.append(h)
+    for h in names:
+        try: return str(ipaddress.ip_address(socket.gethostbyname(h)))
+        except (OSError, ValueError): continue
+    return None
+
+# Ejecuta traceroute (si está instalado) y guarda el resultado asociado al corte. Con internet caído muestra hasta qué salto llega.
+# EN: Run traceroute (if installed) and store the result tied to the outage. With the internet down it shows how far it gets.
+def run_trace(start, cfg):
+    exe = shutil.which("traceroute")
+    dest = trace_dest(cfg) if exe else None
+    if not dest: return
+    try:
+        p = subprocess.run([exe, "-n", "-w", "1", "-q", "1", "-m", "15", dest], capture_output=True, text=True, timeout=45)
+        text = re.sub(r"[^\x20-\x7e\n]", " ", p.stdout or "")[:TRACE_MAX].strip()
+    except (OSError, subprocess.SubprocessError) as e:
+        log.warning(f"traceroute failed: {e}"); return
+    if text:
+        try: _db("INSERT OR REPLACE INTO wan_traces (start,dest,text) VALUES (?,?,?)", (start, dest, text))
+        except Exception as e: log.warning(f"could not store the traceroute: {e}")
+
+def get_trace(start):
+    try:
+        rows = _db("SELECT dest,text FROM wan_traces WHERE start = ?", (int(start),), fetch=True)
+        return {"dest": rows[0][0], "text": rows[0][1]} if rows else None
+    except Exception: return None
+
+def recent_ips(limit=20):
+    try:
+        rows = _db("SELECT ts,ip,prev FROM wan_ips ORDER BY ts DESC LIMIT ?", (limit,), fetch=True)
+        return [{"ts": a, "ip": b, "prev": c} for a, b, c in rows]
+    except Exception: return []
+
 def load_history() -> int:
     try:
         _db("DELETE FROM wan_samples WHERE ts < ?", (int(time.time()) - HIST_KEEP,))
         _db("DELETE FROM wan_speed WHERE ts < ?", (int(time.time()) - HIST_KEEP,))
         _db("DELETE FROM wan_targets WHERE ts < ?", (int(time.time()) - HIST_KEEP,))
         _db("DELETE FROM wan_outages WHERE start < ?", (int(time.time()) - HIST_KEEP,))
+        _db("DELETE FROM wan_traces WHERE start < ?", (int(time.time()) - HIST_KEEP,))
+        _db("DELETE FROM wan_ips WHERE ts < ?", (int(time.time()) - HIST_KEEP,))
         rows = _db("SELECT ts,up,rtt,loss,jitter,gw,dns FROM wan_samples WHERE ts >= ? ORDER BY ts", (int(time.time()) - 43200,), fetch=True)
         with S.lock:
             for ts, up, rtt, loss, jit, gw, dns in rows: S.history.append({"ts": ts, "up": up, "rtt": rtt, "loss": loss, "jitter": jit, "gw": gw, "dns": dns})
@@ -599,6 +646,7 @@ def track_outage(r, first_fail_ts):
             try: _db("INSERT OR REPLACE INTO wan_outages (start,end,scope) VALUES (?,NULL,?)", (S.down_since, S.scope))
             except Exception as e: log.warning(f"could not store the outage: {e}")
             auth.record_event("wan", "crit", "Internet connection down" + (" (local network too)" if S.scope == "lan" else ""), "wan_down_" + S.scope)
+            threading.Thread(target=run_trace, args=(S.down_since, load_config()), daemon=True, name="wan-trace").start()
             log.warning(f"connection down ({S.scope})")
 
 # La última lectura del router, solo si es reciente (si el router dejó de responder, su dato viejo no sirve para diagnosticar).
@@ -714,6 +762,8 @@ def check_ip(cfg):
             if old: S.ip_prev = old
             try: auth.write_json(STATE_FILE, {"ip": ip, "changed": S.ip_changed, "prev": S.ip_prev})
             except Exception as e: log.warning(f"could not store the state: {e}")
+            try: _db("INSERT OR REPLACE INTO wan_ips (ts,ip,prev) VALUES (?,?,?)", (int(time.time()), ip, old))
+            except Exception as e: log.warning(f"could not store the IP change: {e}")
             if old: auth.record_event("wan", "warn", f"Public IP changed from {old} to {ip}", "wan_ipc", ip=ip, prev=old)
 
 def start_speedtest():
@@ -754,7 +804,7 @@ def _pruner():
         time.sleep(3600)
         try:
             cut = int(time.time()) - HIST_KEEP
-            _db("DELETE FROM wan_samples WHERE ts < ?", (cut,)); _db("DELETE FROM wan_speed WHERE ts < ?", (cut,)); _db("DELETE FROM wan_targets WHERE ts < ?", (cut,)); _db("DELETE FROM wan_outages WHERE start < ? AND end IS NOT NULL", (cut,))
+            _db("DELETE FROM wan_samples WHERE ts < ?", (cut,)); _db("DELETE FROM wan_speed WHERE ts < ?", (cut,)); _db("DELETE FROM wan_targets WHERE ts < ?", (cut,)); _db("DELETE FROM wan_outages WHERE start < ? AND end IS NOT NULL", (cut,)); _db("DELETE FROM wan_traces WHERE start < ?", (cut,)); _db("DELETE FROM wan_ips WHERE ts < ?", (cut,))
         except Exception as e: log.warning(f"could not prune: {e}")
 
 # ─── Health ───────────────────────────────────────────────────────────────────
@@ -828,8 +878,12 @@ class H(BaseHTTPRequestHandler):
             cfg = load_config()
             with_hist = parse_qs(urlparse(self.path).query).get("hist", ["1"])[0] != "0"
             with S.lock: hist = list(S.history) if with_hist else []
-            return self._json(200, {"config": public_config(cfg), "snap": snapshot(cfg), "history": hist, "uptime": uptime(), "outages": recent_outages(), "speed": recent_speed(), "stats": wan_stats(cfg),
+            return self._json(200, {"config": public_config(cfg), "snap": snapshot(cfg), "history": hist, "uptime": uptime(), "outages": recent_outages(), "ips": recent_ips(), "speed": recent_speed(), "stats": wan_stats(cfg),
                                     "speed_running": S.speed_running, "next_speed": next_speedtest(cfg), "ping_available": bool(shutil.which("ping")), "engines": engines_available()})
+        if path == "/api/wan/trace":
+            try: tr = get_trace(int(parse_qs(urlparse(self.path).query).get("start", [""])[0]))
+            except ValueError: return self._json(400, {"error": "Invalid outage"})
+            return self._json(200, {"trace": tr}) if tr else self._json(404, {"error": "No traceroute for this outage"})
         if path == "/api/wan/history":
             rng = parse_qs(urlparse(self.path).query).get("range", ["1d"])[0]
             if rng not in RANGE_SECS and rng != "all": return self._json(400, {"error": "Invalid range"})

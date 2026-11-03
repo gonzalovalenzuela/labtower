@@ -28,7 +28,7 @@ DNS Monitor — estado de uno o varios Pi-hole (v6 y v5) o AdGuard Home / status
 #     followed (credentials never go to another site) and the address is reduced to scheme://host[:port].
 #
 #     Structure: validation · HTTP client · Pi-hole · AdGuard · reading one server · cache and history · poller · health · HTTP.
-import base64, http.client, json, os, re, ssl, sys, time, logging, threading, uuid
+import base64, http.client, json, os, re, socket, ssl, sys, time, logging, threading, uuid
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 ThreadingHTTPServer.request_queue_size = 128
 from urllib.parse import urlparse, parse_qs, urlencode
@@ -39,6 +39,8 @@ from pathlib import Path
 # EN: Shared authentication module (sibling folder /auth).
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
+sys.path.insert(0, str(Path(__file__).parent))
+import dnsq
 
 # Solo loopback; el acceso desde la red pasa por nginx.
 # EN: Loopback only; network access goes through nginx.
@@ -376,8 +378,61 @@ def adguard_set_blocking(cfg, st, enabled, seconds):
 # ─── Lectura de un servidor ───────────────────────────────────────────────────
 # Lee todo un servidor. «st» guarda la sesión de Pi-hole entre lecturas.
 # EN: Read a whole server. "st" keeps the Pi-hole session between readings.
+# ─── Salud de los DNS de salida (upstreams) ───────────────────────────────────
+PROBE_EVERY = 60                         # seconds between active checks of each upstream
+PROBE_NAME  = "example.com"
+BLOCK_ANSWERS = ("0.0.0." + "0", "::")                       # addresses a DNS blocker answers with (a comparison, not a bind)
+COMPARE_DNS = os.environ.get("DNS_COMPARE", "1.1.1.1")     # outside resolver used by the resolution test
+
+# Pregunta «example.com» directamente a cada DNS de salida (cada 60 s) y anota si responde y en cuánto. Solo se sondean direcciones IP
+# permitidas (no esta máquina ni enlace local) y nunca DoH/DoT, que no se pueden consultar por UDP.
+# EN: Ask "example.com" directly to each upstream (every 60 s) and note whether it answers and how fast. Only allowed IP addresses
+#     are probed (not this machine or link-local) and never DoH/DoT, which cannot be queried over UDP.
+def probe_upstreams(snap: dict, st: dict):
+    ups = snap.get("upstreams") or []
+    pr = st.setdefault("probe", {"ts": 0.0, "res": {}})
+    if time.time() - pr["ts"] >= PROBE_EVERY:
+        found = {}
+        for u in ups:
+            hp = dnsq.split_upstream(u.get("ip") or u.get("name"), u.get("port"))
+            if hp and auth.valid_target(hp[0]): found[(u.get("name") or u.get("ip") or "?", hp)] = None
+        res, threads = {}, []
+        def work(k, hp):
+            r = dnsq.query(hp[0], hp[1], PROBE_NAME, "A", 2.0)
+            res[k] = {"ok": bool(r.get("ok")), "ms": r.get("ms"), "error": r.get("error")}
+        for (k, hp) in list(found)[:8]:
+            th = threading.Thread(target=work, args=(k, hp), daemon=True); th.start(); threads.append(th)
+        for th in threads: th.join(4)
+        pr["res"], pr["ts"] = res, time.time()
+    for u in ups:
+        p = pr["res"].get(u.get("name") or u.get("ip") or "?")
+        if p: u["probe"] = p
+
+# Prueba de resolución: pregunta el mismo nombre a este servidor DNS y a un resolutor externo, y compara.
+# EN: Resolution test: ask the same name to this DNS server and to an outside resolver, and compare.
+def resolve_compare(cfg: dict, name: str, qtype: str) -> dict:
+    host = urlparse(cfg["url"]).hostname or ""
+    if not auth.valid_target(host): raise ValueError("Invalid DNS server address")
+    try: ip = socket.getaddrinfo(host, None, type=socket.SOCK_DGRAM)[0][4][0]
+    except OSError: raise ValueError("Could not resolve the DNS server address")
+    if not auth.valid_target(ip): raise ValueError("Invalid DNS server address")
+    mine, outside = {}, {}
+    def a(): mine.update(dnsq.query(ip, 53, name, qtype, 3.0))
+    def b(): outside.update(dnsq.query(COMPARE_DNS, 53, name, qtype, 3.0))
+    ts = [threading.Thread(target=f, daemon=True) for f in (a, b)]
+    for x in ts: x.start()
+    for x in ts: x.join(5)
+    def sinkhole(r):          # Pi-hole / AdGuard answer 0.0.0.0 or :: for a blocked name
+        addr = [x["value"] for x in r.get("answers") or [] if x["type"] in ("A", "AAAA")]
+        return bool(addr) and all(a in BLOCK_ANSWERS for a in addr)
+    blocked = bool(outside.get("answers")) and (sinkhole(mine) or mine.get("rcode") in (3, 5) or (mine.get("ok") and not mine.get("answers")))
+    verdict = "blocked" if blocked else "failed" if not mine.get("ok") else "ok"
+    return {"name": name, "type": qtype, "server": {"addr": ip, **mine}, "outside": {"addr": COMPARE_DNS, **outside}, "verdict": verdict}
+
 def collect(cfg: dict, st: dict) -> dict:
     snap = pihole_collect(cfg, st) if cfg["type"] == "pihole" else adguard_collect(cfg, st)
+    try: probe_upstreams(snap, st)
+    except Exception as e: log.warning(f"upstream probe: {e}")
     snap["alerts"] = compute_alerts(snap)
     return snap
 
@@ -389,6 +444,9 @@ def compute_alerts(s: dict) -> list:
     elif s.get("blocking") == "failed": a.append({"lv": "crit", "type": "blocking_failed"})
     if _num(s.get("domains_blocked")) and s["domains_blocked"] == 0 and s.get("blocking") == "enabled": a.append({"lv": "warn", "type": "no_lists"})
     ups = s.get("upstreams") or []
+    probed = [u for u in ups if u.get("probe")]
+    down = [u for u in probed if not u["probe"]["ok"]]
+    if down: a.append({"lv": "crit" if len(down) == len(probed) else "warn", "type": "upstream_down", "value": ", ".join(str(u.get("name") or u.get("ip")) for u in down)[:80]})
     if any(u.get("ms") and u["ms"] >= 500 for u in ups): a.append({"lv": "warn", "type": "slow_upstream", "value": max(u["ms"] for u in ups if u.get("ms"))})
     return a
 
@@ -515,6 +573,14 @@ def _events(n: dict, snap: dict):
         if snap["blocking"] == "disabled": auth.record_event("dns", "warn", f"{n['name']}: blocking paused", "dns_off", n=n["name"])
         elif ch[1] == "enabled": auth.record_event("dns", "info", f"{n['name']}: blocking active", "dns_on", n=n["name"])
         elif snap["blocking"] == "failed": auth.record_event("dns", "crit", f"{n['name']}: blocking failed", "dns_fail", n=n["name"])
+
+    for u in snap.get("upstreams") or []:
+        p = u.get("probe")
+        if not p: continue
+        nm = str(u.get("name") or u.get("ip"))
+        ch = auth.state_changed(f"dns-up:{n['id']}:{nm}", "up" if p["ok"] else "down")
+        if ch and not p["ok"]: auth.record_event("dns", "warn", f"{n['name']}: upstream {nm} not answering", "dns_upstream_down", n=n["name"], u=nm)
+        elif ch: auth.record_event("dns", "info", f"{n['name']}: upstream {nm} answering again", "dns_upstream_up", n=n["name"], u=nm)
 
 def _poll(sid: str):
     cache = _cache.get(sid)
@@ -698,6 +764,21 @@ class H(BaseHTTPRequestHandler):
             log.info(f"{who}: {'resume' if body['enabled'] else 'pause'} blocking on {n['name']}")
             if cc: cc.wake.set()
             return self._json(200, {"ok": True})
+
+        # POST /api/dns/<id>/resolve {"name": "example.com", "type": "A"|"AAAA"}: qué responde este DNS frente a un resolutor externo (nivel «execute»).
+        # EN: POST /api/dns/<id>/resolve: what this DNS answers compared with an outside resolver ("execute" level).
+        mr = re.fullmatch(r"/api/dns/([a-zA-Z0-9\-]+)/resolve", path)
+        if mr:
+            if not auth.check_permission(tok, "dns", "execute"):
+                return self._json(403 if auth.check_permission(tok, "dns", "readonly") else 401, {"error": "Execute permission required"})
+            n = next((x for x in load_servers() if x["id"] == mr.group(1)), None)
+            if not n: return self._json(404, {"error": "Not found"})
+            name, qt = str(body.get("name") or "").strip(), str(body.get("type") or "A").upper()
+            if not dnsq.valid_name(name) or qt not in ("A", "AAAA"): return self._json(400, {"error": "Invalid name or type"})
+            if not _test_gate.acquire(blocking=False): return self._json(429, {"error": "Too many tests at once"})
+            try: return self._json(200, resolve_compare(n, name, qt))
+            except ValueError as e: return self._json(400, {"error": str(e)})
+            finally: _test_gate.release()
 
         if not auth.check_permission(tok, "dns", "admin"):
             return self._json(403 if auth.check_permission(tok, "dns", "readonly") else 401, {"error": "Admin permission required"})

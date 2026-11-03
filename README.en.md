@@ -243,6 +243,9 @@ labtower-health
 - **Quality and availability:** a card with **latency percentiles** (median, p95 and p99) and availability over 24 h, 7 d and 30 d, with the number of outages, mean duration, the longest, **mean time between outages (MTBF)** and a breakdown by cause (LAN / WAN / Internet). A history shorter than the period is not judged as if it covered it. The targets table adds the **24 h p95** and the **share of failed rounds in 24 h for each target**, to tell "only one fails" from "everything fails" (one sample per target and round is stored, with the same retention as the history, `WAN_KEEP_DAYS`).
 - **Speed against the plan:** with the contracted speed set in *Settings*, the card shows the share of the plan of the last test, the 7 and 30 day means, the **download speed by hour of the day** and the **30-day daily trend**. If **3 tests in a row** fall under 70 % of the plan, a warning appears (also on the Overview) and an event is recorded when it starts and another when it clears.
 - **Quality events:** packet loss (≥ 5 %) or latency (≥ 150 ms) that last **3 rounds in a row** create an event when they start and another when they end; a single spike does not. Outages have their own events.
+- **Public IP history:** a card with every IP change (date, new IP and the previous one), besides the Overview notice.
+- **Traceroute on every outage:** when an outage opens a `traceroute` (15 hops max) runs towards the first target and is stored with the outage; the *Traceroute* button in the outages table shows how far the uplink got. It needs the `traceroute` package (the installer recommends it); without it nothing is stored.
+
 
 ### VPN Monitor
 - Shows the clients connected to each VPN server: name, real and virtual address, time connected, traffic, recent sessions and connect / disconnect alerts in the Overview timeline. Read-only: it never changes anything on the VPN server. Up to 16 servers.
@@ -265,10 +268,17 @@ labtower-health
   ```
   If SSH fails with "Permission denied" it is almost always permissions: `chmod 755 ~`, `chmod 700 ~/.ssh` and `chmod 600 ~/.ssh/authorized_keys`. With certificate-only authentication the user column is empty and LabTower shows the certificate's *Common Name*.
 
+### DNS Monitor
+- **Upstream health:** every 60 s `example.com` is asked directly to each upstream DNS reported by Pi-hole or AdGuard Home; the list shows whether it answers and how fast. One that does not answer raises an alert (critical if none answers) and an event on the Overview timeline. DoH/DoT, this machine and link-local addresses are not probed.
+- **Resolution test** ("execute" level): type a name and it is asked to the DNS server and to an outside resolver (`1.1.1.1`, changeable with `DNS_COMPARE`); it shows both answers and warns when the name is **blocked** by your DNS.
+
+
 ### WOL Console
 - Sends magic packets (at most 10 per minute per IP).
 - Picks hosts found by Net Monitor (name, MAC, IP and category) and uses the latest IP if DHCP changed it.
 - Net Monitor tags hosts registered here with *WOL*.
+- **Live state:** each device's dot turns green when it answers ping (checked from the server every 12 s, using Net Monitor's latest IP).
+- **Wake-up confirmation:** after sending the packet the dot blinks until the device answers and reports "is up (N s)"; if it does not answer within 3 minutes, it says so.
 
 ### Admin Panel
 - Users and per-module permissions (none, read-only, execute, admin).
@@ -423,6 +433,7 @@ sudo systemctl restart wol-console labtower-ups admin-panel net-monitor proxmox-
 | `NAS_KEEP_DAYS` | NAS | `7` | Days of history per NAS |
 | `LABTOWER_PI_KEEP_DAYS` | Overview | `7` | Days of Pi history |
 | `WOL_BROADCAST` | WOL | automatic | Comma-separated broadcast addresses |
+| `DNS_COMPARE` | DNS | `1.1.1.1` | Outside resolver of the resolution test |
 | `LABTOWER_SECURE_COOKIE` | all | off | `1` marks the cookie `Secure` (only behind HTTPS) |
 
 ---

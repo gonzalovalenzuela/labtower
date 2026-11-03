@@ -2,6 +2,9 @@
 
 ## 2.1.6j — 2026-11-03
 
+- **Nuevo:** WOL Console: estado en vivo de cada equipo (ping desde el servidor) y confirmación de encendido: tras enviar el paquete avisa «encendió (N s)» o que no respondió en 3 minutos.
+- **Nuevo:** WAN Monitor: historial de cambios de IP pública y traceroute automático al abrirse cada corte, visible desde la tabla de cortes (el paquete `traceroute` pasa a ser recomendado).
+- **Nuevo:** DNS Monitor: salud de los DNS de salida (sondeo directo cada 60 s, con alerta y evento en el Resumen) y prueba de resolución que compara tu DNS con un resolutor externo y detecta nombres bloqueados.
 - **Nuevo:** Proxmox Monitor: capacidad y salud del cluster (días hasta llenarse, prueba N-1, HA, replicación, tareas fallidas, Ceph, datos de cada nodo, cambios de estado de invitados y bloqueos). El README indica ahora los privilegios que necesita el token de API.
 - **Nuevo:** UPS Monitor: estado detallado (banderas), alarmas y beeper, calidad de la red eléctrica y margen de apagado.
 - **Nuevo:** WAN Monitor: calidad por destino, percentiles de latencia, velocidad frente al plan, disponibilidad y MTBF, y eventos de calidad sostenida.
@@ -12,6 +15,7 @@
 - **Arreglo:** un POST sin cuerpo ya no devuelve 400 en Net, NUT, Proxmox, NAS, VPN, WOL, Resumen y Panel.
 - **Arreglo:** el grupo de un equipo en Net Monitor se perdía en cada reescaneo.
 - **Arreglo:** el escape de HTML de Net, WOL y Panel ahora también cubre la comilla simple.
+- **Arreglo:** el esquema de métricas declaraba dos veces la tabla de destinos del WAN.
 
 ## 2.1.6i — 2026-11-03
 

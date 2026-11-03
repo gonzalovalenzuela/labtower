@@ -347,3 +347,7 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
 /* Teléfono: tabla resumen más compacta para que quepan todas las columnas sin cortarse / EN: Phone: compact summary table so every column fits */
 @media(max-width:520px){.dns-table thead th{padding:7px 4px;font-size:9.5px;letter-spacing:.1px}.dns-table tbody td{padding:9px 4px;font-size:12px}.dns-table thead th:first-child,.dns-table tbody td:first-child{padding-left:8px}.dns-table .sum-sub{font-size:10px}.dns-table .pill,.dns-table .badge{font-size:10px;padding:2px 6px}}
 @media(max-width:520px){.dns-table thead th:last-child,.dns-table tbody tr:not(.detail-row) td:last-child{display:none}}
+
+.up-ok{color:var(--green)}.up-bad{color:var(--red)}
+.res-form{display:flex;gap:8px;padding:12px 16px;flex-wrap:wrap}.res-form input{flex:1;min-width:180px}
+.res-ans{padding:2px 16px 10px;font:12px/1.6 var(--mono);color:var(--text-mid)}

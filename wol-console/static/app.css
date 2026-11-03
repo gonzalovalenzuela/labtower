@@ -124,7 +124,7 @@ td{padding:10px 16px;vertical-align:middle}
 .col-st{width:36px}
 .ind{width:8px;height:8px;border-radius:50%;background:var(--border-b);display:block;margin:0 auto;transition:all .3s}
 .ind.waking{background:var(--orange);box-shadow:0 0 0 3px var(--orange-dim);animation:pind .5s ease infinite}
-.ind.sent{background:var(--green);box-shadow:0 0 0 3px var(--green-dim)}
+.ind.on{background:var(--green);box-shadow:0 0 0 3px var(--green-dim)}
 @keyframes pind{0%,100%{opacity:1}50%{opacity:.25}}
 .dev-name{font-size:13.5px;font-weight:500;color:var(--text);display:block}
 .dev-mac{font-size:11px;color:var(--text-dim);font-family:var(--mono);display:block;margin-top:1px}

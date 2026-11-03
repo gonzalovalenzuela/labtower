@@ -110,6 +110,7 @@ const LANG={
  "tooSoon": "Wait a few seconds before measuring again",
  "outages": "Outages",
  "noOutages": "No outages recorded",
+ "traceBtn": "Traceroute", "traceTo": "Traceroute to {0} when the outage started", "traceNone": "No traceroute for this outage", "ipHistory": "Public IP history", "ipNow": "current", "noIpHistory": "No changes recorded yet",
  "stTitle": "Quality and availability",
  "stLatency": "Latency (percentiles)",
  "stP50": "Median",
@@ -300,6 +301,7 @@ const LANG={
  "tooSoon": "Espera unos segundos antes de volver a medir",
  "outages": "Cortes",
  "noOutages": "Sin cortes registrados",
+ "traceBtn": "Traceroute", "traceTo": "Traceroute a {0} al empezar el corte", "traceNone": "Este corte no tiene traceroute", "ipHistory": "Historial de IP pública", "ipNow": "actual", "noIpHistory": "Aún no hay cambios registrados",
  "stTitle": "Calidad y disponibilidad",
  "stLatency": "Latencia (percentiles)",
  "stP50": "Mediana",
@@ -556,11 +558,37 @@ function speedCard(){
   const next=!cfg.enabled||!cfg.every_hours?t('speedOff'):(W.next_speed?t('speedNext',fmtDate(W.next_speed)):'');
   return `<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('speed'))}</div>${btn}</div>${body}<div class="wan-note">${esc(next)}<br>${esc(t('speedHint'))}</div></div>`;
 }
+// Traceroute guardado al abrirse cada corte: se carga al pedirlo y queda en memoria mientras la página esté abierta.
+// EN: Traceroute stored when each outage opened: loaded on request and kept in memory while the page stays open.
+const TRACES={},OPEN_TRACE=new Set();
+async function toggleTrace(start){
+  if(OPEN_TRACE.has(start)){OPEN_TRACE.delete(start);renderMain();return;}
+  if(!(start in TRACES)){
+    try{const r=await fetch('api/wan/trace?start='+encodeURIComponent(start));TRACES[start]=r.ok?(await r.json()).trace:null;}
+    catch{TRACES[start]=null;}
+  }
+  OPEN_TRACE.add(start);renderMain();
+}
 function outagesCard(){
   const o=W.outages||[];
-  const rows=o.length?o.map(x=>`<tr><td>${esc(fmtDate(x.start))}</td><td>${x.end?esc(fmtDur(x.end-x.start)):pill('crit',t('ongoing'))}</td><td>${esc(t(x.scope==='lan'?'scopeLan':x.scope==='wan'?'scopeWan':'scopeInternet'))}</td></tr>`).join('')
-    :`<tr><td colspan="3" class="wan-empty">${esc(t('noOutages'))}</td></tr>`;
-  return `<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('outages'))}</div></div><div class="tbl-wrap"><table class="wan-table"><thead><tr><th>${esc(t('colStart'))}</th><th>${esc(t('colDur'))}</th><th>${esc(t('colScope'))}</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  const rows=o.length?o.map(x=>{
+    const tr=x.trace?`<button class="btn-secondary" data-on-click="toggleTrace" data-on-click-args="${jsargs([x.start])}">${esc(t('traceBtn'))}</button>`:'';
+    let r=`<tr><td>${esc(fmtDate(x.start))}</td><td>${x.end?esc(fmtDur(x.end-x.start)):pill('crit',t('ongoing'))}</td><td>${esc(t(x.scope==='lan'?'scopeLan':x.scope==='wan'?'scopeWan':'scopeInternet'))}</td><td>${tr}</td></tr>`;
+    if(x.trace&&OPEN_TRACE.has(x.start)){
+      const d=TRACES[x.start];
+      r+=`<tr class="trace-row"><td colspan="4">${d?`<div class="wan-note">${esc(t('traceTo',d.dest))}</div><pre class="wan-trace">${esc(d.text)}</pre>`:`<div class="wan-note">${esc(t('traceNone'))}</div>`}</td></tr>`;
+    }
+    return r;}).join('')
+    :`<tr><td colspan="4" class="wan-empty">${esc(t('noOutages'))}</td></tr>`;
+  return `<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('outages'))}</div></div><div class="tbl-wrap"><table class="wan-table"><thead><tr><th>${esc(t('colStart'))}</th><th>${esc(t('colDur'))}</th><th>${esc(t('colScope'))}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+// Historial de cambios de IP pública (el más reciente primero).
+// EN: Public IP change history (newest first).
+function ipHistoryCard(){
+  const l=W.ips||[];
+  const rows=l.length?l.map((x,i)=>`<tr><td>${esc(fmtDate(x.ts))}</td><td>${esc(x.ip)}${i===0?' <span class="sum-sub">'+esc(t('ipNow'))+'</span>':''}</td><td>${x.prev?esc(x.prev):'—'}</td></tr>`).join('')
+    :`<tr><td colspan="3" class="wan-empty">${esc(t('noIpHistory'))}</td></tr>`;
+  return `<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('ipHistory'))}</div></div><div class="tbl-wrap"><table class="wan-table"><thead><tr><th>${esc(t('colStart'))}</th><th>IP</th><th>${esc(t('ipWas'))}</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 function renderMain(){
   const s=W.snap,box=$('main-content');
@@ -581,7 +609,7 @@ function renderMain(){
     +ring(t('gUp24'),pc(up['24h']),'var(--wan)',upTxt(up['24h']))+'</div>';
   h+='<div class="wan-grid">';
   h+=`<div class="node-card wide"><div class="node-hd"><div class="node-name">${esc(t('targets'))}</div><span>${pill(si.lv,si.txt)}</span></div><div class="tbl-wrap"><table class="wan-table"><thead><tr><th>${esc(t('colTarget'))}</th><th>${esc(t('colKind'))}</th><th>${esc(t('colRtt'))}</th><th>${esc(t('colLoss'))}</th><th class="c-temp">${esc(t('colJitter'))}</th><th>${esc(t('colP95Day'))}</th><th>${esc(t('colFail24'))}</th><th>${esc(t('colOk'))}</th></tr></thead><tbody>${targetRows(s)}</tbody></table></div></div>`;
-  h+=statsCard()+speedCard()+outagesCard();
+  h+=statsCard()+speedCard()+outagesCard()+ipHistoryCard();
   h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('info'))}</div></div>
     ${kv(t('pubIp'),esc(s.public_ip||'—')+(s.ip_changed?` <span class="sum-sub">${esc(t('ipChanged'))} ${esc(fmtDate(s.ip_changed))}</span>`:''))}
     ${kv(t('gwIp'),esc(s.gateway_ip||'—'))}${routerRow(s)}${kv(t('gUp7'),esc(upTxt(up['7d'])))}${kv(t('gUp30'),esc(upTxt(up['30d'])))}${kv(t('lastCheck'),esc(fmtDate(s.ts)))}</div>`;
@@ -776,4 +804,4 @@ _i18nReady=true;
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ closeModals, doLogin, logout, rtTypeChanged, runSpeed, saveSettings, testRouter, setLang, setRange, toggleCmp, setTheme, toggleNav });
+if (window.cspRegister) cspRegister({ toggleTrace, closeModals, doLogin, logout, rtTypeChanged, runSpeed, saveSettings, testRouter, setLang, setRange, toggleCmp, setTheme, toggleNav });

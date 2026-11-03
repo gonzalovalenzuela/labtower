@@ -1820,10 +1820,10 @@ CREATE TABLE IF NOT EXISTS net_latency (ip TEXT NOT NULL, ts INTEGER NOT NULL, m
                                         PRIMARY KEY (ip, ts)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS wan_targets (host TEXT NOT NULL, ts INTEGER NOT NULL, rtt REAL, loss REAL, ok INTEGER NOT NULL,
                                         PRIMARY KEY (host, ts)) WITHOUT ROWID;
-CREATE TABLE IF NOT EXISTS wan_targets (host TEXT NOT NULL, ts INTEGER NOT NULL, rtt REAL, loss REAL, ok INTEGER NOT NULL,
-                                        PRIMARY KEY (host, ts)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS wan_speed   (ts INTEGER PRIMARY KEY, down REAL, up REAL, ping REAL, server TEXT, error TEXT);
 CREATE TABLE IF NOT EXISTS wan_outages (start INTEGER PRIMARY KEY, end INTEGER, scope TEXT);
+CREATE TABLE IF NOT EXISTS wan_traces  (start INTEGER PRIMARY KEY, dest TEXT, text TEXT);
+CREATE TABLE IF NOT EXISTS wan_ips     (ts INTEGER PRIMARY KEY, ip TEXT NOT NULL, prev TEXT);
 """
 
 def metrics_conn():
