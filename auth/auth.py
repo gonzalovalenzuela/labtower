@@ -1815,6 +1815,10 @@ CREATE TABLE IF NOT EXISTS nas_series  (nid TEXT NOT NULL, k TEXT NOT NULL, ts I
 CREATE TABLE IF NOT EXISTS dns_samples (sid TEXT NOT NULL, ts INTEGER NOT NULL, total INTEGER, blocked INTEGER, pct REAL, ms REAL,
                                         PRIMARY KEY (sid, ts)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS wan_samples (ts INTEGER PRIMARY KEY, up INTEGER NOT NULL, rtt REAL, loss REAL, jitter REAL, gw REAL, dns REAL);
+CREATE TABLE IF NOT EXISTS wan_targets (host TEXT NOT NULL, ts INTEGER NOT NULL, rtt REAL, loss REAL, ok INTEGER NOT NULL,
+                                        PRIMARY KEY (host, ts)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS wan_targets (host TEXT NOT NULL, ts INTEGER NOT NULL, rtt REAL, loss REAL, ok INTEGER NOT NULL,
+                                        PRIMARY KEY (host, ts)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS wan_speed   (ts INTEGER PRIMARY KEY, down REAL, up REAL, ping REAL, server TEXT, error TEXT);
 CREATE TABLE IF NOT EXISTS wan_outages (start INTEGER PRIMARY KEY, end INTEGER, scope TEXT);
 """

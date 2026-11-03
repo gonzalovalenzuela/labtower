@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
 sys.path.insert(0, str(Path(__file__).parent))
 import router as rtr
+import stats as wst
 
 HOST       = "127.0.0.1"
 PORT       = 8088
@@ -432,6 +433,7 @@ class WanState:
         self.wake = threading.Event()
         self.gw = None
         self.router, self.router_wake, self.router_test = None, threading.Event(), 0
+        self.speed_low = None          # tests in a row under 70 % of the plan (None until the history is read)
 
 S = WanState()
 
@@ -444,6 +446,19 @@ def _db(sql, args=(), fetch=False):
 def store_sample(r):
     try: _db("INSERT OR REPLACE INTO wan_samples (ts,up,rtt,loss,jitter,gw,dns) VALUES (?,?,?,?,?,?,?)", (r["ts"], 1 if r["up"] else 0, r["rtt"], r["loss"], r["jitter"], r["gw"], r["dns"]))
     except Exception as e: log.warning(f"could not store the sample: {e}")
+
+def tkey(t):
+    """Label of a target in the history: the host for ping, tcp:host:port for TCP."""
+    return t["host"] if t.get("kind") != "tcp" else f"tcp:{t['host']}:{t.get('port')}"
+
+def store_targets(r):
+    rows = [(tkey(t), r["ts"], t.get("rtt"), t.get("loss"), 1 if t.get("ok") else 0) for t in r.get("targets", [])]
+    if not rows: return
+    try:
+        c = auth.metrics_conn()
+        try: c.executemany("INSERT OR REPLACE INTO wan_targets (host,ts,rtt,loss,ok) VALUES (?,?,?,?,?)", rows); c.commit()
+        finally: c.close()
+    except Exception as e: log.warning(f"could not store the target samples: {e}")
 
 def history_window(range_: str, prev: bool = False):
     """(since, until) of a range. prev=True gives the period just before it (same length) so charts can compare the two; "all" has none."""
@@ -476,6 +491,33 @@ def uptime():
         except Exception: out[k] = None
     return out
 
+# ─── Estadísticas: percentiles, destinos, velocidad contra el plan y disponibilidad ───
+# Se calculan sobre el historial guardado y se guardan 60 s en memoria (la página consulta cada pocos segundos).
+# EN: ─── Statistics: percentiles, targets, speed against the plan and availability ───
+#     Computed over the stored history and kept 60 s in memory (the page asks every few seconds).
+_stats_cache = [0, None]
+
+def wan_stats(cfg):
+    now = int(time.time())
+    if _stats_cache[1] is not None and now - _stats_cache[0] < 60: return _stats_cache[1]
+    out = {"latency": {}, "targets": {}, "speed": None, "avail": {}}
+    try:
+        first = (_db("SELECT MIN(ts) FROM wan_samples", fetch=True) or [[None]])[0][0] or now
+        for k, w in (("24h", 86400), ("7d", 604800), ("30d", 2592000)):
+            rtts = [r[0] for r in _db("SELECT rtt FROM wan_samples WHERE ts >= ? AND up = 1 AND rtt IS NOT NULL", (now - w,), fetch=True)]
+            out["latency"][k] = wst.latency_stats(rtts)
+            outs = _db("SELECT start,end,scope FROM wan_outages WHERE COALESCE(end, ?) >= ?", (now, now - w), fetch=True)
+            out["avail"][k] = wst.outage_stats(outs, now, w, first)
+        for k, w in (("24h", 86400), ("7d", 604800)):
+            out["targets"][k] = wst.target_stats(_db("SELECT host,rtt,loss,ok FROM wan_targets WHERE ts >= ?", (now - w,), fetch=True))
+        sp = cfg["speed"]
+        rows = _db("SELECT ts,down,up,error FROM wan_speed WHERE ts >= ? ORDER BY ts", (now - 30 * 86400,), fetch=True)
+        out["speed"] = wst.speed_stats(rows, sp.get("plan_down"), sp.get("plan_up"), now, lambda t: time.localtime(t).tm_hour)
+    except Exception as e:
+        log.warning(f"could not compute the statistics: {e}")
+    _stats_cache[0], _stats_cache[1] = now, out
+    return out
+
 def recent_outages(limit=15):
     try:
         rows = _db("SELECT start,end,scope FROM wan_outages ORDER BY start DESC LIMIT ?", (limit,), fetch=True)
@@ -492,6 +534,7 @@ def load_history() -> int:
     try:
         _db("DELETE FROM wan_samples WHERE ts < ?", (int(time.time()) - HIST_KEEP,))
         _db("DELETE FROM wan_speed WHERE ts < ?", (int(time.time()) - HIST_KEEP,))
+        _db("DELETE FROM wan_targets WHERE ts < ?", (int(time.time()) - HIST_KEEP,))
         _db("DELETE FROM wan_outages WHERE start < ?", (int(time.time()) - HIST_KEEP,))
         rows = _db("SELECT ts,up,rtt,loss,jitter,gw,dns FROM wan_samples WHERE ts >= ? ORDER BY ts", (int(time.time()) - 43200,), fetch=True)
         with S.lock:
@@ -500,12 +543,40 @@ def load_history() -> int:
         if open_: S.down_since, S.scope, S.fails = open_[0][0], open_[0][1], DOWN_AFTER      # an outage was open when the service stopped: keep it open
         last = _db("SELECT ts FROM wan_speed ORDER BY ts DESC LIMIT 1", fetch=True)
         if last: S.speed_last = last[0][0]
+        try: S.speed_low = wst.speed_stats(_db("SELECT ts,down,up,error FROM wan_speed WHERE ts >= ? ORDER BY ts", (int(time.time()) - 30 * 86400,), fetch=True),
+                                          load_config()["speed"].get("plan_down"), load_config()["speed"].get("plan_up"), int(time.time()), lambda t: time.localtime(t).tm_hour)["low_streak"]
+        except Exception: S.speed_low = 0
         st = auth.read_json(STATE_FILE, {}, dict)
         if isinstance(st.get("ip"), str): S.ip, S.ip_changed = st["ip"], st.get("changed")
         if isinstance(st.get("prev"), str): S.ip_prev = st["prev"][:64]
         return len(rows)
     except Exception as e:
         log.warning(f"could not load the history: {e}"); return 0
+
+_sus = wst.Sustain(3)
+LOSS_WARN, LAT_WARN = 5.0, 150.0
+
+# Pérdida o latencia sostenidas (3 rondas seguidas) generan un evento al empezar y otro al terminar; un pico suelto no.
+# EN: Sustained loss or latency (3 rounds in a row) create an event when they start and another when they end; a single spike does not.
+def sustained_events(r):
+    if not r["up"]: return                      # an outage has its own events
+    for key, bad, ev, val in (("loss", r["loss"] is not None and r["loss"] >= LOSS_WARN, "wan_loss", r["loss"]),
+                              ("lat", r["rtt"] is not None and r["rtt"] >= LAT_WARN, "wan_lat", r["rtt"])):
+        ch = _sus.update(key, bad)
+        if ch == "on": auth.record_event("wan", "warn", f"{'Packet loss' if key == 'loss' else 'High latency'} sustained ({round(val, 1)}{'%' if key == 'loss' else ' ms'})", ev, v=round(val, 1))
+        elif ch == "off": auth.record_event("wan", "info", f"{'Packet loss' if key == 'loss' else 'Latency'} back to normal", ev + "_ok")
+
+def speed_events(cfg):
+    st = wst.speed_stats(_db("SELECT ts,down,up,error FROM wan_speed WHERE ts >= ? ORDER BY ts", (int(time.time()) - 30 * 86400,), fetch=True),
+                         cfg["speed"].get("plan_down"), cfg["speed"].get("plan_up"), int(time.time()), lambda t: time.localtime(t).tm_hour)
+    prev, S.speed_low = S.speed_low, st["low_streak"]
+    _stats_cache[1] = None
+    if prev is None: return
+    last = st["last"] or {}
+    if S.speed_low >= wst.LOW_STREAK and prev < wst.LOW_STREAK:
+        auth.record_event("wan", "warn", f"Speed below 70 % of the plan in {S.speed_low} tests in a row", "wan_speed_low", n=S.speed_low, d=last.get("down") or 0, u=last.get("up") or 0)
+    elif S.speed_low == 0 and prev >= wst.LOW_STREAK:
+        auth.record_event("wan", "info", "Speed is back above 70 % of the plan", "wan_speed_ok")
 
 # Registra el paso de «arriba» a «caído» (tras DOWN_AFTER rondas fallidas) y la recuperación; escribe eventos para la línea de tiempo del Resumen.
 # EN: Record the change from "up" to "down" (after DOWN_AFTER failed rounds) and the recovery; writes events for the Overview timeline.
@@ -544,6 +615,7 @@ def compute_alerts(s: dict) -> list:
         if s.get("rtt") is not None and s["rtt"] >= 150: a.append({"lv": "warn", "type": "latency", "value": s["rtt"]})
         if s.get("dns") is not None and s["dns"] >= 500: a.append({"lv": "warn", "type": "dns_slow", "value": s["dns"]})
         elif s.get("dns_fail"): a.append({"lv": "warn", "type": "dns_fail"})
+    if (S.speed_low or 0) >= wst.LOW_STREAK: a.append({"lv": "warn", "type": "speed_low", "value": S.speed_low})
     if s.get("ip_changed") and time.time() - s["ip_changed"] < IP_NOTICE_S: a.append({"lv": "info", "type": "ip_changed", "value": s.get("public_ip"), "prev": s.get("ip_prev")})
     return a
 
@@ -589,7 +661,10 @@ def probe_loop():
         if r["up"]: first_fail = None
         with S.lock: S.last = r; S.history.append({"ts": r["ts"], "up": 1 if r["up"] else 0, "rtt": r["rtt"], "loss": r["loss"], "jitter": r["jitter"], "gw": r["gw"], "dns": r["dns"]})
         store_sample(r)
+        store_targets(r)
         track_outage(r, first_fail or r["ts"])
+        try: sustained_events(r)
+        except Exception as e: log.warning(f"sustained events: {e}")
         if r["up"] and cfg["ip_url"] and time.time() - S.ip_checked >= IP_EVERY: check_ip(cfg)
         S.wake.wait(max(1.0, cfg["interval"] - (time.time() - t0))); S.wake.clear()
 
@@ -651,6 +726,8 @@ def start_speedtest():
             res = run_speedtest(cfg)
             _db("INSERT OR REPLACE INTO wan_speed (ts,down,up,ping,server,error) VALUES (?,?,?,?,?,?)", (res["ts"], res["down"], res["up"], res["ping"], res["server"], res["error"]))
             S.speed_last = res["ts"]
+            try: speed_events(cfg)
+            except Exception as e: log.warning(f"speed events: {e}")
             log.info(f"speed test: ↓ {res['down']} Mb/s ↑ {res['up']} Mb/s ping {res['ping']} ms" + (f" [{res['error']}]" if res["error"] else ""))
         except Exception as e: log.error(f"speed test failed: {e}")
         finally:
@@ -677,7 +754,7 @@ def _pruner():
         time.sleep(3600)
         try:
             cut = int(time.time()) - HIST_KEEP
-            _db("DELETE FROM wan_samples WHERE ts < ?", (cut,)); _db("DELETE FROM wan_speed WHERE ts < ?", (cut,)); _db("DELETE FROM wan_outages WHERE start < ? AND end IS NOT NULL", (cut,))
+            _db("DELETE FROM wan_samples WHERE ts < ?", (cut,)); _db("DELETE FROM wan_speed WHERE ts < ?", (cut,)); _db("DELETE FROM wan_targets WHERE ts < ?", (cut,)); _db("DELETE FROM wan_outages WHERE start < ? AND end IS NOT NULL", (cut,))
         except Exception as e: log.warning(f"could not prune: {e}")
 
 # ─── Health ───────────────────────────────────────────────────────────────────
@@ -751,7 +828,7 @@ class H(BaseHTTPRequestHandler):
             cfg = load_config()
             with_hist = parse_qs(urlparse(self.path).query).get("hist", ["1"])[0] != "0"
             with S.lock: hist = list(S.history) if with_hist else []
-            return self._json(200, {"config": public_config(cfg), "snap": snapshot(cfg), "history": hist, "uptime": uptime(), "outages": recent_outages(), "speed": recent_speed(),
+            return self._json(200, {"config": public_config(cfg), "snap": snapshot(cfg), "history": hist, "uptime": uptime(), "outages": recent_outages(), "speed": recent_speed(), "stats": wan_stats(cfg),
                                     "speed_running": S.speed_running, "next_speed": next_speedtest(cfg), "ping_available": bool(shutil.which("ping")), "engines": engines_available()})
         if path == "/api/wan/history":
             rng = parse_qs(urlparse(self.path).query).get("range", ["1d"])[0]

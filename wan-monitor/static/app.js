@@ -110,6 +110,26 @@ const LANG={
  "tooSoon": "Wait a few seconds before measuring again",
  "outages": "Outages",
  "noOutages": "No outages recorded",
+ "stTitle": "Quality and availability",
+ "stLatency": "Latency (percentiles)",
+ "stP50": "Median",
+ "stSamples": "Samples",
+ "stAvail": "Availability",
+ "stOutN": "Outages",
+ "stOutMean": "Mean duration",
+ "stOutLong": "Longest",
+ "stMtbf": "Time between outages",
+ "stByScope": "By cause",
+ "stNone": "None",
+ "stCollect": "Collecting data…",
+ "stObserved": "observed",
+ "colP95Day": "p95 24 h",
+ "colFail24": "Failed 24 h",
+ "spHours": "Speed by hour of the day",
+ "spTrend": "Daily trend (30 days)",
+ "spAvg30": "30-day average",
+ "spLowWarn": "{0} speed tests in a row under 70 % of the contracted speed",
+ "spHint": "Download, mean of the tests of each hour",
  "colStart": "Start",
  "colDur": "Duration",
  "colScope": "Where",
@@ -162,6 +182,7 @@ const LANG={
   "down_internet": "No internet access since {0}",
   "down_lan": "The local network is unreachable since {0}",
   "down_wan": "The router reports its internet (WAN) link is down since {0}",
+  "speed_low": "Speed under 70 % of the plan in {0} tests in a row",
   "loss": "Packet loss {0}%",
   "latency": "High latency ({0} ms)",
   "dns_slow": "Slow DNS lookup ({0} ms)",
@@ -279,6 +300,26 @@ const LANG={
  "tooSoon": "Espera unos segundos antes de volver a medir",
  "outages": "Cortes",
  "noOutages": "Sin cortes registrados",
+ "stTitle": "Calidad y disponibilidad",
+ "stLatency": "Latencia (percentiles)",
+ "stP50": "Mediana",
+ "stSamples": "Muestras",
+ "stAvail": "Disponibilidad",
+ "stOutN": "Cortes",
+ "stOutMean": "Duración media",
+ "stOutLong": "El más largo",
+ "stMtbf": "Tiempo entre cortes",
+ "stByScope": "Por causa",
+ "stNone": "Ninguno",
+ "stCollect": "Recopilando datos…",
+ "stObserved": "observado",
+ "colP95Day": "p95 24 h",
+ "colFail24": "Fallos 24 h",
+ "spHours": "Velocidad por hora del día",
+ "spTrend": "Tendencia diaria (30 días)",
+ "spAvg30": "Promedio de 30 días",
+ "spLowWarn": "{0} pruebas de velocidad seguidas bajo el 70 % de lo contratado",
+ "spHint": "Bajada, promedio de las pruebas de cada hora",
  "colStart": "Inicio",
  "colDur": "Duración",
  "colScope": "Dónde",
@@ -331,6 +372,7 @@ const LANG={
   "down_internet": "Sin acceso a internet desde {0}",
   "down_lan": "La red local no responde desde {0}",
   "down_wan": "El router informa que su enlace a internet (WAN) está caído desde {0}",
+  "speed_low": "Velocidad bajo el 70 % del plan en {0} pruebas seguidas",
   "loss": "Pérdida de paquetes {0}%",
   "latency": "Latencia alta ({0} ms)",
   "dns_slow": "Resolución DNS lenta ({0} ms)",
@@ -453,12 +495,15 @@ function updateGlobalStats(){
 function fmtMbps(v){return v==null?'—':(v>=100?Math.round(v):Math.round(v*10)/10)+'<span style="font-size:13px;color:var(--text-dim)"> Mb/s</span>';}
 function lastSpeed(){const l=(W.speed||[]).filter(s=>!s.error&&s.down!=null);return l.length?l[l.length-1]:null;}
 function ms(v){return v==null?'—':(Math.round(v*10)/10)+' ms';}
+function tkeyOf(x){return x.kind==='tcp'?'tcp:'+x.host+':'+x.port:x.host;}
 function targetRows(s){
   const list=[...(s.targets||[])];if(s.gateway)list.push(s.gateway);
+  const ts={};((W.stats&&W.stats.targets&&W.stats.targets['24h'])||[]).forEach(x=>{ts[x.host]=x;});
   return list.map(x=>{
+    const st=x.gateway?null:ts[tkeyOf(x)];
     const kind=x.kind==='tcp'?t('kindTcp',x.port||''):t('kindPing');
     return `<tr><td>${x.gateway?`<span class="sum-name">${esc(t('gatewayRow'))}</span><div class="sum-sub">${esc(x.host)}</div>`:`<span class="sum-name">${esc(x.host)}</span>`}</td>
-      <td>${esc(kind)}</td><td>${ms(x.rtt)}</td><td>${x.loss==null?'—':esc(Math.round(x.loss))+'%'}</td><td class="c-temp">${ms(x.jitter)}</td><td>${pill(x.ok?'ok':'crit',t(x.ok?'ok':'fail'))}</td></tr>`;
+      <td>${esc(kind)}</td><td>${ms(x.rtt)}</td><td>${x.loss==null?'—':esc(Math.round(x.loss))+'%'}</td><td class="c-temp">${ms(x.jitter)}</td><td>${st?ms(st.p95):'—'}</td><td>${st?(st.fail_pct>0?`<span style="color:${st.fail_pct>=1?'var(--orange)':'inherit'}">${esc(st.fail_pct)}%</span>`:'0%'):'—'}</td><td>${pill(x.ok?'ok':'crit',t(x.ok?'ok':'fail'))}</td></tr>`;
   }).join('');
 }
 // % de lo entregado respecto a la velocidad contratada (última prueba y promedio de 7 días). / Delivered vs contracted speed in % (last test and 7-day average).
@@ -473,6 +518,31 @@ function planRows(cfg,sp,last){
   };
   return one(t('speedDown'),cfg.plan_down,'down')+one(t('speedUp'),cfg.plan_up,'up');
 }
+// Mini gráfico de barras (CSS) con una etiqueta al pasar el mouse. / Small bar chart (CSS) with a tooltip.
+function miniBars(items,color){
+  const mx=Math.max(1,...items.map(i=>i.v||0));
+  return '<div style="display:flex;align-items:flex-end;gap:2px;height:46px;margin:6px 14px 2px">'+items.map(i=>`<div title="${esc(i.tip)}" style="flex:1;min-width:3px;height:${i.v==null?2:Math.max(3,Math.round(i.v/mx*100))}%;background:${i.v==null?'var(--border)':color};border-radius:2px 2px 0 0;opacity:${i.v==null?1:.85}"></div>`).join('')+'</div>';
+}
+function statsCard(){
+  const st=W.stats;if(!st)return '';
+  const L=st.latency||{},A=st.avail||{};
+  const row=(lab,k)=>{const l=L[k]||{},a=A[k]||{};
+    return `<tr><td>${esc(lab)}</td><td>${l.n?ms(l.p50):'—'}</td><td>${l.n?ms(l.p95):'—'}</td><td>${l.n?ms(l.p99):'—'}</td><td>${a.pct==null?'—':esc(a.pct)+'%'}</td><td>${a.count==null?'—':(a.count?esc(a.count):esc(t('stNone')))}</td><td>${a.mean==null?'—':esc(fmtDur(a.mean))}</td><td>${a.longest?esc(fmtDur(a.longest)):'—'}</td><td>${a.mtbf==null?'—':esc(fmtDur(a.mtbf))}</td></tr>`;};
+  const sc=A['30d']&&A['30d'].count?A['30d'].scopes:null;
+  const scTxt=sc?['lan','wan','internet'].filter(k=>sc[k]).map(k=>t(k==='lan'?'scopeLan':k==='wan'?'scopeWan':'scopeInternet')+': '+sc[k]).join(' · '):'';
+  return `<div class="node-card wide"><div class="node-hd"><div class="node-name">${esc(t('stTitle'))}</div></div><div class="tbl-wrap"><table class="wan-table"><thead><tr><th></th><th>${esc(t('stP50'))}</th><th>p95</th><th>p99</th><th>${esc(t('stAvail'))}</th><th>${esc(t('stOutN'))}</th><th>${esc(t('stOutMean'))}</th><th>${esc(t('stOutLong'))}</th><th>${esc(t('stMtbf'))}</th></tr></thead><tbody>${row('24 h','24h')}${row('7 d','7d')}${row('30 d','30d')}</tbody></table></div>${scTxt?`<div class="wan-note">${esc(t('stByScope'))} (30 d): ${esc(scTxt)}</div>`:''}</div>`;
+}
+function speedExtra(){
+  const sp=W.stats&&W.stats.speed;if(!sp||!sp.n)return '';
+  let h='';
+  if(sp.plan_down&&sp.avg30&&sp.avg30.down!=null)h+=kv(t('spAvg30'),`<b style="color:${pctCol(sp.avg30.down)}">${sp.avg30.down}%</b> <span class="sum-sub">↓</span>`+(sp.plan_up&&sp.avg30.up!=null?` · <b style="color:${pctCol(sp.avg30.up)}">${sp.avg30.up}%</b> <span class="sum-sub">↑</span>`:''));
+  if(sp.hours&&sp.hours.length>=3){
+    const byH={};sp.hours.forEach(x=>{byH[x.h]=x;});
+    h+=`<div class="wan-note" style="padding-bottom:0">${esc(t('spHours'))}</div>`+miniBars(Array.from({length:24},(_,i)=>({v:byH[i]?byH[i].down:null,tip:String(i).padStart(2,'0')+':00 — '+(byH[i]?fmtNum(byH[i].down)+' Mb/s ('+byH[i].n+')':'—')})),'var(--green)');
+  }
+  if(sp.trend&&sp.trend.length>=3)h+=`<div class="wan-note" style="padding-bottom:0">${esc(t('spTrend'))}</div>`+miniBars(sp.trend.map(x=>({v:x.down,tip:fmtDate(x.ts).split(' ')[0]+' — '+(x.down==null?'—':fmtNum(x.down)+' Mb/s')})),'var(--blue)');
+  return h;
+}
 function speedCard(){
   const sp=W.speed||[],cfg=W.config.speed,last=sp.length?sp[sp.length-1]:null;
   let btn='';
@@ -482,7 +552,7 @@ function speedCard(){
   if(!last)body=`<div class="wan-empty">${esc(t('speedNone'))}</div>`;
   else if(last.error)body=`<div class="wan-empty" style="color:var(--red)">${esc(t('speedErr'))}: ${esc(last.error)}</div>`;
   else body=`<div class="wan-gauges" style="grid-template-columns:repeat(3,1fr);padding:12px 14px">${bigNum(t('speedDown'),last.down==null?'—':fmtNum(Math.round(last.down*10)/10),'Mb/s','var(--green)')}${bigNum(t('speedUp'),last.up==null?'—':fmtNum(Math.round(last.up*10)/10),last.up==null?'':'Mb/s','var(--blue)')}${bigNum(t('speedPing'),last.ping==null?'—':last.ping,last.ping==null?'':'ms')}</div>
-    ${planRows(cfg,sp,last)}${kv(t('speedServer'),esc(last.server||'—')+(cfg.engine&&cfg.engine!=='builtin'?' <span class="sum-sub">'+esc(cfg.engine==='ookla'?'Ookla':'LibreSpeed')+'</span>':''))}${kv(t('lastCheck'),esc(fmtDate(last.ts)))}`;
+    ${planRows(cfg,sp,last)}${speedExtra()}${kv(t('speedServer'),esc(last.server||'—')+(cfg.engine&&cfg.engine!=='builtin'?' <span class="sum-sub">'+esc(cfg.engine==='ookla'?'Ookla':'LibreSpeed')+'</span>':''))}${kv(t('lastCheck'),esc(fmtDate(last.ts)))}`;
   const next=!cfg.enabled||!cfg.every_hours?t('speedOff'):(W.next_speed?t('speedNext',fmtDate(W.next_speed)):'');
   return `<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('speed'))}</div>${btn}</div>${body}<div class="wan-note">${esc(next)}<br>${esc(t('speedHint'))}</div></div>`;
 }
@@ -510,8 +580,8 @@ function renderMain(){
     +bigNum(t('gGw'),s.gw==null?'—':Math.round(s.gw*10)/10,s.gw==null?'':'ms')
     +ring(t('gUp24'),pc(up['24h']),'var(--wan)',upTxt(up['24h']))+'</div>';
   h+='<div class="wan-grid">';
-  h+=`<div class="node-card wide"><div class="node-hd"><div class="node-name">${esc(t('targets'))}</div><span>${pill(si.lv,si.txt)}</span></div><div class="tbl-wrap"><table class="wan-table"><thead><tr><th>${esc(t('colTarget'))}</th><th>${esc(t('colKind'))}</th><th>${esc(t('colRtt'))}</th><th>${esc(t('colLoss'))}</th><th class="c-temp">${esc(t('colJitter'))}</th><th>${esc(t('colOk'))}</th></tr></thead><tbody>${targetRows(s)}</tbody></table></div></div>`;
-  h+=speedCard()+outagesCard();
+  h+=`<div class="node-card wide"><div class="node-hd"><div class="node-name">${esc(t('targets'))}</div><span>${pill(si.lv,si.txt)}</span></div><div class="tbl-wrap"><table class="wan-table"><thead><tr><th>${esc(t('colTarget'))}</th><th>${esc(t('colKind'))}</th><th>${esc(t('colRtt'))}</th><th>${esc(t('colLoss'))}</th><th class="c-temp">${esc(t('colJitter'))}</th><th>${esc(t('colP95Day'))}</th><th>${esc(t('colFail24'))}</th><th>${esc(t('colOk'))}</th></tr></thead><tbody>${targetRows(s)}</tbody></table></div></div>`;
+  h+=statsCard()+speedCard()+outagesCard();
   h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('info'))}</div></div>
     ${kv(t('pubIp'),esc(s.public_ip||'—')+(s.ip_changed?` <span class="sum-sub">${esc(t('ipChanged'))} ${esc(fmtDate(s.ip_changed))}</span>`:''))}
     ${kv(t('gwIp'),esc(s.gateway_ip||'—'))}${routerRow(s)}${kv(t('gUp7'),esc(upTxt(up['7d'])))}${kv(t('gUp30'),esc(upTxt(up['30d'])))}${kv(t('lastCheck'),esc(fmtDate(s.ts)))}</div>`;
