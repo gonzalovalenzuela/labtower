@@ -36,7 +36,8 @@ Every screen shares the same navigation, in the same order and grouping. Only th
 - **Top bar with a switcher** (default): the logo goes to the home page, and the module switcher opens a panel with all the modules, grouped, with their status (active, warnings or failing, shown with a shape and text, not only colour). It closes with Esc or by clicking outside. Language, theme, clock, user and "Menu type" are in the same bar. On phones there is a bottom bar (Home, Overview, Modules and Options) and modules are picked from a sheet that slides up.
 - **Classic side menu:** the modules grouped in the side panel and, in the Overview, a strip at the top.
 - **Choosing the menu type:** the first time you sign in a wizard offers both options. You can change it later in **Menu type** (next to language and theme). The choice is saved in the browser.
-- **Notices:** if any module has warnings or is failing, a box appears at the top of the content, under the menu, with a link to each one. Status comes from a single public GET to `/admin/api/health`.
+- **Common bar:** language, theme, clock, user, sign out, 24H and "Menu type" look the same in every module and in the Overview; with the top bar they move up to the global bar and the module bar disappears if nothing of its own is left. Each module's action buttons (Scan network, Settings, Wake All) share one look and also move up to the global bar.
+- **Notices:** if any module has warnings or is failing, a box appears under the module bar, aligned with the content, with a link to each one. Status comes from a single public GET to `/admin/api/health`.
 - Modules keep only their own things in the side panel (server lists, filters). If they have none, the panel is hidden. Nothing of this shows in kiosk mode.
 
 ## Screenshots
@@ -111,8 +112,8 @@ librespeed-cli --version
 ## Update
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.6/labtower_2.1.6_all.deb
-sudo apt-get install -y ./labtower_2.1.6_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.7/labtower_2.1.7_all.deb
+sudo apt-get install -y ./labtower_2.1.7_all.deb
 labtower-health
 ```
 
@@ -134,12 +135,13 @@ labtower-health
 
 ### Overview
 - **Global status** (All good / Attention / Failure) and a list of what needs attention, linked to the module.
+- **Status chips per module:** a row with one chip per module (● ok, ▲ warning, ■ failing, with the number of warnings). A click jumps to its card and Ctrl/⌘+click opens the module. "Only with problems" hides the healthy cards and is remembered in the browser.
 - **UPS:** state, battery, load, runtime, power and 24 h charts.
 - **Proxmox:** nodes online, running VMs and CTs, CPU and memory (12 h chart), Ceph health.
 - **NAS:** per NAS, status, CPU and memory (12 h chart with temperature), healthy disks, temperature and the fullest volume.
 - **Network:** hosts online, known and offline, last scan, device types and new hosts from the last 48 h.
 - **VPN:** how many clients are connected per server; the detail (who, from where, traffic) is in VPN Monitor.
-- **Raspberry Pi:** temperature, CPU, memory, disk, uptime and power supply status. On a Raspberry Pi only, it adds a 24 h temperature chart with under-voltage and throttling marks (kept 7 days in `metrics.db`).
+- **Server (LabTower Server):** temperature, CPU, memory, disk, uptime and power supply status. On a Raspberry Pi only, it adds a 24 h temperature chart with under-voltage and throttling marks (kept 7 days in `metrics.db`).
 - **Event timeline:** important changes with their time (UPS on battery, node down, Ceph change, new or vanished hosts). The modules record them even when nobody has the page open: last 300 events or 30 days.
 - **Global search** (top bar or the `/` key): Net Monitor hosts, UPS, Proxmox VMs and containers, NAS, DNS servers and WOL devices; it only shows what each user can see.
 - **Alert rules** (admins): thresholds on server, UPS, NAS, Proxmox, DNS and internet metrics, as warning or critical; they are evaluated while the Overview is open and the ones that trigger show in the attention panel.
@@ -149,7 +151,7 @@ labtower-health
 
 **Kiosk mode** (*Kiosk* button or `/overview/?kiosk=1`): full screen, large text, no buttons or cursor, screen kept awake. A touch or the mouse shows the exit button. URL options: `?zoom=0.8` (0.5 to 2) and `?autoscroll=1` (scrolls up and down by itself if the content does not fit). A read-only user is recommended.
 
-**iPad as a display:** open `http://PI-IP/overview/?kiosk=1` in Safari → Share → *Add to Home Screen*, with *Open as Web App* on. To stop it from locking: *Guided Access* or *Auto-Lock: Never*.
+**iPad as a display:** open `http://SERVER-IP/overview/?kiosk=1` in Safari → Share → *Add to Home Screen*, with *Open as Web App* on. To stop it from locking: *Guided Access* or *Auto-Lock: Never*.
 
 ### UPS Monitor
 - Starts with no servers. An admin adds one (name, `upsd` host and port, default 3493) and can test the connection before saving.
@@ -162,20 +164,21 @@ labtower-health
 
 ### Net Monitor
 - **Network:** detected automatically (the server's /24) or set with `SCAN_NETWORK`.
-- **Scanning:** a new install scans nothing until you ask (*Run initial scan* button). Automatic scanning is enabled in *Settings* (minimum 60 s).
+- **Scanning:** a new install scans nothing until you ask (*Run initial scan* button). Automatic scanning, clean-up of offline devices, SNMP and Pi-hole are set in the *Settings* window (minimum 60 s between scans); *Scan network* and *Settings* are in the top bar.
 - **Detection:** ping (TTL), ports and HTTP banner. It does not use `nmap`.
 - **MAC and vendor**, in this order: Pi-hole, local ARP, SNMP (ARP table of a router or switch). Vendors come from the Wireshark `manuf` list (weekly download) or `ieee-data`.
 - **Device types:** computer, phone, tablet, router, switch, access point, storage, TV, camera, printer, game console, server, IP phone, UPS, smart speaker and other. OS, type and group can be edited by hand.
 - **Trash button** to remove a host from the list (admins only). If it is still connected, the next scan discovers it again.
 - **Proxmox:** VMs and containers are recognised in the table ("VM 100" / "CT 200" badge) by matching MAC, IP and, with no other clue, an identical name. The Hosts / Online / Offline cards filter the table.
 - Hovering (or tapping on iPad) an IP in UPS, Proxmox, WOL or Overview shows a card with the host's data.
-- SNMP credentials and the Pi-hole password are stored with 600 permissions and the API never returns them.
+- SNMP credentials and the Pi-hole password are stored with 600 permissions and the API never returns them. Saving the Pi-hole settings with an empty password keeps the stored one (the field says so). If Pi-hole regenerates its own certificate with the same subject and issuer it is pinned again automatically and an event is recorded; a different identity is refused until you save again.
 - **Device security and stability:** (1) **MAC change on an IP:** if an IP that was online shows a different MAC on the next scan, an event is recorded and the device shows a *MAC changed* badge (7 days); it could be a duplicate IP, a replaced device or spoofing. Nothing is reported if the device was offline in between, because DHCP handing IPs to other devices is normal. (2) **Unreviewed devices:** devices discovered before updating count as known; new ones stay *unreviewed* (badge, strip above the table and Overview card) until an admin marks them as known, one by one or all at once. (3) **Per-device connectivity:** in the detail, the share of time online over 7 and 30 days, the drops of the last 7 days and a bar of the last week, computed from the connection log; a history shorter than the period is not judged as if it covered it. A device with 4 or more drops in 24 h raises an event and is flagged *Unstable* when it has 8 or more in the week. (5) **Watched devices:** in the detail, *Watch this device* (admins, up to 40) probes it every 30 s (`NET_WATCH_EVERY`, 0 disables it); after 2 failures in a row there is a critical event and an Overview alert, and another when it is back. (4) The **latency** of each watched device is stored (`NET_LATENCY_KEEP_DAYS`, 30 days by default) and the detail shows its 1, 7 or 30 day chart with mean, p95, maximum and loss. (6) **New ports:** if a device shows a port it never showed before, an event is recorded (a port that closes and reopens because of a timeout does not count); remote-access, file-sharing and database ports (21, 23, 135, 139, 445, 3389, 5900, 3306, 5432, 6379…) are raised as warnings. A device's group is no longer lost on rescan.
 
 #### Switch Monitor (Net Monitor tab)
 - Second tab next to *Devices*. For each switch it shows the front panel with every port's state (up, down, disabled, new errors, link between switches, loop), negotiated speed, packets per second, errors, STP, temperature and which device is behind each port (the switch's MAC table is matched with the hosts Net Monitor already knows).
 - **Models:** ZX310S (web interface), HC-SWTGW218AS (web interface) and any SNMP v2c switch (TP-Link and others); SNMP is the only one that reports bytes, so only there you get Mb/s.
 - **Added from the UI** (*+ Add switch*, admins only), with a *Test* button before saving. User, password or community are stored in `switches.json` with 600 permissions and the API never returns them.
+- **Stored web session:** the web-interface switches (ZX, HC) keep a single session open and do not hand it out to another client while it is alive; LabTower stores its session cookie (600 permissions, in the Net Monitor data) and reuses it after a restart or an upgrade, and waits longer between attempts when the switch rejects the session several times in a row.
 - **Read-only:** nothing is changed on the switches. Dangerous operations (clearing the ZX counters, wiping the HC MAC table, reboot, save) are blocked in the code.
 - **1-year history** (like UPS Monitor): temperature and, per port, state, speed, packets or Mb/s and errors; ranges 1 h, 1 d, 1 wk, 1 mo and all. Rates are computed between samples and tolerate counters that reset to zero.
 - **History** (sub-tab): cumulative totals per port (real bytes via SNMP; on ZX and HC, which only report packets, bytes are an estimate = packets × an average size configurable per switch, marked with «≈»), stored in the database and kept across switch and LabTower restarts. It adds up how far each counter advances between reads and starts from the value the switch already had when it was added.
@@ -243,7 +246,7 @@ labtower-health
 - **Quality and availability:** a card with **latency percentiles** (median, p95 and p99) and availability over 24 h, 7 d and 30 d, with the number of outages, mean duration, the longest, **mean time between outages (MTBF)** and a breakdown by cause (LAN / WAN / Internet). A history shorter than the period is not judged as if it covered it. The targets table adds the **24 h p95** and the **share of failed rounds in 24 h for each target**, to tell "only one fails" from "everything fails" (one sample per target and round is stored, with the same retention as the history, `WAN_KEEP_DAYS`).
 - **Speed against the plan:** with the contracted speed set in *Settings*, the card shows the share of the plan of the last test, the 7 and 30 day means, the **download speed by hour of the day** and the **30-day daily trend**. If **3 tests in a row** fall under 70 % of the plan, a warning appears (also on the Overview) and an event is recorded when it starts and another when it clears.
 - **Quality events:** packet loss (≥ 5 %) or latency (≥ 150 ms) that last **3 rounds in a row** create an event when they start and another when they end; a single spike does not. Outages have their own events.
-- **Public IP history:** a card with every IP change (date, new IP and the previous one), besides the Overview notice.
+- **Public IP history:** a card with every IP change (date with year, new IP and the previous one), besides the Overview notice. It is never pruned. LabTower only knows since it started watching, so the date of the oldest record is corrected in *Settings → Public IP known since* (dd-mm-yyyy). The *Connection* card and the side panel show the days since the last change.
 - **Traceroute on every outage:** when an outage opens a `traceroute` (15 hops max) runs towards the first target and is stored with the outage; the *Traceroute* button in the outages table shows how far the uplink got. It needs the `traceroute` package (the installer recommends it); without it nothing is stored.
 
 
@@ -451,7 +454,7 @@ Designed for a **trusted local network**. Do not expose port 80 to the internet.
 - **Strict CSP:** no inline scripts or handlers (`script-src 'self'`). Browsers: Chrome 75+, Firefox 105+, Safari 15.4+.
 - **Per-module permissions:** an admin can only grant or remove permissions on modules where they hold that level, and cannot delete or change the password of a user with more permissions.
 - **Least privilege:** the code in `/opt/labtower` is root-owned and read-only for the services; their data lives in `/var/lib/labtower/`. The systemd units are hardened. Scripts that run as root (installer, Teleporter, SFTP backup) never follow symlinks inside the services' folders.
-- **Validated input:** NUT, Proxmox, NAS and Pi-hole hosts and names; the Pi-hole certificate is pinned on first connection; each Proxmox cluster's fingerprint is pinned. An old cluster without a fingerprint shows a permanent warning (use *Pin certificate*).
+- **Validated input:** NUT, Proxmox, NAS and Pi-hole hosts and names; the Pi-hole certificate is pinned on first connection (renewed automatically only if the new one has the same subject and issuer, or the pinned one has expired); each Proxmox cluster's fingerprint is pinned. An old cluster without a fingerprint shows a permanent warning (use *Pin certificate*).
 - **Backup from the panel:** runs as root through a `sudo` rule limited to `teleporter.sh gui-backup` and `gui-restore`. Restoring the NUT config can bring in commands that `upsd` runs as root: restore trusted backups only.
 
 - **Critical actions:** creating a user, resetting someone else's password, restoring or downloading a backup ask again for your account password (with the same attempt brake as the login). A stolen session or an unattended browser is not enough.

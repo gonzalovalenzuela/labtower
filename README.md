@@ -36,7 +36,8 @@ Todas las pantallas comparten la misma navegación, con el mismo orden y agrupac
 - **Barra superior con selector** (por defecto): el logo lleva al inicio, y el selector de módulo abre un panel con todos los módulos agrupados y su estado (activo, con avisos o con fallas, con forma y texto, no solo color). Se cierra con Esc o al hacer clic fuera. Idioma, tema, reloj, usuario y «Tipo de menú» van en la misma barra. En el móvil hay una barra inferior (Inicio, Resumen, Módulos y Opciones) y los módulos se eligen en una hoja desde abajo.
 - **Menú lateral clásico:** los módulos agrupados en el panel lateral y, en el Resumen, una tira arriba.
 - **Elegir el tipo de menú:** la primera vez que entras aparece un asistente con las dos opciones. Se cambia después en **Tipo de menú** (junto al idioma y el tema). La elección se guarda en el navegador.
-- **Avisos:** si algún módulo está con avisos o fallas, aparece un recuadro arriba del contenido, bajo el menú, con enlace a cada uno. El estado sale de un único GET público a `/admin/api/health`.
+- **Barra común:** idioma, tema, reloj, usuario, salir, 24H y «Tipo de menú» se ven igual en todos los módulos y en el Resumen; con la barra superior suben a la barra global y la barra del módulo desaparece si no le queda nada propio. Los botones de acción de cada módulo (Escanear red, Ajustes, Despertar todos) comparten un solo aspecto y también suben a la barra global.
+- **Avisos:** si algún módulo está con avisos o fallas, aparece un recuadro bajo la barra del módulo, alineado con el contenido, con enlace a cada uno. El estado sale de un único GET público a `/admin/api/health`.
 - Los módulos conservan en su panel lateral solo lo propio (listas de servidores, filtros). Si no tienen nada propio, el panel se oculta. En modo kiosko no se muestra nada de esto.
 
 ## Capturas
@@ -111,8 +112,8 @@ librespeed-cli --version
 ## Actualizar
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.6/labtower_2.1.6_all.deb
-sudo apt-get install -y ./labtower_2.1.6_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.7/labtower_2.1.7_all.deb
+sudo apt-get install -y ./labtower_2.1.7_all.deb
 labtower-health
 ```
 
@@ -134,12 +135,13 @@ labtower-health
 
 ### Resumen
 - **Estado global** (Todo en orden / Atención / Falla) y lista de lo que requiere atención, con enlace al módulo.
+- **Chips de estado por módulo:** una fila con un chip por módulo (● ok, ▲ aviso, ■ falla, con el número de avisos). Un clic va a su tarjeta y Ctrl/⌘+clic abre el módulo. «Solo con problemas» oculta las tarjetas sanas y se recuerda en el navegador.
 - **UPS:** estado, batería, carga, autonomía, consumo y gráficos de las últimas 24 h.
 - **Proxmox:** nodos en línea, VMs y CTs corriendo, CPU y memoria (gráfico de 12 h), salud de Ceph.
 - **NAS:** por cada NAS, estado, CPU y memoria (gráfico de 12 h con temperatura), discos sanos, temperatura y el volumen más lleno.
 - **VPN:** cuántos clientes hay conectados por servidor; el detalle (quién, desde dónde, tráfico) está en VPN Monitor.
 - **Red:** equipos en línea, conocidos y apagados, último escaneo, reparto por tipo y equipos nuevos de las últimas 48 h.
-- **Raspberry Pi:** temperatura, CPU, memoria, disco, tiempo encendida y estado de la fuente de poder. Solo en una Raspberry Pi agrega el gráfico de 24 h de temperatura con marcas de bajo voltaje y limitación (se guarda 7 días en `metrics.db`).
+- **Servidor (LabTower Server):** temperatura, CPU, memoria, disco, tiempo encendida y estado de la fuente de poder. Solo en una Raspberry Pi agrega el gráfico de 24 h de temperatura con marcas de bajo voltaje y limitación (se guarda 7 días en `metrics.db`).
 - **Línea de tiempo:** cambios importantes con hora (UPS a batería, nodo caído, cambio de Ceph, equipos nuevos o que dejaron de responder). Los guardan los módulos, aunque nadie tenga la página abierta: últimos 300 eventos o 30 días.
 - **Búsqueda global** (barra superior o tecla `/`): equipos de Net Monitor, UPS, VMs y contenedores de Proxmox, NAS, servidores DNS y equipos WOL; solo muestra lo que cada usuario puede ver.
 - **Reglas de alerta** (administradores): umbrales sobre métricas del servidor, UPS, NAS, Proxmox, DNS e internet, como aviso o crítico; se evalúan con el Resumen abierto y las que se cumplen aparecen en el panel de atención.
@@ -149,7 +151,7 @@ labtower-health
 
 **Modo kiosko** (botón *Kiosko* o `/overview/?kiosk=1`): pantalla completa, letra grande, sin botones ni cursor, y la pantalla no se apaga. Un toque o el mouse muestra el botón para salir. Opciones por URL: `?zoom=0.8` (0.5 a 2) y `?autoscroll=1` (sube y baja solo si no cabe). Se recomienda un usuario de solo lectura.
 
-**iPad como pantalla:** abre `http://IP-DEL-PI/overview/?kiosk=1` en Safari → Compartir → *Añadir a pantalla de inicio*, con *Abrir como app web* activado. Para que no se bloquee: *Acceso guiado* o *Bloqueo automático: Nunca*.
+**iPad como pantalla:** abre `http://IP-DEL-SERVIDOR/overview/?kiosk=1` en Safari → Compartir → *Añadir a pantalla de inicio*, con *Abrir como app web* activado. Para que no se bloquee: *Acceso guiado* o *Bloqueo automático: Nunca*.
 
 ### UPS Monitor
 - Empieza sin servidores. Un administrador agrega uno (nombre, host y puerto de `upsd`, por defecto 3493) y puede probar la conexión antes de guardar.
@@ -162,20 +164,21 @@ labtower-health
 
 ### Net Monitor
 - **Red:** se detecta sola (la /24 del servidor) o se fija con `SCAN_NETWORK`.
-- **Escaneo:** en una instalación nueva no escanea hasta que lo pidas (botón *Hacer escaneo inicial*). El escaneo automático se activa en *Ajustes* (mínimo 60 s).
+- **Escaneo:** en una instalación nueva no escanea hasta que lo pidas (botón *Hacer escaneo inicial*). El escaneo automático, la limpieza de equipos sin conexión, SNMP y Pi-hole se configuran en la ventana *Ajustes* (mínimo 60 s entre escaneos); *Escanear red* y *Ajustes* están en la barra superior.
 - **Detección:** ping (TTL), puertos y banner HTTP. No usa `nmap`.
 - **MAC y fabricante**, en este orden: Pi-hole, ARP local, SNMP (ARP de un router o switch). El fabricante sale de la base `manuf` de Wireshark (descarga semanal) o de `ieee-data`.
 - **Tipos de equipo:** computador, teléfono, tablet, router, switch, punto de acceso, almacenamiento, TV, cámara, impresora, consola de juegos, servidor, teléfono IP, UPS, altavoz inteligente y otros. SO, tipo y grupo se pueden editar a mano.
 - **Basurero** para quitar un equipo de la lista (solo administradores). Si sigue conectado, el próximo escaneo lo vuelve a descubrir.
 - **Proxmox:** las VM y contenedores se reconocen en la tabla (insignia «VM 100» / «CT 200») cruzando MAC, IP y, si no hay otra pista, nombre idéntico. Las tarjetas Hosts / Online / Offline filtran la tabla.
 - Al pasar el mouse (o tocar en iPad) por una IP en UPS, Proxmox, WOL o Resumen aparece una tarjeta con los datos del equipo.
-- Las credenciales SNMP y la clave de Pi-hole se guardan con permisos 600 y la API nunca las devuelve.
+- Las credenciales SNMP y la clave de Pi-hole se guardan con permisos 600 y la API nunca las devuelve. Guardar los ajustes de Pi-hole con la contraseña en blanco conserva la guardada (el campo lo indica). Si Pi-hole regenera su certificado propio con el mismo sujeto y emisor, se vuelve a fijar solo y queda un evento; con otra identidad se rechaza hasta que guardes de nuevo.
 - **Seguridad y estabilidad de los equipos:** (1) **Cambio de MAC en una IP:** si una IP que estaba conectada aparece en el siguiente escaneo con otra MAC, se anota un evento y el equipo muestra la insignia *MAC cambió* (7 días); puede ser una IP duplicada, un equipo reemplazado o una suplantación. Si el equipo estuvo desconectado entre medio no se avisa, porque el DHCP reparte las IP a otros equipos con normalidad. (2) **Equipos sin revisar:** los equipos descubiertos antes de actualizar cuentan como conocidos; los nuevos quedan *sin revisar* (insignia, franja sobre la tabla y tarjeta del Resumen) hasta que un administrador los marca como conocidos, uno por uno o todos a la vez. (3) **Conectividad de cada equipo:** en el detalle, porcentaje conectado en 7 y 30 días, caídas de 7 días y una barra de la última semana, calculados con el registro de conexiones; un historial más corto que el período no se juzga como si lo cubriera. Un equipo con 4 o más caídas en 24 h genera un evento y se marca *Inestable* si lleva 8 o más en la semana. (5) **Equipos vigilados:** en el detalle, *Vigilar este equipo* (administradores, hasta 40) lo sondea cada 30 s (`NET_WATCH_EVERY`, 0 lo desactiva); tras 2 fallos seguidos hay un evento crítico y un aviso en el Resumen, y otro cuando vuelve. (4) De cada equipo vigilado se guarda la **latencia** (`NET_LATENCY_KEEP_DAYS`, 30 días por defecto) y el detalle muestra su gráfico de 1, 7 o 30 días con promedio, p95, máximo y pérdida. (6) **Puertos nuevos:** si un equipo muestra un puerto que nunca había mostrado se anota un evento (un puerto que se cierra y se reabre por un tiempo de espera no cuenta); los de acceso remoto, archivos compartidos y bases de datos (21, 23, 135, 139, 445, 3389, 5900, 3306, 5432, 6379…) salen como aviso. El grupo de un equipo ya no se pierde al reescanear.
 
 #### Switch Monitor (pestaña de Net Monitor)
 - Segunda pestaña junto a *Equipos*. Para cada switch muestra el panel frontal con el estado de cada puerto (arriba, abajo, deshabilitado, errores nuevos, enlace entre switches, loop), velocidad negociada, paquetes por segundo, errores, STP, temperatura y a qué equipo está conectado cada puerto (cruza la tabla MAC del switch con los equipos que ya conoce Net Monitor).
 - **Modelos:** ZX310S (interfaz web), HC-SWTGW218AS (interfaz web) y cualquier switch con SNMP v2c (ej: TP-Link y otros); este último es el único que entrega bytes, así que solo ahí hay Mb/s.
 - **Se agregan desde la interfaz** (botón *+ Agregar switch*, solo administradores), con botón *Probar* antes de guardar. Usuario, contraseña o community se guardan en `switches.json` con permisos 600 y la API nunca los devuelve.
+- **Sesión web guardada:** los switches de interfaz web (ZX, HC) mantienen una sola sesión abierta y no la entregan a otro cliente mientras siga viva; LabTower guarda su cookie de sesión (permisos 600, en los datos de Net Monitor) y la reutiliza tras reiniciar o actualizar, y espera más entre intentos si el switch rechaza la sesión varias veces seguidas.
 - **Solo lectura:** no cambia nada en los switches. Las operaciones peligrosas (borrar contadores del ZX, vaciar la tabla MAC del HC, reiniciar, guardar) están bloqueadas en el código.
 - **Historial de 1 año** (como UPS Monitor): temperatura y, por puerto, estado, velocidad, paquetes o Mb/s y errores; rangos 1 h, 1 d, 1 sem, 1 mes y todo. Las tasas se calculan entre muestras y toleran contadores que vuelven a cero.
 - **Historial** (subpestaña): totales acumulados por puerto (bytes reales por SNMP; en ZX y HC, que solo informan paquetes, los bytes son una estimación = paquetes × tamaño medio configurable por switch, marcada con «≈»), guardados en la base y sin perderse cuando el switch o LabTower se reinician. Suma cuánto avanza cada contador entre lecturas y parte del valor que el switch ya traía al agregarlo.
@@ -243,7 +246,7 @@ labtower-health
 - **Calidad y disponibilidad:** tarjeta con **percentiles de latencia** (mediana, p95 y p99) y disponibilidad en 24 h, 7 d y 30 d, con número de cortes, duración media, el más largo, **tiempo medio entre cortes (MTBF)** y desglose por causa (LAN / WAN / Internet). Un historial más corto que el período no se juzga como si lo cubriera. La tabla de destinos suma el **p95 de 24 h** y el **porcentaje de rondas fallidas de 24 h de cada destino**, para distinguir «cae solo uno» de «cae todo» (se guarda una muestra por destino y ronda, con la misma retención del historial, `WAN_KEEP_DAYS`).
 - **Velocidad contra el plan:** con la velocidad contratada indicada en *Ajustes*, la tarjeta muestra el porcentaje de la última prueba, el promedio de 7 y de 30 días, la **velocidad de bajada por hora del día** y la **tendencia diaria de 30 días**. Si **3 pruebas seguidas** quedan bajo el 70 % del plan, aparece un aviso (también en el Resumen) y se anota un evento al empezar y otro cuando se normaliza.
 - **Eventos de calidad:** pérdida de paquetes (≥ 5 %) o latencia (≥ 150 ms) que se mantienen **3 rondas seguidas** generan un evento al empezar y otro al terminar; un pico suelto no. Los cortes tienen sus propios eventos.
-- **Historial de IP pública:** tarjeta con cada cambio de IP (fecha, IP nueva y la anterior), además del aviso del Resumen.
+- **Historial de IP pública:** tarjeta con cada cambio de IP (fecha con año, IP nueva y la anterior), además del aviso del Resumen. No se borra nunca. Como LabTower solo sabe desde que empezó a vigilar, la fecha del registro más antiguo se corrige en *Ajustes → IP pública conocida desde* (dd-mm-aaaa). La tarjeta *Conexión* y el panel lateral muestran los días desde el último cambio.
 - **Traceroute en cada corte:** al abrirse un corte se ejecuta un `traceroute` (máx. 15 saltos) hacia el primer destino y se guarda con el corte; en la tabla de cortes, el botón *Traceroute* lo muestra y deja ver hasta qué salto llegaba la salida. Requiere el paquete `traceroute` (el instalador lo recomienda); sin él, simplemente no se guarda.
 
 
@@ -451,7 +454,7 @@ Pensado para una **red local de confianza**. No expongas el puerto 80 a internet
 - **CSP estricta:** sin scripts ni manejadores en línea (`script-src 'self'`). Navegadores: Chrome 75+, Firefox 105+, Safari 15.4+.
 - **Permisos por módulo:** un administrador solo da o quita permisos en los módulos donde él mismo tiene ese nivel, y no puede borrar ni cambiar la clave de un usuario con más permisos.
 - **Privilegios mínimos:** el código de `/opt/labtower` es de root y de solo lectura para los servicios; sus datos viven en `/var/lib/labtower/`. Los servicios systemd van endurecidos. Los scripts que corren como root (instalador, Teleporter, respaldo SFTP) no siguen enlaces simbólicos dentro de carpetas de los servicios.
-- **Entradas validadas:** hosts y nombres de NUT, Proxmox, NAS y Pi-hole; el certificado de Pi-hole se fija en la primera conexión; la huella de cada cluster Proxmox queda fijada. Un cluster antiguo sin huella muestra un aviso permanente (usa *Fijar certificado*).
+- **Entradas validadas:** hosts y nombres de NUT, Proxmox, NAS y Pi-hole; el certificado de Pi-hole se fija en la primera conexión (se renueva solo si el nuevo trae el mismo sujeto y emisor, o si el fijado ya venció); la huella de cada cluster Proxmox queda fijada. Un cluster antiguo sin huella muestra un aviso permanente (usa *Fijar certificado*).
 - **Respaldo desde el panel:** corre como root mediante una regla `sudo` limitada a `teleporter.sh gui-backup` y `gui-restore`. Restaurar la configuración de NUT puede introducir comandos que `upsd` ejecuta como root: restaura solo respaldos de confianza.
 
 - **Acciones críticas:** crear un usuario, restablecer la clave de otro, restaurar o descargar un respaldo piden de nuevo la contraseña de tu cuenta (con el mismo freno de intentos del login). Una sesión robada o un navegador desatendido no bastan.
