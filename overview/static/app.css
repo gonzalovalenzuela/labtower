@@ -256,19 +256,8 @@ body:not(.kiosk) .top h1{display:none}
 .lang-btn.active{background:var(--blue);color:#fff}
 body.kiosk .topbar{display:none}
 
-/* Estado por módulo: chips (forma + texto + color, no solo color). EN: per-module status chips (shape + text + colour, not colour alone). */
+/* Filtro «solo con problemas». EN: "only with problems" filter. */
 .chips{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px}
-.chips-l{font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--text-dim)}
-.chips-row{display:flex;gap:8px;flex-wrap:wrap}
-.chip{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:99px;border:1px solid var(--border-b);background:var(--surface);color:var(--text);font:600 13px var(--sans);cursor:pointer;transition:border-color .15s,background .15s}
-.chip:hover{border-color:var(--blue)}
-.chip:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
-.chip.ok .chip-s{color:var(--green)}.chip.warn{background:var(--amber-dim);border-color:var(--amber)}.chip.warn .chip-s{color:var(--amber)}
-.chip.crit{background:var(--red-dim);border-color:var(--red)}.chip.crit .chip-s{color:var(--red)}
-.chip-n{font-weight:500;color:var(--text-mid);font-size:12px}
 .chips-f{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-mid);cursor:pointer}
 .only-prob .grid .card[data-sev=ok]{display:none}
-.card.flash{animation:cflash 1.2s ease}
-@keyframes cflash{0%,60%{box-shadow:0 0 0 3px var(--blue)}100%{box-shadow:var(--shadow)}}
-@media (prefers-reduced-motion:reduce){.card.flash{animation:none;outline:2px solid var(--blue)}}
 body.kiosk .chips{display:none}

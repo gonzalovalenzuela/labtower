@@ -136,7 +136,7 @@ labtower-health
 
 ### Overview
 - **Global status** (All good / Attention / Failure) and a list of what needs attention, linked to the module.
-- **Status chips per module:** a row with one chip per module (● ok, ▲ warning, ■ failing, with the number of warnings). A click jumps to its card and Ctrl/⌘+click opens the module. "Only with problems" hides the healthy cards and is remembered in the browser.
+- **Only with problems:** the filter hides the healthy cards and is remembered in the browser.
 - **UPS:** state, battery, load, runtime, power and 24 h charts.
 - **Proxmox:** nodes online, running VMs and CTs, CPU and memory (12 h chart), Ceph health.
 - **NAS:** per NAS, status, CPU and memory (12 h chart with temperature), healthy disks, temperature and the fullest volume.

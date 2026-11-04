@@ -136,7 +136,7 @@ labtower-health
 
 ### Resumen
 - **Estado global** (Todo en orden / Atención / Falla) y lista de lo que requiere atención, con enlace al módulo.
-- **Chips de estado por módulo:** una fila con un chip por módulo (● ok, ▲ aviso, ■ falla, con el número de avisos). Un clic va a su tarjeta y Ctrl/⌘+clic abre el módulo. «Solo con problemas» oculta las tarjetas sanas y se recuerda en el navegador.
+- **Solo con problemas:** el filtro oculta las tarjetas sanas y se recuerda en el navegador.
 - **UPS:** estado, batería, carga, autonomía, consumo y gráficos de las últimas 24 h.
 - **Proxmox:** nodos en línea, VMs y CTs corriendo, CPU y memoria (gráfico de 12 h), salud de Ceph.
 - **NAS:** por cada NAS, estado, CPU y memoria (gráfico de 12 h con temperatura), discos sanos, temperatura y el volumen más lleno.

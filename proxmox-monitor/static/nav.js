@@ -29,12 +29,12 @@
     {es: 'Sistema', en: 'System', items: ['admin']}
   ];
   var T = {
-    es: {mods: 'Módulos', opts: 'Opciones', main: 'Principal', switchTo: 'Cambiar de módulo', up: 'Activo', mid: 'Con avisos', down: 'Con fallas', home: 'Inicio de LabTower',
+    es: {mods: 'Módulos', opts: 'Opciones', out: 'Salir', main: 'Principal', switchTo: 'Cambiar de módulo', up: 'Activo', mid: 'Con avisos', down: 'Con fallas', home: 'Inicio de LabTower',
       warn: 'Atención', menuType: 'Tipo de menú', wizTitle: 'Elige cómo quieres navegar',
       wizText: 'Puedes cambiarlo cuando quieras desde «Tipo de menú». Se guarda en este navegador.',
       optBar: 'Barra superior con selector', optBarD: 'Un selector con todos los módulos y su estado. En el móvil, una barra inferior.',
       optSide: 'Menú lateral clásico', optSideD: 'Los módulos agrupados en el panel lateral, como antes.', current: 'Actual', ok: 'Listo'},
-    en: {mods: 'Modules', opts: 'Options', main: 'Main', switchTo: 'Switch module', up: 'Active', mid: 'Warnings', down: 'Failing', home: 'LabTower home',
+    en: {mods: 'Modules', opts: 'Options', out: 'Sign out', main: 'Main', switchTo: 'Switch module', up: 'Active', mid: 'Warnings', down: 'Failing', home: 'LabTower home',
       warn: 'Attention', menuType: 'Menu type', wizTitle: 'Choose how you want to navigate',
       wizText: 'You can change it any time from “Menu type”. It is saved in this browser.',
       optBar: 'Top bar with switcher', optBarD: 'One switcher with every module and its status. On phones, a bottom bar.',
@@ -217,6 +217,11 @@
       var op = tabItem('opts', tr.opts, '<line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/>', null, false);
       op.addEventListener('click', function () { toggle(false); var b = document.getElementById('nav-toggle'); if (b) b.click(); });
     }
+    // ES: Salir en toda sección (menos el kiosco, que no tiene barra): usa el botón de salir propio del módulo, aunque su barra esté oculta en el móvil.
+    // EN: Sign out in every section (except the kiosk, which has no bar): it uses the module's own sign-out button, even when its bar is hidden on phones.
+    var lo = tabItem('out', tr.out, '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>', null, false);
+    lo.setAttribute('data-gtab', 'out');
+    lo.addEventListener('click', function () { toggle(false); var x = document.querySelector('.btn-logout'); if (x) x.click(); });
   }
 
   // ── Menú clásico (lateral; tira en el Resumen) / classic menu (side; strip in the Overview) ──

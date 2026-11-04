@@ -80,16 +80,24 @@ class Nav(unittest.TestCase):
         self.assertIn('id="tb-actions"', (wan / "index.html").read_text())
         self.assertIn("act.appendChild(b)", (wan / "app.js").read_text())
 
-    def test_overview_uses_the_common_bar_and_status_chips(self):
-        """El Resumen tiene la misma barra común que los demás módulos (idioma, tema, reloj, usuario, salir) y chips de estado por módulo."""
+    def test_overview_uses_the_common_bar_without_module_chips(self):
+        """El Resumen tiene la misma barra común que los demás módulos (idioma, tema, reloj, usuario, salir); ya no tiene la fila de chips de módulos, solo el filtro «solo con problemas»."""
         ov = ROOT / "overview" / "static"
         html, js = (ov / "index.html").read_text(), (ov / "app.js").read_text()
-        for needle in ('class="lang-btns"', 'class="theme-btns"', 'id="clock"', 'class="topbar-user"', 'class="btn-logout"', 'id="chips"', 'id="only-prob"'):
+        for needle in ('class="lang-btns"', 'class="theme-btns"', 'id="clock"', 'class="topbar-user"', 'class="btn-logout"', 'id="only-prob"'):
             self.assertIn(needle, html)
         top = html[html.index('<div class="top">'):html.index('id="attn"')]
         for old in ('id="bl"', "data-theme-toggle", 'id="bo"'):
             self.assertNotIn(old, top)                                  # no duplicated controls in the page header
-        self.assertIn("function renderChips", js); self.assertEqual(js.count("modSev(mods,"), 9)
+        self.assertNotIn('id="chips"', html); self.assertNotIn("renderChips", js)
+        self.assertIn("function applySeverity", js); self.assertEqual(js.count("modSev(mods,"), 9)
+
+    def test_phone_bar_has_a_sign_out_tab_that_uses_the_modules_own_button(self):
+        """ES: En el móvil toda sección tiene «Salir» en la barra inferior (la barra del módulo se oculta); usa el .btn-logout propio. EN: every section has Sign out in the phone bottom bar."""
+        js = (ROOT / "assets" / "nav.js").read_text()
+        self.assertIn("tabItem('out', tr.out", js)
+        self.assertIn("document.querySelector('.btn-logout')", js)
+        self.assertIn("out: 'Salir'", js); self.assertIn("out: 'Sign out'", js)
 
     def test_every_page_has_a_favicon(self):
         for d in (*SIDE, "overview"):
