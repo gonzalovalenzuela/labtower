@@ -16,7 +16,7 @@ const LANG={
     noHosts:'No hosts found',searchPlaceholder:'IP, hostname, OS, port...',pveVm:'VM',pveCt:'CT',pveTip:(g)=>'Proxmox · '+g.cluster+' / '+g.node+' · '+g.name+' ('+g.status+')',pveLbl:'Proxmox',
     piholeIntegration:'Pi-hole Integration',piholeDesc:'Pi-hole v6 API for name resolution and MAC vendor. Credentials are stored on the server.',
     piholeHosts:'Pi-hole hosts (comma separated)',piholePass:'Pi-hole admin password',
-    piholeConnected:'Connected',piholeDiag:'Devices {d} · DHCP leases {l} · Local DNS {n}',piholeErrLocal:'Local DNS not readable ({e}). In Pi-hole use the web password, or enable the app password option “webserver.api.app_sudo”.',piholeErrLeases:'DHCP leases not readable ({e}).',piholeErrLogin:'Could not log in ({e}).',piholeConnecting:'Connecting…',piholeNeedHost:'Enter at least one host',
+    piholePassKept:'•••••••• (saved — leave empty to keep)',piholeConnected:'Connected',piholeDiag:'Devices {d} · DHCP leases {l} · Local DNS {n}',piholeErrLocal:'Local DNS not readable ({e}). In Pi-hole use the web password, or enable the app password option “webserver.api.app_sudo”.',piholeErrLeases:'DHCP leases not readable ({e}).',piholeErrLogin:'Could not log in ({e}).',piholeConnecting:'Connecting…',piholeNeedHost:'Enter at least one host',
     piholeSuccess:'Saved — syncing names…',piholeToast:'Pi-hole connected — names will appear on next scan',
     purgeLbl:'Remove offline after:',purgeDays:'days',purgeTip:'0 = never remove',purgeSaved:(d,n)=>d?`Offline devices are removed after ${d} days (${n} removed now)`:'Offline devices are kept',
     intervalNegative:'Interval cannot be negative',intervalMin:'Minimum 60 seconds (or 0 for manual)',
@@ -52,7 +52,7 @@ unrev:'Unreviewed',unrevMsg:(n,names,more)=>`${n} device${n>1?'s':''} not review
     noHosts:'Sin hosts encontrados',searchPlaceholder:'IP, hostname, OS, puerto...',pveVm:'VM',pveCt:'CT',pveTip:(g)=>'Proxmox · '+g.cluster+' / '+g.node+' · '+g.name+' ('+g.status+')',pveLbl:'Proxmox',
     piholeIntegration:'Integración Pi-hole',piholeDesc:'Pi-hole v6 API para resolución de nombres y vendor MAC. Las credenciales se guardan en el servidor.',
     piholeHosts:'Hosts Pi-hole (separados por coma)',piholePass:'Password Pi-hole admin',
-    piholeConnected:'Conectado',piholeDiag:'Dispositivos {d} · Concesiones DHCP {l} · DNS local {n}',piholeErrLocal:'No se pudo leer el DNS local ({e}). En Pi-hole usa la contraseña de la web, o activa la opción «webserver.api.app_sudo» para la contraseña de aplicación.',piholeErrLeases:'No se pudieron leer las concesiones DHCP ({e}).',piholeErrLogin:'No se pudo iniciar sesión ({e}).',piholeConnecting:'Conectando…',piholeNeedHost:'Ingresa al menos un host',
+    piholePassKept:'•••••••• (guardada — vacío = conservar)',piholeConnected:'Conectado',piholeDiag:'Dispositivos {d} · Concesiones DHCP {l} · DNS local {n}',piholeErrLocal:'No se pudo leer el DNS local ({e}). En Pi-hole usa la contraseña de la web, o activa la opción «webserver.api.app_sudo» para la contraseña de aplicación.',piholeErrLeases:'No se pudieron leer las concesiones DHCP ({e}).',piholeErrLogin:'No se pudo iniciar sesión ({e}).',piholeConnecting:'Conectando…',piholeNeedHost:'Ingresa al menos un host',
     piholeSuccess:'Guardado — sincronizando nombres…',piholeToast:'Pi-hole conectado — los nombres aparecerán en el próximo escaneo',
     purgeLbl:'Quitar sin conexión tras:',purgeDays:'días',purgeTip:'0 = no quitar nunca',purgeSaved:(d,n)=>d?`Los equipos sin conexión se quitan tras ${d} días (${n} quitados ahora)`:'Los equipos sin conexión se conservan',
     intervalNegative:'El intervalo no puede ser negativo',intervalMin:'Mínimo 60 segundos (o 0 para manual)',
@@ -907,6 +907,7 @@ async function loadPiholeConfig(){
   try{
     const r=await fetch('api/config');const d=await r.json();
     document.getElementById('ph-hosts').value=d.pihole_hosts||'';
+    document.getElementById('ph-pass').placeholder=d.pihole_enabled?(t('piholePassKept')||'•••••••• (saved — leave empty to keep)'):'••••••••';
     const st=document.getElementById('ph-status');
     if(d.pihole_enabled){
       const ts=d.pihole_cache_ts?PCT.time(new Date(d.pihole_cache_ts*1000),true):'—';

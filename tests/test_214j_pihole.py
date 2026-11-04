@@ -185,3 +185,22 @@ class RegeneratedCertificate(unittest.TestCase):
                 srv.shutdown(); srv.server_close()
             finally:
                 net.CONF_FILE, net.auth.valid_target, net.auth.record_event = old
+
+
+class SavingWithoutPassword(unittest.TestCase):
+    """The page never shows the stored password, so saving the hosts alone sends it empty: that must keep the stored one."""
+    def test_empty_password_keeps_the_stored_one(self):
+        import tempfile, pathlib
+        old = (net.CONF_FILE, net.PIHOLE_PASS, net.PIHOLE_HOSTS, net.refresh_pihole_cache)
+        with tempfile.TemporaryDirectory() as d:
+            net.CONF_FILE = pathlib.Path(d) / "config.json"; net.refresh_pihole_cache = lambda: None
+            net.PIHOLE_PASS, net.PIHOLE_HOSTS = "", ""
+            srv = support.Server(net.H); tok = support.make_user("phadm", {**support.READONLY, "net": "admin"})
+            try:
+                self.assertEqual(srv.call("POST", "/api/pihole/config", {"hosts": "192.0.2.2", "password": ""}, token=tok)[0], 400)   # nothing stored: a password is required
+                self.assertEqual(srv.call("POST", "/api/pihole/config", {"hosts": "192.0.2.2", "password": "s3cret"}, token=tok)[0], 200)
+                self.assertEqual(srv.call("POST", "/api/pihole/config", {"hosts": "192.0.2.3", "password": ""}, token=tok)[0], 200)   # hosts only
+                cfg = net.load_config()
+                self.assertEqual((cfg["pihole_pass"], cfg["pihole_hosts"], net.PIHOLE_PASS), ("s3cret", "192.0.2.3", "s3cret"))
+            finally:
+                srv.close(); net.CONF_FILE, net.PIHOLE_PASS, net.PIHOLE_HOSTS, net.refresh_pihole_cache = old

@@ -1850,9 +1850,13 @@ class H(BaseHTTPRequestHandler):
                 body["hosts"] = ",".join(hl)
             with _cfg_lock:
                 cfg = load_config()
-                if "password" in body:
+                # ES: Una contraseña vacía significa «dejar la guardada» (la página nunca la muestra, así que al guardar solo los hosts llega vacía); antes la borraba y Pi-hole quedaba desconectado sin avisar.
+                # EN: An empty password means "keep the stored one" (the page never shows it, so saving only the hosts sends it empty); it used to erase it and silently leave Pi-hole disconnected.
+                if body.get("password"):
                     PIHOLE_PASS = body["password"]
                     cfg["pihole_pass"] = body["password"]
+                elif "password" in body and not cfg.get("pihole_pass") and not PIHOLE_PASS:
+                    return self._json(400, {"error": "Enter the Pi-hole password"})
                 if "hosts" in body:
                     PIHOLE_HOSTS = body["hosts"]
                     cfg["pihole_hosts"] = body["hosts"]
