@@ -675,17 +675,19 @@ def _series_store(cid, rows):
         log.warning(f"could not store the slow series: {e}")
 
 def _series_days(cid, rows):
-    out, now = {}, int(time.time())
+    out, why, now = {}, {}, int(time.time())
     try:
         c = auth.metrics_conn()
         try:
             for k, (used, tot) in rows.items():
                 pts = c.execute("SELECT ts,v FROM pve_series WHERE cid=? AND k=? AND ts>=? ORDER BY ts", (cid, k, now - 14 * 86400)).fetchall()
-                out[k] = extra.days_to_full([(r[0], r[1]) for r in pts], tot - used)
+                pp = [(r[0], r[1]) for r in pts]
+                out[k] = extra.days_to_full(pp, tot - used)
+                if out[k] is None: why[k] = list(extra.days_why(pp))
         finally: c.close()
     except Exception as e:
         log.warning(f"could not read the slow series: {e}")
-    return out
+    return out, why
 
 def _extra_round(cluster, client, cache):
     from urllib.parse import quote
@@ -716,10 +718,10 @@ def _extra_round(cluster, client, cache):
     io = extra.ceph_io(data.get("ceph"))
     rows = extra.series_points(nodes, data.get("ceph"))
     if rows and now - _ser_last.get(cid, 0) >= SERIES_EVERY: _series_store(cid, rows)
-    days = _series_days(cid, rows) if rows else {}
+    days, days_why = _series_days(cid, rows) if rows else ({}, {})
     labels = {k: k.split(":", 1)[-1] for k in rows}
     al = (extra.days_alerts(days, labels) + ha["bad"] + repl["bad"] + extra.ceph_alerts(io) + extra.node_alerts(ninfo))
-    res = {"ts": int(now), "nodes": ninfo, "ha": ha, "repl": repl, "tasks": tasks, "ceph": io, "days": days,
+    res = {"ts": int(now), "nodes": ninfo, "ha": ha, "repl": repl, "tasks": tasks, "ceph": io, "days": days, "days_why": days_why,
            "drift": extra.version_drift(ninfo), "errors": errors, "alerts": al}
     with _xlock: _extra[cid] = res
     _emit_alerts(cluster)

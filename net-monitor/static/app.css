@@ -52,6 +52,17 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 .main{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-width:0;min-height:100vh}
 .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;min-height:54px;flex-wrap:wrap;row-gap:6px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
 .topbar-title{white-space:nowrap;font-size:14px;font-weight:600;color:var(--text)}
+.tb-actions{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.overlay{position:fixed;inset:0;background:rgba(15,20,30,.45);backdrop-filter:blur(2px);z-index:8000;display:none;align-items:center;justify-content:center}
+.overlay.show{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:24px;box-shadow:var(--shadow-md)}
+.modal h3{font-size:15px;font-weight:600;color:var(--text);margin-bottom:12px}
+.modal-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.net-set{width:min(560px,95%);max-height:92vh;overflow:auto}
+.net-set-body{display:flex;flex-direction:column;gap:16px}
+.net-set-body .interval-wrap{flex-wrap:wrap}
+/* SNMP and Pi-hole panels open inline inside the settings window instead of floating under their button */
+.net-set-body #snmp-panel,.net-set-body #pihole-panel{position:static!important;width:auto!important;max-height:none!important;margin-top:8px;box-shadow:none!important}
 .tb-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 #clock{font-family:var(--mono);font-size:12px;color:var(--text-dim)}
 .btn-logout{background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px;line-height:1;transition:color .15s;display:flex;align-items:center}
@@ -255,7 +266,7 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
 .view-tab:hover{color:var(--text)}
 .view-tab.active{color:var(--teal);border-bottom-color:var(--teal)}
 .content[hidden]{display:none}
-body.view-sw .tb-right,body.view-sw .scan-bar,body.view-sw .sb-hosts{display:none!important}
+body.view-sw .tb-right,body.view-sw .tb-actions,body.view-sw .scan-bar,body.view-sw .sb-hosts{display:none!important}
 body.view-sw #sw-side{display:block}
 #sw-side[hidden]{display:none}
 .os-filter-count{font:11px var(--mono);color:var(--text-dim)}

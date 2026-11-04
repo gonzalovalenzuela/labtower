@@ -49,6 +49,11 @@ def days_to_full(points, free):
     days = free / (sxy / sxx)
     return round(days, 1) if days <= 365 else None
 
+def days_why(points):
+    """Why days_to_full gave no answer: ('history', days collected) while there is not enough data yet, else ('flat', days collected)."""
+    n = len(points); span = (points[-1][0] - points[0][0]) / 86400 if n > 1 else 0
+    return ("history" if n < 24 or span < 2 else "flat"), round(span, 1)
+
 def series_points(nodes, ceph):
     """{key: used_bytes} to store: one per storage (shared ones once), plus the Ceph cluster. key = 's:<storage>' / 's:<node>/<storage>' / 'ceph'."""
     out, seen = {}, set()

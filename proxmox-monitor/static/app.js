@@ -32,7 +32,7 @@ const LANG={
     cpuAlert:(pct)=>`CPU at ${pct}%`,ramAlert:(pct)=>`RAM at ${pct}%`,
     bkSelAll:'Select all',bkSelNone:'Clear selection',bkSelPending:'Select those without backup or too old',bkIgnoreSel:n=>`Ignore selected (${n})`,bkUnignoreSel:n=>`Stop ignoring selected (${n})`,bkTitle:'Backups (vzdump)',bkWait:'Reading backups… (first read takes a minute)',bkNone:'No backup storage found. The API token needs Datastore.Audit on the storages.',bkOk:'Up to date',bkOld:'Too old',bkNever:'No backup',bkIgnored:'Ignored',bkUnknown:'Unknown',bkAge:(h)=>h<48?`${h} h ago`:`${Math.floor(h/24)} d ago`,bkProblems:(n)=>`${n} without a recent backup`,bkAllOk:'Backups up to date',bkMax:(h)=>`Marked old after ${Math.round(h/24*10)/10} days`,bkDays:'days',bkApply:'Apply',bkIgnore:'Ignore',bkUnignore:'Stop ignoring',bkFailedTasks:'Failed backup tasks',bkVerified:'verified',bkVerFail:'verification failed',bkSaved:'Saved',bkStorageErr:'Could not read storage',bkCopies:(n)=>`${n} copies`,
     xTitle:'Capacity & health',xWait:'Collecting data…',xPerm:'Not available: the API token lacks permission (see the README)',
-    xDays:'Days until full',xDaysNone:'Not enough history or not growing',xDaysV:d=>d+' d',xCeph:'Ceph cluster',
+    xDays:'Days until full',xDaysNone:'Not enough history or not growing',xDaysHist:d=>'Collecting history ('+d+' of 2 days needed)',xDaysFlat:'Not growing',xDaysV:d=>d+' d',xCeph:'Ceph cluster',
     xCap:'Allocation (running guests)',xVcpu:'vCPU',xMemAl:'RAM',xN1Ok:'Survives losing the biggest node',xN1Bad:(n,a,b)=>`Does not fit if ${n} goes down: needs ${a}, ${b} available`,
     xHa:'High availability',xHaNone:'No HA services',xRepl:'Replication',xReplNone:'No replication jobs',xTasks:'Failed tasks (last 2 days)',xTasksNone:'No failed tasks',
     xNodes:'Nodes',xLoad:'load',xSwap:'swap',xIow:'iowait',xCert:'certificate',xCertD:d=>d+' d left',xDrift:v=>'Different PVE versions: '+v,
@@ -77,7 +77,7 @@ const LANG={
     cpuAlert:(pct)=>`CPU al ${pct}%`,ramAlert:(pct)=>`RAM al ${pct}%`,
     bkSelAll:'Seleccionar todas',bkSelNone:'Limpiar selección',bkSelPending:'Seleccionar las sin respaldo o muy viejas',bkIgnoreSel:n=>`Ignorar seleccionadas (${n})`,bkUnignoreSel:n=>`Dejar de ignorar seleccionadas (${n})`,bkTitle:'Respaldos (vzdump)',bkWait:'Leyendo respaldos… (la primera lectura tarda un minuto)',bkNone:'No hay storages de respaldo. El token de la API necesita Datastore.Audit en los storages.',bkOk:'Al día',bkOld:'Muy viejo',bkNever:'Sin respaldo',bkIgnored:'Ignorado',bkUnknown:'Desconocido',bkAge:(h)=>h<48?`hace ${h} h`:`hace ${Math.floor(h/24)} d`,bkProblems:(n)=>`${n} sin respaldo reciente`,bkAllOk:'Respaldos al día',bkMax:(h)=>`Se marca como vieja tras ${Math.round(h/24*10)/10} días`,bkDays:'días',bkApply:'Aplicar',bkIgnore:'Ignorar',bkUnignore:'Dejar de ignorar',bkFailedTasks:'Tareas de respaldo fallidas',bkVerified:'verificado',bkVerFail:'verificación fallida',bkSaved:'Guardado',bkStorageErr:'No se pudo leer el storage',bkCopies:(n)=>`${n} copias`,
     xTitle:'Capacidad y salud',xWait:'Recopilando datos…',xPerm:'No disponible: el token de la API no tiene permiso (ver el README)',
-    xDays:'Días hasta llenarse',xDaysNone:'Sin historial suficiente o no crece',xDaysV:d=>d+' d',xCeph:'Cluster Ceph',
+    xDays:'Días hasta llenarse',xDaysNone:'Sin historial suficiente o no crece',xDaysHist:d=>'Reuniendo historial ('+d+' de 2 días necesarios)',xDaysFlat:'No crece',xDaysV:d=>d+' d',xCeph:'Cluster Ceph',
     xCap:'Asignación (invitados encendidos)',xVcpu:'vCPU',xMemAl:'RAM',xN1Ok:'Resiste la caída del nodo más grande',xN1Bad:(n,a,b)=>`No caben si cae ${n}: necesitan ${a}, hay ${b} disponibles`,
     xHa:'Alta disponibilidad',xHaNone:'Sin servicios HA',xRepl:'Replicación',xReplNone:'Sin trabajos de replicación',xTasks:'Tareas fallidas (últimos 2 días)',xTasksNone:'Sin tareas fallidas',
     xNodes:'Nodos',xLoad:'carga',xSwap:'swap',xIow:'iowait',xCert:'certificado',xCertD:d=>'quedan '+d+' d',xDrift:v=>'Versiones de PVE distintas: '+v,
@@ -460,7 +460,7 @@ function buildDiag(cluster){
     // days until full
     const dk=Object.keys(ex.days||{});
     if(dk.length){h(t('xDays'));dk.sort().forEach(k=>{const d=ex.days[k];const nm=k==='ceph'?t('xCeph'):k.slice(2);
-      ln(nm+' — '+(d==null?t('xDaysNone'):t('xDaysV',d)),d!=null&&d<=3?'var(--red)':d!=null&&d<=14?'var(--orange)':'');});}
+      const w=(ex.days_why||{})[k];ln(nm+' — '+(d!=null?t('xDaysV',d):w&&w[0]==='history'?t('xDaysHist',Math.min(2,w[1])):w&&w[0]==='flat'?t('xDaysFlat'):t('xDaysNone')),d!=null&&d<=3?'var(--red)':d!=null&&d<=14?'var(--orange)':'');});}
     // capacity
     const cap=ex.cap;
     if(cap&&cap.nodes&&cap.nodes.length){h(t('xCap'));

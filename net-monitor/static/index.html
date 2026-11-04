@@ -68,7 +68,111 @@
   <div class="topbar">
     <button class="nav-toggle" id="nav-toggle" aria-label="Menu" aria-expanded="false" data-on-click="toggleNav"><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg></button>
     <span class="topbar-title" data-i18n="netTitle">Network Monitor</span>
+    <span class="tb-actions" id="tb-actions">
+        <button class="btn-scan" id="btn-scan" data-on-click="startScan">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span data-i18n="scanNet">Scan network</span>
+        </button>
+      <button class="btn-scan" id="btn-net-settings" data-on-click="openNetSettings" data-i18n="settings">Settings</button>
+    </span>
     <div class="tb-right">
+      <div class="lang-btns">
+        <button class="lang-btn" id="lang-en" data-on-click="setLang" data-on-click-args="[&quot;en&quot;]">EN</button>
+        <button class="lang-btn" id="lang-es" data-on-click="setLang" data-on-click-args="[&quot;es&quot;]">ES</button>
+      </div>
+      <div class="theme-btns">
+        <button class="theme-btn" id="theme-light" data-on-click="setTheme" data-on-click-args="[&quot;light&quot;]" data-i18n-title="themeLight" title="Light"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span data-i18n="themeLight">Light</span></button>
+        <button class="theme-btn" id="theme-dark" data-on-click="setTheme" data-on-click-args="[&quot;dark&quot;]" data-i18n-title="themeDark" title="Dark"><svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span data-i18n="themeDark">Dark</span></button>
+        <button class="theme-btn" id="theme-system" data-on-click="setTheme" data-on-click-args="[&quot;system&quot;]" title="Auto"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>Auto</button>
+      </div>
+      <span id="clock"></span>
+      <div style="width:1px;height:20px;background:var(--border);margin:0 4px;flex-shrink:0"></div>
+      <div class="topbar-user">
+        <div class="topbar-avatar" id="avatar">?</div>
+        <div class="topbar-user-info">
+          <span class="topbar-user-name" id="me-name">—</span>
+          <span class="topbar-user-role" id="me-role">—</span>
+        </div>
+      </div>
+      <button class="btn-logout" data-on-click="logout" data-i18n-title="titleLogout" title="Sign out">
+        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Scan progress bar -->
+  <div class="scan-bar" id="scan-bar">
+    <svg style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <span id="scan-text" data-i18n="scanningNet">Scanning network...</span>
+    <div class="scan-progress-track"><div class="scan-progress-fill" id="scan-fill" style="width:0%"></div></div>
+    <span id="scan-pct" style="font-family:var(--mono);font-size:11px;flex-shrink:0">0%</span>
+  </div>
+
+  <div class="view-tabs" role="tablist">
+    <button type="button" class="view-tab active" role="tab" data-view="hosts" data-i18n="tabHosts">Devices</button>
+    <button type="button" class="view-tab" role="tab" data-view="switches" data-i18n="tabSwitches">Switch Monitor</button>
+  </div>
+
+  <div class="content" id="view-hosts">
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card clickable" data-status="ALL" data-on-click="setStatusFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]"><div class="stat-ico teal"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg></div><div><div class="stat-val" id="st-total">—</div><div class="stat-lbl" data-i18n="statDiscovered">Hosts discovered</div></div></div>
+      <div class="stat-card clickable" data-status="online" data-on-click="setStatusFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]"><div class="stat-ico green"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg></div><div><div class="stat-val" id="st-online">—</div><div class="stat-lbl" data-i18n="statOnline">Online</div></div></div>
+      <div class="stat-card clickable" data-status="offline" data-on-click="setStatusFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]"><div class="stat-ico red"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></div><div><div class="stat-val" id="st-offline">—</div><div class="stat-lbl" data-i18n="statOffline">Offline</div></div></div>
+      <div class="stat-card"><div class="stat-ico blue"><svg viewBox="0 0 24 24"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg></div><div><div class="stat-val" id="st-ports">—</div><div class="stat-lbl" data-i18n="statOpenPorts">Open ports</div></div></div>
+      <div class="stat-card"><div class="stat-ico orange"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><div><div class="stat-val" id="st-last-scan">—</div><div class="stat-lbl" data-i18n="statLastScan">Last scan</div></div></div>
+    </div>
+
+    <!-- Filter row -->
+    <div class="filter-row">
+      <div class="search-wrap">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="search-input" placeholder="IP, hostname, OS, puerto...">
+      </div>
+      <div class="pills">
+        <button class="pill active" data-status="ALL"     data-on-click="setStatusFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]" data-i18n="filterAll">All</button>
+        <button class="pill"        data-status="online"  data-on-click="setStatusFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]" data-i18n="filterOnline">Online</button>
+        <button class="pill"        data-status="offline" data-on-click="setStatusFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]" data-i18n="filterOffline">Offline</button>
+      </div>
+    </div>
+
+    <!-- Hosts table -->
+    <div class="card">
+      <div class="card-hd">
+        <span class="card-title" data-i18n="hostsTitle">Hosts on network</span>
+        <span class="card-meta" id="host-count">—</span>
+      </div>
+      <div id="review-bar" style="display:none"></div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th class="sortable" data-sort="status" style="width:40px;padding:9px 6px;text-align:center" tabindex="0" data-on-click="setSort" data-on-click-args="[&quot;status&quot;]" data-on-keydown="sortKey" data-on-keydown-args="[{&quot;@&quot;:&quot;event&quot;},&quot;status&quot;]"><span data-i18n="colStatus" style="font-size:0;letter-spacing:0">Status</span><span class="sort-ind"></span></th>
+            <th class="sortable" data-sort="ip" tabindex="0" data-on-click="setSort" data-on-click-args="[&quot;ip&quot;]" data-on-keydown="sortKey" data-on-keydown-args="[{&quot;@&quot;:&quot;event&quot;},&quot;ip&quot;]"><span>IP / Hostname</span><span class="sort-ind"></span></th>
+            <th class="sortable" data-sort="type" tabindex="0" data-on-click="setSort" data-on-click-args="[&quot;type&quot;]" data-on-keydown="sortKey" data-on-keydown-args="[{&quot;@&quot;:&quot;event&quot;},&quot;type&quot;]"><span data-i18n="colType">Type</span><span class="sort-ind"></span></th>
+            <th class="sortable" data-sort="os" tabindex="0" data-on-click="setSort" data-on-click-args="[&quot;os&quot;]" data-on-keydown="sortKey" data-on-keydown-args="[{&quot;@&quot;:&quot;event&quot;},&quot;os&quot;]"><span>OS</span><span class="sort-ind"></span></th>
+            <th class="sortable" data-sort="vendor" tabindex="0" data-on-click="setSort" data-on-click-args="[&quot;vendor&quot;]" data-on-keydown="sortKey" data-on-keydown-args="[{&quot;@&quot;:&quot;event&quot;},&quot;vendor&quot;]"><span>Vendor / MAC</span><span class="sort-ind"></span></th>
+            <th class="sortable" data-sort="ports" tabindex="0" data-on-click="setSort" data-on-click-args="[&quot;ports&quot;]" data-on-keydown="sortKey" data-on-keydown-args="[{&quot;@&quot;:&quot;event&quot;},&quot;ports&quot;]"><span data-i18n="colOpenPorts">Open ports</span><span class="sort-ind"></span></th>
+            <th class="sortable" data-sort="latency" tabindex="0" data-on-click="setSort" data-on-click-args="[&quot;latency&quot;]" data-on-keydown="sortKey" data-on-keydown-args="[{&quot;@&quot;:&quot;event&quot;},&quot;latency&quot;]"><span data-i18n="colLatency">Latency</span><span class="sort-ind"></span></th>
+            <th class="sortable" data-sort="seen" tabindex="0" data-on-click="setSort" data-on-click-args="[&quot;seen&quot;]" data-on-keydown="sortKey" data-on-keydown-args="[{&quot;@&quot;:&quot;event&quot;},&quot;seen&quot;]"><span data-i18n="colLastSeen">Last seen</span><span class="sort-ind"></span></th>
+            <th style="width:28px"></th>
+          </tr></thead>
+          <tbody id="hosts-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="content" id="view-switches" hidden></div>
+</div>
+
+<div id="toast"></div>
+
+<!-- Ajustes de Net Monitor (como en WAN Monitor): escaneo automático, limpieza de equipos sin conexión, SNMP y Pi-hole -->
+<!-- EN: Net Monitor settings (like WAN Monitor): auto-scan, offline cleanup, SNMP and Pi-hole -->
+<div class="overlay" id="net-set-overlay" data-on-click="closeNetSettings" data-on-click-args="[{&quot;@&quot;:&quot;event&quot;}]">
+  <div class="modal net-set">
+    <h3 data-i18n="settings">Settings</h3>
+    <div class="net-set-body">
       <div class="interval-wrap" id="purge-wrap" style="display:none">
         <span class="interval-lbl" data-i18n="purgeLbl">Remove offline after:</span>
         <input type="number" id="purge-days" min="0" max="3650" value="0" style="width:52px;text-align:center" class="interval-sel" data-i18n-title="purgeTip" title="0 = never">
@@ -93,10 +197,6 @@
         </button>
         <span class="interval-lbl" id="iv-next" style="font-family:var(--mono);font-size:10px;min-width:60px"></span>
       </div>
-      <button class="btn-scan" id="btn-scan" data-on-click="startScan">
-        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <span data-i18n="scanNet">Scan network</span>
-      </button>
       <div style="position:relative" id="snmp-wrap">
         <button data-on-click="toggleSnmpPanel" id="btn-snmp" title="SNMP"
           style="display:flex;align-items:center;gap:5px;padding:6px 10px;border-radius:var(--r-sm);border:1px solid var(--border);background:transparent;color:var(--text-dim);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap"
@@ -190,96 +290,10 @@
           </div>
         </div>
       </div>
-      <div class="lang-btns">
-        <button class="lang-btn" id="lang-en" data-on-click="setLang" data-on-click-args="[&quot;en&quot;]">EN</button>
-        <button class="lang-btn" id="lang-es" data-on-click="setLang" data-on-click-args="[&quot;es&quot;]">ES</button>
-      </div>
-      <div class="theme-btns">
-        <button class="theme-btn" id="theme-light" data-on-click="setTheme" data-on-click-args="[&quot;light&quot;]" data-i18n-title="themeLight" title="Light"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span data-i18n="themeLight">Light</span></button>
-        <button class="theme-btn" id="theme-dark" data-on-click="setTheme" data-on-click-args="[&quot;dark&quot;]" data-i18n-title="themeDark" title="Dark"><svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span data-i18n="themeDark">Dark</span></button>
-        <button class="theme-btn" id="theme-system" data-on-click="setTheme" data-on-click-args="[&quot;system&quot;]" title="Auto"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>Auto</button>
-      </div>
-      <span id="clock"></span>
-      <div style="width:1px;height:20px;background:var(--border);margin:0 4px;flex-shrink:0"></div>
-      <div class="topbar-user">
-        <div class="topbar-avatar" id="avatar">?</div>
-        <div class="topbar-user-info">
-          <span class="topbar-user-name" id="me-name">—</span>
-          <span class="topbar-user-role" id="me-role">—</span>
-        </div>
-      </div>
-      <button class="btn-logout" data-on-click="logout" data-i18n-title="titleLogout" title="Sign out">
-        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-      </button>
     </div>
+    <div class="modal-acts"><button class="btn-scan" data-on-click="closeNetSettings" data-i18n="close">Close</button></div>
   </div>
-
-  <!-- Scan progress bar -->
-  <div class="scan-bar" id="scan-bar">
-    <svg style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    <span id="scan-text" data-i18n="scanningNet">Scanning network...</span>
-    <div class="scan-progress-track"><div class="scan-progress-fill" id="scan-fill" style="width:0%"></div></div>
-    <span id="scan-pct" style="font-family:var(--mono);font-size:11px;flex-shrink:0">0%</span>
-  </div>
-
-  <div class="view-tabs" role="tablist">
-    <button type="button" class="view-tab active" role="tab" data-view="hosts" data-i18n="tabHosts">Devices</button>
-    <button type="button" class="view-tab" role="tab" data-view="switches" data-i18n="tabSwitches">Switch Monitor</button>
-  </div>
-
-  <div class="content" id="view-hosts">
-    <!-- Stats -->
-    <div class="stats-row">
-      <div class="stat-card clickable" data-status="ALL" data-on-click="setStatusFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]"><div class="stat-ico teal"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg></div><div><div class="stat-val" id="st-total">—</div><div class="stat-lbl" data-i18n="statDiscovered">Hosts discovered</div></div></div>
-      <div class="stat-card clickable" data-status="online" data-on-click="setStatusFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]"><div class="stat-ico green"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg></div><div><div class="stat-val" id="st-online">—</div><div class="stat-lbl" data-i18n="statOnline">Online</div></div></div>
-      <div class="stat-card clickable" data-status="offline" data-on-click="setStatusFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]"><div class="stat-ico red"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></div><div><div class="stat-val" id="st-offline">—</div><div class="stat-lbl" data-i18n="statOffline">Offline</div></div></div>
-      <div class="stat-card"><div class="stat-ico blue"><svg viewBox="0 0 24 24"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg></div><div><div class="stat-val" id="st-ports">—</div><div class="stat-lbl" data-i18n="statOpenPorts">Open ports</div></div></div>
-      <div class="stat-card"><div class="stat-ico orange"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><div><div class="stat-val" id="st-last-scan">—</div><div class="stat-lbl" data-i18n="statLastScan">Last scan</div></div></div>
-    </div>
-
-    <!-- Filter row -->
-    <div class="filter-row">
-      <div class="search-wrap">
-        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="search-input" placeholder="IP, hostname, OS, puerto...">
-      </div>
-      <div class="pills">
-        <button class="pill active" data-status="ALL"     data-on-click="setStatusFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]" data-i18n="filterAll">All</button>
-        <button class="pill"        data-status="online"  data-on-click="setStatusFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]" data-i18n="filterOnline">Online</button>
-        <button class="pill"        data-status="offline" data-on-click="setStatusFilter" data-on-click-args="[{&quot;@&quot;:&quot;this&quot;}]" data-i18n="filterOffline">Offline</button>
-      </div>
-    </div>
-
-    <!-- Hosts table -->
-    <div class="card">
-      <div class="card-hd">
-        <span class="card-title" data-i18n="hostsTitle">Hosts on network</span>
-        <span class="card-meta" id="host-count">—</span>
-      </div>
-      <div id="review-bar" style="display:none"></div>
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr>
-            <th class="sortable" data-sort="status" style="width:40px;padding:9px 6px;text-align:center" tabindex="0" data-on-click="setSort" data-on-click-args="[&quot;status&quot;]" data-on-keydown="sortKey" data-on-keydown-args="[{&quot;@&quot;:&quot;event&quot;},&quot;status&quot;]"><span data-i18n="colStatus" style="font-size:0;letter-spacing:0">Status</span><span class="sort-ind"></span></th>
-            <th class="sortable" data-sort="ip" tabindex="0" data-on-click="setSort" data-on-click-args="[&quot;ip&quot;]" data-on-keydown="sortKey" data-on-keydown-args="[{&quot;@&quot;:&quot;event&quot;},&quot;ip&quot;]"><span>IP / Hostname</span><span class="sort-ind"></span></th>
-            <th class="sortable" data-sort="type" tabindex="0" data-on-click="setSort" data-on-click-args="[&quot;type&quot;]" data-on-keydown="sortKey" data-on-keydown-args="[{&quot;@&quot;:&quot;event&quot;},&quot;type&quot;]"><span data-i18n="colType">Type</span><span class="sort-ind"></span></th>
-            <th class="sortable" data-sort="os" tabindex="0" data-on-click="setSort" data-on-click-args="[&quot;os&quot;]" data-on-keydown="sortKey" data-on-keydown-args="[{&quot;@&quot;:&quot;event&quot;},&quot;os&quot;]"><span>OS</span><span class="sort-ind"></span></th>
-            <th class="sortable" data-sort="vendor" tabindex="0" data-on-click="setSort" data-on-click-args="[&quot;vendor&quot;]" data-on-keydown="sortKey" data-on-keydown-args="[{&quot;@&quot;:&quot;event&quot;},&quot;vendor&quot;]"><span>Vendor / MAC</span><span class="sort-ind"></span></th>
-            <th class="sortable" data-sort="ports" tabindex="0" data-on-click="setSort" data-on-click-args="[&quot;ports&quot;]" data-on-keydown="sortKey" data-on-keydown-args="[{&quot;@&quot;:&quot;event&quot;},&quot;ports&quot;]"><span data-i18n="colOpenPorts">Open ports</span><span class="sort-ind"></span></th>
-            <th class="sortable" data-sort="latency" tabindex="0" data-on-click="setSort" data-on-click-args="[&quot;latency&quot;]" data-on-keydown="sortKey" data-on-keydown-args="[{&quot;@&quot;:&quot;event&quot;},&quot;latency&quot;]"><span data-i18n="colLatency">Latency</span><span class="sort-ind"></span></th>
-            <th class="sortable" data-sort="seen" tabindex="0" data-on-click="setSort" data-on-click-args="[&quot;seen&quot;]" data-on-keydown="sortKey" data-on-keydown-args="[{&quot;@&quot;:&quot;event&quot;},&quot;seen&quot;]"><span data-i18n="colLastSeen">Last seen</span><span class="sort-ind"></span></th>
-            <th style="width:28px"></th>
-          </tr></thead>
-          <tbody id="hosts-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <div class="content" id="view-switches" hidden></div>
 </div>
-
-<div id="toast"></div>
 
 <script src="csp-bind.js"></script>
 <script src="timefmt.js"></script>

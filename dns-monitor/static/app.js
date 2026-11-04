@@ -329,7 +329,7 @@ async function fetchAll(){
     renderAll();ensureRanges();
   }catch(e){console.error(e);}
 }
-function renderAll(){renderSidebar();renderSummary();renderMain();updateGlobalStats();}
+function renderAll(){keepRes(()=>{renderSidebar();renderSummary();renderMain();updateGlobalStats();});}
 function selectServer(id){activeId=id;renderAll();ensureRanges();}
 function toggleServer(id){activeId=activeId===id?'':id;renderAll();ensureRanges();}
 function lvOf(n){const s=n.snap;if(!s?.ts)return 'loading';if(s.error)return 'err';return 'ok';}
@@ -610,6 +610,12 @@ function resultHtml(o){
     +(r.ok?`<div class="res-ans">${(r.answers||[]).length?(r.answers).map(a=>`<span class="tag">${esc(a.type)}</span> ${esc(a.value)}`).join('<br>'):esc(t('resNone'))}</div>`:'');
   const v=o.verdict==='blocked'?`<div class="alerts"><div class="alert warn">${esc(t('resBlocked'))}</div></div>`:o.verdict==='failed'?`<div class="alerts"><div class="alert crit">${esc(t('resFailed'))}</div></div>`:'';
   return v+line(t('resServer'),o.server)+line(t('resOutside'),o.outside);
+}
+// The page is redrawn every few seconds: keep what is being typed in the resolution test (value, focus and caret) across the redraw.
+function keepRes(draw){
+  const a=document.activeElement,was=a&&a.id==='res-name'?a:null,pos=was?[was.selectionStart,was.selectionEnd]:null;
+  saveRes();draw();
+  if(was){const n=$('res-name');if(n){n.focus();try{n.setSelectionRange(pos[0],pos[1]);}catch(e){}}}
 }
 function saveRes(){const n=$('res-name'),y=$('res-type');if(n)RES.name=n.value.trim();if(y)RES.type=y.value;}
 async function runResolve(id){

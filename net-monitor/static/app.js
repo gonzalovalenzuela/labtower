@@ -3,7 +3,7 @@ const LANG={
     username:'Username',password:'Password',loginBtn:'Sign in',loginFill:'Fill in all fields',aliasPrompt:(ip)=>'Alias for '+ip+':',aliasSaved:'Alias updated',autoScanToast:'Auto-scan: ',autoScanLbl:'Auto-scan:',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',
     navSection:'Navigation',osDetected:'Detected OS',
     netTitle:'Network Monitor',themeLight:'Light',themeDark:'Dark',
-    apply:'Apply',scanNet:'Scan network',
+    apply:'Apply',scanNet:'Scan network',settings:'Settings',close:'Close',
     statDiscovered:'Hosts discovered',statOnline:'Online',statOffline:'Offline',
     statOpenPorts:'Open ports',statLastScan:'Last scan',
     filterAll:'All',filterOnline:'Online',filterOffline:'Offline',
@@ -39,7 +39,7 @@ unrev:'Unreviewed',unrevMsg:(n,names,more)=>`${n} device${n>1?'s':''} not review
     username:'Usuario',password:'Contraseña',loginBtn:'Entrar',loginFill:'Completa todos los campos',aliasPrompt:(ip)=>'Alias para '+ip+':',aliasSaved:'Alias actualizado',autoScanToast:'Escaneo automático: ',autoScanLbl:'Escaneo automático:',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',
     navSection:'Navegación',osDetected:'OS detectado',
     netTitle:'Monitoreo de red',themeLight:'Claro',themeDark:'Oscuro',
-    apply:'Aplicar',scanNet:'Escanear red',
+    apply:'Aplicar',scanNet:'Escanear red',settings:'Ajustes',close:'Cerrar',
     statDiscovered:'Hosts descubiertos',statOnline:'En línea',statOffline:'Sin conexión',
     statOpenPorts:'Puertos abiertos',statLastScan:'Último escaneo',
     filterAll:'Todos',filterOnline:'En línea',filterOffline:'Sin conexión',
@@ -1220,4 +1220,11 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ loadLatency, markAllKnown, setHostFlag, applyInterval, applyPurge, deleteHost, doLogin, editAlias, editOs, logout, rescanHost, saveOuiAuto, savePiholeConfig, saveSnmp, setLang, setOsFilter, setSort, setStatusFilter, setTheme, setTypeFilter, sortKey, startScan, testSnmp, toggleNav, togglePiholePanel, toggleSnmpPanel, updateOui });
+// Ajustes (escaneo automático, limpieza, SNMP y Pi-hole) en una ventana, como en WAN Monitor. / Settings window, like WAN Monitor.
+function openNetSettings(){document.getElementById('net-set-overlay').classList.add('show');}
+function closeNetSettings(ev){
+  if(ev&&ev.target&&ev.target.id!=='net-set-overlay')return;        // a click inside the window does not close it
+  document.getElementById('net-set-overlay').classList.remove('show');
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeNetSettings();});
+if (window.cspRegister) cspRegister({ openNetSettings, closeNetSettings, loadLatency, markAllKnown, setHostFlag, applyInterval, applyPurge, deleteHost, doLogin, editAlias, editOs, logout, rescanHost, saveOuiAuto, savePiholeConfig, saveSnmp, setLang, setOsFilter, setSort, setStatusFilter, setTheme, setTypeFilter, sortKey, startScan, testSnmp, toggleNav, togglePiholePanel, toggleSnmpPanel, updateOui });

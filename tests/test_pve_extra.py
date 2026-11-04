@@ -18,6 +18,11 @@ class Trends(unittest.TestCase):
     def pts(self, days, per_day, start, rate):
         return [(NOW - int((days - i / per_day) * 86400), start + rate * (i / per_day)) for i in range(int(days * per_day))]
 
+    def test_days_why_tells_missing_history_from_flat(self):
+        self.assertEqual(ex.days_why(self.pts(1, 20, 100 * GIB, 0))[0], "history")
+        w = ex.days_why(self.pts(5, 96, 100 * GIB, 0)); self.assertEqual(w[0], "flat"); self.assertGreaterEqual(w[1], 2)
+        self.assertEqual(ex.days_why([]), ("history", 0))
+
     def test_days_to_full_and_guards(self):
         p = self.pts(5, 96, 100 * GIB, 2 * GIB)
         d = ex.days_to_full(p, 20 * GIB)
@@ -151,7 +156,7 @@ class Round(unittest.TestCase):
         self.cl = {"id": "c1", "name": "Pen"}
         self.real_now = m.time.time; m.time.time = lambda: NOW
         self._store = m._series_store; m._series_store = lambda *a: None
-        self._days = m._series_days; m._series_days = lambda *a: {}
+        self._days = m._series_days; m._series_days = lambda *a: ({}, {})
     def tearDown(self):
         m.auth.record_event = self._rec; m.time.time = self.real_now; m._series_store = self._store; m._series_days = self._days
     def kinds(self): return [e[1] for e in self.ev]
