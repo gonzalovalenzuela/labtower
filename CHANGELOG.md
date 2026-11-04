@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.6o — 2026-11-04
+
+- **Mejora:** WAN Monitor: la fecha desde la que se conoce la IP pública se edita en Settings (formato dd-mm-aaaa) y no desde la tarjeta del historial.
+- **Mejora:** WAN Monitor: el historial de IP pública no se borra nunca (antes se conservaban 30 días, salvo la IP actual); la tarjeta muestra los 20 cambios más recientes.
+
 ## 2.1.6n — 2026-11-04
 
 - **Arreglo:** Net Monitor: el switch ZX quedaba «unreachable» tras cada reinicio o actualización (el switch no entregaba una sesión nueva mientras la anterior seguía viva). La sesión web se guarda (modo 600) y se reutiliza; tras varios rechazos seguidos se espera más entre intentos.
