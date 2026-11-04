@@ -628,7 +628,7 @@ def load_history() -> int:
         _db("DELETE FROM wan_targets WHERE ts < ?", (int(time.time()) - HIST_KEEP,))
         _db("DELETE FROM wan_outages WHERE start < ?", (int(time.time()) - HIST_KEEP,))
         _db("DELETE FROM wan_traces WHERE start < ?", (int(time.time()) - HIST_KEEP,))
-        _db("DELETE FROM wan_ips WHERE ts < ? AND ts < (SELECT MAX(ts) FROM wan_ips)", (int(time.time()) - HIST_KEEP,))   # the newest row is the current IP: never prune it
+        # wan_ips is never pruned: one row per IP change (a few bytes), so the whole history is kept / el historial de IP no se poda nunca
         rows = _db("SELECT ts,up,rtt,loss,jitter,gw,dns FROM wan_samples WHERE ts >= ? ORDER BY ts", (int(time.time()) - 43200,), fetch=True)
         with S.lock:
             for ts, up, rtt, loss, jit, gw, dns in rows: S.history.append({"ts": ts, "up": up, "rtt": rtt, "loss": loss, "jitter": jit, "gw": gw, "dns": dns})
@@ -854,7 +854,7 @@ def _pruner():
         time.sleep(3600)
         try:
             cut = int(time.time()) - HIST_KEEP
-            _db("DELETE FROM wan_samples WHERE ts < ?", (cut,)); _db("DELETE FROM wan_speed WHERE ts < ?", (cut,)); _db("DELETE FROM wan_targets WHERE ts < ?", (cut,)); _db("DELETE FROM wan_outages WHERE start < ? AND end IS NOT NULL", (cut,)); _db("DELETE FROM wan_traces WHERE start < ?", (cut,)); _db("DELETE FROM wan_ips WHERE ts < ? AND ts < (SELECT MAX(ts) FROM wan_ips)", (cut,))
+            _db("DELETE FROM wan_samples WHERE ts < ?", (cut,)); _db("DELETE FROM wan_speed WHERE ts < ?", (cut,)); _db("DELETE FROM wan_targets WHERE ts < ?", (cut,)); _db("DELETE FROM wan_outages WHERE start < ? AND end IS NOT NULL", (cut,)); _db("DELETE FROM wan_traces WHERE start < ?", (cut,))
         except Exception as e: log.warning(f"could not prune: {e}")
 
 # ─── Health ───────────────────────────────────────────────────────────────────

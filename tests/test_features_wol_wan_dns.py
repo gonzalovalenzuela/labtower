@@ -123,12 +123,12 @@ class WanTraceAndIps(unittest.TestCase):
                          [("198.51.100.3", "198.51.100.2"), ("198.51.100.2", "198.51.100.1")])
         wan._db("DELETE FROM wan_ips")
 
-    def test_the_current_ip_row_survives_the_retention_prune(self):
-        wan._db("DELETE FROM wan_ips"); old = int(time.time()) - 400 * 86400
+    def test_ip_history_is_never_pruned(self):
+        wan._db("DELETE FROM wan_ips"); old = int(time.time()) - 900 * 86400
         wan._db("INSERT INTO wan_ips (ts,ip,prev) VALUES (?,?,?)", (old - 86400, "198.51.100.1", None))
         wan._db("INSERT INTO wan_ips (ts,ip,prev) VALUES (?,?,?)", (old, "198.51.100.2", "198.51.100.1"))
         wan.load_history()
-        self.assertEqual([x["ip"] for x in wan.recent_ips()], ["198.51.100.2"])      # older one pruned, the current one kept even if it is old
+        self.assertEqual([x["ip"] for x in wan.recent_ips()], ["198.51.100.2", "198.51.100.1"])      # years old, still there
         wan._db("DELETE FROM wan_ips")
 
     def test_start_date_of_the_oldest_record_can_be_set(self):
