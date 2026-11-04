@@ -17,7 +17,7 @@ SUDO       = os.environ.get("TELEPORTER_SUDO", "sudo -n").split()
 SPOOL      = Path(os.environ.get("TELEPORTER_SPOOL", "/var/lib/labtower/teleporter"))
 # El registro de restauración lo escribe root (el panel solo lo lee): así el panel no puede redirigir un archivo que root abre.
 # EN: The restore log is written by root (the panel only reads it): the panel cannot redirect a file that root opens.
-RESTORE_LOG = Path(os.environ.get("TELEPORTER_LOG", "/var/log/labtower/restore.log"))
+RESTORE_LOG = Path(os.environ.get("TELEPORTER_LOG", "/var/lib/labtower/state/restore.log"))
 MAX_UPLOAD = int(os.environ.get("TELEPORTER_MAX_UPLOAD", 200 * 1024 * 1024))
 # Nombres de respaldo permitidos: «labtower-<texto seguro>.tar.gz» (creados por el sistema) o
 # «upload-AAAAMMDD_HHMMSS.tar.gz» (subidos). Cualquier otro nombre se rechaza: evita rutas con «../».

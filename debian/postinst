@@ -211,7 +211,7 @@ os.chmod(dst, 0o600)' "$old" "$new" 2>/dev/null; then
 done
 # ES: Las sesiones antiguas guardaban el token en claro: se descartan (todos deben iniciar sesión otra vez) y se borran de los respaldos.
 # EN: Old sessions stored the token in clear: they are discarded (everyone logs in again) and removed from the backups.
-rm -f "$DATA_DIR/backup.status"   # old location (the status file now lives in root-owned /var/log/labtower)
+rm -f "$DATA_DIR/backup.status"   # old location (the status file now lives in root-owned /var/lib/labtower/state)
 rm -f /var/backups/labtower/sessions.json.*.bak
 
 # ── 3c. Aislamiento: cada módulo es dueño SOLO de su carpeta; los archivos de autenticación pasan a auth/ (solo labtower-auth) ──
@@ -438,7 +438,16 @@ ln -sf /etc/nginx/sites-available/labtower.conf \
 # ES: Carpetas para el HTTPS opcional (labtower-https) y la del registro de restauraciones (root: el panel solo la lee).
 # EN: Folders for the optional HTTPS (labtower-https) and the restore log (root-owned: the panel only reads it).
 mkdir -p /etc/labtower/https.d /etc/labtower/http-extra.d
-mkdir -p /var/log/labtower; chmod 755 /var/log/labtower
+# ES: Estado del respaldo y registro de restauración: carpeta de root dentro de /var/lib (no /var/log: DietPi y otros sistemas con log en RAM la vacían cada hora).
+# EN: Backup status and restore log: root-owned folder under /var/lib (not /var/log: DietPi and other RAM-log setups empty it every hour).
+install -d -m 750 -o root -g labtower "$DATA_DIR/state"
+for f in backup.status backup.verify restore.log; do
+    if [ -s "/var/log/labtower/$f" ] && [ ! -e "$DATA_DIR/state/$f" ] && [ ! -L "/var/log/labtower/$f" ]; then
+        cp -p -- "/var/log/labtower/$f" "$DATA_DIR/state/$f" 2>/dev/null || true
+    fi
+done
+chmod 644 "$DATA_DIR/state"/backup.status "$DATA_DIR/state"/backup.verify 2>/dev/null || true
+rm -rf /var/log/labtower
 
 # ── 7. Usuarios: restaurar desde respaldo o dejar que el servicio cree el administrador inicial ──
 # EN: Step 7: users: restore from a backup, or let the service create the initial administrator.

@@ -346,7 +346,7 @@ sudo labtower-sftp-backup status      # result of the last run
 - **Safe:** uploaded as `.part` and renamed; the remote size is compared; the server's host key is pinned on first connection.
 - **Retention:** 30 copies on the storage (`KEEP_REMOTE`) and 7 on the LabTower server (`KEEP_LOCAL`). Only files named `labtower-auto-<host>-<date>_<time>.tar.gz` are deleted.
 - **Verification:** `sudo labtower-sftp-backup verify` (also a daily cron at 09:43, `/etc/cron.d/labtower-sftp-verify`) lists the storage and checks that the newest copy exists, is not empty and is less than `VERIFY_MAX_AGE` hours old (36 by default, in `backup.conf`). It notices a stopped cron, a deleted copy or a storage that stopped answering. The result (`/var/log/labtower/backup.verify`) shows on the Overview card as *Copy on storage*.
-- Result in `/var/log/labtower/backup.status`; errors with `journalctl -t labtower-sftp-backup`. Change the schedule in `/etc/cron.d/labtower-sftp-backup`.
+- Result in `/var/lib/labtower/state/backup.status`; errors with `journalctl -t labtower-sftp-backup`. Change the schedule in `/etc/cron.d/labtower-sftp-backup`.
 - Use a dedicated SFTP user with access to that folder only.
 
 ---
@@ -501,7 +501,7 @@ On the server:
 | `/var/lib/labtower/` | Data: `auth/` (users, sessions, events; `labtower-auth` only) and `<module>/` (each with its own `metrics.db`) |
 | `/etc/labtower/` | `backup.conf`, backup key and passphrase, `tls/` |
 | `/var/backups/labtower/` | Copies made before updating, uninstalling or restoring |
-| `/var/log/labtower/` | SFTP backup status and restore log |
+| `/var/lib/labtower/state/` | SFTP backup status and restore log |
 | `/usr/local/bin/` | `teleporter`, `labtower-sftp-backup`, `labtower-https`, `labtower-health`, `labtower-resources`, `labtower-resetpw`, `labtower-modules` |
 
 Each module is an independent Python HTTP server. All of them use `auth/auth.py` for users and sessions.

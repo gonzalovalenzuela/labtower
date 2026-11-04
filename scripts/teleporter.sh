@@ -48,7 +48,7 @@ NGINX_ENABLED="${LABTOWER_NGINX_ENABLED:-/etc/nginx/sites-enabled/labtower.conf}
 SAFETY_DIR="${LABTOWER_SAFETY_DIR:-/var/backups/labtower}"
 SPOOL_DIR="$DATA_DIR/teleporter"      # backups/uploads handled by the admin panel
 LOCK_FILE="${LABTOWER_LOCK:-/run/lock/labtower-teleporter.lock}"
-RESTORE_LOG="${LABTOWER_RESTORE_LOG:-/var/log/labtower/restore.log}"   # root-owned: the panel only reads it
+RESTORE_LOG="${LABTOWER_RESTORE_LOG:-/var/lib/labtower/state/restore.log}"   # root-owned: the panel only reads it
 # ES: Usuario SIN datos con el que se abre un respaldo no confiable (extraer, validar JSON/SQLite). «labtower» ya no es dueño de nada ni corre ningún servicio.
 #     Cada archivo de datos pertenece al usuario de SU módulo (owner_of); el panel (labtower-auth) es dueño de auth/ y de la carpeta de intercambio.
 # EN: Data-less user used to open an untrusted backup (extract, validate JSON/SQLite). "labtower" owns nothing and runs no service any more.

@@ -19,13 +19,13 @@
 #  4. Old copies are pruned (KEEP_LOCAL here, KEEP_REMOTE on the storage). Only files named
 #     labtower-auto-<this host>-<date>_<time>.tar.gz are ever deleted, nothing else.
 #  5. `verify` (daily, independent of the backup) lists the storage and checks the newest copy exists, is not empty and is recent,
-#     so a job that stopped running, or a copy that was lost on the storage, is noticed. Result: /var/log/labtower/backup.verify.
-#  6. The result is written to /var/log/labtower/backup.status and to the system log
+#     so a job that stopped running, or a copy that was lost on the storage, is noticed. Result: /var/lib/labtower/state/backup.verify.
+#  6. The result is written to /var/lib/labtower/state/backup.status and to the system log
 #     (journalctl -t labtower-sftp-backup).
 # ES: Respaldo automático de LabTower por SFTP. `teleporter backup` crea el archivo, `teleporter check` lo verifica antes de
 #     subirlo, se sube con nombre temporal (.part) y se renombra al terminar, se compara el tamaño remoto con el local y se borran
 #     las copias viejas (solo las que se llaman labtower-auto-<este equipo>-<fecha>_<hora>.tar.gz). Solo usa llave SSH, nunca
-#     contraseña, para poder correr desde cron. El resultado queda en /var/log/labtower/backup.status y en el log del sistema.
+#     contraseña, para poder correr desde cron. El resultado queda en /var/lib/labtower/state/backup.status y en el log del sistema.
 set -uo pipefail
 
 CONF="${LABTOWER_BACKUP_CONF:-/etc/labtower/backup.conf}"
@@ -41,10 +41,10 @@ KNOWN_HOSTS="/etc/labtower/backup_known_hosts"
 KEEP_LOCAL=7
 KEEP_REMOTE=30
 LOCAL_DIR="/var/backups/labtower"
-STATUS_FILE="/var/log/labtower/backup.status"   # root-owned dir: never write as root inside a folder the service user controls
+STATUS_FILE="/var/lib/labtower/state/backup.status"   # root-owned dir (not /var/log: DietPi and other RAM-log setups empty it every hour)
 TELEPORTER="/usr/local/bin/teleporter.sh"
 LOCK_FILE="/run/lock/labtower-sftp-backup.lock"
-VERIFY_FILE="/var/log/labtower/backup.verify"   # result of `verify`
+VERIFY_FILE="/var/lib/labtower/state/backup.verify"   # result of `verify`
 VERIFY_MAX_AGE=36                              # hours: a newer copy than this must exist on the storage / horas
 ENCRYPT="yes"                                  # yes | no — encrypt the copy that is uploaded / cifrar la copia que se sube
 PASSPHRASE_FILE="/etc/labtower/backup_passphrase"
@@ -110,7 +110,7 @@ write_status() {
   if ! { printf '{"time": %s, "ok": %s, "file": "%s", "size": %s, "remote": "%s@%s:%s", "message": "%s"}\n' \
     "$(date +%s)" "$([ "$ok" = 1 ] && echo true || echo false)" "$(clean "$file")" "${size:-0}" \
     "$(clean "$SFTP_USER")" "$(clean "$SFTP_HOST")" "$(clean "$SFTP_DIR")" "$msg" > "$tmp" 2>/dev/null \
-    && chmod 644 "$tmp" && { sync "$tmp" 2>/dev/null || true; } && mv -f "$tmp" "$STATUS_FILE" 2>/dev/null; }; then rm -f "$tmp" 2>/dev/null; fi
+    && chmod 644 "$tmp" && { sync "$tmp" 2>/dev/null || true; } && mv -f "$tmp" "$STATUS_FILE" 2>/dev/null; }; then rm -f "$tmp" 2>/dev/null; else sync -f "$(dirname "$STATUS_FILE")" 2>/dev/null || true; fi
   return 0
 }
 
@@ -331,7 +331,7 @@ cmd_decrypt() {
 
 # ── status ─────────────────────────────────────────────────────────────────────
 cmd_status() {
-  [ -f "$STATUS_FILE" ] || { echo "No backup has run yet."; return 0; }
+  [ -s "$STATUS_FILE" ] || { echo "No backup has run yet (no status recorded). Run: sudo labtower-sftp-backup run"; return 0; }
   python3 -I - "$STATUS_FILE" <<'PY'
 import json, sys, time
 try:

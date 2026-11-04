@@ -348,7 +348,7 @@ sudo labtower-sftp-backup status      # resultado de la última corrida
 - **Seguro:** se sube como `.part` y se renombra; se compara el tamaño remoto; la huella del servidor queda fijada en la primera conexión.
 - **Retención:** 30 copias en el storage (`KEEP_REMOTE`) y 7 en el servidor LabTower (`KEEP_LOCAL`). Solo se borran archivos `labtower-auto-<equipo>-<fecha>_<hora>.tar.gz`.
 - **Verificación:** `sudo labtower-sftp-backup verify` (también un cron diario a las 09:43, `/etc/cron.d/labtower-sftp-verify`) lista el storage y comprueba que la copia más reciente existe, no está vacía y tiene menos de `VERIFY_MAX_AGE` horas (36 por defecto, en `backup.conf`). Detecta un cron detenido, una copia borrada o un storage que dejó de responder. El resultado (`/var/log/labtower/backup.verify`) aparece en la tarjeta del Resumen como *Copia en el storage*.
-- Resultado en `/var/log/labtower/backup.status`; errores con `journalctl -t labtower-sftp-backup`. El horario se cambia en `/etc/cron.d/labtower-sftp-backup`.
+- Resultado en `/var/lib/labtower/state/backup.status`; errores con `journalctl -t labtower-sftp-backup`. El horario se cambia en `/etc/cron.d/labtower-sftp-backup`.
 - Usa un usuario SFTP propio, con acceso solo a esa carpeta.
 
 ---
@@ -503,7 +503,7 @@ En el servidor de Labtower:
 | `/var/lib/labtower/` | Datos: `auth/` (usuarios, sesiones, eventos; solo `labtower-auth`) y `<módulo>/` (cada uno con su `metrics.db`) |
 | `/etc/labtower/` | `backup.conf`, llave y contraseña del respaldo, `tls/` |
 | `/var/backups/labtower/` | Copias antes de actualizar, desinstalar o restaurar |
-| `/var/log/labtower/` | Estado del respaldo SFTP y registro de restauración |
+| `/var/lib/labtower/state/` | Estado del respaldo SFTP y registro de restauración |
 | `/usr/local/bin/` | `teleporter`, `labtower-sftp-backup`, `labtower-https`, `labtower-health`, `labtower-resources`, `labtower-resetpw`, `labtower-modules` |
 
 Cada módulo es un servidor HTTP Python independiente. Todos usan `auth/auth.py` para usuarios y sesiones.

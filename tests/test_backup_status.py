@@ -41,9 +41,20 @@ class BackupStatus(unittest.TestCase):
             self.assertTrue("verify" not in r or r["verify"]["time"] is None)
 
     def test_empty_or_corrupt_file_is_not_an_error(self):
-        for txt in ("", "{", "[1]"):
+        for txt in ("{", "[1]"):
             pathlib.Path(self.st).write_text(txt)
             self.assertEqual(auth.backup_status(), {"state": "unknown"})
+
+    def test_empty_file_counts_as_never_ran(self):
+        # ES: DietPi y otros vacían /var/log cada hora: un archivo vacío es «aún no corrió», no «ilegible». / EN: an empty file means "not run yet", not "unreadable".
+        pathlib.Path(self.st).write_text("")
+        self.assertIn(auth.backup_status()["state"], ("off", "pending"))
+
+    def test_state_files_do_not_live_in_var_log(self):
+        # ES: /var/log puede ser un tmpfs que se vacía cada hora (DietPi-RAMlog). / EN: /var/log may be an hourly-cleared tmpfs (DietPi-RAMlog).
+        root = pathlib.Path(__file__).resolve().parent.parent
+        for rel in ("scripts/labtower-sftp-backup", "scripts/teleporter.sh", "auth/auth.py", "auth/teleporter_api.py", "etc/cron.d/labtower-sftp-verify"):
+            self.assertNotIn("/var/log/labtower", (root / rel).read_text(), rel)
 
     def test_included_in_system_stats(self):
         self.assertIn("backup", auth.system_stats())

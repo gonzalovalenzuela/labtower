@@ -1464,7 +1464,7 @@ def _cpu_percent():
 # Resultado de `labtower-sftp-backup verify` (comprobación en el storage); None si nunca corrió o el archivo no sirve.
 # EN: Result of `labtower-sftp-backup verify` (check on the storage); None if it never ran or the file is unusable.
 def _backup_verify():
-    f = os.environ.get("LABTOWER_BACKUP_VERIFY", "/var/log/labtower/backup.verify")
+    f = os.environ.get("LABTOWER_BACKUP_VERIFY", "/var/lib/labtower/state/backup.verify")
     try:
         d = json.loads(Path(f).read_text())
         if not isinstance(d, dict): return None
@@ -1478,10 +1478,12 @@ def _backup_verify():
 def backup_status():
     """State of the automatic SFTP backup for the Overview card: off (not configured), pending (configured, no run yet), ok, fail or unknown.
     ES: Estado del respaldo SFTP: lee el archivo que escribe labtower-sftp-backup (root, 644) y, si no existe, si hay SFTP_USER en la configuración."""
-    f = os.environ.get("LABTOWER_BACKUP_STATUS", "/var/log/labtower/backup.status")
+    f = os.environ.get("LABTOWER_BACKUP_STATUS", "/var/lib/labtower/state/backup.status")
     conf = os.environ.get("LABTOWER_BACKUP_CONF", "/etc/labtower/backup.conf")
     try:
-        d = json.loads(Path(f).read_text())
+        txt = Path(f).read_text()
+        if not txt.strip(): raise FileNotFoundError(f)          # empty file: same as «never ran»
+        d = json.loads(txt)
         if not isinstance(d, dict): raise ValueError("not an object")
         out = {"state": "ok" if d.get("ok") is True else "fail", "time": d.get("time"), "file": d.get("file") or "",
                "size": d.get("size"), "message": str(d.get("message") or "")[:220]}
