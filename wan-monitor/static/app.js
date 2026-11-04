@@ -141,7 +141,7 @@ const LANG={
  "pubIp": "Public IP",
  "gwIp": "Gateway",
  "lastCheck": "Last check",
- "ipChanged": "IP changed", "ipWas": "was", "pubIpSb": "Public IP",
+ "ipChanged": "IP changed", "ipDays": "{0} days since last change", "ipDay1": "1 day since last change", "ipToday": "Changed today", "ipWas": "was", "pubIpSb": "Public IP",
  "noPing": "The ping command is not installed; only TCP checks will work.",
  "histRtt": "Latency",
  "histLoss": "Packet loss and jitter",
@@ -332,7 +332,7 @@ const LANG={
  "pubIp": "IP pública",
  "gwIp": "Puerta de enlace",
  "lastCheck": "Última medición",
- "ipChanged": "IP cambió", "ipWas": "antes", "pubIpSb": "IP pública",
+ "ipChanged": "IP cambió", "ipDays": "{0} días desde el último cambio", "ipDay1": "1 día desde el último cambio", "ipToday": "Cambió hoy", "ipWas": "antes", "pubIpSb": "IP pública",
  "noPing": "El comando ping no está instalado; solo funcionarán las pruebas TCP.",
  "histRtt": "Latencia",
  "histLoss": "Pérdida de paquetes y jitter",
@@ -489,7 +489,7 @@ function updateGlobalStats(){
   if(sb){
     sb.style.display=s&&s.public_ip?'':'none';
     if(s&&s.public_ip){
-      const ch=s.ip_changed?`<div class="sb-ip-sub">${esc(t('ipChanged'))} ${esc(fmtDate(s.ip_changed))}${s.ip_prev?' · '+esc(t('ipWas'))+' '+esc(s.ip_prev):''}</div>`:'';
+      const ch=s.ip_changed?`<div class="sb-ip-sub">${esc(ipAge(s.ip_changed))}${s.ip_prev?' · '+esc(t('ipWas'))+' '+esc(s.ip_prev):''}</div>`:'';
       $('sb-ip-body').innerHTML=`<div class="sb-ip" title="${esc(s.public_ip)}"><span class="sb-ip-dot${s.ip_changed&&Date.now()/1000-s.ip_changed<86400?' chg':''}"></span><span class="sb-ip-val">${esc(s.public_ip)}</span></div>${ch}`;
     }
   }
@@ -585,6 +585,8 @@ function outagesCard(){
 // Historial de cambios de IP pública (el más reciente primero).
 // EN: Public IP change history (newest first).
 function dmy(ts){const d=new Date(ts*1000),p=n=>String(n).padStart(2,'0');return p(d.getDate())+'-'+p(d.getMonth()+1)+'-'+d.getFullYear();}
+// Días desde el último cambio de IP (la fecha exacta está en el historial). / EN: Days since the last IP change (the exact date is in the history).
+function ipAge(ts){const d=Math.max(0,Math.floor((Date.now()/1000-ts)/86400));return d===0?t('ipToday'):d===1?t('ipDay1'):t('ipDays').replace('{0}',d);}
 function fmtFull(ts){const d=new Date(ts*1000);return d.toLocaleDateString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+PCT.time(d);}
 // Cambia la fecha de inicio del registro más antiguo (Ajustes, administradores). / EN: Change the start date of the oldest record (Settings, administrators).
 async function setIpSince(){
@@ -623,7 +625,7 @@ function renderMain(){
   h+=`<div class="node-card wide"><div class="node-hd"><div class="node-name">${esc(t('targets'))}</div><span>${pill(si.lv,si.txt)}</span></div><div class="tbl-wrap"><table class="wan-table"><thead><tr><th>${esc(t('colTarget'))}</th><th>${esc(t('colKind'))}</th><th>${esc(t('colRtt'))}</th><th>${esc(t('colLoss'))}</th><th class="c-temp">${esc(t('colJitter'))}</th><th>${esc(t('colP95Day'))}</th><th>${esc(t('colFail24'))}</th><th>${esc(t('colOk'))}</th></tr></thead><tbody>${targetRows(s)}</tbody></table></div></div>`;
   h+=statsCard()+speedCard()+outagesCard()+ipHistoryCard();
   h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('info'))}</div></div>
-    ${kv(t('pubIp'),esc(s.public_ip||'—')+(s.ip_changed?` <span class="sum-sub">${esc(t('ipChanged'))} ${esc(fmtDate(s.ip_changed))}</span>`:''))}
+    ${kv(t('pubIp'),esc(s.public_ip||'—')+(s.ip_changed?` <span class="sum-sub">${esc(ipAge(s.ip_changed))}</span>`:''))}
     ${kv(t('gwIp'),esc(s.gateway_ip||'—'))}${routerRow(s)}${kv(t('gUp7'),esc(upTxt(up['7d'])))}${kv(t('gUp30'),esc(upTxt(up['30d'])))}${kv(t('lastCheck'),esc(fmtDate(s.ts)))}</div>`;
   h+='</div>'+chartSections('wan');
   box.innerHTML=h;
