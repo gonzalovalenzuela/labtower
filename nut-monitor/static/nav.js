@@ -246,11 +246,15 @@
       first = false;
       ids.forEach(function (id) {
         var it = I[id], self = id === o.self;
-        var a = el('a', (strip ? 'nav-chip' : 'nav-item') + (self ? ' active' : ''));
+        var a = el('a', (strip ? 'nav-chip' : 'nav-item') + (self ? ' active' : '')), name = it.label || (es ? it.es : it.en);
         a.href = it.href; a.setAttribute('data-nav-id', id);
         if (self) a.setAttribute('aria-current', 'page');
         a.appendChild(icon(it.svg, strip ? 14 : null));
-        a.appendChild(document.createTextNode(it.label || (es ? it.es : it.en)));
+        // ES: En la tira el nombre va corto («UPS», «WOL») para que quepa en una línea; el completo queda en el título.
+        // EN: In the strip the name is short ("UPS", "WOL") so it fits on one line; the full one stays in the title.
+        var shown = strip ? name.replace(/ (Monitor|Console|Panel)$/, '') : name;
+        if (shown !== name) { a.title = name; a.setAttribute('aria-label', name); }
+        a.appendChild(document.createTextNode(shown));
         if (it.label && id !== 'admin') a.appendChild(el('span', 'nav-dot'));
         host2.appendChild(a);
       });

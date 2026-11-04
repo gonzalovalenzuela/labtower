@@ -56,6 +56,16 @@ class Nav(unittest.TestCase):
         for k in ("lt-nav-mode", "function wizard", "function classic", "aria-modal", "menuType", "function placeBtn", "function sideLayout", "function barRight"): self.assertIn(k, nav, k)
         for k in (".gwiz", ".gwarn", ".nav-chip", ".gmt", "body.gtb-none .topbar", "body.gside-none .sidebar", "body:not(.has-gbar) .gbar"): self.assertIn(k, css, k)
 
+    def test_overview_strip_fits_on_one_line(self):
+        # ES: la tira del Resumen (menú clásico) usa nombres cortos y el completo en title/aria-label; con 13 px midió 999 de 1288 px.
+        # EN: the Overview strip (classic menu) uses short names with the full one in title/aria-label; at 13 px it measured 999 of 1288 px.
+        nav = (ROOT / "assets" / "nav.js").read_text(); css = (ROOT / "assets" / "nav.css").read_text()
+        self.assertIn("strip ? name.replace(/ (Monitor|Console|Panel)$/, '') : name", nav)
+        self.assertIn("a.title = name; a.setAttribute('aria-label', name);", nav)
+        self.assertIn(".navstrip{display:flex;flex-wrap:wrap;gap:8px 12px;", css)
+        self.assertIn(".nav-grp{display:inline-flex;flex-wrap:wrap;gap:4px;", css)
+        self.assertIn("gap:5px;padding:5px 10px;", css)
+
     def test_overview_vpn_card_shows_only_the_count(self):
         ov = (ROOT / "overview" / "static" / "app.js").read_text()
         fn = ov[ov.index("function renderVPN"):ov.index("return sev;", ov.index("function renderVPN"))]
