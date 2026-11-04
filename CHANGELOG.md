@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.7a — 2026-11-04
+
+- **Arreglo:** el estado del respaldo SFTP quedaba vacío cada hora en servidores con el registro en RAM (DietPi vacía /var/log). El estado, el resultado de la verificación y el registro de restauraciones ahora se guardan en /var/lib/labtower/state y se migran solos al actualizar.
+- **Mejora:** si el archivo de estado está vacío, `labtower-sftp-backup status` y el panel lo tratan como «aún no corrió» en lugar de «ilegible».
+
 ## 2.1.7 — 2026-11-04
 
 - **Nuevo:** navegación unificada. Barra superior con logo (Inicio), grupo actual y selector de módulo con su estado (forma y texto, no solo color), o menú lateral clásico; un asistente permite elegir la primera vez y «Tipo de menú» lo cambia después. En móvil hay barra inferior. Un aviso con enlaces aparece bajo la barra del módulo cuando algún módulo tiene avisos o fallas. El menú muestra solo los módulos con permiso y los que el admin no apagó.
