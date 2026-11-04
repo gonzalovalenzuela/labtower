@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.6p — 2026-11-04
+
+- **Arreglo:** Net Monitor: guardar los ajustes de Pi-hole con la contraseña en blanco borraba la contraseña guardada y Pi-hole quedaba desconectado sin avisar. Ahora una contraseña vacía conserva la guardada (el campo lo indica) y, si no hay ninguna guardada, pide escribirla.
+- **Mejora:** WAN Monitor: la tarjeta Connection y el panel lateral muestran los días desde el último cambio de IP en lugar de la fecha; la fecha exacta queda en el historial.
+
 ## 2.1.6o — 2026-11-04
 
 - **Mejora:** WAN Monitor: la fecha desde la que se conoce la IP pública se edita en Settings (formato dd-mm-aaaa) y no desde la tarjeta del historial.
