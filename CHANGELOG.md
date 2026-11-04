@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.7b — 2026-11-04
+
+- **Arreglo:** el campo del código de verificación (2FA) del inicio de sesión del Resumen aparecía fuera de la tarjeta y se quedaba en la página después de entrar. Ahora queda bajo la contraseña y desaparece al iniciar sesión.
+- **Cambio:** Resumen: se quitó la fila de botones de módulos; queda el filtro «Solo con problemas».
+- **Mejora:** en el móvil, la barra inferior de todas las secciones tiene el botón «Salir».
+- **Mejora:** la cookie de sesión guardada de los switches se crea ya con permiso 600.
+- **Mejora:** README: instalación en una VM o en una Raspberry Pi, con el enlace de la 2.1.7.
+
 ## 2.1.7a — 2026-11-04
 
 - **Arreglo:** el estado del respaldo SFTP quedaba vacío cada hora en servidores con el registro en RAM (DietPi vacía /var/log). El estado, el resultado de la verificación y el registro de restauraciones ahora se guardan en /var/lib/labtower/state y se migran solos al actualizar.
