@@ -30,7 +30,7 @@ input.err{border-color:var(--red);box-shadow:0 0 0 3px var(--red-dim)}
 .sb-ver{font-size:10px;color:var(--text-dim);font-family:var(--mono)}
 .sb-sec{padding:14px 10px 6px}
 .sb-lbl{font-size:10px;font-weight:600;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;padding:0 8px;margin-bottom:3px}
-.nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;color:var(--text-mid);font-size:13.5px;font-weight:500;transition:all .15s;text-decoration:none}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;color:var(--text-mid);font-size:12.5px;font-weight:500;transition:all .15s;text-decoration:none}
 .nav-item svg{width:15px;height:15px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:2}
 .nav-item:hover{background:var(--bg);color:var(--text)}
 .nav-item.active{background:var(--blue-dim);color:var(--blue)}
