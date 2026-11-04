@@ -229,3 +229,43 @@ body.kiosk #c-rules{display:none!important}
 .rl-act{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .rl-msg{color:var(--red);font-size:.78rem}
 .rl-save{background:var(--blue);color:#fff;border-color:var(--blue)}
+
+/* Barra común (idioma, tema, reloj, usuario, salir): mismo aspecto que en los demás módulos. EN: Common bar: same look as in the other modules. */
+.topbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;padding:8px 0}
+.topbar-title{font-size:14px;font-weight:600;color:var(--text)}
+.tb-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}
+#clock{font-family:var(--mono);font-size:12px;color:var(--text-dim)}
+.btn-logout{background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px;line-height:1;transition:color .15s;display:flex;align-items:center}
+.btn-logout svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2}
+.btn-logout:hover{color:var(--red)}
+.topbar-user{display:flex;align-items:center;gap:7px;padding:5px 10px 5px 6px;background:var(--bg);border:1px solid var(--border);border-radius:99px}
+.topbar-avatar{width:24px;height:24px;border-radius:50%;background:var(--blue-dim);color:var(--blue);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.topbar-user-info{display:flex;flex-direction:column;line-height:1.2}
+.topbar-user-name{font-size:12px;font-weight:600;color:var(--text)}
+.topbar-user-role{font-size:10px;color:var(--text-dim)}
+.theme-btns{display:flex;gap:6px;align-items:center}
+.theme-btn{background:transparent;border:1px solid var(--border);border-radius:var(--r-sm);font-family:var(--sans);font-size:10px;font-weight:600;color:var(--text-dim);cursor:pointer;padding:5px 8px;transition:all .15s;display:flex;align-items:center;gap:3px}
+.theme-btn svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0}
+.theme-btn.active{background:var(--blue-dim);border-color:var(--blue);color:var(--blue)}
+.lang-btns{display:flex;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden}
+.lang-btn{background:transparent;border:none;font-family:var(--mono);font-size:10px;font-weight:700;color:var(--text-dim);cursor:pointer;padding:4px 8px;transition:all .15s;letter-spacing:.5px}
+.lang-btn:hover{color:var(--text)}
+.lang-btn.active{background:var(--blue);color:#fff}
+body.kiosk .topbar{display:none}
+
+/* Estado por módulo: chips (forma + texto + color, no solo color). EN: per-module status chips (shape + text + colour, not colour alone). */
+.chips{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px}
+.chips-l{font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--text-dim)}
+.chips-row{display:flex;gap:8px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:99px;border:1px solid var(--border-b);background:var(--surface);color:var(--text);font:600 13px var(--sans);cursor:pointer;transition:border-color .15s,background .15s}
+.chip:hover{border-color:var(--blue)}
+.chip:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.chip.ok .chip-s{color:var(--green)}.chip.warn{background:var(--amber-dim);border-color:var(--amber)}.chip.warn .chip-s{color:var(--amber)}
+.chip.crit{background:var(--red-dim);border-color:var(--red)}.chip.crit .chip-s{color:var(--red)}
+.chip-n{font-weight:500;color:var(--text-mid);font-size:12px}
+.chips-f{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-mid);cursor:pointer}
+.only-prob .grid .card[data-sev=ok]{display:none}
+.card.flash{animation:cflash 1.2s ease}
+@keyframes cflash{0%,60%{box-shadow:0 0 0 3px var(--blue)}100%{box-shadow:var(--shadow)}}
+@media (prefers-reduced-motion:reduce){.card.flash{animation:none;outline:2px solid var(--blue)}}
+body.kiosk .chips{display:none}

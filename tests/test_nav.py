@@ -80,6 +80,17 @@ class Nav(unittest.TestCase):
         self.assertIn('id="tb-actions"', (wan / "index.html").read_text())
         self.assertIn("act.appendChild(b)", (wan / "app.js").read_text())
 
+    def test_overview_uses_the_common_bar_and_status_chips(self):
+        """El Resumen tiene la misma barra común que los demás módulos (idioma, tema, reloj, usuario, salir) y chips de estado por módulo."""
+        ov = ROOT / "overview" / "static"
+        html, js = (ov / "index.html").read_text(), (ov / "app.js").read_text()
+        for needle in ('class="lang-btns"', 'class="theme-btns"', 'id="clock"', 'class="topbar-user"', 'class="btn-logout"', 'id="chips"', 'id="only-prob"'):
+            self.assertIn(needle, html)
+        top = html[html.index('<div class="top">'):html.index('id="attn"')]
+        for old in ('id="bl"', "data-theme-toggle", 'id="bo"'):
+            self.assertNotIn(old, top)                                  # no duplicated controls in the page header
+        self.assertIn("function renderChips", js); self.assertEqual(js.count("modSev(mods,"), 9)
+
     def test_every_page_has_a_favicon(self):
         for d in (*SIDE, "overview"):
             self.assertIn('rel="icon"', (ROOT / d / "static" / "index.html").read_text(), d)
