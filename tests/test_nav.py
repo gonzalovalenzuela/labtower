@@ -65,6 +65,7 @@ class Nav(unittest.TestCase):
         """En el modo de barra superior #tb-sub se oculta (solo texto): los botones de cada módulo no pueden vivir ahí, y la barra del módulo
         se vuelve a evaluar cuando le aparecen botones después de cargar los datos."""
         nav = (ROOT / "assets" / "nav.js").read_text()
+        self.assertIn("gbar-act", nav); self.assertIn(".gbar-act", (ROOT / "assets" / "nav.css").read_text())      # action buttons go up to the top bar
         self.assertIn("tb.gobs = new MutationObserver", nav); self.assertIn("function ownControls", nav)
         for d in SIDE:
             app = ROOT / d / "static" / "app.js"
@@ -73,6 +74,8 @@ class Nav(unittest.TestCase):
             for i, l in enumerate(lines):
                 if "tb-sub" in l:
                     self.assertIsNone(re.search(r"\bsub\.appendChild\(b\w*\)", " ".join(lines[i:i + 3])), f"{d}: botón dentro de #tb-sub (línea {i + 1})")
+        self.assertIn("button.lt-btn", (ROOT / "assets" / "nav.css").read_text())                 # one look for every module action button
+        self.assertIn("lt-btn", (ROOT / "wan-monitor" / "static" / "app.js").read_text()); self.assertIn('class="lt-btn"', (ROOT / "net-monitor" / "static" / "index.html").read_text())
         wan = (ROOT / "wan-monitor" / "static")
         self.assertIn('id="tb-actions"', (wan / "index.html").read_text())
         self.assertIn("act.appendChild(b)", (wan / "app.js").read_text())

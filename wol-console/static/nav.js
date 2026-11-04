@@ -325,6 +325,7 @@
     (st.moved || []).reverse().forEach(function (m) { try { m.parent.insertBefore(m.node, m.next && m.next.parentNode === m.parent ? m.next : null); } catch (e) {} });
     st.moved = [];
     var oldR = st.bar.querySelector('.gbar-r'); if (oldR) oldR.remove();
+    var oldA = st.bar.querySelector('.gbar-act'); if (oldA) oldA.remove();
     document.body.classList.remove('gside-none', 'gtb-none', 'gtb-merged');
     if (!bar) return;
     // 2) panel lateral / side panel
@@ -344,6 +345,13 @@
     // 3) barra del módulo / module bar
     if (tb && (full || (wide && (none || !sb)))) {
       var nodes = Array.prototype.slice.call(tb.querySelectorAll(STD)).filter(function (n, i, a) { return !a.some(function (o) { return o !== n && o.contains(n); }); });
+      // Los botones de acción del módulo (p. ej. «Escanear red», «Ajustes») suben junto al selector de módulo, así la barra del módulo desaparece y todas las pantallas se ven iguales.
+      // EN: The module's action buttons (e.g. "Scan network", "Settings") go up next to the module selector, so the module bar disappears and every screen looks the same.
+      var acts = tb.querySelector('.tb-actions');
+      if (acts) {
+        var ga = el('div', 'gbar-act'); st.bar.insertBefore(ga, st.bar.querySelector('.gbar-r') || null);
+        st.moved.push({node: acts, parent: acts.parentNode, next: acts.nextSibling}); ga.appendChild(acts);
+      }
       if (nodes.length) {
         var r = barRight();
         nodes.forEach(function (n) { st.moved.push({node: n, parent: n.parentNode, next: n.nextSibling}); r.appendChild(n); });

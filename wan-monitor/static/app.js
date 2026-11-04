@@ -597,7 +597,7 @@ function renderMain(){
   // Los botones van en #tb-actions: la barra con menú superior oculta #tb-sub (solo texto informativo) y los botones se perdían.
   // EN: Buttons go in #tb-actions: the top-bar menu mode hides #tb-sub (informative text only) and the buttons were lost.
   const act=$('tb-actions');act.textContent='';
-  if(canAdmin()){const b=document.createElement('button');b.className='btn-secondary';b.textContent=t('settings');b.onclick=openSettings;act.appendChild(b);}
+  if(canAdmin()){const b=document.createElement('button');b.className='lt-btn';b.textContent=t('settings');b.onclick=openSettings;act.appendChild(b);}
   if(!s){box.innerHTML='<div class="state-msg"><strong>'+esc(t('connecting'))+'</strong>'+esc(t('connectingMsg'))+'</div>';return;}
   const si=stateInfo(s),up=W.uptime||{};
   const pc=v=>v==null?null:v,upTxt=v=>v==null?'—':v+'%';

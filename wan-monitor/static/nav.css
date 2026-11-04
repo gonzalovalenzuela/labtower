@@ -98,6 +98,8 @@ body.has-gbar .sidebar .sb-logo{display:none}
 body.gside-none .sidebar{display:none}
 body.gside-none .main{margin-left:0}
 body.gside-none .nav-toggle{display:none}
+.gbar-act{display:flex;align-items:center;gap:8px;margin-left:16px;min-width:0}
+.gbar-act .tb-actions{display:inline-flex;align-items:center;gap:8px}
 .gbar-r{margin-left:auto;display:flex;align-items:center;gap:8px;min-width:0}
 .gbar-r .sb-footer{margin:0;padding:0;border:0;background:none}
 .gbar-r .user-badge{margin:0;padding:4px 8px;gap:8px}
@@ -108,3 +110,13 @@ body.gtb-none .main{min-height:0}
 @media(max-width:1200px){.gbar-r #clock,.gbar-r #hclock,.gbar-r .theme-btn span,.gbar-r .topbar-user-info,.gbar-r .gmt-t{display:none}}
 @media(max-width:767px){.gbar-r{display:none}}
 #app .top .gmt-t{display:none}
+
+/* Botones de acción de los módulos (Escanear red, Ajustes, Wake All…): un solo aspecto en todas las pantallas. Primario = acento; el resto, neutro.
+   EN: Module action buttons (Scan network, Settings, Wake All…): one look on every screen. Primary = accent; the rest neutral. */
+button.lt-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;box-sizing:border-box;height:34px;padding:0 14px;width:auto;border-radius:8px;border:1px solid var(--border,#e3e8ef);background:var(--surface,#fff);color:var(--text,#1c2430);font:600 13px/1 var(--sans,system-ui,sans-serif);white-space:nowrap;cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+button.lt-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0}
+button.lt-btn:hover:not(:disabled){border-color:var(--teal,#14b8a6);color:var(--teal,#14b8a6)}
+button.lt-btn.lt-btn-primary{border-color:var(--teal,#14b8a6);color:var(--teal,#14b8a6)}
+button.lt-btn.lt-btn-primary:hover:not(:disabled){background:var(--teal,#14b8a6);color:#fff}
+button.lt-btn:focus-visible{outline:2px solid var(--teal,#14b8a6);outline-offset:2px}
+button.lt-btn:disabled{opacity:.55;cursor:not-allowed}
