@@ -211,7 +211,7 @@ def call(path, op, retries=6, **fields):
     """One request to the service. Retries briefly while it is (re)starting. Raises AuthUnavailable if it cannot be reached."""
     data = json.dumps({"op": op, **fields}, separators=(",", ":")).encode() + b"\n"
     last = None
-    for i in range(retries):
+    for _ in range(retries):
         try:
             s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             try:

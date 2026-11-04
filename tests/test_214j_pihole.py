@@ -30,7 +30,7 @@ class PinRenewal(unittest.TestCase):
         self.assertFalse(net._may_repin(now + 10, (now - 100, now - 5), now, same_id=True))     # an expired replacement is never taken
         self.assertFalse(net._may_repin(now + 10, None, now, same_id=True))
     def test_cert_validity_reads_a_real_certificate(self):
-        import subprocess, tempfile, os
+        import subprocess, tempfile
         with tempfile.TemporaryDirectory() as d:
             subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", d + "/k", "-out", d + "/c.pem", "-days", "2", "-subj", "/CN=t"], capture_output=True, check=True)
             der = subprocess.run(["openssl", "x509", "-in", d + "/c.pem", "-outform", "DER"], capture_output=True, check=True).stdout

@@ -95,8 +95,11 @@ class BaseDriver:
         if not self.session_file:
             return
         try:
-            self.jar.save(ignore_discard=True, ignore_expires=True)
+            # ES: el archivo se crea ya en modo 600 (sin ventana con permisos abiertos) y sin seguir enlaces.
+            # EN: the file is created already as 600 (no window with open permissions) and without following links.
+            os.close(os.open(self.session_file, os.O_WRONLY | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600))
             os.chmod(self.session_file, 0o600)
+            self.jar.save(ignore_discard=True, ignore_expires=True)
         except OSError:
             pass
 

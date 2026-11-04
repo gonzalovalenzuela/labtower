@@ -74,7 +74,7 @@ def speed_stats(rows, plan_down, plan_up, now, tz_hour):
                      "up": round(mean(v, 2), 1) if mean(v, 2) is not None else None} for k, v in sorted(days.items())]
     if pd_ or pu:
         n = 0
-        for t, d, u in reversed(ok):
+        for _t, d, u in reversed(ok):
             low = (pd_ and d is not None and d < pd_ * LOW_PLAN) or (pu and u is not None and u < pu * LOW_PLAN)
             if not low: break
             n += 1

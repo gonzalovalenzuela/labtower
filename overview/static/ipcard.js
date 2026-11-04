@@ -1,8 +1,8 @@
 /* Tarjeta con los datos de Net Monitor al pasar el ratón por una IP (o nombre de equipo).
-   Uso: <span data-nethost="192.168.0.10">…</span>; con data-nethost-click el clic (o toque, en pantallas táctiles) abre/lleva al detalle.
+   Uso: <span data-nethost="192.0.2.10">…</span>; con data-nethost-click el clic (o toque, en pantallas táctiles) abre/lleva al detalle.
    Todo se construye con textContent (nada de innerHTML): los datos de la red nunca se interpretan como HTML.
    EN: Card with Net Monitor data when hovering an IP (or host name).
-   Usage: <span data-nethost="192.168.0.10">…</span>; with data-nethost-click a click (or tap on touch screens) opens / goes to the detail.
+   Usage: <span data-nethost="192.0.2.10">…</span>; with data-nethost-click a click (or tap on touch screens) opens / goes to the detail.
    Everything is built with textContent (no innerHTML): network data is never parsed as HTML. */
 (function () {
   'use strict';

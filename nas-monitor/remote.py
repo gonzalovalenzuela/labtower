@@ -526,7 +526,7 @@ def omv_collect(cfg, prev, learn=None):
         o["temp"] = t if t is not None and 0 < t < 150 else None
         o["state"] = clean(s.get("overallstatus") or "", 40).upper() or None
     disks = []
-    for i, (f, o) in enumerate(sorted(by_file.items(), key=lambda kv: kv[1]["name"]), 1):
+    for i, (_f, o) in enumerate(sorted(by_file.items(), key=lambda kv: kv[1]["name"]), 1):
         lv = _OMV_SMART_LV.get(o["state"] or "UNKNOWN", "warn") if o["state"] else "ok"
         disks.append({"idx": str(i), "name": o["name"], "model": o["model"], "type": o["type"], "status": None,
                       "status_text": o["state"] or "OK", "lv": lv, "temp": o["temp"]})

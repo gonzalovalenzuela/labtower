@@ -104,8 +104,8 @@ function setLang(l){
 
 // Estado: sesión, equipos, filtros activos, búsqueda y equipo expandido.
 // EN: State: session, devices, active filters, search and expanded device.
-// Enlace profundo desde otras páginas: /net/?ip=192.168.0.10 abre ese equipo expandido.
-// EN: Deep link from other pages: /net/?ip=192.168.0.10 opens that device expanded.
+// Enlace profundo desde otras páginas: /net/?ip=192.0.2.10 abre ese equipo expandido.
+// EN: Deep link from other pages: /net/?ip=192.0.2.10 opens that device expanded.
 let _deepIp=(()=>{try{const v=new URLSearchParams(location.search).get('ip')||'';return /^\d{1,3}(\.\d{1,3}){3}$/.test(v)?v:null}catch(e){return null}})();
 let pveByMac=new Map(), pveByIp=new Map(), pveByName=new Map(), pveTs=0;
 let ME=null, scanNetwork='', scanRunning=false, hosts=[], filterOs='ALL', filterType='ALL', filterStatus='ALL', searchQ='', expanded=null, pollTimer=null;

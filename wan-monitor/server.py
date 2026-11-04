@@ -77,7 +77,7 @@ def _https_url(u, what):
     u = str(u or "").strip()
     p = urlparse(u)
     if p.scheme != "https" or p.username or p.password or not (auth.valid_host(p.hostname or "") and auth.valid_target(p.hostname)): raise ValueError(f"{what} must be an https:// address")
-    try: p.port
+    try: _ = p.port          # validates the port: raises ValueError if invalid
     except ValueError: raise ValueError(f"Invalid port in {what}")
     if len(u) > 300 or re.search(r"[\x00-\x20\x7f]", u): raise ValueError(f"Invalid {what}")
     return u
