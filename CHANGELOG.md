@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.7e — 2026-11-04
+
+- **Arreglo:** Resumen, modo kiosko: en la tarjeta VPN Monitor, «N connected» queda en una sola línea y alineado.
+
 ## 2.1.7d — 2026-11-04
 
 - **Arreglo:** instalador: al actualizar ya no devuelve todos los datos al usuario «labtower» (mostraba «data of a previous installation handed back to labtower» en cada actualización). Eso solo ocurre tras un purge.
