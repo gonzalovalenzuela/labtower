@@ -44,7 +44,8 @@ import auth      # valid_target(): the switch address cannot be this machine or 
 
 
 class SessionExpired(Exception):
-    pass
+    def __init__(self, msg="the switch sent its login page again right after logging in"):
+        super().__init__(msg)
 
 
 def md5(s):
@@ -69,15 +70,35 @@ def _num(v):
 class BaseDriver:
     FORBIDDEN = set()
 
-    def __init__(self, name, host, user, password, timeout=8, gap=0.3):
+    def __init__(self, name, host, user, password, timeout=8, gap=0.3, session_file=None):
         self.name, self.host = name, host
         self.base = f"http://{host}/"
         self.user, self.password = user, password
         self.timeout, self.gap = timeout, gap
-        self.jar = http.cookiejar.CookieJar()
+        self.session_file = session_file
+        self.jar = http.cookiejar.MozillaCookieJar(str(session_file)) if session_file else http.cookiejar.CookieJar()
+        self.logged_in = False
+        # ES: Estos switches dejan abierta la sesión de quien inició sesión y no la entregan de nuevo a otro cliente mientras siga viva (cada lectura la
+        #     mantiene viva). Al reiniciar el servicio la cookie se perdía y el switch quedaba «inaccesible»: ahora se guarda (modo 600) y se reutiliza.
+        # EN: These switches keep the logged-in session open and do not hand it out again to another client while it is alive (every read keeps it alive).
+        #     On a service restart the cookie was lost and the switch stayed "unreachable": it is now stored (mode 600) and reused.
+        if session_file:
+            try:
+                self.jar.load(ignore_discard=True, ignore_expires=True)
+                self.logged_in = len(self.jar) > 0
+            except (OSError, http.cookiejar.LoadError):
+                pass
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar))
         self.lock = threading.Lock()  # estos httpd no toleran peticiones concurrentes / these httpd cannot take parallel requests
-        self.logged_in = False
+
+    def _save_session(self):
+        if not self.session_file:
+            return
+        try:
+            self.jar.save(ignore_discard=True, ignore_expires=True)
+            os.chmod(self.session_file, 0o600)
+        except OSError:
+            pass
 
     def _check(self, path):
         clean = path.split("?")[0]
@@ -109,10 +130,12 @@ class BaseDriver:
         with self.lock:
             if not self.logged_in:
                 self.login()
+                self._save_session()
             try:
                 return self._fetch(path, data)
             except SessionExpired:
                 self.login()
+                self._save_session()
                 return self._fetch(path, data)
 
     def snapshot(self, with_macs=True):
@@ -638,13 +661,16 @@ def est_factor(cfg):
         return EST_DEFAULT
 
 
-def build_driver(cfg):
+def build_driver(cfg, session_dir=None):
     """Driver a partir de una entrada de configuración. / Driver from a configuration entry."""
     d = cfg.get("driver")
     if d == "snmp":
         return SNMPDriver(cfg["name"], cfg["host"], cfg.get("community") or "", port=int(cfg.get("port") or 161))
     if d in ("zx", "hc"):
         kw = {"mac_paginate": bool(cfg.get("mac_paginate"))} if d == "hc" else {}
+        if session_dir:                      # one file per switch and per host/user: a changed address or account never reuses another session
+            tag = md5(f"{cfg.get('host')}|{cfg.get('user') or 'admin'}")[:10]
+            kw["session_file"] = Path(session_dir) / f"sw-{re.sub(r'[^A-Za-z0-9_-]', '', str(cfg.get('id') or cfg['name']))[:40]}-{tag}.cookies"
         return DRIVERS[d](cfg["name"], cfg["host"], cfg.get("user") or "admin", cfg.get("password") or "", **kw)
     raise ValueError(f"driver desconocido: {d}")
 
@@ -971,14 +997,18 @@ class Manager:
                 want_macs = time.time() - rec["macs_ts"] >= MAC_EVERY
             try:
                 if drv is None:
-                    drv = build_driver(cfg)
+                    drv = build_driver(cfg, self.dir)
                 snap = drv.snapshot(with_macs=want_macs)
                 self._ingest(sid, cfg, snap, want_macs)
             except Exception as e:  # noqa: BLE001
                 if drv is not None:
                     drv.logged_in = False
                 self._fail(sid, cfg, e)
-            w.ev.wait(self.poll_seconds())
+            with self.lock:
+                fails = self.rec.get(sid, {}).get("fails", 0)
+            # Con sesión rechazada varias veces seguidas se espera más: sondear sin parar mantiene viva la sesión vieja del switch.
+            # EN: After several rejected sessions in a row, wait longer: polling non-stop keeps the switch's old session alive.
+            w.ev.wait(self.poll_seconds() * (min(10, fails) if fails >= 3 else 1))
             w.ev.clear()
 
     # ---- ingestión / ingestion

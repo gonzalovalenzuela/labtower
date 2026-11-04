@@ -133,6 +133,28 @@ class Drivers(unittest.TestCase):
         with self.assertRaises(ValueError): d._open("clear_statistics.json")
         with self.assertRaises(ValueError): d._open("clear_statistics.json?x=1")
 
+    def test_zx_session_survives_a_restart(self):
+        import tempfile, os
+        class H(ZXHandler):
+            def do_GET(self):
+                path = self.path.lstrip("/").split("?")[0]; self.state["hits"].append(path)
+                if path == "authorize": body, ck = "ok", "sid=abc123; Path=/"
+                elif "sid=abc123" not in (self.headers.get("Cookie") or ""): body, ck = "<script>location='login.html'</script>", None   # no session: login page
+                else: body, ck = json.dumps(zx_site(self.state).get(path, {})), None
+                b = body.encode(); self.send_response(200); self.send_header("Content-Length", str(len(b)))
+                if ck: self.send_header("Set-Cookie", ck)
+                self.end_headers(); self.wfile.write(b)
+        H.state.update(tick=0, temp=60, new_err=0, expire_once=False, hits=[])
+        srv, host = serve(H)
+        with tempfile.TemporaryDirectory() as d:
+            f = os.path.join(d, "s.cookies")
+            sw.ZXDriver("zx", host, "admin", "pw", gap=0, session_file=f).snapshot(with_macs=False)
+            self.assertEqual(oct(os.stat(f).st_mode & 0o777), "0o600")
+            H.state["hits"].clear()
+            sw.ZXDriver("zx", host, "admin", "pw", gap=0, session_file=f).snapshot(with_macs=False)      # "restart": new driver, same file
+            self.assertEqual(H.state["hits"].count("authorize"), 0)                                        # reused the stored session, no new login
+        srv.shutdown(); srv.server_close()
+
     def test_hc_snapshot_and_mac_clear_guard(self):
         HCHandler.posts.clear()
         srv, host = serve(HCHandler)
@@ -483,7 +505,7 @@ class ManagerTests(unittest.TestCase):
         srv, host = serve(ZXHandler)
         m = sw.Manager(tempfile.mkdtemp(), hooks={})
         orig = sw.build_driver
-        sw.build_driver = lambda cfg: sw.ZXDriver(cfg["name"], cfg["host"], cfg["user"], cfg["password"], gap=0)
+        sw.build_driver = lambda cfg, sd=None: sw.ZXDriver(cfg["name"], cfg["host"], cfg["user"], cfg["password"], gap=0)
         try:
             m.start()
             m.save_switch({"name": "zx", "driver": "zx", "host": host, "user": "admin", "password": "pw"})
