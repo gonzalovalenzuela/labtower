@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.7d — 2026-11-04
+
+- **Arreglo:** instalador: al actualizar ya no devuelve todos los datos al usuario «labtower» (mostraba «data of a previous installation handed back to labtower» en cada actualización). Eso solo ocurre tras un purge.
+- **Mejora:** Resumen, menú clásico: el título lleva el icono de LabTower y la barra superior queda alineada con las tarjetas.
+
 ## 2.1.7c — 2026-11-04
 
 - **Arreglo:** auth, labtower-resetpw y Net Monitor cargan en Python 3.9, la versión mínima del paquete (anotaciones «X | None»). Un test nuevo revisa el código empaquetado con la gramática de 3.9.

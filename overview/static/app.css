@@ -232,10 +232,11 @@ body.kiosk #c-rules{display:none!important}
 .rl-save{background:var(--blue);color:#fff;border-color:var(--blue)}
 
 /* Barra común (idioma, tema, reloj, usuario, salir): mismo aspecto que en los demás módulos. EN: Common bar: same look as in the other modules. */
-.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;min-height:54px;row-gap:6px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:50}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 max(24px,calc((100% - 1320px)/2 + 16px));min-height:54px;row-gap:6px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:50}
 /* El título ya está en la barra: el encabezado de contenido solo se ve en modo kiosco. EN: the title is in the bar already: the content heading only shows in kiosk mode. */
 body:not(.kiosk) .top h1{display:none}
-.topbar-title{font-size:14px;font-weight:600;color:var(--text)}
+.topbar-title{display:inline-flex;align-items:center;gap:10px;font-size:14px;font-weight:600;color:var(--text)}
+.topbar-logo{width:24px;height:24px;border-radius:6px;flex-shrink:0}
 .tb-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}
 #clock{font-family:var(--mono);font-size:12px;color:var(--text-dim)}
 .btn-logout{background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px;line-height:1;transition:color .15s;display:flex;align-items:center}

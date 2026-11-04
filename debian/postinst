@@ -123,7 +123,9 @@ done
 # EN: The top folder is created by root; everything inside is created by the service user (so root never chowns/chmods through a planted link).
 # ES: Tras un purge los datos quedan en root (700): se devuelven al usuario del servicio. Solo en ese estado (carpeta de root, sin enlaces), cuando ningún servicio corre ni puede haber plantado nada.
 # EN: After a purge the data is root-owned (700): hand it back to the service user. Only in that state (root-owned folder, not a link), when no service is running or could have planted anything.
-if [ -d "$DATA_DIR" ] && [ ! -L "$DATA_DIR" ] && [ "$(stat -c %u "$DATA_DIR")" = "0" ]; then
+# ES: Tras un purge queda root:root con modo 700; en una instalación normal es root:labtower 750 y NO se toca (antes se devolvía todo a «labtower» en cada actualización).
+# EN: After a purge it is root:root, mode 700; in a normal install it is root:labtower 750 and is NOT touched (it used to hand everything back to "labtower" on every upgrade).
+if [ -d "$DATA_DIR" ] && [ ! -L "$DATA_DIR" ] && [ "$(stat -c '%u:%g:%a' "$DATA_DIR")" = "0:0:700" ]; then
     find "$DATA_DIR" -xdev -exec chown -h labtower:labtower {} +
     echo "  data of a previous installation handed back to labtower"
 fi
