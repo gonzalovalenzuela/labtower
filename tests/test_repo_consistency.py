@@ -39,12 +39,22 @@ class SharedAssets(unittest.TestCase):
                 digests = {m: hashlib.sha256(p.read_bytes()).hexdigest() for m in MODULES if (p := ROOT / m / "static" / name).is_file()}
                 if name.startswith("nav"):
                     extras = (ROOT / "assets" / name,)
+                elif name == "footer.js":           # la página de inicio también la lleva / the home page carries it too
+                    extras = (ROOT / "home" / name,)
                 elif name.startswith("theme"):      # además de la copia maestra y la página de inicio / plus the master copy and the home page
                     extras = (ROOT / "assets/theme" / name, ROOT / "home" / name)
                 else: extras = ()
                 for extra in extras: digests[str(extra.relative_to(ROOT))] = hashlib.sha256(extra.read_bytes()).hexdigest()
                 self.assertGreaterEqual(len(digests), 2, f"{name} no se encontró en varios módulos")
                 self.assertEqual(len(set(digests.values())), 1, f"{name} difiere entre módulos: {digests}")
+
+    def test_every_page_shows_the_version_footer(self):
+        """Todas las páginas con sesión (módulos, Resumen/kiosko, inicio, cambio de contraseña) cargan footer.js."""
+        pages = [ROOT / m / "static" / "index.html" for m in MODULES] + [ROOT / "home/index.html", ROOT / "auth/static/change-password.html"]
+        for page in pages:
+            with self.subTest(page=str(page.relative_to(ROOT))):
+                self.assertIn('src="footer.js"', page.read_text())
+                self.assertTrue((page.parent / "footer.js").is_file())
 
     def test_every_script_in_index_exists(self):
         for m in MODULES:

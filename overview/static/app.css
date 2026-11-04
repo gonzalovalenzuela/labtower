@@ -261,3 +261,5 @@ body.kiosk .topbar{display:none}
 /* Filtro «solo con problemas». EN: "only with problems" filter. */
 .chips-f{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-mid);cursor:pointer}
 .only-prob .grid .card[data-sev=ok]{display:none}
+.pc-footer{margin-top:auto;padding:14px 20px;text-align:center;font-size:11px;color:var(--text-dim);font-family:var(--mono);letter-spacing:.2px}
+.pc-ver{margin-top:18px;text-align:center;font-size:11px;color:var(--text-dim);font-family:var(--mono)}
