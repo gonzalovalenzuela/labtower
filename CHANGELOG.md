@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.6m — 2026-11-04
+
+- **Nuevo:** Resumen: fila de chips de estado por módulo (● ok, ▲ aviso, ■ falla, con el número de avisos). Un clic va a la tarjeta; Ctrl/⌘+clic abre el módulo. «Solo con problemas» oculta las tarjetas sanas y se recuerda.
+- **Mejora:** Resumen: usa la misma barra común que los demás módulos (idioma, tema, reloj, usuario, salir y 24H); con el menú de barra superior suben a la barra global.
+- **Mejora:** Net Monitor: auto-scan, limpieza de equipos sin conexión, SNMP y Pi-hole pasan a una ventana «Settings», como en WAN Monitor. «Scan network» y «Settings» suben a la barra superior.
+- **Mejora:** los botones de acción de los módulos (Scan network, Settings, Wake All) comparten un solo aspecto y suben a la barra global.
+- **Mejora:** una sola escala de texto en todos los módulos: cabecera de tabla 11 px / 600, celda 13 px, título de tarjeta 12 px, ítems del menú de WOL como los demás.
+- **Mejora:** Proxmox: «Días hasta llenarse» distingue «Reuniendo historial (X de 2 días necesarios)» de «No crece».
+- **Arreglo:** DNS Monitor: el texto de la prueba de resolución se borraba cada 5 s al redibujarse la página y el test no se ejecutaba.
+- **Arreglo:** WAN Monitor: la IP actual desaparecía del historial al ser más antigua que 30 días.
+
 ## 2.1.6l — 2026-11-03
 
 - **Arreglo:** en el modo de menú «barra superior» se perdía el botón «Ajustes» de WAN Monitor (la barra del módulo quedaba vacía u oculta). Ahora el botón vive fuera del texto que esa barra oculta y la barra se vuelve a evaluar cuando le aparecen botones después de cargar los datos. Se revisaron todos los módulos en 4 tamaños y no se perdía ningún otro control.
