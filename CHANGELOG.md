@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.6n — 2026-11-04
+
+- **Arreglo:** Net Monitor: el switch ZX quedaba «unreachable» tras cada reinicio o actualización (el switch no entregaba una sesión nueva mientras la anterior seguía viva). La sesión web se guarda (modo 600) y se reutiliza; tras varios rechazos seguidos se espera más entre intentos.
+- **Arreglo:** Net Monitor: Pi-hole dejaba de conectar cuando regeneraba su certificado propio. Si el nuevo trae el mismo sujeto y emisor se acepta, se vuelve a fijar y queda un evento; con otra identidad sigue rechazado. Si falla sin nombres conocidos reintenta al minuto, y el panel muestra el error de la consulta de dispositivos.
+- **Arreglo:** WAN Monitor: el historial de IP pública muestra el año y el registro más antiguo tiene un selector de fecha (administradores) para fijar desde cuándo se conoce. Una fecha editada a mano en `state.json` prevalece sobre la de la base de datos.
+- **Arreglo:** Resumen: la barra superior ocupa todo el ancho como en los demás módulos y el título ya no se repite; la tira de módulos salta de línea entre grupos.
+- **Arreglo:** el aviso «Attention» queda bajo la barra del módulo, alineado con el contenido, en vez de encima; en Net Monitor «Scan network» y «Settings» quedan junto al título.
+
 ## 2.1.6m — 2026-11-04
 
 - **Nuevo:** Resumen: fila de chips de estado por módulo (● ok, ▲ aviso, ■ falla, con el número de avisos). Un clic va a la tarjeta; Ctrl/⌘+clic abre el módulo. «Solo con problemas» oculta las tarjetas sanas y se recuerda.
