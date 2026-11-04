@@ -110,7 +110,7 @@ const LANG={
  "tooSoon": "Wait a few seconds before measuring again",
  "outages": "Outages",
  "noOutages": "No outages recorded",
- "traceBtn": "Traceroute", "traceTo": "Traceroute to {0} when the outage started", "traceNone": "No traceroute for this outage", "ipHistory": "Public IP history", "ipNow": "current", "noIpHistory": "No changes recorded yet",
+ "traceBtn": "Traceroute", "traceTo": "Traceroute to {0} when the outage started", "traceNone": "No traceroute for this outage", "ipHistory": "Public IP history", "ipSince": "Date this record started", "ipSinceSaved": "Date saved", "ipNow": "current", "noIpHistory": "No changes recorded yet",
  "stTitle": "Quality and availability",
  "stLatency": "Latency (percentiles)",
  "stP50": "Median",
@@ -301,7 +301,7 @@ const LANG={
  "tooSoon": "Espera unos segundos antes de volver a medir",
  "outages": "Cortes",
  "noOutages": "Sin cortes registrados",
- "traceBtn": "Traceroute", "traceTo": "Traceroute a {0} al empezar el corte", "traceNone": "Este corte no tiene traceroute", "ipHistory": "Historial de IP pública", "ipNow": "actual", "noIpHistory": "Aún no hay cambios registrados",
+ "traceBtn": "Traceroute", "traceTo": "Traceroute a {0} al empezar el corte", "traceNone": "Este corte no tiene traceroute", "ipHistory": "Historial de IP pública", "ipSince": "Fecha en que empezó este registro", "ipSinceSaved": "Fecha guardada", "ipNow": "actual", "noIpHistory": "Aún no hay cambios registrados",
  "stTitle": "Calidad y disponibilidad",
  "stLatency": "Latencia (percentiles)",
  "stP50": "Mediana",
@@ -584,9 +584,19 @@ function outagesCard(){
 }
 // Historial de cambios de IP pública (el más reciente primero).
 // EN: Public IP change history (newest first).
+function isoDay(ts){const d=new Date(ts*1000),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+function fmtFull(ts){const d=new Date(ts*1000);return d.toLocaleDateString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+PCT.time(d);}
+// Cambia la fecha de inicio del registro más antiguo (administradores). / EN: Change the start date of the oldest record (administrators).
+async function setIpSince(v){
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(v||'');if(!m)return;
+  const old=(W.ips||[]).slice(-1)[0],d=old?new Date(old.ts*1000):new Date();
+  const ts=Math.floor(new Date(+m[1],+m[2]-1,+m[3],d.getHours(),d.getMinutes(),0).getTime()/1000);
+  try{const r=await post('api/wan/ip/since',{ts});if(r.ok){W.ips=r.d.ips;toast(t('ipSinceSaved'));renderMain();}else toast(r.d.error||'Error',true);}
+  catch(e){toast(e.message,true);}
+}
 function ipHistoryCard(){
   const l=W.ips||[];
-  const rows=l.length?l.map((x,i)=>`<tr><td>${esc(fmtDate(x.ts))}</td><td>${esc(x.ip)}${i===0?' <span class="sum-sub">'+esc(t('ipNow'))+'</span>':''}${x.prev?'<br><span class="sum-sub">'+esc(t('ipWas'))+' '+esc(x.prev)+'</span>':''}</td></tr>`).join('')
+  const rows=l.length?l.map((x,i)=>`<tr><td>${esc(fmtFull(x.ts))}${canAdmin()&&i===l.length-1?`<br><input type="date" class="ip-since" max="${esc(isoDay(Date.now()/1000))}" value="${esc(isoDay(x.ts))}" aria-label="${esc(t('ipSince'))}" title="${esc(t('ipSince'))}" data-on-change="setIpSince" data-on-change-args='[{"@":"value"}]'>`:''}</td><td>${esc(x.ip)}${i===0?' <span class="sum-sub">'+esc(t('ipNow'))+'</span>':''}${x.prev?'<br><span class="sum-sub">'+esc(t('ipWas'))+' '+esc(x.prev)+'</span>':''}</td></tr>`).join('')
     :`<tr><td colspan="2" class="wan-empty">${esc(t('noIpHistory'))}</td></tr>`;
   return `<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('ipHistory'))}</div></div><div class="tbl-wrap"><table class="wan-table"><thead><tr><th>${esc(t('colStart'))}</th><th>IP</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
@@ -807,4 +817,4 @@ _i18nReady=true;
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ toggleTrace, closeModals, doLogin, logout, rtTypeChanged, runSpeed, saveSettings, testRouter, setLang, setRange, toggleCmp, setTheme, toggleNav });
+if (window.cspRegister) cspRegister({ setIpSince, toggleTrace, closeModals, doLogin, logout, rtTypeChanged, runSpeed, saveSettings, testRouter, setLang, setRange, toggleCmp, setTheme, toggleNav });

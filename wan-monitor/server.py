@@ -591,6 +591,30 @@ def backfill_ips():
     if added: log.info(f"public IP history: {added} earlier change(s) recovered from the events")
     return added
 
+# Fecha de inicio del registro más antiguo (el primero que se conoció). Si es el de la IP actual, también es «desde cuándo» tiene esa IP.
+# EN: Start date of the oldest record (the first one ever known). If it is the current IP's, it is also "since when" it has that IP.
+def set_ip_since(ts):
+    if not isinstance(ts, int) or isinstance(ts, bool) or not 946684800 <= ts <= int(time.time()):
+        raise ValueError("Invalid date")
+    rows = _db("SELECT ts,ip FROM wan_ips ORDER BY ts", fetch=True)
+    if not rows: raise ValueError("No IP recorded yet")
+    if len(rows) > 1 and ts >= rows[1][0]: raise ValueError("The date must be before the next change")
+    _db("UPDATE wan_ips SET ts=? WHERE ts=?", (ts, rows[0][0]))
+    if len(rows) == 1:                                          # the only record is the current IP: state keeps the same date
+        with S.lock:
+            S.ip_changed = ts
+            try: auth.write_json(STATE_FILE, {"ip": S.ip, "changed": ts, "prev": S.ip_prev})
+            except Exception as e: log.warning(f"could not store the state: {e}")
+
+# Si state.json trae una fecha para la IP actual distinta de la de su fila (editada a mano), manda state.json.
+# EN: If state.json holds a date for the current IP that differs from its row (edited by hand), state.json wins.
+def reconcile_ip_since():
+    if not S.ip or not isinstance(S.ip_changed, int): return
+    rows = _db("SELECT ts,ip FROM wan_ips ORDER BY ts DESC LIMIT 2", fetch=True)
+    if not rows or rows[0][1] != S.ip or abs(rows[0][0] - S.ip_changed) <= 5: return
+    if len(rows) > 1 and S.ip_changed <= rows[1][0]: return
+    _db("UPDATE wan_ips SET ts=? WHERE ts=?", (S.ip_changed, rows[0][0]))
+
 def recent_ips(limit=20):
     try:
         rows = _db("SELECT ts,ip,prev FROM wan_ips ORDER BY ts DESC LIMIT ?", (limit,), fetch=True)
@@ -621,6 +645,7 @@ def load_history() -> int:
         if S.ip and not _db("SELECT 1 FROM wan_ips LIMIT 1", fetch=True):        # first start with the history: seed it with the IP already known
             _db("INSERT OR REPLACE INTO wan_ips (ts,ip,prev) VALUES (?,?,?)", (S.ip_changed or int(time.time()), S.ip, S.ip_prev))
         backfill_ips()
+        reconcile_ip_since()
         return len(rows)
     except Exception as e:
         log.warning(f"could not load the history: {e}"); return 0
@@ -955,6 +980,14 @@ class H(BaseHTTPRequestHandler):
             who = (auth.get_session(tok) or {}).get("username", "?")
             auth.audit(who, "wan_config_changed", "wan-monitor", "router " + ("on" if cfg["router"]["enabled"] else "off") + " " + cfg["router"]["type"], auth.client_ip(self), module="wan")
             return self._json(200, {"config": public_config(cfg)})
+        if path == "/api/wan/ip/since":
+            if not auth.check_permission(tok, "wan", "admin"):
+                return self._json(403 if auth.check_permission(tok, "wan", "readonly") else 401, {"error": "Admin permission required"})
+            try: set_ip_since(body.get("ts"))
+            except ValueError as e: return self._json(400, {"error": str(e)})
+            who = (auth.get_session(tok) or {}).get("username", "?")
+            auth.audit(who, "wan_ip_since_changed", "wan-monitor", str(body.get("ts")), auth.client_ip(self), module="wan")
+            return self._json(200, {"ips": recent_ips()})
         if path == "/api/wan/router/test":
             if not auth.check_permission(tok, "wan", "admin"):
                 return self._json(403 if auth.check_permission(tok, "wan", "readonly") else 401, {"error": "Admin permission required"})

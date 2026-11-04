@@ -51,7 +51,7 @@ class Nav(unittest.TestCase):
         nav = (ROOT / "assets" / "nav.js").read_text(); css = (ROOT / "assets" / "nav.css").read_text()
         self.assertIn("'/logo.png'", nav); self.assertNotIn("'LT'", nav)             # the original icon, not text
         self.assertIn("function warnStrip", nav); self.assertIn("document.querySelector('.main')", nav)
-        self.assertIn("insertBefore(box, host.firstChild)", nav)                      # notice at the top of the content
+        self.assertIn("host.insertBefore(box, at)", nav)                                 # notice under the module bar (top of the content when there is none)
         self.assertIn("=== 'overview' ? null", nav)                                 # the Overview has its own notice
         for k in ("lt-nav-mode", "function wizard", "function classic", "aria-modal", "menuType", "function placeBtn", "function sideLayout", "function barRight"): self.assertIn(k, nav, k)
         for k in (".gwiz", ".gwarn", ".nav-chip", ".gmt", "body.gtb-none .topbar", "body.gside-none .sidebar", "body:not(.has-gbar) .gbar"): self.assertIn(k, css, k)
@@ -98,3 +98,12 @@ class Nav(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TopBarLayout(unittest.TestCase):
+    def test_overview_bar_is_full_width_and_net_actions_sit_by_the_title(self):
+        ov = (ROOT / "overview" / "static" / "app.css").read_text(); css = (ROOT / "assets" / "nav.css").read_text()
+        self.assertIn(".ov-in{max-width:1320px", ov); self.assertIn("position:sticky;top:0", ov.split(".topbar{")[1].split("}")[0])
+        self.assertIn("body:not(.kiosk) .top h1{display:none}", ov)
+        self.assertIn(".topbar>.tb-actions{", css); self.assertIn(".nav-grp{", css)
+

@@ -102,7 +102,8 @@
     });
     if (!bad.length) { if (box) box.remove(); return; }
     if (!box) { box = el('div', 'gwarn'); box.id = 'gwarn'; box.setAttribute('role', 'status'); }
-    if (box.parentNode !== host || host.firstChild !== box) host.insertBefore(box, host.firstChild);
+    var tbar = host.querySelector(':scope > .topbar'), at = tbar ? tbar.nextSibling : host.firstChild;   // bajo la barra del módulo, no encima / under the module bar, not above it
+    if (box.parentNode !== host || (tbar ? box.previousSibling !== tbar : host.firstChild !== box)) host.insertBefore(box, at);
     box.className = 'gwarn ' + (bad.some(function (b) { return b[1] === 'down'; }) ? 'down' : 'mid');
     box.textContent = '';
     box.appendChild(el('b', 'gwarn-t', tr.warn));
@@ -224,7 +225,7 @@
     var box = document.getElementById('nav-items'), strip = false;
     if (!box && o.self === 'overview') {
       box = document.getElementById('navstrip');
-      if (!box) { box = el('nav', 'navstrip nokiosk'); box.id = 'navstrip'; var w = document.getElementById('app'); if (w) w.insertBefore(box, document.getElementById('attn') || w.children[1] || null); }
+      if (!box) { box = el('nav', 'navstrip nokiosk'); box.id = 'navstrip'; var at = document.getElementById('attn'), w = at ? at.parentNode : document.getElementById('app'); if (w) w.insertBefore(box, at || w.children[1] || null); }
       strip = true;
     }
     if (!box) return;
@@ -234,7 +235,8 @@
     G.forEach(function (g) {
       var ids = g.items.filter(function (id) { return visible(id, me); });
       if (!ids.length) return;
-      if (strip) { if (!first) box.appendChild(el('span', 'nav-sep')); }
+      var host2 = box;
+      if (strip) { host2 = el('span', 'nav-grp'); box.appendChild(host2); }   // el salto de línea cae entre grupos / line breaks fall between groups
       else if (g.es) box.appendChild(el('div', 'nav-group-lbl', es ? g.es : g.en));
       first = false;
       ids.forEach(function (id) {
@@ -245,7 +247,7 @@
         a.appendChild(icon(it.svg, strip ? 14 : null));
         a.appendChild(document.createTextNode(it.label || (es ? it.es : it.en)));
         if (it.label && id !== 'admin') a.appendChild(el('span', 'nav-dot'));
-        box.appendChild(a);
+        host2.appendChild(a);
       });
     });
   }

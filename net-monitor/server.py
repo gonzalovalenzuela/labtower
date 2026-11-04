@@ -209,9 +209,25 @@ def _cert_validity(der: bytes):
 
 # Un certificado fijado que ya VENCIÓ puede reemplazarse solo por uno vigente (renovación normal de Pi-hole); si el fijado sigue vigente, un cambio es sospechoso y se rechaza.
 # EN: A pinned certificate that has already EXPIRED may be replaced by a currently valid one (normal Pi-hole renewal); if the pinned one is still valid, a change is suspicious and refused.
-def _may_repin(old_exp, new_validity, now=None) -> bool:
+def _may_repin(old_exp, new_validity, now=None, same_id=False) -> bool:
     now = int(now if now is not None else time.time())
-    return bool(old_exp) and old_exp < now and bool(new_validity) and new_validity[0] <= now <= new_validity[1]
+    valid_now = bool(new_validity) and new_validity[0] <= now <= new_validity[1]
+    if not valid_now:
+        return False
+    return bool(same_id) or (bool(old_exp) and old_exp < now)
+
+# Identidad del certificado (sujeto + emisor). Pi-hole puede regenerar su certificado autofirmado (reinicio, actualización, contenedor sin volumen): el
+# nuevo trae el mismo sujeto y emisor. Un certificado con otra identidad sigue rechazado.
+# EN: Certificate identity (subject + issuer). Pi-hole can regenerate its self-signed certificate (restart, update, container without a volume): the
+#     new one carries the same subject and issuer. A certificate with another identity is still refused.
+def _cert_ident(der: bytes) -> str:
+    try:
+        r = subprocess.run(["openssl", "x509", "-inform", "DER", "-noout", "-subject", "-issuer"],
+                           input=der, capture_output=True, timeout=5)
+        t = " | ".join(" ".join(l.split()) for l in r.stdout.decode().splitlines() if "=" in l)
+        return t[:300]
+    except Exception:
+        return ""
 
 PIHOLE_HOST_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?$")
 def _pihole_request(host: str, path: str, method: str = "GET",
@@ -234,18 +250,23 @@ def _pihole_request(host: str, path: str, method: str = "GET",
         fp = hashlib.sha256(conn.sock.getpeercert(True)).hexdigest()
         with _cfg_lock:
             cfg = load_config()
-            pins = cfg.setdefault("pihole_pins", {}); exps = cfg.setdefault("pihole_pin_exp", {})
+            pins = cfg.setdefault("pihole_pins", {}); exps = cfg.setdefault("pihole_pin_exp", {}); ids = cfg.setdefault("pihole_pin_id", {})
+            der = conn.sock.getpeercert(True)
             if pins.get(host) is None:
-                pins[host] = fp; v = _cert_validity(conn.sock.getpeercert(True)); exps[host] = v[1] if v else 0; save_config(cfg)
+                pins[host] = fp; v = _cert_validity(der); exps[host] = v[1] if v else 0; ids[host] = _cert_ident(der); save_config(cfg)
                 log.info(f"Pi-hole {host}: certificate fingerprint pinned ({fp[:16]}…)")
             elif pins[host] != fp:
-                v = _cert_validity(conn.sock.getpeercert(True))
-                if _may_repin(exps.get(host), v):
-                    pins[host] = fp; exps[host] = v[1]; save_config(cfg)
-                    log.warning(f"Pi-hole {host}: the pinned certificate had expired; pinned the renewed one ({fp[:16]}…)")
-                    auth.record_event("net", "warn", f"Pi-hole {host}: certificate renewed and re-pinned", "pihole_repin", host=host)
+                v = _cert_validity(der); ident = _cert_ident(der)
+                same = bool(ident) and ident == ids.get(host)
+                if _may_repin(exps.get(host), v, same_id=same):
+                    why = "the same subject and issuer" if same else "the pinned one had expired"
+                    pins[host] = fp; exps[host] = v[1]; ids[host] = ident; save_config(cfg)
+                    log.warning(f"Pi-hole {host}: the certificate was regenerated ({why}); pinned the new one ({fp[:16]}…)")
+                    auth.record_event("net", "warn", f"Pi-hole {host}: certificate changed ({why}) and was re-pinned", "pihole_repin", host=host)
                 else:
-                    raise RuntimeError(f"Pi-hole {host}: the certificate changed and the pinned one is still valid (nothing was sent). Press Save in Pi-hole settings to accept the new certificate")
+                    raise RuntimeError(f"Pi-hole {host}: the certificate changed to a different identity and the pinned one is still valid (nothing was sent). Press Save in Pi-hole settings to accept the new certificate")
+            elif host not in ids:                                  # pin from an older version: learn its identity while it still matches
+                ids[host] = _cert_ident(der); save_config(cfg)
         conn.request(method, path, body=data, headers=headers)
         r = conn.getresponse()
         raw = r.read()
@@ -385,6 +406,7 @@ def _refresh_pihole_cache():
             break  # Usar solo el primero que responda
         except Exception as e:
             log.warning(f"Pi-hole network/devices error {host}: {e}")
+            diag["errors"]["login"] = f"network/devices: {e}"[:200]
         finally:
             _pihole_logout(host, sid)
 
@@ -397,7 +419,7 @@ def _refresh_pihole_cache():
             return
         _pihole_cache.clear()
         _pihole_cache.update(new_cache)
-        _pihole_ts = time.time()
+        _pihole_ts = time.time() if answered else time.time() - PIHOLE_TTL + 60      # failed with nothing known: retry in 1 minute, not 5
 
 # Datos de una IP desde la caché; si tiene más de 5 minutos, la refresca en segundo plano sin bloquear.
 # EN: Data of an IP from the cache; if it is older than 5 minutes, it is refreshed in the background without blocking.
@@ -1834,7 +1856,7 @@ class H(BaseHTTPRequestHandler):
                 if "hosts" in body:
                     PIHOLE_HOSTS = body["hosts"]
                     cfg["pihole_hosts"] = body["hosts"]
-                cfg.pop("pihole_pins", None); cfg.pop("pihole_pin_exp", None)          # saving again = the administrator accepts the current certificates
+                cfg.pop("pihole_pins", None); cfg.pop("pihole_pin_exp", None); cfg.pop("pihole_pin_id", None)          # saving again = the administrator accepts the current certificates
                 save_config(cfg)
             # Refrescar cache inmediatamente
             if PIHOLE_PASS:

@@ -364,3 +364,4 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
 .wan-table tbody tr.trace-row td{white-space:normal}
 .wan-trace{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--text);white-space:pre;overflow-x:auto}
 .wan-link{background:none;border:0;padding:0;margin-top:2px;color:var(--wan);font:inherit;font-size:11px;cursor:pointer;text-decoration:underline}
+.ip-since{margin-top:4px;height:26px;padding:0 6px;border:1px solid var(--border);border-radius:var(--r-sm,6px);background:var(--surface);color:var(--text-mid);font:12px var(--mono)}

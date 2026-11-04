@@ -79,7 +79,8 @@ body.kiosk .gwarn{display:none}
 .nav-group-lbl{font-size:10px;font-weight:600;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;padding:12px 10px 4px}
 .nav-dot{width:8px;height:8px;border-radius:50%;margin-left:auto;flex-shrink:0;background:var(--text-dim);opacity:.45}
 .nav-dot.up{background:#22c55e;opacity:1}.nav-dot.mid{background:#eab308;opacity:1}.nav-dot.down{background:#ef4444;opacity:1}
-.navstrip{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 14px}
+.navstrip{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin:0 0 14px}
+.nav-grp{display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center}
 .nav-chip{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border:1px solid var(--border,#e3e8ef);border-radius:99px;font:inherit;font-size:13px;color:var(--text-mid,#5a6a85);text-decoration:none;background:var(--surface,#fff);cursor:pointer}
 .nav-chip svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
 .nav-chip:hover{color:var(--text,#1a2033);border-color:var(--border-b,#cdd4e0)}
@@ -98,6 +99,8 @@ body.has-gbar .sidebar .sb-logo{display:none}
 body.gside-none .sidebar{display:none}
 body.gside-none .main{margin-left:0}
 body.gside-none .nav-toggle{display:none}
+.topbar>.tb-actions{display:inline-flex;align-items:center;gap:8px;margin:0 auto 0 16px}
+.gbar-act .tb-actions{margin:0}
 .gbar-act{display:flex;align-items:center;gap:8px;margin-left:16px;min-width:0}
 .gbar-act .tb-actions{display:inline-flex;align-items:center;gap:8px}
 .gbar-r{margin-left:auto;display:flex;align-items:center;gap:8px;min-width:0}

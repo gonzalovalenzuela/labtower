@@ -4,7 +4,8 @@
 html{font-size:15px}
 body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh}
 a{color:inherit;text-decoration:none}
-.wrap{max-width:1320px;margin:0 auto;padding:16px}
+.wrap{padding:0}
+.ov-in{max-width:1320px;margin:0 auto;padding:16px}
 .top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
 .top h1{font-size:1.25rem;font-weight:700;letter-spacing:-.3px;display:flex;align-items:center;gap:10px}
 .logo{width:30px;height:30px;border-radius:8px;display:block}
@@ -75,7 +76,7 @@ svg.spark{width:100%;height:42px;display:block}
 /* EN: Kiosk mode: large text, no controls; meant for a fixed monitor or tablet. */
 body.kiosk{cursor:none}
 html.kiosk{font-size:19px;font-size:calc(19px*var(--kz,1))}
-body.kiosk .wrap{max-width:none;padding:18px 24px}
+body.kiosk .ov-in{max-width:none;padding:18px 24px}
 body.kiosk .nokiosk{display:none!important}
 body.kiosk .grid{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
 /* Mosaico: filas de 4 px, cada tarjeta ocupa las que necesita (ver masonry() en app.js). EN: masonry: 4 px rows, each card spans what it needs (see masonry() in app.js). */
@@ -93,7 +94,7 @@ body.kiosk .top{padding-right:17rem}
 /* Tablet chica o portátil (≤ 1399 px de ancho): tarjetas más compactas para que quepan más datos por pantalla. */
 /* EN: Small tablet or laptop (≤ 1399 px wide): more compact cards so more data fits on the screen. */
 @media (max-width:1399px){
-body.kiosk .wrap{padding:8px 10px}
+body.kiosk .ov-in{padding:8px 10px}
 body.kiosk .top{margin-bottom:8px}
 body.kiosk .grid{column-gap:8px;grid-column-gap:8px;grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
 body.kiosk .card.wide{margin-top:8px}
@@ -153,7 +154,7 @@ html.nfg.kiosk .legend.lg2>*+*{margin-top:0}
 .nfg .ev>*+*{margin-left:10px}
 .nfg .ev .t{margin-left:auto;padding-left:10px}
 .nfg .login>*+*{margin-top:12px}
-@media (max-width:640px){.wrap{padding:12px}.row .l{width:52px}.grid{grid-template-columns:1fr}}
+@media (max-width:640px){.ov-in{padding:12px}.row .l{width:52px}.grid{grid-template-columns:1fr}}
 
 
 /* iPad / pantallas táctiles y app web (Añadir a pantalla de inicio) / EN: iPad, touch screens and web-app mode */
@@ -231,7 +232,9 @@ body.kiosk #c-rules{display:none!important}
 .rl-save{background:var(--blue);color:#fff;border-color:var(--blue)}
 
 /* Barra común (idioma, tema, reloj, usuario, salir): mismo aspecto que en los demás módulos. EN: Common bar: same look as in the other modules. */
-.topbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;padding:8px 0}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;min-height:54px;row-gap:6px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:50}
+/* El título ya está en la barra: el encabezado de contenido solo se ve en modo kiosco. EN: the title is in the bar already: the content heading only shows in kiosk mode. */
+body:not(.kiosk) .top h1{display:none}
 .topbar-title{font-size:14px;font-weight:600;color:var(--text)}
 .tb-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}
 #clock{font-family:var(--mono);font-size:12px;color:var(--text-dim)}

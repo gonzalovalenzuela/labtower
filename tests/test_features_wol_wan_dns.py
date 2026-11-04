@@ -131,6 +131,30 @@ class WanTraceAndIps(unittest.TestCase):
         self.assertEqual([x["ip"] for x in wan.recent_ips()], ["198.51.100.2"])      # older one pruned, the current one kept even if it is old
         wan._db("DELETE FROM wan_ips")
 
+    def test_start_date_of_the_oldest_record_can_be_set(self):
+        wan._db("DELETE FROM wan_ips"); now = int(time.time()); o = (wan.S.ip, wan.S.ip_changed, wan.S.ip_prev, wan.auth.write_json)
+        wan.auth.write_json = lambda *a, **k: None
+        wan.S.ip, wan.S.ip_changed, wan.S.ip_prev = "198.51.100.9", None, None
+        try:
+            wan._db("INSERT INTO wan_ips (ts,ip,prev) VALUES (?,?,?)", (now, "198.51.100.9", None))
+            wan.set_ip_since(1696118400)                                                         # 2023-10-01
+            self.assertEqual(wan.recent_ips()[0]["ts"], 1696118400); self.assertEqual(wan.S.ip_changed, 1696118400)
+            for bad in (now + 9999, 5, "x", None, True): self.assertRaises(ValueError, wan.set_ip_since, bad)
+            wan._db("INSERT INTO wan_ips (ts,ip,prev) VALUES (?,?,?)", (now - 100, "198.51.100.10", "198.51.100.9"))
+            self.assertRaises(ValueError, wan.set_ip_since, now - 50)                           # not after the next change
+            wan.set_ip_since(1696118500); self.assertEqual([x["ts"] for x in wan.recent_ips()], [now - 100, 1696118500])
+        finally: wan.S.ip, wan.S.ip_changed, wan.S.ip_prev, wan.auth.write_json = o
+        wan._db("DELETE FROM wan_ips")
+
+    def test_a_date_edited_in_state_json_wins_over_the_row(self):
+        wan._db("DELETE FROM wan_ips"); now = int(time.time()); o = (wan.S.ip, wan.S.ip_changed)
+        wan._db("INSERT INTO wan_ips (ts,ip,prev) VALUES (?,?,?)", (now, "198.51.100.9", None))
+        wan.S.ip, wan.S.ip_changed = "198.51.100.9", 1696118400
+        try: wan.reconcile_ip_since()
+        finally: wan.S.ip, wan.S.ip_changed = o
+        self.assertEqual(wan.recent_ips()[0]["ts"], 1696118400)
+        wan._db("DELETE FROM wan_ips")
+
     def test_wan_reads_only_its_own_events(self):
         authrpc = support.load("auth/authrpc.py"); asked = []
         class FA:
