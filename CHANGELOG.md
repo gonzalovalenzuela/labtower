@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.1.7 — 2026-11-04
+
+- **Nuevo:** navegación unificada. Barra superior con logo (Inicio), grupo actual y selector de módulo con su estado (forma y texto, no solo color), o menú lateral clásico; un asistente permite elegir la primera vez y «Tipo de menú» lo cambia después. En móvil hay barra inferior. Un aviso con enlaces aparece bajo la barra del módulo cuando algún módulo tiene avisos o fallas. El menú muestra solo los módulos con permiso y los que el admin no apagó.
+- **Nuevo:** el admin puede deshabilitar los módulos que no usa (Admin Panel → Módulos, o `sudo labtower-modules disable|enable <módulo>`). Desaparecen de menús, inicio y Resumen, no cuentan en la salud y siguen apagados tras reinicios, actualizaciones y restauraciones; sus datos se conservan.
+- **Nuevo:** Resumen: fila de chips de estado por módulo (● ok, ▲ aviso, ■ falla, con el número de avisos); un clic va a la tarjeta y Ctrl/⌘+clic abre el módulo. «Solo con problemas» oculta las tarjetas sanas y se recuerda.
+- **Nuevo:** Proxmox Monitor: capacidad y salud del cluster (días hasta llenarse, prueba N-1, HA, replicación, tareas fallidas, Ceph, datos por nodo, cambios de estado de invitados y bloqueos). El README indica los privilegios que necesita el token de API.
+- **Nuevo:** UPS Monitor: estado detallado (banderas), alarmas y beeper, calidad de la red eléctrica y margen de apagado.
+- **Nuevo:** NAS Monitor: días hasta llenarse cada volumen, temperatura máxima y promedio de 24 h por disco, enlace caído y errores de cada puerto de red, y eventos en el Resumen (actualización disponible, ventiladores, disco caliente, enlace caído, errores de red, reinicio).
+- **Nuevo:** WAN Monitor: calidad por destino, percentiles de latencia, velocidad frente al plan, disponibilidad y MTBF, eventos de calidad sostenida, historial de IP pública (con año, sin límite de retención; recupera cambios anteriores desde los eventos) y traceroute automático al abrirse cada corte. La fecha desde la que se conoce la IP se edita en Settings (dd-mm-aaaa), y la tarjeta Connection y el panel lateral muestran los días desde el último cambio. El paquete `traceroute` pasa a ser recomendado.
+- **Nuevo:** Net Monitor: cambio de MAC en una IP, dispositivos sin revisar, historial de conectividad por equipo, equipos vigilados con latencia, puertos nuevos y marca de equipo inestable.
+- **Nuevo:** DNS Monitor: salud de los DNS de salida (sondeo cada 60 s, con alerta y evento en el Resumen) y prueba de resolución que compara tu DNS con un resolutor externo y detecta nombres bloqueados.
+- **Nuevo:** WOL Console: estado en vivo de cada equipo (ping desde el servidor) y confirmación de encendido: avisa «encendió (N s)» o que no respondió en 3 minutos.
+- **Mejora:** el VPN Monitor guarda la última lectura de cada servidor y la muestra de inmediato tras reiniciar («Lectura anterior, actualizando…»); las lecturas de más de 5 s quedan en el log (`slow read`). El Resumen muestra solo la cantidad de clientes VPN conectados.
+- **Mejora:** barra común en todos los módulos y en el Resumen (idioma, tema, reloj, usuario, salir, 24H y «Tipo de menú»), de ancho completo; con la barra superior suben a la barra global y la barra del módulo se oculta si no le queda nada propio. Los botones de acción (Scan network, Settings, Wake All) comparten un solo aspecto.
+- **Mejora:** Net Monitor: auto-scan, limpieza de equipos sin conexión, SNMP y Pi-hole pasan a una ventana «Settings», como en WAN Monitor.
+- **Mejora:** una sola escala de texto en todos los módulos: cabecera de tabla 11 px / 600, celda 13 px, título de tarjeta 12 px.
+- **Mejora:** Proxmox: «Días hasta llenarse» distingue «Reuniendo historial (X de 2 días necesarios)» de «No crece».
+- **Mejora:** el ícono de la barra superior vuelve a ser el original de LabTower; Admin Panel, Net, Proxmox, NAS, DNS, WAN y VPN ahora tienen ícono en la pestaña del navegador.
+- **Seguridad:** al restablecer la contraseña de otra cuenta, el cambio en el siguiente inicio de sesión es obligatorio, y los usuarios nuevos lo llevan marcado; cambiar niveles de permiso pide la contraseña actual.
+- **Seguridad:** las URLs https de WAN no pueden apuntar a esta máquina ni a direcciones link-local; NUT rechaza 0.0.0.0 y link-local; el sondeo de DNS de salida solo usa el puerto 53 o puertos altos; el servicio de autenticación limita los eventos y registros que cada módulo puede escribir, y el módulo WAN lee solo sus propios eventos.
+- **Arreglo:** Net Monitor: Pi-hole dejaba de conectar hasta pulsar «Guardar» cuando renovaba o regeneraba su certificado propio. Si el certificado fijado venció, o el nuevo trae el mismo sujeto y emisor, se fija el nuevo (queda en el registro y en los eventos); con otra identidad sigue rechazado. Si falla sin nombres conocidos reintenta al minuto, y el panel muestra el error de la consulta de dispositivos.
+- **Arreglo:** Net Monitor: guardar los ajustes de Pi-hole con la contraseña en blanco borraba la contraseña guardada y Pi-hole quedaba desconectado sin avisar. Ahora una contraseña vacía conserva la guardada (el campo lo indica) y, si no hay ninguna guardada, pide escribirla.
+- **Arreglo:** Net Monitor: el switch ZX quedaba «unreachable» tras cada reinicio o actualización. La sesión web del switch se guarda (modo 600) y se reutiliza, y tras varios rechazos seguidos se espera más entre intentos.
+- **Arreglo:** Net Monitor: guardar OUI o SNMP podía borrar huellas de Pi-hole recién fijadas; el grupo de un equipo se perdía en cada reescaneo.
+- **Arreglo:** DNS Monitor: el texto de la prueba de resolución se borraba cada 5 s al redibujarse la página y el test no se ejecutaba.
+- **Arreglo:** en el modo «barra superior» se perdía el botón «Ajustes» de WAN Monitor; el aviso «Attention» quedaba encima de la barra del módulo y «Scan network» / «Settings» al centro.
+- **Arreglo:** un POST sin cuerpo ya no devuelve 400 en Net, NUT, Proxmox, NAS, VPN, WOL, Resumen y Panel; el escape de HTML de Net, WOL y Panel cubre también la comilla simple.
+
 ## 2.1.6p — 2026-11-04
 
 - **Arreglo:** Net Monitor: guardar los ajustes de Pi-hole con la contraseña en blanco borraba la contraseña guardada y Pi-hole quedaba desconectado sin avisar. Ahora una contraseña vacía conserva la guardada (el campo lo indica) y, si no hay ninguna guardada, pide escribirla.
