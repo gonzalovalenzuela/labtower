@@ -45,7 +45,7 @@
     if(!isLogin)return p;
     function clr(){var q=document.getElementById('lt-code');if(q)q.value=''}
     return p.then(function(r){
-      if(r.status!==401){clr();return r}
+      if(r.status!==401){clr();if(r.ok){var e=document.getElementById('lt-code');if(e&&e.parentNode&&e.parentNode.parentNode)e.parentNode.parentNode.removeChild(e.parentNode)}return r}
       return r.clone().json().then(function(d){
         if(!d||d.error!=='2FA code required'){clr();return r}
         var pw=document.querySelector('input[type=password]');
@@ -53,7 +53,7 @@
           var w=document.createElement('div');w.style.cssText='margin-top:10px';
           w.innerHTML='<label style="display:block;font-size:12px;margin-bottom:4px"></label><input id="lt-code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" style="width:100%;box-sizing:border-box;font:inherit;padding:10px;border-radius:8px;border:1px solid var(--border,#555);background:var(--bg-input,transparent);color:inherit">';
           w.firstChild.textContent=L().lbl;
-          var host=pw.closest('.field,.lfield,.fld')||pw.parentNode;host.parentNode.insertBefore(w,host.nextSibling);
+          var host=pw.closest('.field,.lfield,.fld')||pw;host.parentNode.insertBefore(w,host.nextSibling);
           var ci=w.querySelector('input');ci.addEventListener('keydown',function(e){if(e.key==='Enter'){pw.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))}});
           ci.focus();
         } else if(document.getElementById('lt-code')){document.getElementById('lt-code').focus()}
