@@ -146,3 +146,26 @@ class Rename(unittest.TestCase):
         self.assertRegex(ctrl, r"(?m)^Package: labtower$")
         self.assertRegex(ctrl, r"(?m)^Conflicts: pi-console$")
         self.assertRegex(ctrl, r"(?m)^Replaces: pi-console$")
+
+class Python39(unittest.TestCase):
+    """debian/control declara python3 (>= 3.9): el código empaquetado debe importar en 3.9.
+    EN: debian/control declares python3 (>= 3.9): packaged code must import on 3.9."""
+    def test_packaged_code_runs_on_python_39(self):
+        import ast
+        ctrl = (ROOT / "debian/control").read_text()
+        self.assertIn("python3 (>= 3.9)", ctrl, "si cambia el mínimo, ajusta este test")
+        files = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
+        # tests/ no se empaqueta; assets/brand es una herramienta de desarrollo.
+        # EN: tests/ is not packaged; assets/brand is a development tool.
+        files = [f for f in files if not f.startswith(("tests/", "assets/brand/"))]
+        self.assertTrue(files)
+        for f in files:
+            src = (ROOT / f).read_text()
+            tree = ast.parse(src, f, feature_version=(3, 9))
+            if "from __future__ import annotations" in src:
+                continue
+            for n in ast.walk(tree):
+                anns = [n.annotation] if isinstance(n, (ast.AnnAssign, ast.arg)) else [n.returns] if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) else []
+                for a in anns:
+                    bad = a is not None and any(isinstance(x, ast.BinOp) and isinstance(x.op, ast.BitOr) for x in ast.walk(a))
+                    self.assertFalse(bad, f"{f}:{a.lineno if a else 0}: «X | Y» en una anotación necesita «from __future__ import annotations» en Python 3.9")

@@ -274,7 +274,7 @@ class DnsFeatures(unittest.TestCase):
         sid = self._server(); o = dnsq.query
         def fake(h, p, name, t="A", timeout=2.0):
             if h == dns.COMPARE_DNS: return {"ok": True, "ms": 9, "rcode": 0, "answers": [{"type": "A", "value": "93.184.216.34"}]}
-            return {"ok": True, "ms": 2, "rcode": 0, "answers": [{"type": "A", "value": "0.0.0.0"}]}
+            return {"ok": True, "ms": 2, "rcode": 0, "answers": [{"type": "A", "value": "0.0.0.0"}]}  # nosec B104 - test data
         dnsq.query = fake
         try:
             s, j = self.srv.call("POST", f"/api/dns/{sid}/resolve", {"name": "ads.example.com"}, token=self.exe)

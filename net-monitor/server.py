@@ -28,6 +28,7 @@ Detection: TTL + pure-Python ports + HTTP banner + mDNS
 #
 #     Structure: configuration · probes (ping, ports, banner) · Pi-hole · SNMP · OUI vendor database ·
 #     identification rules · scanner · health · HTTP handler.
+from __future__ import annotations  # permite «X | None» en Python 3.9 / allows «X | None» on Python 3.9
 import json, os, re, socket, struct, subprocess, sys, time, logging, threading, ipaddress, ssl
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 # Cola de conexiones pendientes más grande que la de fábrica (5), para no rechazar ráfagas.

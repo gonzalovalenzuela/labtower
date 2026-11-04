@@ -45,6 +45,7 @@ file, fsync and rename) so no data is lost or corrupted by power cuts.
 #
 #     Convention: comments are written in Spanish first and then in English (marked "EN:"). The
 #     English docstrings describe what each function does; the comments explain why.
+from __future__ import annotations  # permite «X | None» en Python 3.9 / allows «X | None» on Python 3.9
 import base64, copy, functools, json, os, re, hashlib, hmac, secrets, struct, time, logging, threading, glob, stat, shutil, subprocess, sqlite3
 from pathlib import Path
 
