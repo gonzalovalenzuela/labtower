@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.7c — 2026-11-04
+
+- **Arreglo:** auth, labtower-resetpw y Net Monitor cargan en Python 3.9, la versión mínima del paquete (anotaciones «X | None»). Un test nuevo revisa el código empaquetado con la gramática de 3.9.
+- **Mejora:** Resumen, menú clásico: la tira de módulos cabe en una línea, con nombres cortos (UPS, Net, WOL, Admin); el nombre completo queda en el tooltip.
+
 ## 2.1.7b — 2026-11-04
 
 - **Arreglo:** el campo del código de verificación (2FA) del inicio de sesión del Resumen aparecía fuera de la tarjeta y se quedaba en la página después de entrar. Ahora queda bajo la contraseña y desaparece al iniciar sesión.
