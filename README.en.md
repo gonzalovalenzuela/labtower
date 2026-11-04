@@ -59,14 +59,15 @@ All screens (light and dark, 4 sizes) are in [`docs/screenshots/`](docs/screensh
 ## Install
 
 - **Install in a Proxmox container (CT):** [guide and script](docs/CT.md) (`scripts/labtower-ct` creates the CT and installs LabTower).
+- **Install on a VM or a Raspberry Pi (Debian 12+, Ubuntu, DietPi or Raspberry Pi OS):**
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.6/labtower_2.1.6_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.7/labtower_2.1.7_all.deb
 sudo apt-get update
-sudo apt-get install -y ./labtower_2.1.6_all.deb
+sudo apt-get install -y ./labtower_2.1.7_all.deb
 ```
 
-Use `apt-get install ./file.deb`, not `dpkg -i`, so `apt` installs the dependencies. Then open `http://<pi-ip>/`.
+Use `apt-get install ./file.deb`, not `dpkg -i`, so `apt` installs the dependencies. Then open `http://<labtower-ip>/`.
 
 The installer creates one system user per service (`labtower-auth`, `labtower-wol`, …), the systemd services, the nginx config and the `admin` user with a **random password**, shown when it finishes. If you lost it: `sudo cat /var/lib/labtower/auth/initial-admin-password`. If you already changed it and forgot the new one, reset it with `sudo labtower-resetpw` (see below).
 

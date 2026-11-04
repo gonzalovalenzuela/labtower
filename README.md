@@ -59,13 +59,12 @@ Todas las pantallas (tema claro y oscuro, 4 tamaños) están en [`docs/screensho
 ## Instalar
 
 - **Instalar en un contenedor de Proxmox (CT):** [guía y script](docs/CT.md) (`scripts/labtower-ct` crea el CT e instala LabTower).
-  
-- Instalar en una Raspberry Pi o VM
+- **Instalar en una VM o en una Raspberry Pi (Debian 12+, Ubuntu, DietPi o Raspberry Pi OS):**
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.6/labtower_2.1.6_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.7/labtower_2.1.7_all.deb
 sudo apt-get update
-sudo apt-get install -y ./labtower_2.1.6_all.deb
+sudo apt-get install -y ./labtower_2.1.7_all.deb
 ```
 
 Usa `apt-get install ./archivo.deb` y no `dpkg -i`, para que `apt` instale las dependencias. Luego abre `http://<ip-de-labtower>/`.
