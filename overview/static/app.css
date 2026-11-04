@@ -257,7 +257,5 @@ body:not(.kiosk) .top h1{display:none}
 body.kiosk .topbar{display:none}
 
 /* Filtro «solo con problemas». EN: "only with problems" filter. */
-.chips{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px}
-.chips-f{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-mid);cursor:pointer}
+.chips-f{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-mid);cursor:pointer}
 .only-prob .grid .card[data-sev=ok]{display:none}
-body.kiosk .chips{display:none}
