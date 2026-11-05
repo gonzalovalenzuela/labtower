@@ -1,9 +1,5 @@
 # Changelog
 
-Desde la próxima versión LabTower sigue [Versionado Semántico 2.0.0](https://semver.org/lang/es/): `MAJOR.MINOR.PATCH`.
-**MAJOR** cambia si algo deja de ser compatible (formato de datos, API, nombres de servicios), **MINOR** si se agrega una función sin romper nada y **PATCH** si solo se corrige un error. Sin letras al final (`2.1.7f` fue la última así); las pruebas se numeran como prerrelease (`2.2.0-rc.1`; en el `.deb` se escribe `2.2.0~rc.1` para que apt lo ordene antes de `2.2.0`).
-Las versiones anteriores a esta nota usaban un sufijo de letra y no cumplen SemVer; el orden de actualización de `apt` no se ve afectado (`2.1.8` es mayor que `2.1.7f`).
-
 ## 2.1.7f — 2026-11-05
 
 - **Arreglo:** WAN Monitor: ya no consulta el DNS cada vez que lee su configuración. Antes mandaba al DNS de la red una consulta a api.ipify.org y dos a speed.cloudflare.com cada pocos segundos (decenas de miles al día). Ahora el nombre se resuelve al guardar y una vez antes de conectarse.
