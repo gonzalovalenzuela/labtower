@@ -1,6 +1,7 @@
 """ES: El campo del código 2FA va dentro del formulario de acceso (también en el Resumen, donde la contraseña no está en un .field) y se quita al entrar.
 EN: The 2FA code field goes inside the login form (also in the Overview, where the password is not in a .field) and is removed after a successful login."""
-import pathlib, unittest
+import pathlib
+import unittest
 
 SRC = (pathlib.Path(__file__).resolve().parent.parent / "assets" / "theme" / "theme.js").read_text()
 

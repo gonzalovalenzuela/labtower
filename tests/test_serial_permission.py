@@ -97,5 +97,59 @@ class Modules(unittest.TestCase):
         self.assertNotIn("SN-123", str(d["other"]))
 
 
+class Http(unittest.TestCase):
+    """Los tres módulos por HTTP: con el permiso el serial llega, sin él no (y sin sesión nada llega)."""
+    @classmethod
+    def setUpClass(cls):
+        cls.yes = support.make_user("http_ser_yes", {**READONLY, "serials": "readonly"})
+        cls.no = support.make_user("http_ser_no", {**READONLY, "serials": "none"})
+
+    def test_ups_endpoint(self):
+        m = support.load("nut-monitor/server.py")
+        c = m.SCache("sx"); c._ups = {"ups1": {"ups.serial": "UPS-SN-1", "device.serial": "UPS-SN-1", "_serial": "UPS-SN-1", "ups.status": "OL", "_ts": 1}}
+        m._caches["sx"] = c
+        srv = support.Server(m.H)
+        try:
+            st, d = srv.call("GET", "/api/ups?range=none", token=self.yes); self.assertEqual(st, 200)
+            self.assertEqual(d["sx"]["ups"]["ups1"]["_serial"], "UPS-SN-1")
+            st, d = srv.call("GET", "/api/ups?range=none", token=self.no); self.assertEqual(st, 200)
+            self.assertNotIn("UPS-SN-1", str(d)); self.assertEqual(d["sx"]["ups"]["ups1"]["ups.status"], "OL")
+            self.assertEqual(srv.call("GET", "/api/ups?range=none")[0], 401)
+        finally: srv.close(); m._caches.pop("sx", None)
+
+    def test_nas_endpoint(self):
+        m = support.load("nas-monitor/server.py")
+        m.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        ep, m.ensure_poller = m.ensure_poller, lambda n: None
+        old = m.load_nas()
+        m.save_nas([{"id": "nsx", "name": "n", "host": "192.0.2.9", "type": "synology"}])
+        cc = m.NasCache("nsx"); cc.update({"system": {"model": "DS", "serial": "NAS-SN-1"}, "alerts": []}); m._cache["nsx"] = cc
+        srv = support.Server(m.H)
+        try:
+            st, d = srv.call("GET", "/api/nas?hist=0", token=self.yes); self.assertEqual(st, 200)
+            self.assertEqual(d["nas"][0]["snap"]["data"]["system"]["serial"], "NAS-SN-1")
+            st, d = srv.call("GET", "/api/nas?hist=0", token=self.no); self.assertEqual(st, 200)
+            self.assertNotIn("NAS-SN-1", str(d)); self.assertEqual(d["nas"][0]["snap"]["data"]["system"]["model"], "DS")
+            self.assertEqual(srv.call("GET", "/api/nas?hist=0")[0], 401)
+        finally: srv.close(); m.ensure_poller = ep; m._cache.pop("nsx", None); m.save_nas(old)
+
+    def test_proxmox_detail_and_diag_endpoints(self):
+        m = support.load("proxmox-monitor/server.py")
+        orig = (m.node_detail, m._node_known, m.load_clusters, dict(m._smart))
+        m.node_detail = lambda cid, name: {"serial": "PVE-SN-1", "other": []}
+        m._node_known = lambda cid, name: True
+        m.load_clusters = lambda: [{"id": "cx"}]
+        m._smart["cx"] = {"ts": 1, "nodes": {"n1": {"disks": [{"dev": "/dev/sda", "serial": "DISK-SN-1"}], "error": None}}}
+        srv = support.Server(m.H)
+        try:
+            st, d = srv.call("GET", "/api/clusters/cx/nodes/n1/detail", token=self.yes); self.assertEqual((st, d["detail"]["serial"]), (200, "PVE-SN-1"))
+            st, d = srv.call("GET", "/api/clusters/cx/nodes/n1/detail", token=self.no); self.assertEqual((st, d["detail"]["serial"]), (200, ""))
+            self.assertEqual(srv.call("GET", "/api/clusters/cx/nodes/n1/detail")[0], 401)
+            st, d = srv.call("GET", "/api/diag?id=cx", token=self.yes); self.assertIn("DISK-SN-1", str(d))
+            st, d = srv.call("GET", "/api/diag?id=cx", token=self.no); self.assertEqual(st, 200); self.assertNotIn("DISK-SN-1", str(d))
+            self.assertEqual(srv.call("GET", "/api/diag?id=cx")[0], 401)
+        finally: srv.close(); m.node_detail, m._node_known, m.load_clusters = orig[:3]; m._smart.clear(); m._smart.update(orig[3])
+
+
 if __name__ == "__main__":
     unittest.main()
