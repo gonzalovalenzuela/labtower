@@ -12,7 +12,7 @@ import auth  # noqa: E402  (la ruta se agrega arriba)
 # EN: The tests start fake servers on 127.0.0.1; in production valid_target() rejects them (anti-SSRF). Here it is relaxed to valid_host and the real
 #     function is kept in real_valid_target to be tested on its own.
 real_valid_target = auth.valid_target
-auth.valid_target = lambda h, allow_loopback=False: auth.valid_host(h)
+auth.valid_target = lambda h, allow_loopback=False, resolve=True: auth.valid_host(h)
 
 _loaded = {}
 def load(rel):

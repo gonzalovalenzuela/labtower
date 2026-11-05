@@ -129,7 +129,7 @@ if __name__ == "__main__": unittest.main()
 class Rename(unittest.TestCase):
     """El proyecto se llamaba Pi Console hasta la 1.4. El nombre viejo solo puede quedar donde sirve para migrar o para leer cosas antiguas."""
     ALLOWED = {"CHANGELOG.md", "README.md", "README.en.md", "RELEASE_NOTES_2.0.md", "debian/postinst", "debian/postrm", "debian/control", "auth/auth.py",
-               "auth/teleporter_api.py", "scripts/teleporter.sh", "tests/test_repo_consistency.py"}
+               "auth/teleporter_api.py", "scripts/teleporter.sh", "tests/test_repo_consistency.py", "tests/test_service_names.py"}
     def test_old_name_only_where_it_is_needed(self):
         out = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
         bad = []

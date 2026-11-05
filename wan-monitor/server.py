@@ -73,10 +73,10 @@ ENGINES = {"builtin": None, "ookla": "speedtest", "librespeed": "librespeed-cli"
 def engines_available():
     return {k: (b is None or bool(shutil.which(b))) for k, b in ENGINES.items()}
 
-def _https_url(u, what):
+def _https_url(u, what, resolve=True):
     u = str(u or "").strip()
     p = urlparse(u)
-    if p.scheme != "https" or p.username or p.password or not (auth.valid_host(p.hostname or "") and auth.valid_target(p.hostname)): raise ValueError(f"{what} must be an https:// address")
+    if p.scheme != "https" or p.username or p.password or not (auth.valid_host(p.hostname or "") and auth.valid_target(p.hostname, resolve=resolve)): raise ValueError(f"{what} must be an https:// address")
     try: _ = p.port          # validates the port: raises ValueError if invalid
     except ValueError: raise ValueError(f"Invalid port in {what}")
     if len(u) > 300 or re.search(r"[\x00-\x20\x7f]", u): raise ValueError(f"Invalid {what}")
@@ -90,7 +90,7 @@ def _int(v, lo, hi, what):
 
 # Ajustes del router. La clave solo se cambia si llega una nueva (vacía = conservar la guardada; clear_password = borrarla) y NUNCA se devuelve al navegador.
 # EN: Router settings. The password changes only when a new one arrives (empty = keep the stored one; clear_password = delete it) and is NEVER sent to the browser.
-def _validate_router(new, cur):
+def _validate_router(new, cur, resolve=True):
     r = dict(DEFAULTS["router"]); r.update(cur if isinstance(cur, dict) else {})
     if isinstance(new, dict):
         for k in ("enabled", "type", "host", "port", "https", "user", "interface", "every"):
@@ -100,7 +100,7 @@ def _validate_router(new, cur):
     r["enabled"], r["https"] = bool(r.get("enabled")), bool(r.get("https"))
     if r.get("type") not in rtr.TYPES: raise ValueError("Unknown router type")
     host = str(r.get("host") or "").strip()
-    if host and not (auth.valid_host(host) and auth.valid_target(host)): raise ValueError("Invalid router address")
+    if host and not (auth.valid_host(host) and auth.valid_target(host, resolve=resolve)): raise ValueError("Invalid router address")
     r["host"] = host
     r["port"] = _int(r.get("port", 80), 1, 65535, "Router port")
     user = str(r.get("user") or "").strip()
@@ -124,12 +124,12 @@ def public_config(cfg):
 
 # Combina lo recibido con lo guardado y valida cada campo.
 # EN: Merge what arrived with what is stored and validate every field.
-def validate(body: dict, current=None) -> dict:
+def validate(body: dict, current=None, resolve=True) -> dict:
     cfg = json.loads(json.dumps(current or DEFAULTS))
     for k in ("targets", "gateway", "dns_name", "interval", "ip_url"):
         if k in body: cfg[k] = body[k]
     if isinstance(body.get("speed"), dict): cfg["speed"].update(body["speed"])
-    cfg["router"] = _validate_router(body.get("router"), cfg.get("router"))
+    cfg["router"] = _validate_router(body.get("router"), cfg.get("router"), resolve)
     tg = cfg["targets"]
     if not isinstance(tg, list) or not 1 <= len(tg) <= 6: raise ValueError("Between 1 and 6 targets")
     out = []
@@ -153,7 +153,7 @@ def validate(body: dict, current=None) -> dict:
     cfg["dns_name"] = dn
     cfg["interval"] = _int(cfg["interval"], 10, 300, "Interval")
     iu = str(cfg.get("ip_url") or "").strip()
-    cfg["ip_url"] = _https_url(iu, "IP address service") if iu else ""
+    cfg["ip_url"] = _https_url(iu, "IP address service", resolve) if iu else ""
     sp = cfg["speed"]
     sp["enabled"], sp["upload"] = bool(sp.get("enabled")), bool(sp.get("upload"))
     if sp.get("engine", "builtin") not in ENGINES: raise ValueError("Unknown speed test engine")
@@ -163,15 +163,19 @@ def validate(body: dict, current=None) -> dict:
     sp["streams"] = _int(sp.get("streams", 4), 1, 8, "Streams")
     sp["plan_down"] = _int(sp.get("plan_down", 0), 0, 100000, "Contracted download speed")      # Mb/s, 0 = not set
     sp["plan_up"] = _int(sp.get("plan_up", 0), 0, 100000, "Contracted upload speed")
-    sp["down_url"] = _https_url(sp.get("down_url"), "Download address")
-    sp["up_url"] = _https_url(sp.get("up_url"), "Upload address")
+    sp["down_url"] = _https_url(sp.get("down_url"), "Download address", resolve)
+    sp["up_url"] = _https_url(sp.get("up_url"), "Upload address", resolve)
     return cfg
 
+# ES: Se lee en cada ronda, petición y chequeo de salud: aquí NO se resuelven nombres por DNS (cada lectura generaba consultas a api.ipify.org y speed.cloudflare.com
+#     al DNS de la red, decenas de miles al día). La comprobación con DNS se hace al guardar y justo antes de conectarse (_url_safe).
+# EN: Read on every round, request and health check: names are NOT resolved here (every read sent queries for api.ipify.org and speed.cloudflare.com to the
+#     network's DNS, tens of thousands a day). The check with DNS is done when saving and right before connecting (_url_safe).
 def load_config() -> dict:
     cur = auth.read_json(DATA_FILE, {}, dict)
-    try: return validate(cur) if cur else validate({})
+    try: return validate(cur, resolve=False) if cur else validate({}, resolve=False)
     except ValueError as e:
-        log.warning(f"stored configuration invalid ({e}); using defaults"); return validate({})
+        log.warning(f"stored configuration invalid ({e}); using defaults"); return validate({}, resolve=False)
 
 def save_config(cfg: dict):
     with _cfg_lock: auth.write_json(DATA_FILE, cfg)
@@ -402,6 +406,7 @@ def run_speedtest(cfg) -> dict:
 def _builtin_speedtest(cfg) -> dict:
     res = {"ts": int(time.time()), "down": None, "up": None, "ping": None, "server": urlparse(cfg["speed"]["down_url"]).hostname, "error": None}
     try:
+        if not (_url_safe(cfg["speed"]["down_url"]) and _url_safe(cfg["speed"]["up_url"])): raise RuntimeError("A test address points at this machine or a link-local address")
         res["ping"] = speed_ping(cfg)
         res["down"] = speed_down(cfg)
         if res["down"] is None: res["error"] = "No data received from the test server"
@@ -413,7 +418,14 @@ def _builtin_speedtest(cfg) -> dict:
     return res
 
 # ─── IP pública ───────────────────────────────────────────────────────────────
+# Antes de conectar se resuelve el nombre UNA vez y se rechaza si apunta a esta máquina o a una dirección de enlace local (SSRF), aunque se haya guardado antes.
+# EN: Before connecting, the name is resolved ONCE and refused if it points at this machine or a link-local address (SSRF), even if it was saved earlier.
+def _url_safe(url):
+    h = urlparse(url).hostname
+    return bool(h) and auth.valid_target(h)
+
 def fetch_public_ip(url):
+    if not _url_safe(url): return None
     c, path = _conn(url, 6)
     try:
         c.request("GET", path, headers={"User-Agent": "LabTower-WAN", "Accept": "text/plain"}); r = c.getresponse(); raw = r.read(256)

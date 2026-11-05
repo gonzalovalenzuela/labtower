@@ -300,4 +300,51 @@ class Http(WithFakePing):
             self.assertEqual(m.health_report(False)[0], 200)
         finally: m._stop.clear()
 
+class NoDnsLookupOnConfigRead(unittest.TestCase):
+    """Reading the stored configuration must not look names up: every read used to query api.ipify.org and speed.cloudflare.com (tens of thousands a day)."""
+    def setUp(self):
+        self._vt = m.auth.valid_target; m.auth.valid_target = support.real_valid_target
+        self.lookups = []
+        def gai(host, *a, **k): self.lookups.append(host); return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("203.0.113.5", 0))]
+        self._gai, socket.getaddrinfo = socket.getaddrinfo, gai
+    def tearDown(self): m.auth.valid_target = self._vt; socket.getaddrinfo = self._gai
+
+    def test_load_config_does_not_resolve_names(self):
+        m.save_config(m.validate({}, resolve=False)); self.lookups.clear()
+        for _ in range(5): c = m.load_config()
+        self.assertEqual(self.lookups, [])
+        self.assertEqual(c["ip_url"], "https://api.ipify.org")
+
+    def test_saving_still_resolves_and_refuses_internal_addresses(self):
+        self.assertEqual(m.validate({"ip_url": "https://ip.example.org"})["ip_url"], "https://ip.example.org"); self.assertIn("ip.example.org", self.lookups)
+        socket.getaddrinfo = lambda host, *a, **k: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("169.254.169.254", 0))]
+        with self.assertRaises(ValueError): m.validate({"ip_url": "https://rebind.example.org"})
+
+    def test_literal_addresses_and_localhost_are_still_refused_without_dns(self):
+        for u in ("https://localhost/", "https://127.0.0.1/", "https://169.254.169.254/"):
+            with self.subTest(u=u), self.assertRaises(ValueError): m.validate({"ip_url": u}, resolve=False)
+        self.assertEqual(self.lookups, [])
+
+    def test_a_stored_name_that_now_points_inside_is_not_contacted(self):
+        socket.getaddrinfo = lambda host, *a, **k: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("169.254.169.254", 0))]
+        o = m._conn
+        def boom(*a, **k): raise AssertionError("must not connect")
+        m._conn = boom
+        try:
+            self.assertIsNone(m.fetch_public_ip("https://rebind.example.org"))
+            res = m._builtin_speedtest(m.validate({}, resolve=False))
+            self.assertIn("link-local", res["error"]); self.assertIsNone(res["down"])
+        finally: m._conn = o
+
+    def test_ip_check_resolves_once_per_check(self):
+        o = m._conn
+        class Boom(Exception): pass
+        def conn(url, timeout=10): raise Boom()
+        m._conn = conn; self.lookups.clear()
+        try:
+            with self.assertRaises(Boom): m.fetch_public_ip("https://api.ipify.org")
+        finally: m._conn = o
+        self.assertEqual(self.lookups, ["api.ipify.org"])
+
+
 if __name__ == "__main__": unittest.main()

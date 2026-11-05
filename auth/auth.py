@@ -956,7 +956,8 @@ def valid_host(h) -> bool:
 #     LabTower from being used as a "bridge" to its own internal services or to metadata (SSRF). Not applied to NUT or to ping/TCP targets, where looking at the
 #     own machine is legitimate.
 # allow_loopback=True (NUT only): the own machine is accepted, link-local / 0.0.0.0 / multicast still are not.
-def valid_target(h, allow_loopback: bool = False) -> bool:
+# resolve=False: only the checks that need no DNS lookup (literal IPs, "localhost"); used when a stored configuration is read again.
+def valid_target(h, allow_loopback: bool = False, resolve: bool = True) -> bool:
     import ipaddress, socket
     if not valid_host(h): return False
     name = h.strip("[]").lower()
@@ -970,6 +971,7 @@ def valid_target(h, allow_loopback: bool = False) -> bool:
         ipaddress.ip_address(name); return not bad(name)
     except ValueError:
         pass
+    if not resolve: return True       # names are not looked up: for re-reading a stored configuration (a lookup per read floods the DNS server)
     try:
         infos = socket.getaddrinfo(name, None, proto=socket.IPPROTO_TCP)
     except OSError:
