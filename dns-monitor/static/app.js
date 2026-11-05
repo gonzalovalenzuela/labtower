@@ -98,6 +98,12 @@ const LANG={
  "upstreams": "Upstream DNS",
  "upOk": "answers", "upDown": "no answer", "resTitle": "Resolution test", "resName": "Domain name (e.g. example.com)", "resBtn": "Resolve", "resServer": "This DNS server", "resOutside": "Outside resolver", "resBlocked": "Blocked by this DNS (the outside resolver answers)", "resFailed": "This DNS server did not answer", "resSame": "Answers received", "resNone": "no answer records", "resErr": "Could not resolve",
  "hourly": "Queries per hour (last 24 h)",
+ "qTitleH": "Queries per hour",
+ "qTitleD": "Queries per day",
+ "qSrcpihole": "Source: Pi-hole database",
+ "qSrcadguard": "Source: AdGuard Home statistics",
+ "qSrclocal": "Source: counts LabTower stores while it reads this server (they only go back to when it started)",
+ "qAll": "All",
  "info": "Server",
  "version": "Version",
  "api": "API",
@@ -218,6 +224,12 @@ const LANG={
  "upstreams": "DNS de salida",
  "upOk": "responde", "upDown": "sin respuesta", "resTitle": "Prueba de resolución", "resName": "Nombre de dominio (ej. example.com)", "resBtn": "Resolver", "resServer": "Este servidor DNS", "resOutside": "Resolutor externo", "resBlocked": "Bloqueado por este DNS (el resolutor externo sí responde)", "resFailed": "Este servidor DNS no respondió", "resSame": "Respuestas recibidas", "resNone": "sin registros de respuesta", "resErr": "No se pudo resolver",
  "hourly": "Consultas por hora (últimas 24 h)",
+ "qTitleH": "Consultas por hora",
+ "qTitleD": "Consultas por día",
+ "qSrcpihole": "Fuente: base de datos de Pi-hole",
+ "qSrcadguard": "Fuente: estadísticas de AdGuard Home",
+ "qSrclocal": "Fuente: conteos que LabTower guarda al leer este servidor (solo desde que empezó a guardarlos)",
+ "qAll": "Todo",
  "info": "Servidor",
  "version": "Versión",
  "api": "API",
@@ -327,6 +339,7 @@ async function fetchAll(){
     if(wantHist)_histTs=Date.now();
     if(activeId!==''&&!items.some(n=>n.id===activeId))activeId=items[0]?.id||null;
     renderAll();ensureRanges();
+    if(activeId)loadQ(activeId,qRange);
   }catch(e){console.error(e);}
 }
 function renderAll(){keepRes(()=>{renderSidebar();renderSummary();renderMain();updateGlobalStats();});}
@@ -421,6 +434,43 @@ function hourly(h){
   return `<svg class="dns-hourly" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${s}</svg><div class="dns-hourly-axis"><span>-24 h</span><span>-12 h</span><span>${esc(t('now'))}</span></div>
     <div class="vchart-legend" style="padding:6px 14px 10px"><div class="vchart-legend-item"><div class="vchart-legend-dot" style="background:var(--dns-soft)"></div>${esc(t('legTotal'))}</div><div class="vchart-legend-item"><div class="vchart-legend-dot" style="background:var(--dns)"></div>${esc(t('legBlocked'))}</div></div>`;
 }
+// Tarjeta de consultas: 24 h (de la lectura actual) o más tiempo (hora/día) con botones de rango. Los datos largos los entrega /api/dns/<id>/queries.
+// EN: Queries card: 24 h (from the current reading) or longer (hour/day) with range buttons. The long data comes from /api/dns/<id>/queries.
+let qRange='1d';
+const _q={}, _qBusy={};
+async function loadQ(id,range,force){
+  if(range==='1d'||!id)return;
+  const key=id+'|'+range,c=_q[key];
+  if(!force&&c&&Date.now()-c.ts<120000)return;
+  if(_qBusy[key])return;_qBusy[key]=true;
+  try{
+    const r=await fetch('api/dns/'+encodeURIComponent(id)+'/queries?range='+range);
+    if(r.ok){_q[key]={ts:Date.now(),d:await r.json()};if(qRange===range&&activeId===id)renderAll();}
+  }catch(e){console.error(e);}
+  finally{_qBusy[key]=false;}
+}
+function setQRange(range){qRange=range;if(activeId)loadQ(activeId,range,true);renderAll();}
+function qBars(q){
+  const bars=q&&q.bars||[];
+  if(!bars.length||!bars.some(b=>b.total>0))return `<div class="dns-empty">${esc(t('noData'))}</div>`;
+  const mx=Math.max(...bars.map(b=>b.total),1),W=240,H=64,bw=W/bars.length,gap=bars.length>60?.3:1.2;let s='';
+  const lab=b=>{const d=new Date(b.t*1000),dd=d.toLocaleDateString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit'});return q.unit==='hour'?dd+' '+String(d.getHours()).padStart(2,'0')+':00':dd;};
+  bars.forEach((b,i)=>{
+    const hh=Math.max(.6,b.total/mx*(H-4)),bh=Math.min(hh,b.blocked/mx*(H-4)),x=(i*bw+gap/2).toFixed(2),w=Math.max(.4,bw-gap).toFixed(2);
+    s+=`<g><title>${esc(lab(b)+' · '+fmtNum(b.total)+' / '+fmtNum(b.blocked))}</title><rect x="${x}" y="${(H-hh).toFixed(1)}" width="${w}" height="${hh.toFixed(1)}" class="hb-t"/><rect x="${x}" y="${(H-bh).toFixed(1)}" width="${w}" height="${bh.toFixed(1)}" class="hb-b"/></g>`;
+  });
+  const mid=bars[Math.floor(bars.length/2)];
+  return `<svg class="dns-hourly" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${s}</svg><div class="dns-hourly-axis"><span>${esc(lab(bars[0]))}</span><span>${esc(lab(mid))}</span><span>${esc(t('now'))}</span></div>
+    <div class="vchart-legend" style="padding:6px 14px 4px"><div class="vchart-legend-item"><div class="vchart-legend-dot" style="background:var(--dns-soft)"></div>${esc(t('legTotal'))}</div><div class="vchart-legend-item"><div class="vchart-legend-dot" style="background:var(--dns)"></div>${esc(t('legBlocked'))}</div></div>
+    <div class="dns-qsrc">${esc(t('qSrc'+q.source))}</div>`;
+}
+function queriesCard(id,d){
+  const chips=['1d','1w','1mo','all'].map(r=>`<button type="button" class="vchart-filter${qRange===r?' active':''}" data-on-click="setQRange" data-on-click-args="${jsargs([r])}">${r==='all'?esc(t('qAll')):r}</button>`).join('');
+  const q=qRange==='1d'?null:(_q[id+'|'+qRange]||{}).d;
+  const title=qRange==='1d'?t('hourly'):(q&&q.unit==='hour'?t('qTitleH'):t('qTitleD'));
+  const body=qRange==='1d'?hourly(d.hourly):q?qBars(q):`<div class="dns-empty">…</div>`;
+  return `<div class="node-card wide"><div class="node-hd"><div class="node-name">${esc(title)}</div><div class="vchart-filters dns-qfil">${chips}</div></div>${body}</div>`;
+}
 function buildDetail(n){
   const snap=n.snap||{};
   const d=snap.data,hasData=d&&d.queries!=null;
@@ -443,7 +493,7 @@ function buildDetail(n){
   h+='<div class="dns-gauges">'+ring(t('gBlocked'),pc,'var(--dns)',pc==null?'—':pc+'%')+bigNum(t('gQueries'),fmtNum(d.queries),'')+bigNum(t('gBlockedN'),fmtNum(d.blocked),'','var(--red)')
     +bigNum(t('gLists'),fmtNum(d.domains_blocked),'')+bigNum(t('gClients'),d.clients==null?'—':d.clients,'')+bigNum(t('gResp'),d.ms==null?'—':d.ms,d.ms==null?'':'ms',d.ms>=200?'var(--orange)':'var(--text)')+'</div>';
   h+='<div class="dns-grid">';
-  h+=`<div class="node-card wide"><div class="node-hd"><div class="node-name">${esc(t('hourly'))}</div></div>${hourly(d.hourly)}</div>`;
+  h+=queriesCard(n.id,d);
   h+=topList(t('topDomains'),d.top_domains,'var(--dns)')+topList(t('topBlocked'),d.top_blocked,'var(--red)')+topList(t('topClients'),d.top_clients,'var(--blue)');
   const upState=u=>!u.probe?'':u.probe.ok?` <span class="up-ok" title="${esc(t('upOk'))}">●</span> `+esc(u.probe.ms)+' ms':` <span class="up-bad" title="${esc(t('upDown'))}">●</span> `+esc(t('upDown'));
   const ups=(d.upstreams||[]).map(u=>`<div class="top-row"><span class="tn" title="${esc(u.ip||'')}">${esc(u.name||u.ip||'—')}${u.port?`<small>:${esc(u.port)}</small>`:''}</span><span class="tc">${esc(fmtNum(u.count))}${u.ms!=null?' · '+esc(u.ms)+' ms':''}${upState(u)}</span></div>`).join('');
@@ -672,4 +722,4 @@ _i18nReady=true;
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ runResolve, saveRes, closeModals, confirmDelete, doLogin, logout, openForm, openPause, resumeBlocking, saveServer, setLang, setRange, toggleCmp, setTheme, testServer, toggleNav, toggleServer, typeChanged });
+if (window.cspRegister) cspRegister({ runResolve, saveRes, closeModals, confirmDelete, doLogin, logout, openForm, openPause, resumeBlocking, saveServer, setLang, setRange, setQRange, toggleCmp, setTheme, testServer, toggleNav, toggleServer, typeChanged });

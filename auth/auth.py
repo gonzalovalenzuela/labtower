@@ -1818,6 +1818,8 @@ CREATE TABLE IF NOT EXISTS nas_series  (nid TEXT NOT NULL, k TEXT NOT NULL, ts I
                                         PRIMARY KEY (nid, k, ts)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS dns_samples (sid TEXT NOT NULL, ts INTEGER NOT NULL, total INTEGER, blocked INTEGER, pct REAL, ms REAL,
                                         PRIMARY KEY (sid, ts)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS dns_hourly  (sid TEXT NOT NULL, hour INTEGER NOT NULL, total INTEGER, blocked INTEGER,
+                                        PRIMARY KEY (sid, hour)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS wan_samples (ts INTEGER PRIMARY KEY, up INTEGER NOT NULL, rtt REAL, loss REAL, jitter REAL, gw REAL, dns REAL);
 CREATE TABLE IF NOT EXISTS net_latency (ip TEXT NOT NULL, ts INTEGER NOT NULL, ms REAL, ok INTEGER NOT NULL,
                                         PRIMARY KEY (ip, ts)) WITHOUT ROWID;

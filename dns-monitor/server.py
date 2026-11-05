@@ -28,7 +28,8 @@ DNS Monitor — estado de uno o varios Pi-hole (v6 y v5) o AdGuard Home / status
 #     followed (credentials never go to another site) and the address is reduced to scheme://host[:port].
 #
 #     Structure: validation · HTTP client · Pi-hole · AdGuard · reading one server · cache and history · poller · health · HTTP.
-import base64, http.client, json, os, re, socket, ssl, sys, time, logging, threading, uuid
+import base64, http.client, json, os, re, socket, sqlite3, ssl, sys, time, logging, threading, uuid
+from datetime import date, timedelta
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 ThreadingHTTPServer.request_queue_size = 128
 from urllib.parse import urlparse, parse_qs, urlencode
@@ -205,6 +206,20 @@ def bin24(rows, now=None):
         if 0 <= i < 24: tot[i] += int(t or 0); blk[i] += int(b or 0)
     return {"total": tot, "blocked": blk}
 
+
+# Filas por hora de reloj (inicio de la hora, total, bloqueadas) de las últimas 24 h. La hora más antigua queda fuera porque la ventana la corta a medias.
+# Se guardan en metrics.db para poder dibujar semanas y meses aunque el DNS solo entregue 24 h.
+# EN: Clock-hour rows (hour start, total, blocked) for the last 24 h. The oldest hour is left out because the window cuts it in half.
+#     They are stored in metrics.db so weeks and months can be drawn even when the DNS only gives 24 h.
+def hour_rows(rows, now=None):
+    now = now or time.time(); first = -(-int(now - 86400) // 3600) * 3600; acc = {}
+    for ts, t, b in rows:
+        if not _num(ts): continue
+        h = int(ts) // 3600 * 3600
+        if h < first: continue
+        a = acc.setdefault(h, [0, 0]); a[0] += int(t or 0); a[1] += int(b or 0)
+    return [(h, a[0], a[1]) for h, a in sorted(acc.items())]
+
 # ─── Pi-hole ──────────────────────────────────────────────────────────────────
 # v6: POST /api/auth da un «sid» que se manda en la cabecera X-FTL-SID (dura unos minutos y se renueva al usarlo).
 # v5: /admin/api.php con ?auth=<token>; el token es el que muestra Ajustes → API.
@@ -275,7 +290,8 @@ def pihole_collect(cfg, st):
             if ms is not None and cnt: wsum += ms * cnt; wcnt += cnt
         snap["upstreams"], snap["ms"] = ups, (round(wsum / wcnt, 1) if wcnt else None)
         hh = get("/api/history")
-        snap["hourly"] = bin24([(x.get("timestamp"), x.get("total"), x.get("blocked")) for x in (_g(hh, "history", default=[]) or []) if isinstance(x, dict) and _num(x.get("timestamp"))])
+        h6 = [(x.get("timestamp"), x.get("total"), x.get("blocked")) for x in (_g(hh, "history", default=[]) or []) if isinstance(x, dict) and _num(x.get("timestamp"))]
+        snap["hourly"] = bin24(h6); snap["hours"] = hour_rows(h6)
         if not st.get("version") or time.time() - st.get("vts", 0) > 3600:
             v = get("/api/info/version")
             st["version"] = _g(v, "version", "core", "local", "version", default=st.get("version") or ""); st["vts"] = time.time()
@@ -304,7 +320,8 @@ def pihole_collect(cfg, st):
             nm, _, ip = k.partition("|"); snap["top_clients"].append({"name": nm, "ip": ip or nm, "count": v})
         ot = get5({"overTimeData10mins": ""})
         dom, ads = _g(ot, "domains_over_time", default={}) or {}, _g(ot, "ads_over_time", default={}) or {}
-        snap["hourly"] = bin24([(int(k), v, ads.get(k, 0)) for k, v in dom.items() if str(k).isdigit()])
+        h5 = [(int(k), v, ads.get(k, 0)) for k, v in dom.items() if str(k).isdigit()]
+        snap["hourly"] = bin24(h5); snap["hours"] = hour_rows(h5)
     snap["warnings"] = warnings
     return snap
 
@@ -359,6 +376,9 @@ def adguard_collect(cfg, st):
     if stt.get("time_units") == "hours" and len(dq) <= 24 and dq:
         pad = 24 - len(dq)
         snap["hourly"] = {"total": [0] * pad + [int(x or 0) for x in dq], "blocked": [0] * pad + [int(x or 0) for x in (bf + [0] * len(dq))[:len(dq)]]}
+        top = int(time.time()) // 3600 * 3600                           # the last value is the current hour
+        bl = (bf + [0] * len(dq))[:len(dq)]
+        snap["hours"] = [(top - (len(dq) - 1 - i) * 3600, int(v or 0), int(bl[i] or 0)) for i, v in enumerate(dq)]
     else:
         snap["hourly"] = {"total": [], "blocked": []}
     try:
@@ -462,6 +482,93 @@ def test_connection(cfg: dict) -> dict:
         except DnsError: pass
     return {"type": snap["type"], "api": snap["api"], "version": snap.get("version", ""), "queries": snap["queries"], "blocking": snap["blocking"]}
 
+
+# ─── Consultas por hora y por día (gráfico «Consultas por hora» con rangos) ─────────────
+# Fuentes, en este orden: la base de largo plazo del DNS (Pi-hole v6 → /api/history/database; AdGuard con retención de días) y, si no hay o no alcanza,
+# las horas que LabTower guarda desde que lee el DNS (tabla dns_hourly de metrics.db, un año por defecto).
+# EN: Queries per hour and per day (the "Queries per hour" chart with ranges). Sources, in this order: the DNS's own long-term database (Pi-hole v6 →
+#     /api/history/database; AdGuard with day retention) and, if it has none or not enough, the hours LabTower stores since it reads the DNS
+#     (table dns_hourly in metrics.db, one year by default).
+HOURS_KEEP = auth.keep_days("DNS_QUERIES_KEEP_DAYS", 365) * 86400
+QRANGES = {"1w": (7, "hour"), "1mo": (30, "day"), "all": (365, "day")}      # range → (days, bar unit)
+_QCACHE: dict = {}
+_QTTL = {"1w": 120, "1mo": 300, "all": 900}
+
+def push_hours(sid: str, rows):
+    if not rows: return
+    try:
+        c = auth.metrics_conn()
+        try:
+            c.executemany("INSERT OR REPLACE INTO dns_hourly (sid,hour,total,blocked) VALUES (?,?,?,?)", [(sid, int(h), int(t), int(b)) for h, t, b in rows])
+            c.execute("DELETE FROM dns_hourly WHERE sid = ? AND hour < ?", (sid, int(time.time()) - HOURS_KEEP)); c.commit()
+        finally: c.close()
+    except (sqlite3.Error, OSError) as e:
+        log.warning(f"could not store the hourly counts: {e}")
+
+def _bucket(ts, unit):
+    if unit == "hour": return int(ts) // 3600 * 3600
+    d = time.localtime(ts)
+    return int(time.mktime((d.tm_year, d.tm_mon, d.tm_mday, 0, 0, 0, 0, 0, -1)))
+
+def _next_bucket(cur, unit):
+    if unit == "hour": return cur + 3600
+    d = date(*time.localtime(cur)[:3]) + timedelta(days=1)
+    return int(time.mktime(d.timetuple()))
+
+def build_bars(rows, start, end, unit):
+    """(timestamp, total, blocked) rows → one bar per hour or local day from start to end; empty hours are zero. Leading empty bars are cut."""
+    acc = {}
+    for ts, t, b in rows:
+        if not _num(ts): continue
+        a = acc.setdefault(_bucket(ts, unit), [0, 0]); a[0] += int(t or 0); a[1] += int(b or 0)
+    bars, cur = [], _bucket(start, unit)
+    while cur <= end and len(bars) < 800:
+        a = acc.get(cur, [0, 0]); bars.append({"t": cur, "total": a[0], "blocked": a[1]}); cur = _next_bucket(cur, unit)
+    while len(bars) > 1 and not bars[0]["total"]: bars.pop(0)
+    return bars
+
+def _remote_rows(cfg, st, days):
+    """History rows from the DNS itself, or None when it has none (older Pi-hole, AdGuard with 1-day retention, errors)."""
+    now = int(time.time())
+    if cfg["type"] == "pihole" and st.get("api") == "v6":
+        rows = []
+        for a in range(now - days * 86400, now, 31 * 86400):                 # 31-day chunks keep every answer small
+            code, j = _ph6(cfg, st, "/api/history/database", {"from": a, "until": min(now, a + 31 * 86400)})
+            if code != 200 or not isinstance(j, dict): return None
+            rows += [(x.get("timestamp"), x.get("total"), x.get("blocked")) for x in (j.get("history") or []) if isinstance(x, dict)]
+        return rows or None
+    if cfg["type"] == "adguard":
+        code, stt = _ag(cfg, "GET", "/control/stats")
+        if code != 200 or not isinstance(stt, dict) or stt.get("time_units") != "days": return None
+        dq, bf = stt.get("dns_queries") or [], stt.get("blocked_filtering") or []
+        today = _bucket(now, "day"); out = []
+        for i, v in enumerate(dq):
+            d = date(*time.localtime(today)[:3]) - timedelta(days=len(dq) - 1 - i)
+            out.append((int(time.mktime(d.timetuple())) + 43200, v, bf[i] if i < len(bf) else 0))
+        return out or None
+    return None
+
+def _local_rows(sid, days):
+    c = auth.metrics_conn()
+    try: return c.execute("SELECT hour,total,blocked FROM dns_hourly WHERE sid = ? AND hour >= ? ORDER BY hour", (sid, int(time.time()) - days * 86400)).fetchall()
+    finally: c.close()
+
+def queries_range(cfg, st, sid, rng):
+    days, unit = QRANGES[rng]
+    key, now = (sid, rng), time.time()
+    hit = _QCACHE.get(key)
+    if hit and now - hit[0] < _QTTL[rng]: return hit[1]
+    src, rows = "local", None
+    try: rows = _remote_rows(cfg, st, days)
+    except (DnsError, OSError, ValueError, TypeError) as e: log.warning(f"remote history unavailable: {e}")
+    if rows: src = cfg["type"]
+    else: rows = _local_rows(sid, days)
+    start = int(now) - days * 86400
+    out = {"range": rng, "unit": unit, "source": src, "bars": build_bars(rows, start, int(now), unit)}
+    if len(_QCACHE) > 100: _QCACHE.clear()
+    _QCACHE[key] = (now, out)
+    return out
+
 # ─── Historial (% bloqueado, consultas y tiempo de respuesta por servidor) ────
 # Un buffer circular de ~12 h por servidor; cada muestra se guarda al instante en metrics.db (tabla dns_samples) y al arrancar se recargan las últimas ~12 h.
 # EN: A ~12 h circular buffer per server; every sample is stored at once in metrics.db (table dns_samples) and the last ~12 h are reloaded at startup.
@@ -532,9 +639,10 @@ def history_range(sid: str, range_: str, prev: bool = False) -> list:
 
 def forget_history(sid: str):
     with _hist_lock: _HISTORY.pop(sid, None)
+    for k in [k for k in _QCACHE if k[0] == sid]: _QCACHE.pop(k, None)
     try:
         c = auth.metrics_conn()
-        try: c.execute("DELETE FROM dns_samples WHERE sid = ?", (sid,)); c.commit()
+        try: c.execute("DELETE FROM dns_samples WHERE sid = ?", (sid,)); c.execute("DELETE FROM dns_hourly WHERE sid = ?", (sid,)); c.commit()
         finally: c.close()
     except Exception as e: log.warning(f"could not delete the history: {e}")
 
@@ -595,6 +703,7 @@ def _poll(sid: str):
             try:
                 snap = collect(n, cache.state)
                 snap["name"] = n["name"]
+                push_hours(sid, snap.pop("hours", None))
                 push_history(sid, snap)
                 cache.update(snap)
                 _events(n, snap)
@@ -721,6 +830,16 @@ class H(BaseHTTPRequestHandler):
             try: return self._json(200, {"range": rng, "prev": prev, "history": history_range(mh.group(1), rng, prev)})
             except Exception as e:
                 log.warning(f"history query failed: {e}"); return self._json(500, {"error": "Could not read the history"})
+        mq = re.fullmatch(r"/api/dns/([A-Za-z0-9_-]{1,40})/queries", path)
+        if mq:
+            cfg = next((n for n in load_servers() if n.get("id") == mq.group(1)), None)
+            if cfg is None: return self._json(404, {"error": "Server not found"})
+            rng = parse_qs(urlparse(self.path).query).get("range", ["1w"])[0]
+            if rng not in QRANGES: return self._json(400, {"error": "Invalid range"})
+            cache = _cache.get(cfg["id"])
+            try: return self._json(200, queries_range(cfg, cache.state if cache else {}, cfg["id"], rng))
+            except (sqlite3.Error, OSError, DnsError, ValueError) as e:
+                log.warning(f"queries query failed: {e}"); return self._json(500, {"error": "Could not read the history"})
         self._json(404, {"error": "Not found"})
 
     # POST: login/logout; «execute»: pausar o reanudar el bloqueo; solo admin: alta, edición y prueba.
