@@ -16,6 +16,7 @@ Carpetas: `<resolución>/<tema>/<pantalla>.png`. En móvil y tablet la captura e
 | Net Monitor (detalle de un equipo) | [net-detail.png](1920x1080/light/net-detail.png) | [net-detail.png](1920x1080/dark/net-detail.png) |
 | Switch Monitor | [switches.png](1920x1080/light/switches.png) | [switches.png](1920x1080/dark/switches.png) |
 | Proxmox Monitor | [proxmox.png](1920x1080/light/proxmox.png) | [proxmox.png](1920x1080/dark/proxmox.png) |
+| Proxmox Monitor (detalle de un nodo con PVE mods) | [proxmox-node.png](1920x1080/light/proxmox-node.png) | [proxmox-node.png](1920x1080/dark/proxmox-node.png) |
 | NAS Monitor | [nas.png](1920x1080/light/nas.png) | [nas.png](1920x1080/dark/nas.png) |
 | DNS Monitor | [dns.png](1920x1080/light/dns.png) | [dns.png](1920x1080/dark/dns.png) |
 | DNS Monitor (prueba de resolución) | [dns-resolve.png](1920x1080/light/dns-resolve.png) | [dns-resolve.png](1920x1080/dark/dns-resolve.png) |
@@ -38,6 +39,7 @@ Carpetas: `<resolución>/<tema>/<pantalla>.png`. En móvil y tablet la captura e
 | Net Monitor (detalle de un equipo) | [net-detail.png](1366x768/light/net-detail.png) | [net-detail.png](1366x768/dark/net-detail.png) |
 | Switch Monitor | [switches.png](1366x768/light/switches.png) | [switches.png](1366x768/dark/switches.png) |
 | Proxmox Monitor | [proxmox.png](1366x768/light/proxmox.png) | [proxmox.png](1366x768/dark/proxmox.png) |
+| Proxmox Monitor (detalle de un nodo con PVE mods) | [proxmox-node.png](1366x768/light/proxmox-node.png) | [proxmox-node.png](1366x768/dark/proxmox-node.png) |
 | NAS Monitor | [nas.png](1366x768/light/nas.png) | [nas.png](1366x768/dark/nas.png) |
 | DNS Monitor | [dns.png](1366x768/light/dns.png) | [dns.png](1366x768/dark/dns.png) |
 | DNS Monitor (prueba de resolución) | [dns-resolve.png](1366x768/light/dns-resolve.png) | [dns-resolve.png](1366x768/dark/dns-resolve.png) |

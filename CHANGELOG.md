@@ -1,53 +1,25 @@
 # Changelog
 
-## 2.1.7h — 2026-11-05
+## 2.1.8 — 2026-11-05
 
-- **Mejora:** WAN Monitor: el período de las pruebas de velocidad se fija en minutos u horas (mínimo 5 minutos). Con menos de 30 minutos aparece una advertencia: puede saturar el enlace rápidamente. Lo que ya tenías guardado en horas se convierte solo.
-- **Arreglo:** la tarjeta de IP ya no ofrece Net Monitor para esta misma máquina (127.0.0.1, ::1, localhost), por ejemplo en los clientes de UPS Monitor.
-- **Cambio:** WOL Console: se quitó «Export JSON» del menú Acciones y el «v2» bajo el nombre.
-
-## 2.1.7g — 2026-11-05
-
-- **Mejora:** Proxmox Monitor: el detalle del nodo muestra las temperaturas y los ventiladores del add-on PVE mods, agrupados como en Proxmox: estado térmico de la CPU por núcleo (con máximo y crítico), temperaturas NVMe por modelo, otras temperaturas y ventiladores en RPM, además de «Sensor Mod Version» e «Information». Requiere PVE mods instalado en cada nodo (ver README).
-- **Arreglo:** Proxmox Monitor: los servicios apagados a propósito (`syslog`, `systemd-timesyncd`…) ya no aparecen como «dead». Se muestra un resumen y solo se marcan en rojo los que deberían estar corriendo o fallaron.
-- **Mejora:** nuevo permiso por usuario, «Ver números de serie» (sí/no), para UPS, NAS, discos y nodos de Proxmox. Sin él, el servidor no envía esos datos al navegador. Los usuarios nuevos lo traen en «no»; al actualizar lo conservan los administradores de WOL o UPS.
-
-## 2.1.7f — 2026-11-05
-
-- **Arreglo:** WAN Monitor: ya no consulta el DNS cada vez que lee su configuración. Antes mandaba al DNS de la red una consulta a api.ipify.org y dos a speed.cloudflare.com cada pocos segundos (decenas de miles al día). Ahora el nombre se resuelve al guardar y una vez antes de conectarse.
 - **Cambio:** los servicios se llaman todos `labtower-<módulo>`: labtower-wol, labtower-auth, labtower-net, labtower-pve, labtower-nas, labtower-dns, labtower-wan y labtower-vpn (labtower-ups y labtower-overview no cambian). Al actualizar, el instalador quita los nombres viejos; los datos no se tocan. Ejemplo: `journalctl -u labtower-wan`.
-- **Mejora:** la versión de LabTower aparece en el pie de todas las páginas, incluido el kiosko, el inicio y el cambio de contraseña.
+- **Mejora:** nuevo permiso por usuario, «Ver números de serie» (sí/no), para UPS, NAS, discos y nodos de Proxmox. Sin él, el servidor no envía esos datos al navegador. Los usuarios nuevos lo traen en «no»; al actualizar lo conservan los administradores de WOL o UPS.
+- **Mejora:** Proxmox Monitor: al hacer clic en el nombre de un nodo se abre su detalle completo, con gráficos por rango. Si el nodo tiene el add-on PVE mods, muestra las temperaturas y los ventiladores agrupados como en Proxmox: estado térmico de la CPU por núcleo (con máximo y crítico), temperaturas NVMe por modelo, otras temperaturas y ventiladores en RPM, además de «Sensor Mod Version» e «Information». Requiere PVE mods instalado en cada nodo (ver README).
+- **Arreglo:** Proxmox Monitor: los servicios apagados a propósito (`syslog`, `systemd-timesyncd`…) ya no aparecen como «dead». Se muestra un resumen y solo se marcan en rojo los que deberían estar corriendo o fallaron.
+- **Mejora:** WAN Monitor: gráfico de las pruebas de velocidad con rangos (1 h, 1 día, 1 semana, 1 mes, todo). El período de las pruebas se fija en minutos u horas (mínimo 5 minutos); con menos de 30 minutos aparece una advertencia: puede saturar el enlace rápidamente. Lo que ya tenías guardado en horas se convierte solo.
+- **Arreglo:** WAN Monitor: ya no consulta el DNS cada vez que lee su configuración. Antes mandaba al DNS de la red una consulta a api.ipify.org y dos a speed.cloudflare.com cada pocos segundos (decenas de miles al día). Ahora el nombre se resuelve al guardar y una vez antes de conectarse.
 - **Mejora:** Net Monitor: el gráfico de temperatura de los switches tiene rangos (1 h, 1 día, 1 semana, 1 mes, todo).
-- **Mejora:** WAN Monitor: gráfico de las pruebas de velocidad con los mismos rangos.
-- **Mejora:** Proxmox Monitor: al hacer clic en el nombre de un nodo se abre su detalle completo, con gráficos por rango.
 - **Mejora:** DNS Monitor: «Consultas por hora» con rangos (1 día, 1 semana, 1 mes, todo) y un gráfico nuevo de actividad por cliente (Pi-hole).
-
-## 2.1.7e — 2026-11-04
-
-- **Arreglo:** Resumen, modo kiosko: en la tarjeta VPN Monitor, «N connected» queda en una sola línea y alineado.
-
-## 2.1.7d — 2026-11-04
-
-- **Arreglo:** instalador: al actualizar ya no devuelve todos los datos al usuario «labtower» (mostraba «data of a previous installation handed back to labtower» en cada actualización). Eso solo ocurre tras un purge.
-- **Mejora:** Resumen, menú clásico: el título lleva el icono de LabTower y la barra superior queda alineada con las tarjetas.
-
-## 2.1.7c — 2026-11-04
-
-- **Arreglo:** auth, labtower-resetpw y Net Monitor cargan en Python 3.9, la versión mínima del paquete (anotaciones «X | None»). Un test nuevo revisa el código empaquetado con la gramática de 3.9.
-- **Mejora:** Resumen, menú clásico: la tira de módulos cabe en una línea, con nombres cortos (UPS, Net, WOL, Admin); el nombre completo queda en el tooltip.
-
-## 2.1.7b — 2026-11-04
-
-- **Arreglo:** el campo del código de verificación (2FA) del inicio de sesión del Resumen aparecía fuera de la tarjeta y se quedaba en la página después de entrar. Ahora queda bajo la contraseña y desaparece al iniciar sesión.
-- **Cambio:** Resumen: se quitó la fila de botones de módulos; queda el filtro «Solo con problemas».
+- **Arreglo:** la tarjeta de IP ya no ofrece Net Monitor para esta misma máquina (127.0.0.1, ::1, localhost), por ejemplo en los clientes de UPS Monitor.
+- **Mejora:** la versión de LabTower aparece en el pie de todas las páginas, incluido el kiosko, el inicio y el cambio de contraseña.
+- **Mejora:** Resumen: el campo del código de verificación (2FA) del inicio de sesión queda bajo la contraseña y desaparece al iniciar sesión; se quitó la fila de botones de módulos (queda el filtro «Solo con problemas»); en el menú clásico el título lleva el icono de LabTower, la tira de módulos cabe en una línea con nombres cortos (UPS, Net, WOL, Admin) y la barra superior queda alineada con las tarjetas; en el kiosko, «N connected» de VPN Monitor queda en una sola línea.
 - **Mejora:** en el móvil, la barra inferior de todas las secciones tiene el botón «Salir».
+- **Cambio:** WOL Console: se quitó «Export JSON» del menú Acciones y el «v2» bajo el nombre.
+- **Arreglo:** instalador: al actualizar ya no devuelve todos los datos al usuario «labtower» (mostraba «data of a previous installation handed back to labtower» en cada actualización). Eso solo ocurre tras un purge.
+- **Arreglo:** auth, labtower-resetpw y Net Monitor cargan en Python 3.9, la versión mínima del paquete (anotaciones «X | None»). Un test nuevo revisa el código empaquetado con la gramática de 3.9.
+- **Arreglo:** el estado del respaldo SFTP quedaba vacío cada hora en servidores con el registro en RAM (DietPi vacía /var/log). El estado, el resultado de la verificación y el registro de restauraciones ahora se guardan en /var/lib/labtower/state y se migran solos al actualizar. Si el archivo de estado está vacío, `labtower-sftp-backup status` y el panel lo tratan como «aún no corrió» en lugar de «ilegible».
 - **Mejora:** la cookie de sesión guardada de los switches se crea ya con permiso 600.
-- **Mejora:** README: instalación en una VM o en una Raspberry Pi, con el enlace de la 2.1.7.
-
-## 2.1.7a — 2026-11-04
-
-- **Arreglo:** el estado del respaldo SFTP quedaba vacío cada hora en servidores con el registro en RAM (DietPi vacía /var/log). El estado, el resultado de la verificación y el registro de restauraciones ahora se guardan en /var/lib/labtower/state y se migran solos al actualizar.
-- **Mejora:** si el archivo de estado está vacío, `labtower-sftp-backup status` y el panel lo tratan como «aún no corrió» en lugar de «ilegible».
+- **Mejora:** README: instalación en una VM o en una Raspberry Pi, y requisito de PVE mods para el detalle de nodos de Proxmox.
 
 ## 2.1.7 — 2026-11-04
 

@@ -46,6 +46,8 @@ Every screen shares the same navigation, in the same order and grouping. Only th
 
 <img src="docs/screenshots/1920x1080/dark/wan-trace.png" width="290"> <img src="docs/screenshots/1920x1080/light/dns-resolve.png" width="290"> <img src="docs/screenshots/1920x1080/dark/vpn.png" width="290"> <img src="docs/screenshots/1920x1080/light/switches.png" width="290">
 
+<img src="docs/screenshots/1920x1080/dark/proxmox-node.png" width="290"> <img src="docs/screenshots/1920x1080/light/proxmox-node.png" width="290">
+
 All screens (light and dark, 4 sizes) are in [`docs/screenshots/`](docs/screenshots/). The data is demo data.
 
 ---
@@ -62,9 +64,9 @@ All screens (light and dark, 4 sizes) are in [`docs/screenshots/`](docs/screensh
 - **Install on a VM or a Raspberry Pi (Debian 12+, Ubuntu, DietPi or Raspberry Pi OS):**
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.7/labtower_2.1.7_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.8/labtower_2.1.8_all.deb
 sudo apt-get update
-sudo apt-get install -y ./labtower_2.1.7_all.deb
+sudo apt-get install -y ./labtower_2.1.8_all.deb
 ```
 
 Use `apt-get install ./file.deb`, not `dpkg -i`, so `apt` installs the dependencies. Then open `http://<labtower-ip>/`.
@@ -113,8 +115,8 @@ librespeed-cli --version
 ## Update
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.7/labtower_2.1.7_all.deb
-sudo apt-get install -y ./labtower_2.1.7_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.8/labtower_2.1.8_all.deb
+sudo apt-get install -y ./labtower_2.1.8_all.deb
 labtower-health
 ```
 
@@ -195,6 +197,7 @@ labtower-health
 ### Proxmox Monitor
 - Polls each cluster every 5 s with the page open and every 60 s when idle.
 - **Node detail — temperatures and fans:** requires the **[PVE mods](https://github.com/Meliox/PVE-mods)** add-on (`lm-sensors`) installed on each Proxmox node. Without it the detail still shows everything else (CPU, memory, network, services, disks…) but not the *CPU thermal state*, *NVMe temperatures*, *Other temperatures*, *System fans* or *Sensor Mod Version* sections. LabTower only reads what the add-on publishes through the Proxmox API; it installs nothing on the nodes and never shows machine or drive serial numbers.
+- **Node detail:** click a node's name to open its detail (CPU, memory, network, disks, services) with charts by range. Services that are intentionally off are not flagged as failures.
 - Node order and pinned nodes are saved per cluster (admin only).
 - When adding a cluster you must confirm its certificate SHA-256 fingerprint, which is then pinned. If the certificate changes, the token is not sent.
 - **Cluster diagnostics** (panel below the nodes): node reboots with a common timeline (those less than 10 minutes apart are flagged as *simultaneous*, and they are detected even if LabTower was stopped), corosync quorum state, down OSDs and Ceph warnings, and the SMART data of each node's disks (health, wear, temperature, errors, sectors and, on NVMe, *Unsafe Shutdowns*) read every 15 minutes (`PVE_SMART_EVERY`, in seconds; 0 disables it). Everything creates events on the Overview timeline. The API token needs the `Sys.Audit` privilege on `/nodes` (role `PVEAuditor`) to read the disks.
@@ -276,6 +279,7 @@ labtower-health
 
 ### DNS Monitor
 - **Upstream health:** every 60 s `example.com` is asked directly to each upstream DNS reported by Pi-hole or AdGuard Home; the list shows whether it answers and how fast. One that does not answer raises an alert (critical if none answers) and an event on the Overview timeline. DoH/DoT, this machine and link-local addresses are not probed.
+- **Queries per hour and per client:** "Queries per hour" with ranges (1 day, 1 week, 1 month, all) and, on Pi-hole, a per-client activity chart.
 - **Resolution test** ("execute" level): type a name and it is asked to the DNS server and to an outside resolver (`1.1.1.1`, changeable with `DNS_COMPARE`); it shows both answers and warns when the name is **blocked** by your DNS.
 
 
@@ -407,7 +411,7 @@ Each module answers `GET /api/health` (200 = ok or degraded, 503 = failed). With
 | `labtower-vpn` | VPN Monitor |
 | `labtower-overview` | Overview |
 
-Since 2.1.7f every service is called `labtower-<module>` (formerly `wol-console`, `admin-panel`, `net-monitor`, `proxmox-monitor`, `nas-monitor`, `dns-monitor`, `wan-monitor`, `vpn-monitor`). When upgrading, the installer removes the old names and enables the new ones; the data is not touched.
+Since 2.1.8 every service is called `labtower-<module>` (formerly `wol-console`, `admin-panel`, `net-monitor`, `proxmox-monitor`, `nas-monitor`, `dns-monitor`, `wan-monitor`, `vpn-monitor`). When upgrading, the installer removes the old names and enables the new ones; the data is not touched.
 
 **Uninstall:** `sudo apt remove labtower` stops the services and saves a copy of the data in `/var/backups/labtower`. `sudo apt purge labtower` also removes the code, services, nginx site and the `labtower-*` users. In both cases `/var/lib/labtower` and `/var/backups/labtower` are **not deleted**; remove them by hand for a clean machine.
 
