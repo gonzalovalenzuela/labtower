@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.7g — 2026-11-05
+
+- **Mejora:** Proxmox Monitor: el detalle del nodo muestra las temperaturas y los ventiladores del add-on PVE mods, agrupados como en Proxmox: estado térmico de la CPU por núcleo (con máximo y crítico), temperaturas NVMe por modelo, otras temperaturas y ventiladores en RPM, además de «Sensor Mod Version» e «Information». Requiere PVE mods instalado en cada nodo (ver README).
+- **Arreglo:** Proxmox Monitor: los servicios apagados a propósito (`syslog`, `systemd-timesyncd`…) ya no aparecen como «dead». Se muestra un resumen y solo se marcan en rojo los que deberían estar corriendo o fallaron.
+- **Mejora:** nuevo permiso por usuario, «Ver números de serie» (sí/no), para UPS, NAS, discos y nodos de Proxmox. Sin él, el servidor no envía esos datos al navegador. Los usuarios nuevos lo traen en «no»; al actualizar lo conservan los administradores de WOL o UPS.
+
 ## 2.1.7f — 2026-11-05
 
 - **Arreglo:** WAN Monitor: ya no consulta el DNS cada vez que lee su configuración. Antes mandaba al DNS de la red una consulta a api.ipify.org y dos a speed.cloudflare.com cada pocos segundos (decenas de miles al día). Ahora el nombre se resuelve al guardar y una vez antes de conectarse.
