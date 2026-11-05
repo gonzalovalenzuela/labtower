@@ -104,6 +104,9 @@ const LANG={
  "qSrcadguard": "Source: AdGuard Home statistics",
  "qSrclocal": "Source: counts LabTower stores while it reads this server (they only go back to when it started)",
  "qAll": "All",
+ "cTitle": "Client activity",
+ "cOther": "Other",
+ "cUnsupported": "Not available: this DNS does not report queries per client over time (Pi-hole only; v5 gives the last 24 h).",
  "info": "Server",
  "version": "Version",
  "api": "API",
@@ -230,6 +233,9 @@ const LANG={
  "qSrcadguard": "Fuente: estadísticas de AdGuard Home",
  "qSrclocal": "Fuente: conteos que LabTower guarda al leer este servidor (solo desde que empezó a guardarlos)",
  "qAll": "Todo",
+ "cTitle": "Actividad de clientes",
+ "cOther": "Otros",
+ "cUnsupported": "No disponible: este DNS no informa las consultas por cliente en el tiempo (solo Pi-hole; v5 entrega las últimas 24 h).",
  "info": "Servidor",
  "version": "Versión",
  "api": "API",
@@ -339,7 +345,7 @@ async function fetchAll(){
     if(wantHist)_histTs=Date.now();
     if(activeId!==''&&!items.some(n=>n.id===activeId))activeId=items[0]?.id||null;
     renderAll();ensureRanges();
-    if(activeId)loadQ(activeId,qRange);
+    if(activeId){loadQ(activeId,qRange);loadC(activeId,cRange);}
   }catch(e){console.error(e);}
 }
 function renderAll(){keepRes(()=>{renderSidebar();renderSummary();renderMain();updateGlobalStats();});}
@@ -471,6 +477,47 @@ function queriesCard(id,d){
   const body=qRange==='1d'?hourly(d.hourly):q?qBars(q):`<div class="dns-empty">…</div>`;
   return `<div class="node-card wide"><div class="node-hd"><div class="node-name">${esc(title)}</div><div class="vchart-filters dns-qfil">${chips}</div></div>${body}</div>`;
 }
+// Actividad de clientes: barras apiladas por cliente (los 6 con más consultas y «otros»), con los mismos rangos. Datos de /api/dns/<id>/clients.
+// EN: Client activity: stacked bars per client (the 6 busiest and "other"), with the same ranges. Data from /api/dns/<id>/clients.
+let cRange='1d';
+const _c={}, _cBusy={};
+const C_COLORS=['#4361ee','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#94a3b8'];
+async function loadC(id,range,force){
+  if(!id)return;
+  const key=id+'|'+range,c=_c[key];
+  if(!force&&c&&Date.now()-c.ts<60000)return;
+  if(_cBusy[key])return;_cBusy[key]=true;
+  try{
+    const r=await fetch('api/dns/'+encodeURIComponent(id)+'/clients?range='+range);
+    if(r.ok){_c[key]={ts:Date.now(),d:await r.json()};if(cRange===range&&activeId===id)renderAll();}
+  }catch(e){console.error(e);}
+  finally{_cBusy[key]=false;}
+}
+function setCRange(range){cRange=range;if(activeId)loadC(activeId,range,true);renderAll();}
+function clientBars(q){
+  if(!q.supported)return `<div class="dns-empty">${esc(t('cUnsupported'))}</div>`;
+  const bars=q.bars||[],cl=q.clients||[];
+  if(!bars.length||!bars.some(b=>b.v.some(x=>x>0)))return `<div class="dns-empty">${esc(t('noData'))}</div>`;
+  const sum=b=>b.v.reduce((a,x)=>a+x,0),mx=Math.max(...bars.map(sum),1),W=240,H=64,bw=W/bars.length,gap=bars.length>60?.3:1.2;
+  const lab=b=>{const d=new Date(b.t*1000),dd=d.toLocaleDateString(_lang==='es'?'es-CL':'en-GB',{day:'2-digit',month:'2-digit'});return q.unit==='hour'?dd+' '+String(d.getHours()).padStart(2,'0')+':00':dd;};
+  const names=cl.map(x=>x.name).concat([t('cOther')]);
+  let s='';
+  bars.forEach((b,i)=>{
+    const x=(i*bw+gap/2).toFixed(2),w=Math.max(.4,bw-gap).toFixed(2);let y=H,segs='';
+    b.v.forEach((v,j)=>{if(v<=0)return;const h=v/mx*(H-4);y-=h;segs+=`<rect x="${x}" y="${y.toFixed(1)}" width="${w}" height="${h.toFixed(1)}" fill="${C_COLORS[Math.min(j,C_COLORS.length-1)]}"/>`;});
+    const tip=lab(b)+' · '+b.v.map((v,j)=>v>0?names[j]+': '+fmtNum(v):'').filter(Boolean).join(' · ');
+    s+=`<g><title>${esc(tip)}</title>${segs}</g>`;
+  });
+  const mid=bars[Math.floor(bars.length/2)];
+  const leg=names.map((nm,j)=>j<cl.length||bars.some(b=>b.v[j]>0)?`<div class="vchart-legend-item"><div class="vchart-legend-dot" style="background:${C_COLORS[Math.min(j,C_COLORS.length-1)]}"></div>${esc(nm)}</div>`:'').join('');
+  return `<svg class="dns-hourly" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${s}</svg><div class="dns-hourly-axis"><span>${esc(lab(bars[0]))}</span><span>${esc(lab(mid))}</span><span>${esc(t('now'))}</span></div>
+    <div class="vchart-legend" style="padding:6px 14px 10px;justify-content:flex-start">${leg}</div>`;
+}
+function clientsCard(id){
+  const chips=['1d','1w','1mo','all'].map(r=>`<button type="button" class="vchart-filter${cRange===r?' active':''}" data-on-click="setCRange" data-on-click-args="${jsargs([r])}">${r==='all'?esc(t('qAll')):r}</button>`).join('');
+  const q=(_c[id+'|'+cRange]||{}).d;
+  return `<div class="node-card wide"><div class="node-hd"><div class="node-name">${esc(t('cTitle'))}</div><div class="vchart-filters dns-qfil">${q&&!q.supported?'':chips}</div></div>${q?clientBars(q):'<div class="dns-empty">…</div>'}</div>`;
+}
 function buildDetail(n){
   const snap=n.snap||{};
   const d=snap.data,hasData=d&&d.queries!=null;
@@ -493,7 +540,7 @@ function buildDetail(n){
   h+='<div class="dns-gauges">'+ring(t('gBlocked'),pc,'var(--dns)',pc==null?'—':pc+'%')+bigNum(t('gQueries'),fmtNum(d.queries),'')+bigNum(t('gBlockedN'),fmtNum(d.blocked),'','var(--red)')
     +bigNum(t('gLists'),fmtNum(d.domains_blocked),'')+bigNum(t('gClients'),d.clients==null?'—':d.clients,'')+bigNum(t('gResp'),d.ms==null?'—':d.ms,d.ms==null?'':'ms',d.ms>=200?'var(--orange)':'var(--text)')+'</div>';
   h+='<div class="dns-grid">';
-  h+=queriesCard(n.id,d);
+  h+=queriesCard(n.id,d)+clientsCard(n.id);
   h+=topList(t('topDomains'),d.top_domains,'var(--dns)')+topList(t('topBlocked'),d.top_blocked,'var(--red)')+topList(t('topClients'),d.top_clients,'var(--blue)');
   const upState=u=>!u.probe?'':u.probe.ok?` <span class="up-ok" title="${esc(t('upOk'))}">●</span> `+esc(u.probe.ms)+' ms':` <span class="up-bad" title="${esc(t('upDown'))}">●</span> `+esc(t('upDown'));
   const ups=(d.upstreams||[]).map(u=>`<div class="top-row"><span class="tn" title="${esc(u.ip||'')}">${esc(u.name||u.ip||'—')}${u.port?`<small>:${esc(u.port)}</small>`:''}</span><span class="tc">${esc(fmtNum(u.count))}${u.ms!=null?' · '+esc(u.ms)+' ms':''}${upState(u)}</span></div>`).join('');
@@ -722,4 +769,4 @@ _i18nReady=true;
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ runResolve, saveRes, closeModals, confirmDelete, doLogin, logout, openForm, openPause, resumeBlocking, saveServer, setLang, setRange, setQRange, toggleCmp, setTheme, testServer, toggleNav, toggleServer, typeChanged });
+if (window.cspRegister) cspRegister({ runResolve, saveRes, closeModals, confirmDelete, doLogin, logout, openForm, openPause, resumeBlocking, saveServer, setLang, setRange, setQRange, setCRange, toggleCmp, setTheme, testServer, toggleNav, toggleServer, typeChanged });

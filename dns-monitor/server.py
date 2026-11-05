@@ -569,6 +569,87 @@ def queries_range(cfg, st, sid, rng):
     _QCACHE[key] = (now, out)
     return out
 
+
+# ─── Actividad de clientes (consultas por cliente en el tiempo) ─────────────────────
+# Pi-hole v6: /api/history/clients (24 h) y /api/history/database/clients (más tiempo); Pi-hole v5: getClientsOverTime (24 h). AdGuard Home no entrega
+# una serie por cliente, así que ahí el gráfico no está disponible. Se muestran los 6 clientes con más consultas y el resto como «otros».
+# EN: Client activity (queries per client over time). Pi-hole v6: /api/history/clients (24 h) and /api/history/database/clients (longer); Pi-hole v5:
+#     getClientsOverTime (24 h). AdGuard Home gives no per-client series, so the chart is not available there. The 6 busiest clients are shown, the rest as "other".
+CLIENT_TOP = 6
+CRANGES = {"1d": (1, "hour"), "1w": (7, "hour"), "1mo": (30, "day"), "all": (365, "day")}
+_CCACHE: dict = {}
+_CTTL = {"1d": 60, "1w": 120, "1mo": 300, "all": 900}
+
+def _client_names(raw):
+    """Pi-hole 'clients' (object keyed by address, or a list) → {key: display name}."""
+    out = {}
+    if isinstance(raw, dict):
+        for k, v in raw.items():
+            out[str(k)] = str((v.get("name") if isinstance(v, dict) else "") or k)[:80]
+    elif isinstance(raw, list):
+        for v in raw:
+            if isinstance(v, dict) and (v.get("ip") or v.get("name")): out[str(v.get("ip") or v.get("name"))] = str(v.get("name") or v.get("ip"))[:80]
+    return out
+
+def build_client_bars(points, names, start, end, unit):
+    """points: [(timestamp, {client: count})] → {"clients": [{key, name, total}] (top CLIENT_TOP, busiest first), "bars": [{t, v: [per client…, other]}]}."""
+    totals = {}
+    for ts, data in points:
+        if _num(ts) and isinstance(data, dict):
+            for k, v in data.items():
+                if _num(v): totals[str(k)] = totals.get(str(k), 0) + int(v)
+    top = [k for k, _ in sorted(totals.items(), key=lambda kv: -kv[1])[:CLIENT_TOP] if totals[k] > 0]
+    idx, acc = {k: i for i, k in enumerate(top)}, {}
+    for ts, data in points:
+        if not _num(ts) or not isinstance(data, dict): continue
+        row = acc.setdefault(_bucket(ts, unit), [0] * (len(top) + 1))
+        for k, v in data.items():
+            if _num(v): row[idx.get(str(k), len(top))] += int(v)
+    bars, cur = [], _bucket(start, unit)
+    while cur <= end and len(bars) < 800:
+        bars.append({"t": cur, "v": acc.get(cur, [0] * (len(top) + 1))}); cur = _next_bucket(cur, unit)
+    while len(bars) > 1 and not any(bars[0]["v"]): bars.pop(0)
+    return {"clients": [{"key": k, "name": names.get(k, k), "total": totals[k]} for k in top], "bars": bars}
+
+def _client_points(cfg, st, rng, days):
+    """(points, names) from the DNS, or None when this DNS cannot give a per-client series for the range."""
+    now = int(time.time())
+    if cfg["type"] != "pihole": return None
+    if st.get("api") == "v6":
+        pts, names = [], {}
+        chunks = [(None, None)] if rng == "1d" else [(a, min(now, a + 31 * 86400)) for a in range(now - days * 86400, now, 31 * 86400)]
+        for a, b in chunks:
+            path, params = ("/api/history/clients", {"N": 20}) if a is None else ("/api/history/database/clients", {"from": a, "until": b, "N": 20})
+            code, j = _ph6(cfg, st, path, params)
+            if code != 200 or not isinstance(j, dict): return None
+            names.update(_client_names(j.get("clients")))
+            pts += [(x.get("timestamp"), x.get("data")) for x in (j.get("history") or []) if isinstance(x, dict)]
+        return (pts, names) if pts else None
+    if st.get("api") == "v5" and rng == "1d":
+        j = _ph5(cfg, {"getClientsOverTime": ""})
+        cl = (j or {}).get("clients") if isinstance(j, dict) else None
+        ot = (j or {}).get("over_time") if isinstance(j, dict) else None
+        if not isinstance(cl, list) or not isinstance(ot, dict): return None
+        keys = [str(c.get("ip") or c.get("name")) for c in cl if isinstance(c, dict)]
+        pts = [(int(ts), {keys[i]: v for i, v in enumerate(vals) if i < len(keys)}) for ts, vals in ot.items() if str(ts).isdigit() and isinstance(vals, list)]
+        return (pts, _client_names(cl)) if pts else None
+    return None
+
+def clients_range(cfg, st, sid, rng):
+    key, now = (sid, rng), time.time()
+    hit = _CCACHE.get(key)
+    if hit and now - hit[0] < _CTTL[rng]: return hit[1]
+    days, unit = CRANGES[rng]
+    out = {"range": rng, "unit": unit, "supported": False, "clients": [], "bars": []}
+    try: got = _client_points(cfg, st, rng, days)
+    except (DnsError, OSError, ValueError, TypeError) as e:
+        log.warning(f"client history unavailable: {e}"); got = None
+    if got:
+        out.update(build_client_bars(got[0], got[1], int(now) - days * 86400, int(now), unit)); out["supported"] = True
+    if len(_CCACHE) > 100: _CCACHE.clear()
+    _CCACHE[key] = (now, out)
+    return out
+
 # ─── Historial (% bloqueado, consultas y tiempo de respuesta por servidor) ────
 # Un buffer circular de ~12 h por servidor; cada muestra se guarda al instante en metrics.db (tabla dns_samples) y al arrancar se recargan las últimas ~12 h.
 # EN: A ~12 h circular buffer per server; every sample is stored at once in metrics.db (table dns_samples) and the last ~12 h are reloaded at startup.
@@ -639,7 +720,8 @@ def history_range(sid: str, range_: str, prev: bool = False) -> list:
 
 def forget_history(sid: str):
     with _hist_lock: _HISTORY.pop(sid, None)
-    for k in [k for k in _QCACHE if k[0] == sid]: _QCACHE.pop(k, None)
+    for c in (_QCACHE, _CCACHE):
+        for k in [k for k in c if k[0] == sid]: c.pop(k, None)
     try:
         c = auth.metrics_conn()
         try: c.execute("DELETE FROM dns_samples WHERE sid = ?", (sid,)); c.execute("DELETE FROM dns_hourly WHERE sid = ?", (sid,)); c.commit()
@@ -830,6 +912,14 @@ class H(BaseHTTPRequestHandler):
             try: return self._json(200, {"range": rng, "prev": prev, "history": history_range(mh.group(1), rng, prev)})
             except Exception as e:
                 log.warning(f"history query failed: {e}"); return self._json(500, {"error": "Could not read the history"})
+        mc = re.fullmatch(r"/api/dns/([A-Za-z0-9_-]{1,40})/clients", path)
+        if mc:
+            cfg = next((n for n in load_servers() if n.get("id") == mc.group(1)), None)
+            if cfg is None: return self._json(404, {"error": "Server not found"})
+            rng = parse_qs(urlparse(self.path).query).get("range", ["1d"])[0]
+            if rng not in CRANGES: return self._json(400, {"error": "Invalid range"})
+            cache = _cache.get(cfg["id"])
+            return self._json(200, clients_range(cfg, cache.state if cache else {}, cfg["id"], rng))
         mq = re.fullmatch(r"/api/dns/([A-Za-z0-9_-]{1,40})/queries", path)
         if mq:
             cfg = next((n for n in load_servers() if n.get("id") == mq.group(1)), None)

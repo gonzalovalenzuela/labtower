@@ -99,12 +99,71 @@ class Sources(unittest.TestCase):
         self.assertEqual(set(dns.QRANGES), {"1w", "1mo", "all"})
 
 
+class ClientActivity(unittest.TestCase):
+    def setUp(self):
+        dns._CCACHE.clear()
+        self._ph6, self._ph5 = dns._ph6, dns._ph5
+
+    def tearDown(self):
+        dns._ph6, dns._ph5 = self._ph6, self._ph5
+        dns._CCACHE.clear()
+
+    def test_top_clients_and_other(self):
+        pts = [(NOW - 3600, {f"c{i}": 100 - i for i in range(9)}), (NOW - 7200, {"c0": 5, "zz": 0})]
+        out = dns.build_client_bars(pts, {"c0": "mac.lan"}, NOW - 4 * 3600, NOW, "hour")
+        self.assertEqual(len(out["clients"]), dns.CLIENT_TOP)
+        self.assertEqual((out["clients"][0]["key"], out["clients"][0]["name"], out["clients"][0]["total"]), ("c0", "mac.lan", 105))
+        self.assertNotIn("zz", [c["key"] for c in out["clients"]])           # a client with no queries is not shown
+        busy = next(b for b in out["bars"] if b["t"] == (NOW - 3600) // 3600 * 3600)
+        self.assertEqual(len(busy["v"]), dns.CLIENT_TOP + 1)
+        self.assertEqual(busy["v"][-1], sum(100 - i for i in range(dns.CLIENT_TOP, 9)))     # the rest goes to "other"
+
+    def test_day_bars_add_up_the_hours(self):
+        d0 = dns._bucket(NOW - 86400, "day")
+        out = dns.build_client_bars([(d0 + 3600, {"a": 2}), (d0 + 9000, {"a": 3, "b": 1})], {}, NOW - 5 * 86400, NOW, "day")
+        self.assertEqual(out["bars"][0]["v"][:2], [5, 1])
+
+    def test_pihole_v6_24h_and_long_ranges_use_different_endpoints(self):
+        seen = []
+        def fake(cfg, st, path, params=None, **kw):
+            seen.append(path)
+            return 200, {"clients": {"192.0.2.5": {"name": "mac.lan", "total": 9}}, "history": [{"timestamp": NOW, "data": {"192.0.2.5": 9}}]}
+        dns._ph6 = fake
+        _, names = dns._client_points({"type": "pihole"}, {"api": "v6"}, "1d", 1)
+        self.assertEqual((seen, names), (["/api/history/clients"], {"192.0.2.5": "mac.lan"}))
+        seen.clear(); dns._client_points({"type": "pihole"}, {"api": "v6"}, "1mo", 30)
+        self.assertEqual(set(seen), {"/api/history/database/clients"})
+
+    def test_pihole_v5_only_gives_24_hours(self):
+        dns._ph5 = lambda cfg, params: {"clients": [{"name": "mac", "ip": "192.0.2.5"}], "over_time": {str(NOW): [4]}}
+        pts, _ = dns._client_points({"type": "pihole"}, {"api": "v5"}, "1d", 1)
+        self.assertEqual(pts, [(NOW, {"192.0.2.5": 4})])
+        self.assertIsNone(dns._client_points({"type": "pihole"}, {"api": "v5"}, "1w", 7))
+
+    def test_adguard_is_not_supported(self):
+        self.assertIsNone(dns._client_points({"type": "adguard"}, {}, "1d", 1))
+        out = dns.clients_range({"type": "adguard"}, {}, "t-c1", "1d")
+        self.assertFalse(out["supported"])
+        self.assertEqual(out["bars"], [])
+
+    def test_errors_do_not_break_the_answer(self):
+        def boom(*a, **k): raise dns.DnsError("down")
+        dns._ph6 = boom
+        self.assertFalse(dns.clients_range({"type": "pihole"}, {"api": "v6"}, "t-c2", "1w")["supported"])
+
+    def test_known_ranges_only(self):
+        self.assertEqual(set(dns.CRANGES), {"1d", "1w", "1mo", "all"})
+
+
 class Page(unittest.TestCase):
     def test_the_card_has_the_range_buttons_and_the_handler(self):
         js = (support.ROOT / "dns-monitor/static/app.js").read_text()
         self.assertIn('data-on-click="setQRange"', js)
         self.assertRegex(js, r"cspRegister\(\{[^}]*\bsetQRange\b")
         self.assertIn("api/dns/'+encodeURIComponent(id)+'/queries?range=", js)
+        self.assertIn('data-on-click="setCRange"', js)
+        self.assertRegex(js, r"cspRegister\(\{[^}]*\bsetCRange\b")
+        self.assertIn("/clients?range=", js)
 
 
 if __name__ == "__main__":
