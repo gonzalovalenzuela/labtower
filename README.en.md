@@ -124,7 +124,7 @@ labtower-health
 - **From Pi Console (1.x):** LabTower is the same project under a new name. The 2.0 `.deb` replaces `pi-console` and migrates by itself the user, data, HTTPS certificates, SFTP backup and earlier backups to the new paths (`/var/lib/labtower`, `/etc/labtower`…). You have to log in again. The `pi-console-*` commands are now `labtower-*`. Afterwards you can run `sudo dpkg -P pi-console` to clean up the old package record.
 - Installing a **lower** version number than the current one needs `--allow-downgrades`.
 - After updating, reload the page (Ctrl+Shift+R). On iPad, close and reopen the page.
-- Changes for each version are in [CHANGELOG.md](CHANGELOG.md).
+- Changes for each version are in [CHANGELOG.en.md](CHANGELOG.en.md) (Spanish, with every development build: [CHANGELOG.md](CHANGELOG.md)).
 
 ## First login
 
@@ -498,7 +498,7 @@ labtower/
 ├── assets/nav.*       # shared navigation (nav.js, nav.css); every module has an identical copy in its static/
 ├── tests/             # automated tests (unittest)
 ├── docs/              # APT.md and screenshots
-├── CHANGELOG.md, RELEASE_NOTES_2.0.md, VERSION, LICENSE
+├── CHANGELOG.md, CHANGELOG.en.md, RELEASE_NOTES_2.0.md, VERSION, LICENSE
 └── README.md, README.en.md
 ```
 
