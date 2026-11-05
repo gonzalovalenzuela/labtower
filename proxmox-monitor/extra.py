@@ -6,7 +6,9 @@ EN: Proxmox Monitor — extra information: days until full (storage / Ceph), VM/
     (overcommit and N-1 test), HA, replication, failed tasks, Ceph PG state and per-node data (version, kernel, load, swap,
     iowait, certificate). Pure functions: no network, no disk, so they can be tested with sample data.
 """
-import re, math
+import json
+import math
+import re
 
 LOCK_MIN        = 60          # min: a lock older than this is "stuck" (a running backup holds 'backup' much longer)
 LOCK_BACKUP_MIN = 360
@@ -322,6 +324,53 @@ def _flat(v, depth=0):
     if isinstance(v, dict) and depth < 2: return " · ".join(f"{_s(k, 40)}: {_flat(x, depth + 1)}" for k, x in list(v.items())[:12])
     return ""
 
+_YES = (True, 1, "1", "yes", "true", "on")
+
+def _pvemod(k, v):
+    """The PVE-mod add-on puts its own fields in the node status. Return a short readable text ('' = nothing worth showing); its serial number is never shown."""
+    if not isinstance(v, dict): return _flat(v)
+    if k == "PveMod_JsonSensorInfo": return ""       # only says which sensors the add-on reads (cpu, nvme, fans…): nothing to show
+    if k == "PveMod_systemInfo":
+        return " | ".join(f"{lab}: {_s(v.get(n), 60)}" for lab, n in (("Manufacturer", "manufacturer"), ("Product Name", "product_name")) if v.get(n))
+    if k == "PveMod_upsInfo": return "" if v.get("disabled") in _YES else _flat({n: x for n, x in v.items() if n != "disabled"})
+    return _flat(v)
+
+def sensors(v):
+    """Readings from the PVE-mod add-on (its 'data' is `sensors -j` output, maybe after a title line) → [{g: cpu|nvme|other|fans, l, v}]. [] when absent or unreadable."""
+    raw = v.get("data") if isinstance(v, dict) else None
+    if isinstance(raw, str):
+        i = raw.find("{")
+        try: raw = json.loads(raw[i:]) if i >= 0 else None
+        except ValueError: raw = None
+    if not isinstance(raw, dict): return []
+    out = []
+    for chip, feats in list(raw.items())[:40]:
+        if not isinstance(feats, dict): continue
+        c = str(chip).lower()
+        grp = "cpu" if c.startswith(("coretemp", "k10temp", "zenpower", "cpu_thermal")) else "nvme" if c.startswith("nvme") else "other"
+        for fname, fv in list(feats.items())[:60]:
+            if not isinstance(fv, dict): continue
+            for key, val in fv.items():
+                m = re.fullmatch(r"(temp|fan)\d+_input", str(key))
+                x = _n(val)
+                if not m or x is None or not math.isfinite(x): continue
+                lab = _s(fname, 40) if grp != "other" or m.group(1) == "fan" else _s(chip, 30) + " · " + _s(fname, 40)
+                out.append({"g": "fans" if m.group(1) == "fan" else grp, "l": lab, "v": round(x, 1)})
+                if len(out) >= 120: return out
+    return out
+
+# Servicios que deben estar corriendo cuando Proxmox no informa si el servicio está habilitado (versiones antiguas).
+# EN: Services that must be running when Proxmox does not say whether the service is enabled (old versions).
+_CORE_SERVICES = {"pve-cluster", "pvedaemon", "pveproxy", "pvestatd", "pve-firewall", "pvescheduler", "sshd", "cron"}
+
+def service_problem(s):
+    """A stopped service is a problem only if it is meant to run. Proxmox lists syslog, systemd-timesyncd… as 'dead' when they are off on purpose."""
+    state, unit, act = (_s(s.get(k), 20) for k in ("state", "unit-state", "active-state"))
+    if state == "running": return False
+    if act == "failed": return True
+    if unit: return unit == "enabled"
+    return _s(s.get("service"), 60) in _CORE_SERVICES
+
 _STATUS_KNOWN = {"cpu", "cpuinfo", "memory", "swap", "rootfs", "ksm", "loadavg", "wait", "uptime", "kversion", "pveversion", "current-kernel", "boot-info", "idle"}
 
 def node_detail(status, version, tinfo, dns, net, subs, apt, services, disks):
@@ -351,14 +400,18 @@ def node_detail(status, version, tinfo, dns, net, subs, apt, services, disks):
         "subscription": {"status": _s(sb.get("status"), 40), "level": _s(sb.get("level"), 20), "product": _s(sb.get("productname"), 80), "due": _s(sb.get("nextduedate"), 20)} if sb else None,
         "updates": len(apt) if isinstance(apt, list) else None,
         "net": [], "services": [], "disks": [],
-        "other": [{"k": _s(k, 60), "v": _flat(v)} for k, v in sorted(st.items()) if k not in _STATUS_KNOWN and _flat(v)][:40],
+        "other": [], "sensors": sensors(st.get("PveMod_JsonSensorInfo")),
+        "temp_unit": "F" if isinstance(st.get("PveMod_JsonSensorInfo"), dict) and st["PveMod_JsonSensorInfo"].get("temp_unit") == "F" else "C",
     }
+    for k, v in sorted(st.items()):
+        val = _pvemod(k, v) if str(k).startswith("PveMod_") else _flat(v)
+        if k not in _STATUS_KNOWN and val and len(out["other"]) < 40: out["other"].append({"k": _s(k, 60), "v": val})
     for n in (net if isinstance(net, list) else [])[:60]:
         if not isinstance(n, dict): continue
         out["net"].append({"iface": _s(n.get("iface"), 40), "type": _s(n.get("type"), 20), "active": bool(n.get("active")), "address": _s(n.get("cidr") or n.get("address"), 60),
                            "gateway": _s(n.get("gateway"), 60), "ports": _s(n.get("bridge_ports") or n.get("slaves"), 120), "comments": _s(n.get("comments"), 80)})
     for s in (services if isinstance(services, list) else [])[:60]:
-        if isinstance(s, dict) and s.get("service"): out["services"].append({"name": _s(s.get("service"), 60), "state": _s(s.get("state"), 20), "desc": _s(s.get("desc"), 100)})
+        if isinstance(s, dict) and s.get("service"): out["services"].append({"name": _s(s.get("service"), 60), "state": _s(s.get("state"), 20), "desc": _s(s.get("desc"), 100), "bad": service_problem(s)})
     for d in (disks if isinstance(disks, list) else [])[:60]:
         if isinstance(d, dict): out["disks"].append({"dev": _s(d.get("devpath"), 40), "model": _s(d.get("model"), 80), "size": _n(d.get("size")), "type": _s(d.get("type"), 12),
                                                      "health": _s(d.get("health"), 20), "wearout": _s(d.get("wearout"), 12)})

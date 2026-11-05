@@ -50,6 +50,29 @@ class NodeDetail(unittest.TestCase):
         for secret in ("SECRET-KEY", "SECRET-ID", "SERIAL"):
             self.assertNotIn(secret, blob, "the license key, server id and disk serials never go to the page")
 
+    def test_pve_mod_fields_are_short_and_never_show_the_serial(self):
+        st = {"PveMod_JsonSensorInfo": {"temp_unit": "C", "cpu": True, "hdd": False, "data": "PVE MOD lm-sensors Enhanced", "other": True, "fans": True, "nvme": True},
+              "PveMod_Version": "1.0.6",
+              "PveMod_systemInfo": {"serial_number": "2TQVWP3", "manufacturer": "Dell Inc.", "display_string": "Manufacturer: Dell Inc. | Serial Number: 2TQVWP3", "product_name": "OptiPlex 7090"},
+              "PveMod_upsInfo": {"disabled": True}}
+        d = extra.node_detail(st, None, None, None, None, None, None, None, None)
+        self.assertEqual({o["k"]: o["v"] for o in d["other"]}, {"PveMod_Version": "1.0.6", "PveMod_systemInfo": "Manufacturer: Dell Inc. | Product Name: OptiPlex 7090"})
+        self.assertNotIn("2TQVWP3", repr(d))
+        st["PveMod_upsInfo"] = {"disabled": False, "model": "APC"}
+        self.assertIn("model: APC", {o["k"]: o["v"] for o in extra.node_detail(st, None, None, None, None, None, None, None, None)["other"]}["PveMod_upsInfo"])
+
+    def test_a_service_off_on_purpose_is_not_a_problem(self):
+        sv = [{"service": "pveproxy", "state": "running", "unit-state": "enabled"},
+              {"service": "syslog", "state": "dead", "unit-state": "disabled"}, {"service": "systemd-timesyncd", "state": "dead", "unit-state": "masked"},
+              {"service": "pvedaemon", "state": "dead", "unit-state": "enabled"}, {"service": "x", "state": "dead", "unit-state": "static", "active-state": "failed"}]
+        d = extra.node_detail(None, None, None, None, None, None, None, sv, None)
+        self.assertEqual({s["name"]: s["bad"] for s in d["services"]}, {"pveproxy": False, "syslog": False, "systemd-timesyncd": False, "pvedaemon": True, "x": True})
+
+    def test_old_proxmox_without_unit_state_only_flags_the_core_services(self):
+        d = extra.node_detail(None, None, None, None, None, None, None, [{"service": "syslog", "state": "dead"}, {"service": "pveproxy", "state": "dead"},
+                                                                      {"service": "pvestatd", "state": "running"}], None)
+        self.assertEqual({s["name"]: s["bad"] for s in d["services"]}, {"syslog": False, "pveproxy": True, "pvestatd": False})
+
     def test_missing_parts_do_not_fail(self):
         d = extra.node_detail(None, None, None, None, None, None, None, None, None)
         self.assertIsNone(d["cpu"]); self.assertIsNone(d["updates"]); self.assertIsNone(d["subscription"])
@@ -148,3 +171,23 @@ class Pages(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PveModSensors(unittest.TestCase):
+    RAW = ('PVE MOD lm-sensors Enhanced:\n{"coretemp-isa-0000": {"Package id 0": {"temp1_input": 41.0, "temp1_max": 100.0}, "Core 0": {"temp2_input": 39.0}},'
+           ' "nvme-pci-0100": {"Composite": {"temp1_input": 33.85}}, "acpitz-acpi-0": {"temp1": {"temp1_input": 27.8}},'
+           ' "dell_smm-virtual-0": {"Processor Fan": {"fan1_input": 1250.0}}}')
+
+    def test_groups_cpu_nvme_other_and_fans(self):
+        s = extra.sensors({"data": self.RAW})
+        self.assertEqual([(x["g"], x["l"], x["v"]) for x in s], [("cpu", "Package id 0", 41.0), ("cpu", "Core 0", 39.0), ("nvme", "Composite", 33.9),
+                                                                ("other", "acpitz-acpi-0 · temp1", 27.8), ("fans", "Processor Fan", 1250.0)])
+
+    def test_unreadable_data_gives_nothing(self):
+        for bad in (None, {}, {"data": "PVE MOD lm-sensors Enhanced:"}, {"data": "x {not json"}, {"data": 5}, "text"):
+            self.assertEqual(extra.sensors(bad), [])
+
+    def test_node_detail_carries_them(self):
+        d = extra.node_detail({"PveMod_JsonSensorInfo": {"temp_unit": "C", "data": self.RAW}}, {}, {}, {}, [], {}, [], [], [])
+        self.assertEqual(len(d["sensors"]), 5)
+        self.assertEqual(d["temp_unit"], "C")

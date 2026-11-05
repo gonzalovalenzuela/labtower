@@ -1,5 +1,5 @@
 const LANG={
-  en:{ndPrimary:'Primary metrics',ndSecondary:'Secondary metrics',ndSystem:'System',ndCpu:'CPU usage',ndOfCpus:n=>'of '+n+' CPUs',ndRam:'Memory usage',ndKsm:'KSM sharing',ndSwap:'SWAP usage',ndDisk:'Disk (/) usage',ndLoadAvg:'CPU load average',ndIowait:'CPU I/O delay',ndCpuModel:'CPU model',ndKernel:'Kernel version',ndBoot:'Boot mode',ndManager:'Manager version',ndUptime:'Uptime',ndTz:'Time zone',ndDns:'DNS',ndSub:'Subscription',ndUpdates:'Pending updates',ndDisks:'Disks',ndNetIf:'Network interfaces',ndServices:'Services',ndOther:'Other data',ndLoading:'Loading…',ndErr:'Could not read the node from Proxmox.',ndPerm:'The API token has no permission to read this.',ndExpand:'Click to show or hide the node details',ndChCpu:'CPU usage',ndChMem:'Memory usage',ndChLoad:'Server load',ndChNet:'Network traffic',ndSCpu:'CPU',ndSIo:'IO delay',ndSRam:'RAM',ndSSwap:'Swap',ndSLoad:'Load average',ndSIn:'In',ndSOut:'Out',ndRangeNote:'History comes from Proxmox itself; “All” is the last year.',ndNone:'None',ndYes:'yes',ndNo:'no',connecting:'Connecting…',connectingMsg:'Fetching data from Proxmox.',noNodes:'No nodes',noNodesMsg:'No nodes were found in this cluster.',loginTitle:'Sign in',loginSub:'Enter your credentials to continue.',
+  en:{ndPrimary:'Primary metrics',ndSecondary:'Secondary metrics',ndSystem:'System',ndCpu:'CPU usage',ndOfCpus:n=>'of '+n+' CPUs',ndRam:'Memory usage',ndKsm:'KSM sharing',ndSwap:'SWAP usage',ndDisk:'Disk (/) usage',ndLoadAvg:'CPU load average',ndIowait:'CPU I/O delay',ndCpuModel:'CPU model',ndKernel:'Kernel version',ndBoot:'Boot mode',ndManager:'Manager version',ndUptime:'Uptime',ndTz:'Time zone',ndDns:'DNS',ndSub:'Subscription',ndUpdates:'Pending updates',ndDisks:'Disks',ndNetIf:'Network interfaces',ndServices:'Services',ndServState:'State',ndRunning:'running',ndInactive:'inactive (off on purpose)',ndInfo:'Information',ndSnCpu:'CPU thermal state',ndSnNvme:'NVMe temperatures',ndSnOther:'Other temperatures',ndSnFans:'System fans',ndPveMod:'Sensor Mod Version',ndUps:'UPS (PVE mod)',ndOther:'Other data',ndLoading:'Loading…',ndErr:'Could not read the node from Proxmox.',ndPerm:'The API token has no permission to read this.',ndExpand:'Click to show or hide the node details',ndChCpu:'CPU usage',ndChMem:'Memory usage',ndChLoad:'Server load',ndChNet:'Network traffic',ndSCpu:'CPU',ndSIo:'IO delay',ndSRam:'RAM',ndSSwap:'Swap',ndSLoad:'Load average',ndSIn:'In',ndSOut:'Out',ndRangeNote:'History comes from Proxmox itself; “All” is the last year.',ndNone:'None',ndYes:'yes',ndNo:'no',connecting:'Connecting…',connectingMsg:'Fetching data from Proxmox.',noNodes:'No nodes',noNodesMsg:'No nodes were found in this cluster.',loginTitle:'Sign in',loginSub:'Enter your credentials to continue.',
     username:'Username',password:'Password',loginBtn:'Sign in',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',
     navSection:'Navigation',clustersPVE:'PVE Clusters',addCluster:'Add cluster',
     themeLight:'Light',themeDark:'Dark',
@@ -44,7 +44,7 @@ const LANG={
     smartTitle:'Disks (SMART)',smartWait:'Reading SMART data… (first read takes up to a minute)',smartNone:'No disk data. The API token needs the Sys.Audit privilege on /nodes.',
     smartHealth:'Health',smartWear:'Wear',smartTemp:'Temp',smartUnsafe:'Unsafe shutdowns',smartErrs:'Media errors',smartAge:(m)=>`read ${m} min ago`,
     wHealth:'SMART failed',wMedia:'media errors',wCritwarn:'critical warning',wSectors:'bad sectors',wRealloc:'reallocated sectors',wWear:'worn out',wSpare:'low spare',nodeErr:'unavailable'},
-  es:{ndPrimary:'Métricas principales',ndSecondary:'Métricas secundarias',ndSystem:'Sistema',ndCpu:'Uso de CPU',ndOfCpus:n=>'de '+n+' CPU',ndRam:'Uso de memoria',ndKsm:'Compartido por KSM',ndSwap:'Uso de SWAP',ndDisk:'Uso de disco (/)',ndLoadAvg:'Carga promedio de CPU',ndIowait:'Espera de E/S de CPU',ndCpuModel:'Modelo de CPU',ndKernel:'Versión del kernel',ndBoot:'Modo de arranque',ndManager:'Versión del gestor',ndUptime:'Tiempo encendido',ndTz:'Zona horaria',ndDns:'DNS',ndSub:'Suscripción',ndUpdates:'Actualizaciones pendientes',ndDisks:'Discos',ndNetIf:'Interfaces de red',ndServices:'Servicios',ndOther:'Otros datos',ndLoading:'Cargando…',ndErr:'No se pudo leer el nodo desde Proxmox.',ndPerm:'El token de API no tiene permiso para leer esto.',ndExpand:'Clic para mostrar u ocultar el detalle del nodo',ndChCpu:'Uso de CPU',ndChMem:'Uso de memoria',ndChLoad:'Carga del servidor',ndChNet:'Tráfico de red',ndSCpu:'CPU',ndSIo:'Espera E/S',ndSRam:'RAM',ndSSwap:'Swap',ndSLoad:'Carga promedio',ndSIn:'Entrada',ndSOut:'Salida',ndRangeNote:'El historial lo entrega Proxmox; «Todo» es el último año.',ndNone:'Ninguna',ndYes:'sí',ndNo:'no',connecting:'Conectando…',connectingMsg:'Obteniendo datos de Proxmox.',noNodes:'Sin nodos',noNodesMsg:'No se encontraron nodos en este cluster.',loginTitle:'Iniciar sesión',loginSub:'Ingresa tus credenciales para continuar.',
+  es:{ndPrimary:'Métricas principales',ndSecondary:'Métricas secundarias',ndSystem:'Sistema',ndCpu:'Uso de CPU',ndOfCpus:n=>'de '+n+' CPU',ndRam:'Uso de memoria',ndKsm:'Compartido por KSM',ndSwap:'Uso de SWAP',ndDisk:'Uso de disco (/)',ndLoadAvg:'Carga promedio de CPU',ndIowait:'Espera de E/S de CPU',ndCpuModel:'Modelo de CPU',ndKernel:'Versión del kernel',ndBoot:'Modo de arranque',ndManager:'Versión del gestor',ndUptime:'Tiempo encendido',ndTz:'Zona horaria',ndDns:'DNS',ndSub:'Suscripción',ndUpdates:'Actualizaciones pendientes',ndDisks:'Discos',ndNetIf:'Interfaces de red',ndServices:'Servicios',ndServState:'Estado',ndRunning:'en ejecución',ndInactive:'inactivos (apagados a propósito)',ndInfo:'Información',ndSnCpu:'Estado térmico de la CPU',ndSnNvme:'Temperaturas NVMe',ndSnOther:'Otras temperaturas',ndSnFans:'Ventiladores',ndPveMod:'Versión de Sensor Mod',ndUps:'UPS (PVE mod)',ndOther:'Otros datos',ndLoading:'Cargando…',ndErr:'No se pudo leer el nodo desde Proxmox.',ndPerm:'El token de API no tiene permiso para leer esto.',ndExpand:'Clic para mostrar u ocultar el detalle del nodo',ndChCpu:'Uso de CPU',ndChMem:'Uso de memoria',ndChLoad:'Carga del servidor',ndChNet:'Tráfico de red',ndSCpu:'CPU',ndSIo:'Espera E/S',ndSRam:'RAM',ndSSwap:'Swap',ndSLoad:'Carga promedio',ndSIn:'Entrada',ndSOut:'Salida',ndRangeNote:'El historial lo entrega Proxmox; «Todo» es el último año.',ndNone:'Ninguna',ndYes:'sí',ndNo:'no',connecting:'Conectando…',connectingMsg:'Obteniendo datos de Proxmox.',noNodes:'Sin nodos',noNodesMsg:'No se encontraron nodos en este cluster.',loginTitle:'Iniciar sesión',loginSub:'Ingresa tus credenciales para continuar.',
     username:'Usuario',password:'Contraseña',loginBtn:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',
     navSection:'Navegación',clustersPVE:'Clusters PVE',addCluster:'Agregar cluster',
     themeLight:'Claro',themeDark:'Oscuro',
@@ -802,9 +802,10 @@ function drawNodeCharts(cid,name,hover){
 }
 window.addEventListener('resize',()=>{_nOpen.forEach(k=>{const i=k.indexOf('|');drawNodeCharts(k.slice(0,i),k.slice(i+1));});});
 const dash='—';
-function nrow(label,value,pct){
+const OTH={PveMod_systemInfo:'ndInfo',PveMod_Version:'ndPveMod',PveMod_upsInfo:'ndUps'},SYS_MOD=['PveMod_Version','PveMod_systemInfo'];
+function nrow(label,value,pct,cls){
   const bar=pct==null?'':`<div class="nd-bar"><div style="width:${Math.max(0,Math.min(100,pct))}%;background:${pct>85?'var(--red)':pct>70?'var(--orange)':'var(--blue)'}"></div></div>`;
-  return `<div class="nd-row"><span class="nd-l">${esc(label)}</span><span class="nd-v">${value==null||value===''?dash:esc(value)}${bar}</span></div>`;
+  return `<div class="nd-row"><span class="nd-l">${esc(label)}</span><span class="nd-v${cls?' '+cls:''}">${value==null||value===''?dash:esc(value)}${bar}</span></div>`;
 }
 const pctOf=(u,tot)=>(u!=null&&tot)?Math.round(u/tot*1000)/10:null;
 function buildNodePanel(cid,node){
@@ -825,18 +826,21 @@ function buildNodePanel(cid,node){
     nrow(t('ndLoadAvg'),d.load.length?d.load.map(x=>x.toFixed(2)).join(', '):null)+
     nrow(t('ndIowait'),d.iowait==null?null:d.iowait.toFixed(2)+'%')+
     nrow(t('ndCpuModel'),model)+
-    d.other.map(o=>nrow(o.k,o.v)).join(''));
+    d.other.filter(o=>!SYS_MOD.includes(o.k)).map(o=>nrow(OTH[o.k]?t(OTH[o.k]):o.k,o.v)).join(''));
   const sub=d.subscription?[d.subscription.status,d.subscription.level,d.subscription.product,d.subscription.due].filter(Boolean).join(' · '):perm('subscription');
-  const bad=d.services.filter(x=>x.state&&x.state!=='running');
+  const bad=d.services.filter(x=>x.bad),run=d.services.filter(x=>x.state==='running').length,off=d.services.length-run-bad.length;
   const system=sec(t('ndSystem'),
     nrow(t('ndKernel'),d.kernel)+nrow(t('ndBoot'),d.boot.mode?(d.boot.mode.toUpperCase()+(d.boot.secureboot==null?'':' ('+(d.boot.secureboot?'Secure Boot':'no Secure Boot')+')')):null)+
     nrow(t('ndManager'),d.pveversion||d.version)+nrow(t('ndUptime'),fmtUptime(d.uptime))+
     nrow(t('ndTz'),d.timezone)+nrow(t('ndDns'),[d.dns.search,...d.dns.servers].filter(Boolean).join(' · '))+
-    nrow(t('ndSub'),sub)+nrow(t('ndUpdates'),d.updates==null?perm('apt'):String(d.updates)));
+    nrow(t('ndSub'),sub)+nrow(t('ndUpdates'),d.updates==null?perm('apt'):String(d.updates))+
+    d.other.filter(o=>SYS_MOD.includes(o.k)).map(o=>nrow(t(OTH[o.k]),o.v)).join(''));
   const lists=[];
+  const SG=[['cpu','ndSnCpu',1],['nvme','ndSnNvme',1],['other','ndSnOther',1],['fans','ndSnFans',0]];
+  SG.forEach(([g,k,tmp])=>{const rows=(d.sensors||[]).filter(x=>x.g===g);if(rows.length)lists.push(sec(t(k),rows.map(x=>nrow(x.l,tmp?x.v+' °'+d.temp_unit:Math.round(x.v)+' RPM')).join('')));});
   if(d.disks.length)lists.push(sec(t('ndDisks'),d.disks.map(x=>nrow(x.dev+(x.model?' · '+x.model:''),[x.type,x.size?fmtBytes(x.size):'',x.health,x.wearout&&x.wearout!=='N/A'?x.wearout+'%':''].filter(Boolean).join(' · '))).join('')));
   if(d.net.length)lists.push(sec(t('ndNetIf'),d.net.map(x=>nrow(x.iface+' ('+x.type+')',[x.address,x.gateway?'gw '+x.gateway:'',x.ports,x.active?'':'down'].filter(Boolean).join(' · '))).join('')));
-  if(d.services.length)lists.push(sec(t('ndServices'),(bad.length?bad:d.services).map(x=>nrow(x.name,x.state)).join('')+(bad.length?'':'')));
+  if(d.services.length)lists.push(sec(t('ndServices'),nrow(t('ndServState'),run+' '+t('ndRunning')+(off?' · '+off+' '+t('ndInactive'):''))+bad.map(x=>nrow(x.name,x.state,null,'bad')).join('')));
   const charts=Object.keys(NCH).map(kind=>{
     const C=NCH[kind],cvid=nid(cid,node.name,kind);
     return `<div class="nd-ch nd-ch-${kind}">`+VC.section({title:t(C.title),legend:C.series.map(x=>({c:x.c,l:t(x.l)})),

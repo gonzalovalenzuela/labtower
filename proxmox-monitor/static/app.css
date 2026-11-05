@@ -253,6 +253,7 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
 .nd-row{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px}
 .nd-l{color:var(--text-mid);flex:0 0 42%;min-width:0;overflow-wrap:anywhere}
 .nd-v{flex:1;text-align:right;font-family:var(--mono);font-size:11.5px;overflow-wrap:anywhere}
+.nd-v.bad{color:var(--red);font-weight:600}
 .nd-bar{height:4px;border-radius:99px;background:var(--border);margin-top:4px;overflow:hidden}
 .nd-bar div{height:100%;border-radius:99px}
 .nd-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px}
