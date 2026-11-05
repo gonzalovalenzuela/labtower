@@ -40,7 +40,7 @@ class WithFakePing(unittest.TestCase):
 class Validate(unittest.TestCase):
     def test_defaults_are_valid(self):
         c = m.validate({}); self.assertEqual(len(c["targets"]), 3); self.assertEqual((c["interval"], c["gateway"]), (30, "auto"))
-        self.assertTrue(c["speed"]["enabled"]); self.assertEqual(c["speed"]["every_hours"], 12)
+        self.assertTrue(c["speed"]["enabled"]); self.assertEqual(c["speed"]["every_minutes"], 720)
 
     def test_rules(self):
         base = m.validate({})
@@ -275,7 +275,7 @@ class Http(WithFakePing):
     def test_config_update_and_validation(self):
         c = self.srv.call
         s, j = c("POST", "/api/wan/config", {"interval": 45, "speed": {"every_hours": 6}}, token=self.admin); self.assertEqual(s, 200, j)
-        self.assertEqual((m.load_config()["interval"], m.load_config()["speed"]["every_hours"]), (45, 6)); self.assertEqual(j["config"]["speed"]["seconds"], 8)
+        self.assertEqual((m.load_config()["interval"], m.load_config()["speed"]["every_minutes"]), (45, 360)); self.assertEqual(j["config"]["speed"]["seconds"], 8)
         for bad in ({"interval": 1}, {"targets": []}, {"speed": {"down_url": "http://x"}}): self.assertEqual(c("POST", "/api/wan/config", bad, token=self.admin)[0], 400)
         self.assertEqual(oct(stat.S_IMODE(os.stat(m.DATA_FILE).st_mode)), "0o600")
 

@@ -63,7 +63,7 @@ DEFAULTS = {
     "interval": 30,                       # seconds between rounds
     "ip_url": "https://api.ipify.org",    # returns the public IP as plain text ("" = off)
     "router": {"enabled": False, "type": "huawei", "host": "", "port": 80, "https": False, "user": "admin", "password": "", "interface": "wan", "every": 30},
-    "speed": {"enabled": True, "every_hours": 12, "down_url": "https://speed.cloudflare.com/__down", "up_url": "https://speed.cloudflare.com/__up",
+    "speed": {"enabled": True, "every_minutes": 720, "down_url": "https://speed.cloudflare.com/__down", "up_url": "https://speed.cloudflare.com/__up",
               "seconds": 8, "streams": 4, "upload": True, "engine": "builtin", "plan_down": 0, "plan_up": 0},
 }
 _cfg_lock = threading.RLock()
@@ -128,7 +128,13 @@ def validate(body: dict, current=None, resolve=True) -> dict:
     cfg = json.loads(json.dumps(current or DEFAULTS))
     for k in ("targets", "gateway", "dns_name", "interval", "ip_url"):
         if k in body: cfg[k] = body[k]
-    if isinstance(body.get("speed"), dict): cfg["speed"].update(body["speed"])
+    if isinstance(body.get("speed"), dict):
+        sb = dict(body["speed"])
+        # Antes el período se guardaba en horas (every_hours). Si llega así y no trae minutos, se convierte; los minutos mandan si vienen los dos.
+        # EN: The period used to be stored in hours (every_hours). If it arrives that way without minutes it is converted; minutes win if both come.
+        if "every_hours" in sb and "every_minutes" not in sb: sb["every_minutes"] = _int(sb["every_hours"], 0, 720, "Speed test period") * 60
+        sb.pop("every_hours", None)
+        cfg["speed"].update(sb)
     cfg["router"] = _validate_router(body.get("router"), cfg.get("router"), resolve)
     tg = cfg["targets"]
     if not isinstance(tg, list) or not 1 <= len(tg) <= 6: raise ValueError("Between 1 and 6 targets")
@@ -158,7 +164,9 @@ def validate(body: dict, current=None, resolve=True) -> dict:
     sp["enabled"], sp["upload"] = bool(sp.get("enabled")), bool(sp.get("upload"))
     if sp.get("engine", "builtin") not in ENGINES: raise ValueError("Unknown speed test engine")
     sp["engine"] = sp.get("engine", "builtin")
-    sp["every_hours"] = _int(sp.get("every_hours", 12), 0, 720, "Speed test period")
+    sp.pop("every_hours", None)
+    sp["every_minutes"] = _int(sp.get("every_minutes", 720), 0, 43200, "Speed test period")        # minutes, 0 = never
+    if 0 < sp["every_minutes"] < 5: raise ValueError("Speed test period: at least 5 minutes (0 = never)")
     sp["seconds"] = _int(sp.get("seconds", 8), 3, 20, "Speed test duration")
     sp["streams"] = _int(sp.get("streams", 4), 1, 8, "Streams")
     sp["plan_down"] = _int(sp.get("plan_down", 0), 0, 100000, "Contracted download speed")      # Mb/s, 0 = not set
@@ -859,8 +867,8 @@ def start_speedtest():
 
 def next_speedtest(cfg):
     sp = cfg["speed"]
-    if not sp["enabled"] or not sp["every_hours"]: return None
-    return (S.speed_last + sp["every_hours"] * 3600) if S.speed_last else (_STARTED + 300)       # first test 5 min after the first start
+    if not sp["enabled"] or not sp["every_minutes"]: return None
+    return (S.speed_last + sp["every_minutes"] * 60) if S.speed_last else (_STARTED + 300)       # first test 5 min after the first start
 
 def speed_scheduler():
     while not _stop.is_set():

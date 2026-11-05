@@ -166,7 +166,9 @@ const LANG={
  "setPlanUp": "Contracted upload (Mb/s, 0 = not set)",
  "planOf": "of contracted",
  "planAvg": "7-day average",
- "setEvery": "Every (hours, 0 = never)",
+ "setEvery": "Every (0 = never)",
+ "unMin": "minutes", "unHour": "hours",
+ "setEveryWarn": "⚠ Less than 30 minutes can saturate your link quickly: each test uses it at full speed. The minimum is 5 minutes.",
  "setSecs": "Seconds per direction",
  "setStreams": "Parallel streams",
  "setUpload": "Also measure upload",
@@ -357,7 +359,9 @@ const LANG={
  "setPlanUp": "Subida contratada (Mb/s, 0 = sin definir)",
  "planOf": "de lo contratado",
  "planAvg": "Promedio 7 días",
- "setEvery": "Cada (horas, 0 = nunca)",
+ "setEvery": "Cada (0 = nunca)",
+ "unMin": "minutos", "unHour": "horas",
+ "setEveryWarn": "⚠ Menos de 30 minutos puede saturar tu enlace rápidamente: cada prueba lo usa a máxima velocidad. El mínimo es de 5 minutos.",
  "setSecs": "Segundos por sentido",
  "setStreams": "Flujos paralelos",
  "setUpload": "Medir también la subida",
@@ -554,7 +558,7 @@ function speedCard(){
   else if(last.error)body=`<div class="wan-empty" style="color:var(--red)">${esc(t('speedErr'))}: ${esc(last.error)}</div>`;
   else body=`<div class="wan-gauges" style="grid-template-columns:repeat(3,1fr);padding:12px 14px">${bigNum(t('speedDown'),last.down==null?'—':fmtNum(Math.round(last.down*10)/10),'Mb/s','var(--green)')}${bigNum(t('speedUp'),last.up==null?'—':fmtNum(Math.round(last.up*10)/10),last.up==null?'':'Mb/s','var(--blue)')}${bigNum(t('speedPing'),last.ping==null?'—':last.ping,last.ping==null?'':'ms')}</div>
     ${planRows(cfg,sp,last)}${speedExtra()}${kv(t('speedServer'),esc(last.server||'—')+(cfg.engine&&cfg.engine!=='builtin'?' <span class="sum-sub">'+esc(cfg.engine==='ookla'?'Ookla':'LibreSpeed')+'</span>':''))}${kv(t('lastCheck'),esc(fmtDate(last.ts)))}`;
-  const next=!cfg.enabled||!cfg.every_hours?t('speedOff'):(W.next_speed?t('speedNext',fmtDate(W.next_speed)):'');
+  const next=!cfg.enabled||!cfg.every_minutes?t('speedOff'):(W.next_speed?t('speedNext',fmtDate(W.next_speed)):'');
   return `<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('speed'))}</div>${btn}</div>${body}<div class="wan-note">${esc(next)}<br>${esc(t('speedHint'))}</div></div>`;
 }
 // Traceroute guardado al abrirse cada corte: se carga al pedirlo y queda en memoria mientras la página esté abierta.
@@ -669,7 +673,7 @@ function textToTargets(s){
 function openSettings(){
   const c=W.config,sp=c.speed;
   $('s-targets').value=targetsToText(c.targets);$('s-gw').value=c.gateway;$('s-dns').value=c.dns_name;$('s-interval').value=c.interval;$('s-ipurl').value=c.ip_url;{const o=(W.ips||[]).slice(-1)[0];$('f-ipsince').hidden=!o;$('s-ipsince').value=o?dmy(o.ts):'';}
-  $('s-sp-on').checked=!!sp.enabled;$('s-sp-every').value=sp.every_hours;$('s-sp-secs').value=sp.seconds;$('s-sp-streams').value=sp.streams;$('s-sp-pdown').value=sp.plan_down||0;$('s-sp-pup').value=sp.plan_up||0;$('s-sp-up').checked=!!sp.upload;
+  $('s-sp-on').checked=!!sp.enabled;{const m=sp.every_minutes||0,h=m>=60&&m%60===0;$('s-sp-every').value=h?m/60:m;$('o-un-m').textContent=t('unMin');$('o-un-h').textContent=t('unHour');$('s-sp-unit').value=h?'h':'m';everyChanged();}$('s-sp-secs').value=sp.seconds;$('s-sp-streams').value=sp.streams;$('s-sp-pdown').value=sp.plan_down||0;$('s-sp-pup').value=sp.plan_up||0;$('s-sp-up').checked=!!sp.upload;
   const av=W.engines||{builtin:true},nm={builtin:t('engBuiltin'),ookla:t('engOokla'),librespeed:t('engLibre')};
   ['builtin','ookla','librespeed'].forEach(k=>{const o=$('o-eng-'+k);o.textContent=nm[k]+(av[k]?'':' ('+t('engMissing')+')');o.disabled=!av[k]&&sp.engine!==k;});
   $('s-sp-engine').value=sp.engine||'builtin';
@@ -681,6 +685,12 @@ function openSettings(){
   $('set-overlay').classList.add('show');
 }
 const RT_PORTS={huawei:80,openwrt:80,ddwrt:80,tplink:80};
+// Aviso bajo 30 minutos entre pruebas: cada una usa el enlace a máxima velocidad.
+// EN: Warning under 30 minutes between tests: each one uses the link at full speed.
+function everyChanged(){
+  const v=parseInt($('s-sp-every').value),m=isNaN(v)?0:v*($('s-sp-unit').value==='h'?60:1);
+  $('s-sp-warn').hidden=!(m>0&&m<30);
+}
 function rtTypeChanged(setPort){
   const ty=$('s-rt-type').value;
   if(setPort)$('s-rt-port').value=$('s-rt-https').checked?443:RT_PORTS[ty];
@@ -708,7 +718,7 @@ async function saveSettings(){
   const btn=$('btn-save');
   const num=(id,d)=>{const v=parseInt($(id).value);return isNaN(v)?d:v;};
   const body={targets:textToTargets($('s-targets').value),gateway:$('s-gw').value.trim(),dns_name:$('s-dns').value.trim(),interval:num('s-interval',30),ip_url:$('s-ipurl').value.trim(),
-    speed:{engine:$('s-sp-engine').value,enabled:$('s-sp-on').checked,every_hours:num('s-sp-every',12),seconds:num('s-sp-secs',8),streams:num('s-sp-streams',4),plan_down:num('s-sp-pdown',0),plan_up:num('s-sp-pup',0),upload:$('s-sp-up').checked,down_url:$('s-sp-down').value.trim(),up_url:$('s-sp-upurl').value.trim()},router:routerBody()};
+    speed:{engine:$('s-sp-engine').value,enabled:$('s-sp-on').checked,every_minutes:(()=>{const v=parseInt($('s-sp-every').value);return isNaN(v)?720:v*($('s-sp-unit').value==='h'?60:1);})(),seconds:num('s-sp-secs',8),streams:num('s-sp-streams',4),plan_down:num('s-sp-pdown',0),plan_up:num('s-sp-pup',0),upload:$('s-sp-up').checked,down_url:$('s-sp-down').value.trim(),up_url:$('s-sp-upurl').value.trim()},router:routerBody()};
   btn.disabled=true;btn.innerHTML='<span class="spin">⟳</span>';
   try{
     const {ok,d}=await post('api/wan/config',body);
@@ -821,4 +831,5 @@ _i18nReady=true;
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ setIpSince, toggleTrace, closeModals, doLogin, logout, rtTypeChanged, runSpeed, saveSettings, testRouter, setLang, setRange, toggleCmp, setTheme, toggleNav });
+$('s-sp-every').addEventListener('input',everyChanged);
+if (window.cspRegister) cspRegister({ everyChanged, setIpSince, toggleTrace, closeModals, doLogin, logout, rtTypeChanged, runSpeed, saveSettings, testRouter, setLang, setRange, toggleCmp, setTheme, toggleNav });
