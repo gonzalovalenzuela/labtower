@@ -795,6 +795,12 @@ def node_rrd(cid, name, rng):
     def go(): return extra.rrd_points(client.get(f"/nodes/{quote(name, safe='')}/rrddata?timeframe={tf}&cf=AVERAGE").get("data"))
     return _ncached(("rrd", cid, name, rng), NODE_RRD_TTL, go)
 
+# Quita el número de serie de cada disco (SMART) salvo que el usuario tenga el permiso «serials».
+# EN: Remove each drive's serial number (SMART) unless the user holds the "serials" permission.
+def _smart_view(sm, allowed):
+    if allowed or not isinstance(sm, dict): return sm
+    return {**sm, "nodes": {n: ({**v, "disks": [{**d, "serial": ""} for d in v.get("disks", [])]} if isinstance(v, dict) else v) for n, v in (sm.get("nodes") or {}).items()}}
+
 def node_detail(cid, name):
     from urllib.parse import quote
     client = _node_client(cid)
@@ -1175,7 +1181,10 @@ class H(BaseHTTPRequestHandler):
             cid, name, what = m.groups()
             if not _node_known(cid, name): return self._json(404, {"error": "Unknown node"})
             try:
-                if what == "detail": return self._json(200, {"node": name, "detail": node_detail(cid, name)})
+                if what == "detail":
+                    det = node_detail(cid, name)
+                    if not auth.can_see_serials(tok): det = {**det, "serial": ""}         # the machine serial needs the "serials" permission
+                    return self._json(200, {"node": name, "detail": det})
                 rng = parse_qs(urlparse(self.path).query).get("range", ["1d"])[0]
                 if rng not in extra.RRD_FRAME: return self._json(400, {"error": "Invalid range"})
                 return self._json(200, {"range": rng, "history": node_rrd(cid, name, rng)})
@@ -1237,7 +1246,7 @@ class H(BaseHTTPRequestHandler):
                 ex = dict(_extra.get(cid) or {}) or None
                 lv = _live.get(cid) or {}
             if ex: ex["cap"] = lv.get("cap"); ex["locks"] = lv.get("locks", {})
-            self._json(200, {"reboots": rb[:100], "smart": _smart.get(cid), "smart_every": SMART_EVERY, "backups": _backups.get(cid), "extra": ex})
+            self._json(200, {"reboots": rb[:100], "smart": _smart_view(_smart.get(cid), auth.can_see_serials(tok)), "smart_every": SMART_EVERY, "backups": _backups.get(cid), "extra": ex})
 
         # VM y contenedores con sus MAC e IP, para que Net Monitor los asocie a los equipos de la red.
         # EN: VMs and containers with their MACs and IPs, so Net Monitor can match them to the devices on the network.

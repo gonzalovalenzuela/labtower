@@ -327,7 +327,7 @@ def _flat(v, depth=0):
 _YES = (True, 1, "1", "yes", "true", "on")
 
 def _pvemod(k, v):
-    """The PVE-mod add-on puts its own fields in the node status. Return a short readable text ('' = nothing worth showing); its serial number is never shown."""
+    """The PVE-mod add-on puts its own fields in the node status. Return a short readable text ('' = nothing worth showing); the serial number is NOT in this text (node_detail returns it apart, and the server hands it only to users with the serials permission)."""
     if not isinstance(v, dict): return _flat(v)
     if k == "PveMod_JsonSensorInfo": return ""       # only says which sensors the add-on reads (cpu, nvme, fans…): nothing to show
     if k == "PveMod_systemInfo":
@@ -412,6 +412,7 @@ def node_detail(status, version, tinfo, dns, net, subs, apt, services, disks):
         "subscription": {"status": _s(sb.get("status"), 40), "level": _s(sb.get("level"), 20), "product": _s(sb.get("productname"), 80), "due": _s(sb.get("nextduedate"), 20)} if sb else None,
         "updates": len(apt) if isinstance(apt, list) else None,
         "net": [], "services": [], "disks": [],
+        "serial": _s((st.get("PveMod_systemInfo") or {}).get("serial_number"), 60) if isinstance(st.get("PveMod_systemInfo"), dict) else "",
         "other": [], "sensors": sensors(st.get("PveMod_JsonSensorInfo")),
         "temp_unit": "F" if isinstance(st.get("PveMod_JsonSensorInfo"), dict) and st["PveMod_JsonSensorInfo"].get("temp_unit") == "F" else "C",
     }

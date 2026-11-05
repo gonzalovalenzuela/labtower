@@ -129,6 +129,7 @@ labtower-health
 1. Entra con `admin` y la contraseña que mostró el instalador.
 2. El sistema te obliga a elegir una contraseña nueva (mínimo 8 caracteres) antes de usar cualquier módulo.
 3. Crea tus usuarios en el Admin Panel. Al crear un usuario viene marcado «debe cambiar contraseña», y cuando un admin restablece la clave de otra cuenta ese cambio es siempre obligatorio. Crear usuarios, restablecer claves y cambiar niveles de permiso piden tu contraseña actual.
+   - **Números de serie:** cada usuario tiene un permiso aparte, «Ver números de serie» (sí/no), que vale para el UPS, el NAS, los discos y los nodos de Proxmox. Sin él, el servidor ni siquiera envía esos datos al navegador. Los usuarios nuevos lo traen en «no»; al actualizar lo conservan los administradores de WOL o UPS, y el resto lo recibe cuando un administrador se lo marca. Solo puede darlo o quitarlo quien lo tiene.
 
 ---
 

@@ -651,6 +651,13 @@ class NasCache:
     def snap(self):
         with self._lock: return {"id": self.id, "data": dict(self._data), "error": self._err, "ts": self._ts}
 
+# La lectura de un NAS sin su número de serie (la copia en caché no se toca).
+# EN: A NAS reading without its serial number (the cached copy is not touched).
+def _snap_no_serial(snap):
+    d = snap.get("data")
+    if not isinstance(d, dict) or not isinstance(d.get("system"), dict): return snap
+    return {**snap, "data": {**d, "system": {**d["system"], "serial": ""}}}
+
 _cache: dict = {}
 _pollers: dict = {}
 _glock = threading.Lock()
@@ -840,10 +847,12 @@ class H(BaseHTTPRequestHandler):
             if was_idle:
                 for cc in list(_cache.values()): cc.wake.set()
             with_hist = parse_qs(urlparse(self.path).query).get("hist", ["1"])[0] != "0"
+            ser = auth.can_see_serials(tok)
             out = []
             for n in load_nas():
                 if n["id"] not in _pollers or not _pollers[n["id"]].is_alive(): ensure_poller(n)
                 snap = _cache.get(n["id"], NasCache(n["id"])).snap()
+                if not ser: snap = _snap_no_serial(snap)          # serial numbers need the "serials" permission
                 out.append({**public(n), "snap": snap, "history": get_history(n["id"]) if with_hist else []})
             return self._json(200, {"nas": out})
         # GET /api/nas/<id>/history?range=1h|1d|1w|1mo|all: historial reducido de un NAS para los gráficos de detalle.

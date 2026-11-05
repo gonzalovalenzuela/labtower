@@ -41,6 +41,9 @@ log = logging.getLogger("admin")
 # Niveles de permiso aceptados al crear o editar usuarios («none» = sin acceso al módulo).
 # EN: Permission levels accepted when creating or editing users ("none" = no access to the module).
 VALID_PERMS = ("readonly", "execute", "admin", "none")
+# Ver números de serie solo admite sí («readonly») o no («none»).
+# EN: Seeing serial numbers only takes yes ("readonly") or no ("none").
+SERIAL_PERMS = ("readonly", "none")
 
 # Nivel numérico (0 = ninguno) de un diccionario de permisos para un módulo.
 # EN: Numeric level (0 = none) of a permissions dictionary for a module.
@@ -533,6 +536,7 @@ class H(BaseHTTPRequestHandler):
                 dflt = "readonly" if k in ("wol", "nut") else "none"
                 if _lvl(sess["permissions"], k) < auth.LEVELS.get(dflt, 0): dflt = "none"
                 perms[k] = body.get(k + "_permission", dflt)
+            perms[auth.SERIALS] = body.get("serials_permission", "none")      # seeing serial numbers is granted on purpose, never by default
             if not uname or not pwd:
                 return self._json(400, {"error": "Username and password are required"})
             if not re.fullmatch(r'[a-zA-Z0-9_\-]{2,32}', uname):
@@ -540,7 +544,7 @@ class H(BaseHTTPRequestHandler):
             perr = auth.password_error(pwd, uname)
             if perr:
                 return self._json(400, {"error": perr})
-            if any(v not in VALID_PERMS for v in perms.values()):
+            if any(v not in VALID_PERMS for v in perms.values()) or perms[auth.SERIALS] not in SERIAL_PERMS:
                 return self._json(400, {"error": "Invalid permission"})
             denied = _grant_denied(sess["permissions"], {}, perms)
             if denied:
@@ -631,8 +635,8 @@ class H(BaseHTTPRequestHandler):
         m = re.match(r'^/api/users/([a-zA-Z0-9_\-]+)$', path)
         if m:
             uname = m.group(1)
-            new = {k: body.get(k + "_permission") for k in PERM_KEYS if body.get(k + "_permission")}
-            if any(v not in VALID_PERMS for v in new.values()):
+            new = {k: body.get(k + "_permission") for k in PERM_KEYS + (auth.SERIALS,) if body.get(k + "_permission")}
+            if any(v not in VALID_PERMS for v in new.values()) or new.get(auth.SERIALS, "none") not in SERIAL_PERMS:
                 return self._json(400, {"error": "Invalid permission"})
             # Don't let admins lock themselves out of the panel
             # Un admin no puede quitarse a sí mismo el acceso al panel (se quedaría fuera).

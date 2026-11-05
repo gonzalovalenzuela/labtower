@@ -820,6 +820,12 @@ class SCache:
                 "history": history, "stats": self._stats(ups_snap), "error": error, "last_ok": last_ok,
                 "version": ver, "ts": time.time()}
 
+# Quita los números de serie de lo que se envía al navegador salvo que el usuario tenga el permiso «serials».
+# EN: Remove serial numbers from what is sent to the browser unless the user holds the "serials" permission.
+def _no_serials(snap, allowed):
+    if allowed or not isinstance(snap.get("ups"), dict): return snap
+    return {**snap, "ups": {k: auth.without_serials(v) if isinstance(v, dict) else v for k, v in snap["ups"].items()}}
+
 # Tablas globales: caché, hilo y evento de despertar por servidor, protegidas por _gl.
 # EN: Global tables: cache, thread and wake-up event per server, protected by _gl.
 _caches: dict = {}; _pollers: dict = {}; _wake: dict = {}; _gl = threading.Lock()
@@ -1065,12 +1071,14 @@ class H(BaseHTTPRequestHandler):
                 t_ = _pollers.get(s_["id"])
                 if t_ is None or not t_.is_alive():
                     ensure_poller(s_)
-            out    = [{**s, "status": _caches.get(s["id"], SCache(s["id"])).snap(range_)} for s in srvs]
+            ser    = auth.can_see_serials(tok)
+            out    = [{**s, "status": _no_serials(_caches.get(s["id"], SCache(s["id"])).snap(range_), ser)} for s in srvs]
             names = net_names() if auth.check_permission(tok, "net", "readonly") else {}      # only for users who may see Net Monitor
             self._json(200, {"servers": out, "names": names})
         elif path == "/api/ups":
             range_ = self._range_param()
-            self._json(200, {sid: c.snap(range_) for sid, c in _caches.items()})
+            ser    = auth.can_see_serials(tok)
+            self._json(200, {sid: _no_serials(c.snap(range_), ser) for sid, c in _caches.items()})
         # Historial de un solo UPS para un rango (el gráfico lo pide al cambiar de rango).
         # EN: History of a single UPS for a range (the chart requests it when the range changes).
         elif path == "/api/history":

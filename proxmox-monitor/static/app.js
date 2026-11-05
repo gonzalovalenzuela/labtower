@@ -834,7 +834,7 @@ function buildNodePanel(cid,node){
     nrow(t('ndManager'),d.pveversion||d.version)+nrow(t('ndUptime'),fmtUptime(d.uptime))+
     nrow(t('ndTz'),d.timezone)+nrow(t('ndDns'),[d.dns.search,...d.dns.servers].filter(Boolean).join(' · '))+
     nrow(t('ndSub'),sub)+nrow(t('ndUpdates'),d.updates==null?perm('apt'):String(d.updates))+
-    d.other.filter(o=>SYS_MOD.includes(o.k)).map(o=>nrow(t(OTH[o.k]),o.v)).join(''));
+    d.other.filter(o=>SYS_MOD.includes(o.k)).map(o=>nrow(t(OTH[o.k]),o.k==='PveMod_systemInfo'&&d.serial?o.v+' | Serial: '+d.serial:o.v)).join(''));
   const lists=[];
   const SG=[['cpu','ndSnCpu',1],['nvme','ndSnNvme',1],['other','ndSnOther',1],['fans','ndSnFans',0]];
   SG.forEach(([g,k,tmp])=>{const rows=(d.sensors||[]).filter(x=>x.g===g);if(rows.length)lists.push(sec(t(k),rows.map(x=>nrow(x.l,tmp?x.v+' °'+d.temp_unit+(x.mx||x.cr?' ('+[x.mx?'max '+x.mx:'',x.cr?'crit '+x.cr:''].filter(Boolean).join(', ')+')':''):Math.round(x.v)+' RPM'+(x.mx?' (max '+x.mx+')':''))).join('')));});

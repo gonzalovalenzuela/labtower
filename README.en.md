@@ -129,6 +129,7 @@ labtower-health
 1. Sign in as `admin` with the password the installer showed.
 2. You must choose a new password (minimum 8 characters) before using any module.
 3. Create your users in the Admin Panel. "Must change password" is ticked by default when creating a user, and when an admin resets another account's password the change is always mandatory. Creating users, resetting passwords and changing permission levels ask for your current password.
+   - **Serial numbers:** each user has a separate "See serial numbers" permission (yes/no) that covers the UPS, the NAS, drives and Proxmox nodes. Without it the server does not even send that data to the browser. New users get "no"; on update, WOL or UPS administrators keep it and everyone else gets it when an administrator ticks it. Only someone who has it can grant or remove it.
 
 ---
 

@@ -16,7 +16,7 @@ const LANG = {
     topbarTitle:'User management',
     statTotal:'Total users', statAdmins:'Administrators', statReadonly:'Read-only',
     cardTitle:'System users', btnNewUser:'New user',
-    colLast:'Last connection', colUser:'User', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colNAS:'NAS Monitor', colDNS:'DNS Monitor', colWAN:'WAN Monitor', colVPN:'VPN Monitor', colStatus:'Status', colCreated:'Created', colActions:'Actions',
+    colLast:'Last connection', colUser:'User', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colNAS:'NAS Monitor', colDNS:'DNS Monitor', colWAN:'WAN Monitor', colVPN:'VPN Monitor', colSerials:'Serial numbers', fieldSerials:'See serial numbers (UPS, NAS, Proxmox…)', serYes:'Yes', serNo:'No', colStatus:'Status', colCreated:'Created', colActions:'Actions',
     drawerNew:'New user', drawerEdit:'Edit — ',
     fieldUsername:'Username', fieldUsernameHint:'2-32 alphanumeric chars, dash or underscore',
     fieldPassword:'Password', fieldPasswordHint:'Minimum 8 characters',
@@ -87,7 +87,7 @@ const LANG = {
     topbarTitle:'Gestión de usuarios',
     statTotal:'Usuarios totales', statAdmins:'Administradores', statReadonly:'Solo lectura',
     cardTitle:'Usuarios del sistema', btnNewUser:'Nuevo usuario',
-    colLast:'Última conexión', colUser:'Usuario', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colNAS:'NAS Monitor', colDNS:'DNS Monitor', colWAN:'WAN Monitor', colVPN:'VPN Monitor', colStatus:'Estado', colCreated:'Creado', colActions:'Acciones',
+    colLast:'Última conexión', colUser:'Usuario', colWOL:'WOL', colUPS:'UPS Monitor', colNET:'Net Monitor', colPVE:'Proxmox', colNAS:'NAS Monitor', colDNS:'DNS Monitor', colWAN:'WAN Monitor', colVPN:'VPN Monitor', colSerials:'Números de serie', fieldSerials:'Ver números de serie (UPS, NAS, Proxmox…)', serYes:'Sí', serNo:'No', colStatus:'Estado', colCreated:'Creado', colActions:'Acciones',
     drawerNew:'Nuevo usuario', drawerEdit:'Editar — ',
     fieldUsername:'Nombre de usuario', fieldUsernameHint:'2-32 caracteres alfanuméricos, guion o guion bajo',
     fieldPassword:'Contraseña', fieldPasswordHint:'Mínimo 8 caracteres',
@@ -181,6 +181,7 @@ function setLang(l){
     const val = sel.value;
     sel.innerHTML = ['none','readonly','execute','admin'].map(v=>`<option value="${v}"${val===v?' selected':''}>${t('perm'+v.charAt(0).toUpperCase()+v.slice(1))}</option>`).join('');
   });
+  { const s = document.getElementById('d-serials'); fillSerials(s ? s.value : 'none'); }
   // Update perm help box
   updatePermHelpBox();
   // Update drawer title/button if open
@@ -384,6 +385,7 @@ function renderUsers(users) {
       <td data-label="${esc(t('colDNS'))}">${permBadge(u.permissions.dns)}</td>
       <td data-label="${esc(t('colWAN'))}">${permBadge(u.permissions.wan)}</td>
       <td data-label="${esc(t('colVPN'))}">${permBadge(u.permissions.vpn)}</td>
+      <td data-label="${esc(t('colSerials'))}"><span class="perm-badge perm-${u.permissions.serials==='readonly'?'readonly':'none'}">${u.permissions.serials==='readonly'?esc(t('serYes')):esc(t('serNo'))}</span></td>
       <td data-label="${esc(t('colStatus'))}">${u.must_change_password ? `<span class="must-change">${t('mustChangeBadge')}</span>` : '<span style="font-size:11px;color:var(--text-dim)">—</span>'}</td>
       <td data-label="${esc(t('colLast'))}"><span class="ucreated">${u.last_login ? esc(new Date(u.last_login*1000).toLocaleString(locale)) : '—'}</span></td>
       <td data-label="${esc(t('colCreated'))}"><span class="ucreated">${u.created ? new Date(u.created*1000).toLocaleDateString(locale) : '—'}</span></td>
@@ -405,6 +407,13 @@ function permBadge(perm) {
   return `<span class="perm-badge perm-${labels[perm]?perm:'none'}">${labels[perm]||'—'}</span>`;
 }
 
+// Selector «ver números de serie»: sí (readonly) o no (none).
+// EN: "See serial numbers" selector: yes (readonly) or no (none).
+function fillSerials(val){
+  const sel = document.getElementById('d-serials'); if(!sel) return;
+  sel.innerHTML = [['none','serNo'],['readonly','serYes']].map(([v,k])=>`<option value="${v}"${val===v?' selected':''}>${t(k)}</option>`).join('');
+}
+
 // ── Drawer ─────────────────────────────────────────────
 // Abre el cajón lateral para crear un usuario o editar uno existente (el nombre no se puede cambiar al editar).
 // EN: Open the side drawer to create a user or edit an existing one (the name cannot be changed when editing).
@@ -424,6 +433,7 @@ function openDrawer(user) {
     sel.innerHTML = ['none','readonly','execute','admin'].map(v=>`<option value="${v}"${val===v?' selected':''}>${t('perm'+v.charAt(0).toUpperCase()+v.slice(1))}</option>`).join('');
   });
 
+  fillSerials(isEdit ? (user.permissions.serials||'none') : 'none');
   document.getElementById('d-new-pw').value = '';
   document.getElementById('d-new-pw').placeholder = t('fieldNewPwPlaceholder');
   document.getElementById('d-cur-pw').value = '';
@@ -467,12 +477,13 @@ async function saveUser() {
       const dns   = document.getElementById('d-dns').value;
       const wan   = document.getElementById('d-wan').value;
       const vpn   = document.getElementById('d-vpn').value;
+      const ser   = document.getElementById('d-serials').value;
       const must  = document.getElementById('d-must-change').checked;
       if (!uname || !pwd) { toast(t('loginFill'), true); return; }
       const apw = await askPassword(); if (!apw) return;
       const r = await fetch('api/users', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({username:uname, password:pwd, wol_permission:wol, nut_permission:nut, net_permission:net, pve_permission:pve, nas_permission:nas, dns_permission:dns, wan_permission:wan, vpn_permission:vpn, must_change_password:must, current_password:apw})
+        body: JSON.stringify({username:uname, password:pwd, wol_permission:wol, nut_permission:nut, net_permission:net, pve_permission:pve, nas_permission:nas, dns_permission:dns, wan_permission:wan, vpn_permission:vpn, serials_permission:ser, must_change_password:must, current_password:apw})
       });
       const d = await r.json();
       if (!r.ok) { toast(d.error||'Error', true); return; }
@@ -487,12 +498,13 @@ async function saveUser() {
       const dns   = document.getElementById('d-dns').value;
       const wan   = document.getElementById('d-wan').value;
       const vpn   = document.getElementById('d-vpn').value;
+      const ser   = document.getElementById('d-serials').value;
       const newPw = document.getElementById('d-new-pw').value;
       // Actualizar permisos
       let ppw = null;
       const putPerms = pw => fetch('api/users/'+uorig, {
         method: 'PUT', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({wol_permission:wol, nut_permission:nut, net_permission:net, pve_permission:pve, nas_permission:nas, dns_permission:dns, wan_permission:wan, vpn_permission:vpn, ...(pw ? {current_password: pw} : {})})
+        body: JSON.stringify({wol_permission:wol, nut_permission:nut, net_permission:net, pve_permission:pve, nas_permission:nas, dns_permission:dns, wan_permission:wan, vpn_permission:vpn, serials_permission:ser, ...(pw ? {current_password: pw} : {})})
       });
       let r = await putPerms(null);
       if (r.status === 401 && (await r.clone().json()).error === 'Password confirmation required') {   // a level changes: confirm with the password

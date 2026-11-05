@@ -414,7 +414,7 @@ def ensure_initial_user() -> bool:
         pw = _random_password()
         users = {"admin": {
             "password_hash": _hash(pw),
-            "permissions": {"wol": "admin", "nut": "admin", "net": "admin", "pve": "admin", "nas": "admin", "dns": "admin", "wan": "admin", "vpn": "admin"},
+            "permissions": {"wol": "admin", "nut": "admin", "net": "admin", "pve": "admin", "nas": "admin", "dns": "admin", "wan": "admin", "vpn": "admin", "serials": "readonly"},
             "created": int(time.time()),
             "must_change_password": True,
         }}
@@ -530,6 +530,10 @@ def _users_cached() -> dict:
 
 # Migración que corre al iniciar cada servicio: deja un nivel explícito para «net» y «pve» a los usuarios
 # creados antes de que existieran esos módulos. Es idempotente (si ya están, no toca nada).
+# Recurso de permisos para ver números de serie (de equipos, discos, UPS, NAS…): solo «readonly» (puede verlos) o «none».
+# EN: Permission resource for seeing serial numbers (machines, drives, UPS, NAS…): only "readonly" (may see them) or "none".
+SERIALS = "serials"
+
 # EN: Migration that runs when each service starts: gives an explicit "net" and "pve" level to users
 #     created before those modules existed. It is idempotent (if they are already there, nothing changes).
 def ensure_permissions(modules=("net", "pve", "nas", "dns", "wan", "vpn")) -> bool:
@@ -549,6 +553,11 @@ def ensure_permissions(modules=("net", "pve", "nas", "dns", "wan", "vpn")) -> bo
                 if m not in perms:
                     perms[m] = "admin" if perms.get("wol") == "admin" else "readonly"
                     changed = True
+            # Permiso de ver números de serie: quien administra WOL o UPS lo conserva, el resto no hasta que un administrador se lo dé.
+            # EN: Permission to see serial numbers: whoever administers WOL or UPS keeps it, the rest do not until an administrator grants it.
+            if SERIALS not in perms:
+                perms[SERIALS] = "readonly" if "admin" in (perms.get("wol"), perms.get("nut")) else "none"
+                changed = True
         if changed:
             save_users(users)
         return changed
@@ -1166,6 +1175,16 @@ def check_permission(token: str, resource: str, required: str) -> bool:
     s = get_session(token)
     if not s: return False
     return LEVELS.get(s["permissions"].get(resource, ""), 0) >= LEVELS.get(required, 999)
+
+# ¿Esta sesión puede ver números de serie? Cada módulo lo consulta antes de enviarlos al navegador.
+# EN: May this session see serial numbers? Each module asks before sending them to the browser.
+def can_see_serials(token: str) -> bool:
+    return check_permission(token, SERIALS, "readonly")
+
+# Quita de un diccionario de variables de UPS (NUT) todo lo que sea un número de serie: ups.serial, device.serial, battery.serial, _serial…
+# EN: Remove from a UPS (NUT) variables dict everything that is a serial number: ups.serial, device.serial, battery.serial, _serial…
+def without_serials(vars_: dict) -> dict:
+    return {k: v for k, v in vars_.items() if not re.search(r"(^|[._])serial$", str(k).lower())}
 
 # Módulos que el admin apagó (labtower-modules). El archivo tiene un id por línea; si no existe, no hay ninguno apagado.
 # EN: Modules the admin turned off (labtower-modules). The file has one id per line; if it is missing nothing is disabled.

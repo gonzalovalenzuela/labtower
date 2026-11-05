@@ -50,14 +50,15 @@ class NodeDetail(unittest.TestCase):
         for secret in ("SECRET-KEY", "SECRET-ID", "SERIAL"):
             self.assertNotIn(secret, blob, "the license key, server id and disk serials never go to the page")
 
-    def test_pve_mod_fields_are_short_and_never_show_the_serial(self):
+    def test_pve_mod_fields_are_short_and_keep_the_serial_apart(self):
         st = {"PveMod_JsonSensorInfo": {"temp_unit": "C", "cpu": True, "hdd": False, "data": "PVE MOD lm-sensors Enhanced", "other": True, "fans": True, "nvme": True},
               "PveMod_Version": "1.0.6",
               "PveMod_systemInfo": {"serial_number": "2TQVWP3", "manufacturer": "Dell Inc.", "display_string": "Manufacturer: Dell Inc. | Serial Number: 2TQVWP3", "product_name": "OptiPlex 7090"},
               "PveMod_upsInfo": {"disabled": True}}
         d = extra.node_detail(st, None, None, None, None, None, None, None, None)
         self.assertEqual({o["k"]: o["v"] for o in d["other"]}, {"PveMod_Version": "1.0.6", "PveMod_systemInfo": "Manufacturer: Dell Inc. | Product Name: OptiPlex 7090"})
-        self.assertNotIn("2TQVWP3", repr(d))
+        self.assertNotIn("2TQVWP3", repr(d["other"]))      # never inside the text rows
+        self.assertEqual(d["serial"], "2TQVWP3")           # it travels apart: the server hands it only to users with the serials permission
         st["PveMod_upsInfo"] = {"disabled": False, "model": "APC"}
         self.assertIn("model: APC", {o["k"]: o["v"] for o in extra.node_detail(st, None, None, None, None, None, None, None, None)["other"]}["PveMod_upsInfo"])
 
