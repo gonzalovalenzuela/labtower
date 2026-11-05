@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.7h — 2026-11-05
+
+- **Mejora:** WAN Monitor: el período de las pruebas de velocidad se fija en minutos u horas (mínimo 5 minutos). Con menos de 30 minutos aparece una advertencia: puede saturar el enlace rápidamente. Lo que ya tenías guardado en horas se convierte solo.
+- **Arreglo:** la tarjeta de IP ya no ofrece Net Monitor para esta misma máquina (127.0.0.1, ::1, localhost), por ejemplo en los clientes de UPS Monitor.
+- **Cambio:** WOL Console: se quitó «Export JSON» del menú Acciones y el «v2» bajo el nombre.
+
 ## 2.1.7g — 2026-11-05
 
 - **Mejora:** Proxmox Monitor: el detalle del nodo muestra las temperaturas y los ventiladores del add-on PVE mods, agrupados como en Proxmox: estado térmico de la CPU por núcleo (con máximo y crítico), temperaturas NVMe por modelo, otras temperaturas y ventiladores en RPM, además de «Sensor Mod Version» e «Information». Requiere PVE mods instalado en cada nodo (ver README).
