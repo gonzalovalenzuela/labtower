@@ -837,7 +837,7 @@ function buildNodePanel(cid,node){
     d.other.filter(o=>SYS_MOD.includes(o.k)).map(o=>nrow(t(OTH[o.k]),o.v)).join(''));
   const lists=[];
   const SG=[['cpu','ndSnCpu',1],['nvme','ndSnNvme',1],['other','ndSnOther',1],['fans','ndSnFans',0]];
-  SG.forEach(([g,k,tmp])=>{const rows=(d.sensors||[]).filter(x=>x.g===g);if(rows.length)lists.push(sec(t(k),rows.map(x=>nrow(x.l,tmp?x.v+' °'+d.temp_unit:Math.round(x.v)+' RPM')).join('')));});
+  SG.forEach(([g,k,tmp])=>{const rows=(d.sensors||[]).filter(x=>x.g===g);if(rows.length)lists.push(sec(t(k),rows.map(x=>nrow(x.l,tmp?x.v+' °'+d.temp_unit+(x.mx||x.cr?' ('+[x.mx?'max '+x.mx:'',x.cr?'crit '+x.cr:''].filter(Boolean).join(', ')+')':''):Math.round(x.v)+' RPM'+(x.mx?' (max '+x.mx+')':''))).join('')));});
   if(d.disks.length)lists.push(sec(t('ndDisks'),d.disks.map(x=>nrow(x.dev+(x.model?' · '+x.model:''),[x.type,x.size?fmtBytes(x.size):'',x.health,x.wearout&&x.wearout!=='N/A'?x.wearout+'%':''].filter(Boolean).join(' · '))).join('')));
   if(d.net.length)lists.push(sec(t('ndNetIf'),d.net.map(x=>nrow(x.iface+' ('+x.type+')',[x.address,x.gateway?'gw '+x.gateway:'',x.ports,x.active?'':'down'].filter(Boolean).join(' · '))).join('')));
   if(d.services.length)lists.push(sec(t('ndServices'),nrow(t('ndServState'),run+' '+t('ndRunning')+(off?' · '+off+' '+t('ndInactive'):''))+bad.map(x=>nrow(x.name,x.state,null,'bad')).join('')));

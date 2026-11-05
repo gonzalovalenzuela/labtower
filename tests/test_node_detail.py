@@ -174,20 +174,33 @@ if __name__ == "__main__":
 
 
 class PveModSensors(unittest.TestCase):
-    RAW = ('PVE MOD lm-sensors Enhanced:\n{"coretemp-isa-0000": {"Package id 0": {"temp1_input": 41.0, "temp1_max": 100.0}, "Core 0": {"temp2_input": 39.0}},'
-           ' "nvme-pci-0100": {"Composite": {"temp1_input": 33.85}}, "acpitz-acpi-0": {"temp1": {"temp1_input": 27.8}},'
-           ' "dell_smm-virtual-0": {"Processor Fan": {"fan1_input": 1250.0}}}')
+    DATA = {"PVE MOD lm-sensors Enhanced": {  # noqa: RUF012
+        "coretemp-isa-0000": {"Adapter": "ISA adapter", "Core 0": {"temp2_crit": 100, "temp2_input": 55, "temp2_max": 84},
+                              "Package id 0": {"temp1_crit": 100, "temp1_input": 65, "temp1_max": 84}, "cpu_model": "Intel(R) Core(TM) i5-10500", "cpu_package": "0"},
+        "dell_smm-virtual-0": {"Adapter": "Virtual device", "fan1": {"fan1_input": 1823, "fan1_max": 4000}, "pwm1": {"pwm1": 64},
+                               "temp1": {"temp1_input": 55}, "temp3": {"temp3_input": 0}},
+        "nvme-pci-0200": {"Adapter": "PCI adapter", "Composite": {"temp1_crit": 84.85, "temp1_input": 45.85, "temp1_max": 82.85},
+                          "device_path": "/dev/nvme0n1", "model": "Asgard AN1TNVMe-M.2/80", "serial": "SERIAL-123"},
+        "ucsi_source_psy_USBC000:001-isa-0000": {"Adapter": "ISA adapter", "in0": {"in0_input": 5}}}}
 
-    def test_groups_cpu_nvme_other_and_fans(self):
-        s = extra.sensors({"data": self.RAW})
-        self.assertEqual([(x["g"], x["l"], x["v"]) for x in s], [("cpu", "Package id 0", 41.0), ("cpu", "Core 0", 39.0), ("nvme", "Composite", 33.9),
-                                                                ("other", "acpitz-acpi-0 · temp1", 27.8), ("fans", "Processor Fan", 1250.0)])
+    def test_groups_cpu_nvme_other_and_fans_from_the_real_format(self):
+        s = extra.sensors({"data": self.DATA})
+        self.assertEqual([(x["g"], x["l"], x["v"], x.get("mx"), x.get("cr")) for x in s], [
+            ("cpu", "Core 0", 55, 84, 100), ("cpu", "Package id 0", 65, 84, 100), ("fans", "fan1", 1823, 4000, None),
+            ("other", "dell_smm-virtual-0 · temp1", 55, None, None), ("nvme", "Asgard AN1TNVMe-M.2/80", 45.9, 82.8, 84.8)])
+
+    def test_the_drive_serial_never_leaves(self):
+        self.assertNotIn("SERIAL-123", str(extra.sensors({"data": self.DATA})))
+
+    def test_data_as_a_json_string_also_works(self):
+        import json
+        self.assertEqual(len(extra.sensors({"data": json.dumps(self.DATA)})), 5)
 
     def test_unreadable_data_gives_nothing(self):
         for bad in (None, {}, {"data": "PVE MOD lm-sensors Enhanced:"}, {"data": "x {not json"}, {"data": 5}, "text"):
             self.assertEqual(extra.sensors(bad), [])
 
     def test_node_detail_carries_them(self):
-        d = extra.node_detail({"PveMod_JsonSensorInfo": {"temp_unit": "C", "data": self.RAW}}, {}, {}, {}, [], {}, [], [], [])
+        d = extra.node_detail({"PveMod_JsonSensorInfo": {"temp_unit": "C", "data": self.DATA}}, {}, {}, {}, [], {}, [], [], [])
         self.assertEqual(len(d["sensors"]), 5)
         self.assertEqual(d["temp_unit"], "C")

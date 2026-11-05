@@ -193,6 +193,7 @@ labtower-health
 
 ### Proxmox Monitor
 - Polls each cluster every 5 s with the page open and every 60 s when idle.
+- **Node detail — temperatures and fans:** requires the **[PVE mods](https://github.com/Meliox/PVE-mods)** add-on (`lm-sensors`) installed on each Proxmox node. Without it the detail still shows everything else (CPU, memory, network, services, disks…) but not the *CPU thermal state*, *NVMe temperatures*, *Other temperatures*, *System fans* or *Sensor Mod Version* sections. LabTower only reads what the add-on publishes through the Proxmox API; it installs nothing on the nodes and never shows machine or drive serial numbers.
 - Node order and pinned nodes are saved per cluster (admin only).
 - When adding a cluster you must confirm its certificate SHA-256 fingerprint, which is then pinned. If the certificate changes, the token is not sent.
 - **Cluster diagnostics** (panel below the nodes): node reboots with a common timeline (those less than 10 minutes apart are flagged as *simultaneous*, and they are detected even if LabTower was stopped), corosync quorum state, down OSDs and Ceph warnings, and the SMART data of each node's disks (health, wear, temperature, errors, sectors and, on NVMe, *Unsafe Shutdowns*) read every 15 minutes (`PVE_SMART_EVERY`, in seconds; 0 disables it). Everything creates events on the Overview timeline. The API token needs the `Sys.Audit` privilege on `/nodes` (role `PVEAuditor`) to read the disks.

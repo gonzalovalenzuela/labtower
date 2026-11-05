@@ -336,12 +336,14 @@ def _pvemod(k, v):
     return _flat(v)
 
 def sensors(v):
-    """Readings from the PVE-mod add-on (its 'data' is `sensors -j` output, maybe after a title line) → [{g: cpu|nvme|other|fans, l, v}]. [] when absent or unreadable."""
+    """Readings from the PVE-mod add-on → [{g: cpu|nvme|other|fans, l, v, mx, cr}]. Its 'data' is `sensors -j` output wrapped in a
+    'PVE MOD lm-sensors Enhanced' key (a JSON string in some versions). Chip serial numbers are never read. [] when absent or unreadable."""
     raw = v.get("data") if isinstance(v, dict) else None
     if isinstance(raw, str):
         i = raw.find("{")
         try: raw = json.loads(raw[i:]) if i >= 0 else None
         except ValueError: raw = None
+    if isinstance(raw, dict) and isinstance(raw.get("PVE MOD lm-sensors Enhanced"), dict): raw = raw["PVE MOD lm-sensors Enhanced"]
     if not isinstance(raw, dict): return []
     out = []
     for chip, feats in list(raw.items())[:40]:
@@ -351,11 +353,21 @@ def sensors(v):
         for fname, fv in list(feats.items())[:60]:
             if not isinstance(fv, dict): continue
             for key, val in fv.items():
-                m = re.fullmatch(r"(temp|fan)\d+_input", str(key))
+                m = re.fullmatch(r"(temp|fan)(\d+)_input", str(key))
                 x = _n(val)
                 if not m or x is None or not math.isfinite(x): continue
-                lab = _s(fname, 40) if grp != "other" or m.group(1) == "fan" else _s(chip, 30) + " · " + _s(fname, 40)
-                out.append({"g": "fans" if m.group(1) == "fan" else grp, "l": lab, "v": round(x, 1)})
+                fan = m.group(1) == "fan"
+                if x == 0 and grp == "other": continue          # sensor not connected
+                if fan: lab = _s(fname, 40)
+                elif grp == "nvme": lab = _s(feats.get("model") or chip, 60)
+                elif grp == "other": lab = _s(chip, 30) + " · " + _s(fname, 40)
+                else: lab = _s(fname, 40)
+                pre = key[:-len("_input")]
+                row = {"g": "fans" if fan else grp, "l": lab, "v": round(x, 1)}
+                for short, suf in (("mx", "max"), ("cr", "crit")):
+                    y = _n(fv.get(pre + "_" + suf))
+                    if y is not None and math.isfinite(y) and y > 0: row[short] = round(y, 1)
+                out.append(row)
                 if len(out) >= 120: return out
     return out
 
