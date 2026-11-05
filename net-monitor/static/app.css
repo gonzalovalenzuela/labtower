@@ -323,6 +323,7 @@ body.view-sw #sw-side{display:block}
 .sw-portform label,.sw-dlg label{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--text-mid)}
 .sw-portform input[type=text],.sw-portform input:not([type]),.sw-dlg input:not([type=checkbox]),.sw-dlg select{background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--r-sm);color:var(--text);font:13px var(--sans);padding:7px 9px}
 label.chk{flex-direction:row!important;align-items:center;gap:6px!important}
+.sw-charthead{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px}
 .sw-charttitle,.sw-sechead{font:600 11px var(--sans);text-transform:uppercase;letter-spacing:.05em;color:var(--text-dim)}
 .sw-node{font:600 11px var(--sans);fill:var(--text)}
 .sw-topo{width:100%;max-width:520px;height:auto;align-self:center}

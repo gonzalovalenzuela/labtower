@@ -482,6 +482,15 @@ def history_range(range_: str, prev: bool = False) -> list:
 RANGE_SECS = {"1h": 3600, "1d": 86400, "1w": 604800, "1mo": 2592000}
 RANGE_POINTS = 600
 
+# Pruebas de velocidad de un rango (sin las fallidas), para el gráfico de velocidad. Son pocas por día: no se reducen.
+# EN: Speed tests of a range (failed ones left out) for the speed chart. There are few per day, so they are not reduced.
+def speed_range(range_: str, prev: bool = False) -> list:
+    win = history_window(range_, prev)
+    if win is None: return []
+    rows = _db("SELECT ts,down,up,ping FROM wan_speed WHERE ts >= ? AND ts < ? AND error IS NULL AND (down IS NOT NULL OR up IS NOT NULL) ORDER BY ts DESC LIMIT ?",
+               (win[0], win[1], RANGE_POINTS), fetch=True)
+    return [{"ts": a, "down": b, "up": c, "ping": d} for a, b, c, d in reversed(rows)]
+
 def uptime():
     now, out = int(time.time()), {}
     for k, secs in (("24h", 86400), ("7d", 604800), ("30d", 2592000)):
@@ -938,7 +947,8 @@ class H(BaseHTTPRequestHandler):
             rng = parse_qs(urlparse(self.path).query).get("range", ["1d"])[0]
             if rng not in RANGE_SECS and rng != "all": return self._json(400, {"error": "Invalid range"})
             prev = parse_qs(urlparse(self.path).query).get("prev", ["0"])[0] == "1"
-            try: return self._json(200, {"range": rng, "prev": prev, "history": history_range(rng, prev)})
+            kind = parse_qs(urlparse(self.path).query).get("kind", [""])[0]
+            try: return self._json(200, {"range": rng, "prev": prev, "history": speed_range(rng, prev) if kind == "speed" else history_range(rng, prev)})
             except Exception as e:
                 log.warning(f"history query failed: {e}"); return self._json(500, {"error": "Could not read the history"})
         self._json(404, {"error": "Not found"})

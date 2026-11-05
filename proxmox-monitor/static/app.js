@@ -1,5 +1,5 @@
 const LANG={
-  en:{connecting:'Connecting…',connectingMsg:'Fetching data from Proxmox.',noNodes:'No nodes',noNodesMsg:'No nodes were found in this cluster.',loginTitle:'Sign in',loginSub:'Enter your credentials to continue.',
+  en:{ndPrimary:'Primary metrics',ndSecondary:'Secondary metrics',ndSystem:'System',ndCpu:'CPU usage',ndOfCpus:n=>'of '+n+' CPUs',ndRam:'Memory usage',ndKsm:'KSM sharing',ndSwap:'SWAP usage',ndDisk:'Disk (/) usage',ndLoadAvg:'CPU load average',ndIowait:'CPU I/O delay',ndCpuModel:'CPU model',ndKernel:'Kernel version',ndBoot:'Boot mode',ndManager:'Manager version',ndUptime:'Uptime',ndTz:'Time zone',ndDns:'DNS',ndSub:'Subscription',ndUpdates:'Pending updates',ndDisks:'Disks',ndNetIf:'Network interfaces',ndServices:'Services',ndOther:'Other data',ndLoading:'Loading…',ndErr:'Could not read the node from Proxmox.',ndPerm:'The API token has no permission to read this.',ndExpand:'Click to show or hide the node details',ndChCpu:'CPU usage',ndChMem:'Memory usage',ndChLoad:'Server load',ndChNet:'Network traffic',ndSCpu:'CPU',ndSIo:'IO delay',ndSRam:'RAM',ndSSwap:'Swap',ndSLoad:'Load average',ndSIn:'In',ndSOut:'Out',ndRangeNote:'History comes from Proxmox itself; “All” is the last year.',ndNone:'None',ndYes:'yes',ndNo:'no',connecting:'Connecting…',connectingMsg:'Fetching data from Proxmox.',noNodes:'No nodes',noNodesMsg:'No nodes were found in this cluster.',loginTitle:'Sign in',loginSub:'Enter your credentials to continue.',
     username:'Username',password:'Password',loginBtn:'Sign in',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',
     navSection:'Navigation',clustersPVE:'PVE Clusters',addCluster:'Add cluster',
     themeLight:'Light',themeDark:'Dark',
@@ -44,7 +44,7 @@ const LANG={
     smartTitle:'Disks (SMART)',smartWait:'Reading SMART data… (first read takes up to a minute)',smartNone:'No disk data. The API token needs the Sys.Audit privilege on /nodes.',
     smartHealth:'Health',smartWear:'Wear',smartTemp:'Temp',smartUnsafe:'Unsafe shutdowns',smartErrs:'Media errors',smartAge:(m)=>`read ${m} min ago`,
     wHealth:'SMART failed',wMedia:'media errors',wCritwarn:'critical warning',wSectors:'bad sectors',wRealloc:'reallocated sectors',wWear:'worn out',wSpare:'low spare',nodeErr:'unavailable'},
-  es:{connecting:'Conectando…',connectingMsg:'Obteniendo datos de Proxmox.',noNodes:'Sin nodos',noNodesMsg:'No se encontraron nodos en este cluster.',loginTitle:'Iniciar sesión',loginSub:'Ingresa tus credenciales para continuar.',
+  es:{ndPrimary:'Métricas principales',ndSecondary:'Métricas secundarias',ndSystem:'Sistema',ndCpu:'Uso de CPU',ndOfCpus:n=>'de '+n+' CPU',ndRam:'Uso de memoria',ndKsm:'Compartido por KSM',ndSwap:'Uso de SWAP',ndDisk:'Uso de disco (/)',ndLoadAvg:'Carga promedio de CPU',ndIowait:'Espera de E/S de CPU',ndCpuModel:'Modelo de CPU',ndKernel:'Versión del kernel',ndBoot:'Modo de arranque',ndManager:'Versión del gestor',ndUptime:'Tiempo encendido',ndTz:'Zona horaria',ndDns:'DNS',ndSub:'Suscripción',ndUpdates:'Actualizaciones pendientes',ndDisks:'Discos',ndNetIf:'Interfaces de red',ndServices:'Servicios',ndOther:'Otros datos',ndLoading:'Cargando…',ndErr:'No se pudo leer el nodo desde Proxmox.',ndPerm:'El token de API no tiene permiso para leer esto.',ndExpand:'Clic para mostrar u ocultar el detalle del nodo',ndChCpu:'Uso de CPU',ndChMem:'Uso de memoria',ndChLoad:'Carga del servidor',ndChNet:'Tráfico de red',ndSCpu:'CPU',ndSIo:'Espera E/S',ndSRam:'RAM',ndSSwap:'Swap',ndSLoad:'Carga promedio',ndSIn:'Entrada',ndSOut:'Salida',ndRangeNote:'El historial lo entrega Proxmox; «Todo» es el último año.',ndNone:'Ninguna',ndYes:'sí',ndNo:'no',connecting:'Conectando…',connectingMsg:'Obteniendo datos de Proxmox.',noNodes:'Sin nodos',noNodesMsg:'No se encontraron nodos en este cluster.',loginTitle:'Iniciar sesión',loginSub:'Ingresa tus credenciales para continuar.',
     username:'Usuario',password:'Contraseña',loginBtn:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',
     navSection:'Navegación',clustersPVE:'Clusters PVE',addCluster:'Agregar cluster',
     themeLight:'Claro',themeDark:'Oscuro',
@@ -319,7 +319,7 @@ function renderDashboard(){
     bar.innerHTML=`<button data-on-click="resetLayout" data-on-click-args="${jsargs([cluster.id])}">${esc(t('resetOrder'))}</button>`;
     main.appendChild(bar);
   }
-  nodes.forEach(node=>{const card=buildNodeCard(node);decorateCard(card,cluster,node.name,names,pinnedSet);grid.appendChild(card);});
+  nodes.forEach(node=>{const card=buildNodeCard(node,cluster);decorateCard(card,cluster,node.name,names,pinnedSet);grid.appendChild(card);});
   main.appendChild(grid);
 
   // Agregar sección Ceph si está disponible
@@ -350,6 +350,7 @@ function renderDashboard(){
 
   // Dibujar sparklines después de que el DOM esté pintado
   renderSparklines(nodes);
+  refreshOpenNodes(cluster,nodes);
 }
 
 // ── Cluster diagnostics: corosync, Ceph warnings, reboots, SMART ──────────────────
@@ -678,8 +679,10 @@ function decorateCard(card,cluster,name,names,pinned){
 
 // Tarjeta de un nodo: CPU, RAM, disco, tiempo encendido, gráfico pequeño y secciones de VMs y contenedores.
 // EN: Node card: CPU, RAM, disk, uptime, small chart and sections for VMs and containers.
-function buildNodeCard(node){
+function buildNodeCard(node,cluster){
   const card=document.createElement('div');card.className='node-card';
+  const isOpen=!!cluster&&node.status==='online'&&_nOpen.has(nkey(cluster.id,node.name));
+  if(isOpen)card.classList.add('open');
   const isOnline=node.status==='online';
   const cpuPct=Math.round((node.cpu||0)*100);
   const memPct=node.maxmem?Math.round((node.mem/node.maxmem)*100):0;
@@ -692,7 +695,7 @@ function buildNodeCard(node){
   card.innerHTML=`
     <div class="node-hd">
       <div>
-        <div class="node-name">${esc(node.name)}</div>
+        <div class="node-name${cluster?' clickable':''}"${cluster?` data-on-click="toggleNode" data-on-click-args="${jsargs([cluster.id,node.name])}" title="${esc(t('ndExpand'))}"`:''}>${cluster&&isOnline?`<span class="node-chev">${isOpen?'▾':'▸'}</span>`:''}${esc(node.name)}</div>
         <div class="node-sub">${allVMs.length} VMs · ${allCTs.length} CTs · uptime: ${fmtUptime(node.uptime)}</div>
       </div>
       <span class="node-badge ${isOnline?'badge-online':'badge-offline'}">${isOnline?'Online':'Offline'}</span>
@@ -718,7 +721,8 @@ function buildNodeCard(node){
         <span class="res-val">${diskPct}% / ${fmtBytes(node.maxdisk)}</span>
       </div>
     </div>
-    ${node.history?.length>2?`<div style="padding:4px 12px 8px">
+    ${isOpen?buildNodePanel(cluster.id,node):''}
+    ${!isOpen&&node.history?.length>2?`<div style="padding:4px 12px 8px">
       <div style="font-size:10px;color:var(--text-dim);margin-bottom:3px;font-weight:500">${t('historyChart')}</div>
       <canvas id="spark-${esc(node.name)}" height="32" style="width:100%;height:32px;display:block;border-radius:4px;background:var(--bg)"></canvas>
     </div>`:''}
@@ -726,6 +730,120 @@ function buildNodeCard(node){
     ${buildVMSection(allCTs, 'CT', runCTs, node.name)}
     `:`<div style="padding:20px;text-align:center;color:var(--text-dim);font-size:12px">${t('nodeOfflineMsg')}</div>`}`;
   return card;
+}
+
+
+// ── Detalle de un nodo: métricas, sistema y gráficos con rangos (el historial lo entrega Proxmox) ──
+// EN: Node detail: metrics, system and charts with ranges (the history comes from Proxmox itself).
+const _nOpen=new Set((()=>{try{return JSON.parse(localStorage.getItem('pve-open-nodes')||'[]');}catch(e){return [];}})());
+const _nd={}, _nrd={}, _nbusy={};                 // detalle «cid|nodo» → {ts,d,err}; series «cid|nodo|rango» → {ts,pts}
+const _nrange={cpu:'1d',mem:'1d',load:'1d',net:'1d'};
+const nkey=(cid,name)=>cid+'|'+name;
+const nid=(cid,name,kind)=>'nch-'+kind+'-'+String(cid+'-'+name).replace(/[^a-z0-9]/gi,'-');
+const fmtBps=v=>fmtBytes(v)+'/s';
+const NCH={
+  cpu:{title:'ndChCpu',max:100,series:[{k:'cpu',c:'#4361ee',l:'ndSCpu',f:v=>v.toFixed(1)+'%'},{k:'iowait',c:'#f97316',l:'ndSIo',f:v=>v.toFixed(2)+'%'}],axis:v=>Math.round(v)+'%',h:130,pl:40},
+  mem:{title:'ndChMem',max:100,series:[{k:'mem',c:'#22c55e',l:'ndSRam',f:v=>v.toFixed(1)+'%'},{k:'swap',c:'#a855f7',l:'ndSSwap',f:v=>v.toFixed(1)+'%'}],axis:v=>Math.round(v)+'%',h:130,pl:40},
+  load:{title:'ndChLoad',series:[{k:'load',c:'#f59e0b',l:'ndSLoad',f:v=>v.toFixed(2)}],axis:v=>v.toFixed(1),h:120,pl:40},
+  net:{title:'ndChNet',series:[{k:'netin',c:'#22c55e',l:'ndSIn',f:fmtBps},{k:'netout',c:'#4361ee',l:'ndSOut',f:fmtBps}],axis:fmtBps,h:120,pl:64},
+};
+function saveOpen(){try{localStorage.setItem('pve-open-nodes',JSON.stringify([..._nOpen]));}catch(e){}}
+function toggleNode(cid,name){
+  const k=nkey(cid,name);
+  if(_nOpen.has(k))_nOpen.delete(k);else _nOpen.add(k);
+  saveOpen();
+  if(_nOpen.has(k))loadNode(cid,name,true);
+  renderDashboard();
+}
+async function loadNode(cid,name,force){
+  const k=nkey(cid,name),c=_nd[k];
+  if(!force&&c&&Date.now()-c.ts<30000)return;
+  if(_nbusy[k])return;_nbusy[k]=true;
+  try{
+    const r=await fetch('api/clusters/'+encodeURIComponent(cid)+'/nodes/'+encodeURIComponent(name)+'/detail');
+    if(r.ok){const d=await r.json();_nd[k]={ts:Date.now(),d:d.detail,err:null};}
+    else _nd[k]={ts:Date.now(),d:(c&&c.d)||null,err:r.status};
+  }catch(e){_nd[k]={ts:Date.now(),d:(c&&c.d)||null,err:-1};}
+  finally{_nbusy[k]=false;}
+  if(_nOpen.has(k))renderDashboard();
+  Object.keys(NCH).forEach(kind=>loadNodeRange(cid,name,_nrange[kind]));
+}
+async function loadNodeRange(cid,name,range,force){
+  const key=nkey(cid,name)+'|'+range,c=_nrd[key],ttl=range==='1h'?30000:120000;
+  if(!force&&c&&Date.now()-c.ts<ttl)return;
+  if(_nbusy[key])return;_nbusy[key]=true;
+  try{
+    const r=await fetch('api/clusters/'+encodeURIComponent(cid)+'/nodes/'+encodeURIComponent(name)+'/rrd?range='+range);
+    if(r.ok){const d=await r.json();_nrd[key]={ts:Date.now(),pts:d.history||[]};drawNodeCharts(cid,name);}
+  }catch(e){console.error(e);}
+  finally{_nbusy[key]=false;}
+}
+// Pide lo que falta de los nodos abiertos (cada ~30 s) y dibuja sus gráficos tras cada pintado del panel.
+// EN: Fetch what is missing for the open nodes (every ~30 s) and draw their charts after each panel paint.
+function refreshOpenNodes(cluster,nodes){
+  nodes.forEach(n=>{
+    if(n.status!=='online'||!_nOpen.has(nkey(cluster.id,n.name)))return;
+    loadNode(cluster.id,n.name,false);
+    requestAnimationFrame(()=>drawNodeCharts(cluster.id,n.name));
+  });
+}
+function setNRange(btn,cid,name,kind,range){
+  _nrange[kind]=range;
+  document.querySelectorAll('.nd-ch-'+kind+' .vchart-filter').forEach(b=>b.classList.toggle('active',b.dataset.range===range));
+  if(_nrd[nkey(cid,name)+'|'+range])drawNodeCharts(cid,name);
+  loadNodeRange(cid,name,range,true);
+}
+function drawNodeCharts(cid,name,hover){
+  Object.keys(NCH).forEach(kind=>{
+    const cv=document.getElementById(nid(cid,name,kind));if(!cv)return;
+    const C=NCH[kind],range=_nrange[kind];
+    VC.draw(cv,{pts:((_nrd[nkey(cid,name)+'|'+range]||{}).pts||[]),series:C.series.map(x=>({k:x.k,c:x.c,l:t(x.l),f:x.f})),range:range,hover:-1,h:C.h,pl:C.pl,max:C.max,axis:C.axis});
+  });
+}
+window.addEventListener('resize',()=>{_nOpen.forEach(k=>{const i=k.indexOf('|');drawNodeCharts(k.slice(0,i),k.slice(i+1));});});
+const dash='—';
+function nrow(label,value,pct){
+  const bar=pct==null?'':`<div class="nd-bar"><div style="width:${Math.max(0,Math.min(100,pct))}%;background:${pct>85?'var(--red)':pct>70?'var(--orange)':'var(--blue)'}"></div></div>`;
+  return `<div class="nd-row"><span class="nd-l">${esc(label)}</span><span class="nd-v">${value==null||value===''?dash:esc(value)}${bar}</span></div>`;
+}
+const pctOf=(u,tot)=>(u!=null&&tot)?Math.round(u/tot*1000)/10:null;
+function buildNodePanel(cid,node){
+  const c=_nd[nkey(cid,node.name)],d=c&&c.d;
+  if(!d)return `<div class="nd"><div class="nd-msg">${esc(c&&c.err?t('ndErr'):t('ndLoading'))}</div></div>`;
+  const cpus=d.cpuinfo.cpus||node.maxcpu;
+  const mp=pctOf(d.mem.used,d.mem.total),sp=pctOf(d.swap.used,d.swap.total),rp=pctOf(d.root.used,d.root.total);
+  const sec=(title,rows)=>`<div class="nd-sec"><div class="nd-title">${esc(title)}</div>${rows}</div>`;
+  const perm=k=>d.errors&&d.errors[k]==='perm'?t('ndPerm'):null;
+  const primary=sec(t('ndPrimary'),
+    nrow(t('ndCpu'),d.cpu==null?null:d.cpu.toFixed(2)+'% '+t('ndOfCpus',cpus||'?'),d.cpu)+
+    nrow(t('ndRam'),mp==null?null:mp+'% ('+fmtBytes(d.mem.used)+' / '+fmtBytes(d.mem.total)+')',mp)+
+    nrow(t('ndKsm'),d.ksm==null?null:fmtBytes(d.ksm))+
+    nrow(t('ndSwap'),sp==null?null:sp+'% ('+fmtBytes(d.swap.used)+' / '+fmtBytes(d.swap.total)+')',d.swap.total?sp:null)+
+    nrow(t('ndDisk'),rp==null?null:rp+'% ('+fmtBytes(d.root.used)+' / '+fmtBytes(d.root.total)+')',rp));
+  const ci=d.cpuinfo, model=[ci.model,ci.sockets?(ci.sockets+'×'+(ci.cores||'?')+' cores'):'',ci.mhz?Math.round(ci.mhz)+' MHz':''].filter(Boolean).join(' · ');
+  const secondary=sec(t('ndSecondary'),
+    nrow(t('ndLoadAvg'),d.load.length?d.load.map(x=>x.toFixed(2)).join(', '):null)+
+    nrow(t('ndIowait'),d.iowait==null?null:d.iowait.toFixed(2)+'%')+
+    nrow(t('ndCpuModel'),model)+
+    d.other.map(o=>nrow(o.k,o.v)).join(''));
+  const sub=d.subscription?[d.subscription.status,d.subscription.level,d.subscription.product,d.subscription.due].filter(Boolean).join(' · '):perm('subscription');
+  const bad=d.services.filter(x=>x.state&&x.state!=='running');
+  const system=sec(t('ndSystem'),
+    nrow(t('ndKernel'),d.kernel)+nrow(t('ndBoot'),d.boot.mode?(d.boot.mode.toUpperCase()+(d.boot.secureboot==null?'':' ('+(d.boot.secureboot?'Secure Boot':'no Secure Boot')+')')):null)+
+    nrow(t('ndManager'),d.pveversion||d.version)+nrow(t('ndUptime'),fmtUptime(d.uptime))+
+    nrow(t('ndTz'),d.timezone)+nrow(t('ndDns'),[d.dns.search,...d.dns.servers].filter(Boolean).join(' · '))+
+    nrow(t('ndSub'),sub)+nrow(t('ndUpdates'),d.updates==null?perm('apt'):String(d.updates)));
+  const lists=[];
+  if(d.disks.length)lists.push(sec(t('ndDisks'),d.disks.map(x=>nrow(x.dev+(x.model?' · '+x.model:''),[x.type,x.size?fmtBytes(x.size):'',x.health,x.wearout&&x.wearout!=='N/A'?x.wearout+'%':''].filter(Boolean).join(' · '))).join('')));
+  if(d.net.length)lists.push(sec(t('ndNetIf'),d.net.map(x=>nrow(x.iface+' ('+x.type+')',[x.address,x.gateway?'gw '+x.gateway:'',x.ports,x.active?'':'down'].filter(Boolean).join(' · '))).join('')));
+  if(d.services.length)lists.push(sec(t('ndServices'),(bad.length?bad:d.services).map(x=>nrow(x.name,x.state)).join('')+(bad.length?'':'')));
+  const charts=Object.keys(NCH).map(kind=>{
+    const C=NCH[kind],cvid=nid(cid,node.name,kind);
+    return `<div class="nd-ch nd-ch-${kind}">`+VC.section({title:t(C.title),legend:C.series.map(x=>({c:x.c,l:t(x.l)})),
+      filters:VC.filters(_nrange[kind],r=>`data-on-click="setNRange" data-on-click-args="${jsargs([{'@':'this'},cid,node.name,kind,r])}"`,null,false),
+      canvasId:cvid,tipId:cvid+'-tip',h:C.h})+`</div>`;
+  }).join('');
+  return `<div class="nd"><div class="nd-grid">${primary}${secondary}${system}</div>${lists.length?`<div class="nd-grid">${lists.join('')}</div>`:''}<div class="nd-charts">${charts}</div><div class="nd-note">${esc(t('ndRangeNote'))}</div></div>`;
 }
 
 // Gráfico pequeño de CPU y RAM de las últimas ~12 horas, dibujado en un canvas.
@@ -979,4 +1097,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ bkSetDays, closeModals, confirmDelete, doLogin, logout, moveNode, openAddCluster, pinCluster, toggleStopped, resetLayout, saveCluster, toggleBkIgnore, bkSelToggle, bkSelMode, bkBulk, toggleDiag, toggleDiagAll, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection });
+if (window.cspRegister) cspRegister({ bkSetDays, closeModals, confirmDelete, doLogin, logout, moveNode, openAddCluster, pinCluster, toggleStopped, resetLayout, saveCluster, toggleBkIgnore, bkSelToggle, bkSelMode, bkBulk, toggleDiag, toggleDiagAll, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection, toggleNode, setNRange });

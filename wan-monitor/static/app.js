@@ -469,8 +469,7 @@ async function fetchAll(){
   }catch(e){console.error(e);}
 }
 const chartOwner=()=>'wan';
-const historyUrl=(id,range)=>'api/wan/history?range='+range;
-function localPts(kind){return kind==='speed'?((W&&W.speed)||[]).filter(s=>s.down!=null||s.up!=null):[];}
+const historyUrl=(id,range,src)=>'api/wan/history?range='+range+(src==='speed'?'&kind=speed':'');
 function renderAll(){if(!W)return;renderMain();updateGlobalStats();}
 function stateInfo(s){
   if(!s)return {lv:'off',txt:t('stWait')};
@@ -650,7 +649,7 @@ function crossRow(x){
 const CHARTS={
   rtt:{title:'histRtt',down:true,series:[{k:'rtt',c:'#0ea5e9',l:'sRtt',f:v=>v.toFixed(1)+' ms'},{k:'gw',c:'#22c55e',l:'sGw',f:v=>v.toFixed(1)+' ms'},{k:'dns',c:'#f97316',l:'sDns',f:v=>Math.round(v)+' ms'}],axis:v=>Math.round(v)+' ms',h:140,pl:52},
   loss:{title:'histLoss',series:[{k:'loss',c:'#ef4444',l:'sLoss',f:v=>v.toFixed(1)+'%'},{k:'jitter',c:'#a855f7',l:'sJitter',f:v=>v.toFixed(1)+' ms'}],axis:v=>(Math.round(v*10)/10)+'',h:110,pl:40},
-  speed:{title:'histSpeed',local:true,points:true,series:[{k:'down',c:'#22c55e',l:'sDown',f:v=>v.toFixed(1)+' Mb/s'},{k:'up',c:'#3b82f6',l:'sUp',f:v=>v.toFixed(1)+' Mb/s'}],axis:v=>Math.round(v)+'',h:120,pl:46},
+  speed:{title:'histSpeed',src:'speed',points:true,series:[{k:'down',c:'#22c55e',l:'sDown',f:v=>v.toFixed(1)+' Mb/s'},{k:'up',c:'#3b82f6',l:'sUp',f:v=>v.toFixed(1)+' Mb/s'}],axis:v=>Math.round(v)+'',h:120,pl:46},
 };
 const chartRange={rtt:'1d',loss:'1d',speed:'1d'};
 
@@ -725,38 +724,42 @@ async function saveSettings(){
 const RANGES=VC.RANGES;
 const _rangeData={}, _rangeBusy={};          // «clave|rango» → {ts, pts}
 const _cid=(id,kind)=>'ch-'+kind+'-'+String(id).replace(/[^a-z0-9]/gi,'-');
-async function loadRange(id,range,force,prev){
-  const key=id+'|'+range+(prev?'|prev':''),c=_rangeData[key],ttl=range==='1h'?30000:120000;
+async function loadRange(id,range,force,prev,src){
+  src=src||'';
+  const key=id+'|'+range+(prev?'|prev':'')+(src?'|'+src:''),c=_rangeData[key],ttl=range==='1h'?30000:120000;
   if(!force&&c&&Date.now()-c.ts<ttl)return;
   if(_rangeBusy[key])return;_rangeBusy[key]=true;
   try{
-    const r=await fetch(historyUrl(id,range)+(prev?'&prev=1':''));
+    const r=await fetch(historyUrl(id,range,src)+(prev?'&prev=1':''));
     if(r.ok){const d=await r.json();_rangeData[key]={ts:Date.now(),pts:d.history||[]};drawCharts(id);}
   }catch(e){console.error(e);}
   finally{_rangeBusy[key]=false;}
 }
-function ensureRanges(){const id=chartOwner();if(id==null)return;Object.keys(CHARTS).forEach(k=>{if(!CHARTS[k].local)loadRange(id,chartRange[k]);});}
+// Clave del conjunto de datos de un gráfico: los de velocidad vienen de otra consulta.
+// EN: Data set key of a chart: speed charts come from another query.
+const dataKey=(id,kind,range,prev)=>id+'|'+range+(prev?'|prev':'')+(CHARTS[kind].src?'|'+CHARTS[kind].src:'');
+function ensureRanges(){const id=chartOwner();if(id==null)return;Object.keys(CHARTS).forEach(k=>{loadRange(id,chartRange[k],false,false,CHARTS[k].src);});}
 function setRange(btn,kind,range){
   chartRange[kind]=range;
   btn.parentNode.querySelectorAll('.vchart-filter:not(.vchart-cmp)').forEach(b=>b.classList.toggle('active',b===btn));
   const id=chartOwner();if(id==null)return;
-  if(_rangeData[id+'|'+range])drawCharts(id);
-  loadRange(id,range,true);
-  if(VC.cmp[kind]&&range!=='all')loadRange(id,range,true,true);
+  if(_rangeData[dataKey(id,kind,range)])drawCharts(id);
+  loadRange(id,range,true,false,CHARTS[kind].src);
+  if(VC.cmp[kind]&&range!=='all')loadRange(id,range,true,true,CHARTS[kind].src);
 }
-function toggleCmp(btn,kind){VC.cmp[kind]=!VC.cmp[kind];btn.classList.toggle('active',!!VC.cmp[kind]);const id=chartOwner();if(id==null)return;const range=chartRange[kind];if(VC.cmp[kind]&&range!=='all')loadRange(id,range,false,true);drawCharts(id);}
+function toggleCmp(btn,kind){VC.cmp[kind]=!VC.cmp[kind];btn.classList.toggle('active',!!VC.cmp[kind]);const id=chartOwner();if(id==null)return;const range=chartRange[kind];if(VC.cmp[kind]&&range!=='all')loadRange(id,range,false,true,CHARTS[kind].src);drawCharts(id);}
 function chartSections(id,kinds){
   return (kinds||Object.keys(CHARTS)).map(k=>{
     const C=CHARTS[k],cid=_cid(id,k);
-    return VC.section({title:t(C.title),legend:C.series.map(x=>({c:x.c,l:t(x.l)})),filters:C.local?'':VC.filters(chartRange[k],r=>`data-on-click="setRange" data-on-click-args="${jsargs([{'@':'this'},k,r])}"`,`data-on-click="toggleCmp" data-on-click-args="${jsargs([{'@':'this'},k])}"`,VC.cmp[k]),canvasId:cid,tipId:cid+'-tip',h:C.h});
+    return VC.section({title:t(C.title),legend:C.series.map(x=>({c:x.c,l:t(x.l)})),filters:VC.filters(chartRange[k],r=>`data-on-click="setRange" data-on-click-args="${jsargs([{'@':'this'},k,r])}"`,`data-on-click="toggleCmp" data-on-click-args="${jsargs([{'@':'this'},k])}"`,VC.cmp[k]),canvasId:cid,tipId:cid+'-tip',h:C.h});
   }).join('');
 }
 function drawCharts(id){if(id!==chartOwner())return;Object.keys(CHARTS).forEach(k=>drawChart(id,k,-1));}
 function drawChart(id,kind,hover){
   const C=CHARTS[kind],cv=document.getElementById(_cid(id,kind));if(!cv)return;
-  const range=chartRange[kind],loc=!!C.local;
-  VC.draw(cv,{pts:loc?localPts(kind):((_rangeData[id+'|'+range]||{}).pts||[]),prev:!loc&&VC.cmp[kind]?((_rangeData[id+'|'+range+'|prev']||{}).pts||[]):null,
-    series:C.series.map(x=>({k:x.k,c:x.c,l:t(x.l),f:x.f})),range:loc?'1mo':range,hover,h:C.h,pl:C.pl,min:C.min,max:C.max,axis:C.axis,points:C.points,down:C.down,mod:loc?null:'wan'});
+  const range=chartRange[kind];
+  VC.draw(cv,{pts:((_rangeData[dataKey(id,kind,range)]||{}).pts||[]),prev:VC.cmp[kind]?((_rangeData[dataKey(id,kind,range,true)]||{}).pts||[]):null,
+    series:C.series.map(x=>({k:x.k,c:x.c,l:t(x.l),f:x.f})),range:range,hover,h:C.h,pl:C.pl,min:C.min,max:C.max,axis:C.axis,points:C.points,down:C.down,mod:C.src?null:'wan'});
 }
 window.addEventListener('resize',()=>{const id=chartOwner();if(id!=null)drawCharts(id);});
 

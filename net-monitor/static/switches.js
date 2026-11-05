@@ -190,6 +190,12 @@ function chartFor(el) {
 function drawCharts() { document.querySelectorAll('#view-switches .sw-chart').forEach(chartFor); }
 
 
+// Botones de rango (1h … Todo): los mismos para el gráfico de temperatura y el detalle de puerto.
+// EN: Range buttons (1h … All): the same for the temperature chart and the port detail.
+function rangeChips() {
+  return ['1h', '1d', '1w', '1mo', 'all'].map(r => `<button type="button" class="sw-chip${SW.range === r ? ' active' : ''}" data-act="range" data-range="${r}">${r === 'all' ? (_lang === 'es' ? 'Todo' : 'All') : r}</button>`).join('');
+}
+
 // ── Dibujo de la pestaña / drawing the tab ──────────────────────────────────────────────
 function updateStamp() {
   const el = $('sw-stamp'); if (!el || !SW.data) return;
@@ -247,7 +253,7 @@ function portDetail(s, p) {
   const macs = (p.neighbors || []).map(n => `<code>${esc(n.mac)}</code> ${n.name || n.ip ? esc(nameOf(n)) + (n.ip ? ' <span class="dim">' + esc(n.ip) + '</span>' : '') : '<span class="dim">—</span>'}${n.vlan != null ? ' <span class="dim">VLAN ' + esc(n.vlan) + '</span>' : ''}`).join('<br>');
   const ctl = admin ? `<div class="sw-portform"><label>${esc(t('swLabel'))}<input id="sw-lbl" maxlength="32" value="${esc(p.label || '')}" placeholder="${esc(t('swLabelPh'))}"></label>` +
     `<label class="chk"><input type="checkbox" id="sw-upl"${p.uplink_manual ? ' checked' : ''}> ${esc(t('swUplinkChk'))}</label><label class="chk"><input type="checkbox" id="sw-watch"${p.watch ? ' checked' : ''}> ${esc(t('swWatchChk'))}</label><button type="button" class="sw-btn teal" data-act="saveport" data-id="${esc(s.id)}" data-port="${p.port}">${esc(t('swSavePort'))}</button></div>` : '';
-  const ranges = ['1h', '1d', '1w', '1mo', 'all'].map(r => `<button type="button" class="sw-chip${SW.range === r ? ' active' : ''}" data-act="range" data-range="${r}">${r === 'all' ? (_lang === 'es' ? 'Todo' : 'All') : r}</button>`).join('');
+  const ranges = rangeChips();
   const k = histKey(s.id, p.port);
   return `<div class="sw-detail"><div class="sw-dhead"><b>${esc(t('swPortTitle', s.name, p.port))}</b>${p.label ? ' <span class="dim">' + esc(p.label) + '</span>' : ''}<span class="grow"></span>${ranges}<button type="button" class="sw-btn" data-act="closeport">${esc(t('swClose'))}</button></div>` +
     `<div class="sw-info">${info.map(([a, b]) => `<div><span>${esc(a)}</span><b>${esc(b)}</b></div>`).join('')}</div>${macs ? '<div class="sw-macs">' + macs + '</div>' : ''}${ctl}` +
@@ -275,7 +281,7 @@ function card(s) {
       `<div class="sw-tablewrap"><table class="sw-table"><thead><tr>${heads.map(h => `<th>${esc(t(h))}</th>`).join('')}</tr></thead><tbody>${rows.map(p => portRow(s, p)).join('')}</tbody></table></div>` +
       (hasMore ? `<button type="button" class="sw-link" data-act="showall" data-id="${esc(s.id)}">${esc(all ? t('swShowActive') : t('swShowAll', s.ports.length))}</button>` : '') : '') +
     (selP ? portDetail(s, selP) : '') +
-    (hasT ? `<div class="sw-charttitle">${esc(t('swTempChart'))}</div><div class="sw-chart" data-key="${esc(histKey(s.id, null))}" data-kind="temp"></div>` : '') +
+    (hasT ? `<div class="sw-charthead"><div class="sw-charttitle">${esc(t('swTempChart'))}</div><span class="grow"></span>${rangeChips()}</div><div class="sw-chart" data-key="${esc(histKey(s.id, null))}" data-kind="temp"></div>` : '') +
     (!hasT && s.ports.length ? `<div class="sw-note">${esc(t('swNoTemp'))}</div>` : '') + '</div>';
 }
 

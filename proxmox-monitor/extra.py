@@ -284,3 +284,82 @@ def version_drift(nodes_info):
     """Distinct pve-manager versions across nodes (more than one = the cluster is half-upgraded)."""
     v = sorted({ni["version"] for ni in (nodes_info or {}).values() if ni.get("version")})
     return v if len(v) > 1 else []
+
+
+# ─── Detalle de un nodo y su historial (rrddata) ────────────────────────────────
+# El historial de un nodo lo guarda Proxmox mismo (hora, día, semana, mes y año): se pide a /nodes/<n>/rrddata y se traduce a
+# los rangos de los gráficos de LabTower (1h, 1d, 1w, 1mo, todo = año). Funciones puras, sin red.
+# EN: Node detail and its history (rrddata). A node's history is kept by Proxmox itself (hour, day, week, month and year): it is
+#     read from /nodes/<n>/rrddata and mapped to LabTower's chart ranges (1h, 1d, 1w, 1mo, all = year). Pure functions, no network.
+RRD_FRAME = {"1h": "hour", "1d": "day", "1w": "week", "1mo": "month", "all": "year"}
+_MAX_ROWS = 2000
+
+def _pct(used, total):
+    u, t = _n(used), _n(total)
+    return round(u / t * 100, 2) if u is not None and t else None
+
+def rrd_points(rows):
+    """rrddata rows → chart points: cpu / iowait / mem / swap / root in %, load, memory bytes and network bytes per second."""
+    out = []
+    for r in (rows if isinstance(rows, list) else [])[:_MAX_ROWS]:
+        if not isinstance(r, dict): continue
+        ts = _i(r.get("time"))
+        if ts <= 0: continue
+        cpu, io = _n(r.get("cpu")), _n(r.get("iowait"))
+        out.append({"ts": ts, "cpu": round(cpu * 100, 2) if cpu is not None else None, "iowait": round(io * 100, 2) if io is not None else None,
+                    "load": _n(r.get("loadavg")), "mem": _pct(r.get("memused"), r.get("memtotal")), "memused": _n(r.get("memused")),
+                    "swap": _pct(r.get("swapused"), r.get("swaptotal")), "root": _pct(r.get("rootused"), r.get("roottotal")),
+                    "netin": _n(r.get("netin")), "netout": _n(r.get("netout"))})
+    return sorted(out, key=lambda p: p["ts"])
+
+def _flat(v, depth=0):
+    """Short, safe text for a value the page does not know (numbers, strings, small lists / objects)."""
+    if isinstance(v, bool): return "yes" if v else "no"
+    if isinstance(v, int): return str(v)
+    if isinstance(v, float): return str(round(v, 3)) if math.isfinite(v) else ""
+    if isinstance(v, str): return _s(v, 160)
+    if isinstance(v, list) and depth < 2: return ", ".join(_flat(x, depth + 1) for x in v[:12])
+    if isinstance(v, dict) and depth < 2: return " · ".join(f"{_s(k, 40)}: {_flat(x, depth + 1)}" for k, x in list(v.items())[:12])
+    return ""
+
+_STATUS_KNOWN = {"cpu", "cpuinfo", "memory", "swap", "rootfs", "ksm", "loadavg", "wait", "uptime", "kversion", "pveversion", "current-kernel", "boot-info", "idle"}
+
+def node_detail(status, version, tinfo, dns, net, subs, apt, services, disks):
+    """Everything the node panel shows, trimmed and typed. Missing parts stay None / empty (a missing permission is not an error)."""
+    st = status if isinstance(status, dict) else {}
+    ci, mem, sw, rf = (st.get(k) if isinstance(st.get(k), dict) else {} for k in ("cpuinfo", "memory", "swap", "rootfs"))
+    ksm = st.get("ksm") if isinstance(st.get("ksm"), dict) else {}
+    ck, bi = (st.get(k) if isinstance(st.get(k), dict) else {} for k in ("current-kernel", "boot-info"))
+    ver = version if isinstance(version, dict) else {}
+    ti = tinfo if isinstance(tinfo, dict) else {}
+    dn = dns if isinstance(dns, dict) else {}
+    sb = subs if isinstance(subs, dict) else {}
+    cpu = _n(st.get("cpu"))
+    out = {
+        "cpu": round(cpu * 100, 2) if cpu is not None else None, "iowait": round(_n(st.get("wait")) * 100, 2) if _n(st.get("wait")) is not None else None,
+        "load": [x for x in (_n(v) for v in (st.get("loadavg") or [])[:3]) if x is not None] if isinstance(st.get("loadavg"), list) else [],
+        "cpuinfo": {"model": _s(ci.get("model"), 120), "cpus": _i(ci.get("cpus")), "sockets": _i(ci.get("sockets")), "cores": _i(ci.get("cores")), "mhz": _n(ci.get("mhz"))},
+        "mem": {"used": _n(mem.get("used")), "total": _n(mem.get("total")), "free": _n(mem.get("free"))},
+        "swap": {"used": _n(sw.get("used")), "total": _n(sw.get("total"))},
+        "root": {"used": _n(rf.get("used")), "total": _n(rf.get("total"))},
+        "ksm": _n(ksm.get("shared")), "uptime": _i(st.get("uptime")),
+        "kernel": _s(ck.get("release") or st.get("kversion"), 120), "kernel_full": _s(ck.get("version"), 160), "arch": _s(ck.get("machine"), 20),
+        "pveversion": _s(st.get("pveversion"), 120), "version": _s(ver.get("version"), 40), "release": _s(ver.get("release"), 40), "repoid": _s(ver.get("repoid"), 40),
+        "boot": {"mode": _s(bi.get("mode"), 20), "secureboot": bool(bi.get("secureboot")) if "secureboot" in bi else None},
+        "timezone": _s(ti.get("timezone"), 60), "localtime": _i(ti.get("localtime")),
+        "dns": {"search": _s(dn.get("search"), 120), "servers": [_s(dn.get(k), 60) for k in ("dns1", "dns2", "dns3") if dn.get(k)]},
+        "subscription": {"status": _s(sb.get("status"), 40), "level": _s(sb.get("level"), 20), "product": _s(sb.get("productname"), 80), "due": _s(sb.get("nextduedate"), 20)} if sb else None,
+        "updates": len(apt) if isinstance(apt, list) else None,
+        "net": [], "services": [], "disks": [],
+        "other": [{"k": _s(k, 60), "v": _flat(v)} for k, v in sorted(st.items()) if k not in _STATUS_KNOWN and _flat(v)][:40],
+    }
+    for n in (net if isinstance(net, list) else [])[:60]:
+        if not isinstance(n, dict): continue
+        out["net"].append({"iface": _s(n.get("iface"), 40), "type": _s(n.get("type"), 20), "active": bool(n.get("active")), "address": _s(n.get("cidr") or n.get("address"), 60),
+                           "gateway": _s(n.get("gateway"), 60), "ports": _s(n.get("bridge_ports") or n.get("slaves"), 120), "comments": _s(n.get("comments"), 80)})
+    for s in (services if isinstance(services, list) else [])[:60]:
+        if isinstance(s, dict) and s.get("service"): out["services"].append({"name": _s(s.get("service"), 60), "state": _s(s.get("state"), 20), "desc": _s(s.get("desc"), 100)})
+    for d in (disks if isinstance(disks, list) else [])[:60]:
+        if isinstance(d, dict): out["disks"].append({"dev": _s(d.get("devpath"), 40), "model": _s(d.get("model"), 80), "size": _n(d.get("size")), "type": _s(d.get("type"), 12),
+                                                     "health": _s(d.get("health"), 20), "wearout": _s(d.get("wearout"), 12)})
+    return out

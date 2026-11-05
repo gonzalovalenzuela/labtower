@@ -748,6 +748,74 @@ def _extra_loop(cluster, cache):
     if client: client.close()
     for d in (_extra, _live, _guest_prev, _lock_state, _task_seen, _al_on, _ser_last): d.pop(cid, None)
 
+# ─── Consultas bajo demanda de un nodo (panel de detalle y gráficos) ──────────────
+# Un cliente por cluster, reutilizado entre peticiones, y respuestas en caché corta para no cargar a Proxmox si varias personas miran.
+# El nodo debe existir en la última lectura del cluster: el nombre nunca llega a la API sin validar.
+# EN: On-demand node queries (detail panel and charts). One client per cluster, reused between requests, and short-lived cached answers so
+#     Proxmox is not loaded when several people look. The node must exist in the cluster's last reading: the name never reaches the API unchecked.
+_nclients: dict = {}
+_ncache: dict = {}
+_ncl_lock = threading.Lock()
+NODE_DETAIL_TTL, NODE_RRD_TTL = 20, 60
+
+def _node_client(cid):
+    cur = next((c for c in load_clusters() if c["id"] == cid), None)
+    if cur is None: return None
+    sig = (cur["host"], cur.get("port", 8006), cur["user"], cur["token_name"], cur["token_value"], cur.get("verify_ssl", False), _fp_norm(cur.get("fingerprint")))
+    with _ncl_lock:
+        e = _nclients.get(cid)
+        if e is None or e[0] != sig:
+            if e: e[1].close()
+            e = (sig, PVEClient(host=cur["host"], port=cur.get("port", 8006), user=cur["user"], token_name=cur["token_name"],
+                                token_value=cur["token_value"], verify_ssl=cur.get("verify_ssl", False), fingerprint=cur.get("fingerprint")))
+            _nclients[cid] = e
+        return e[1]
+
+def _node_known(cid, name):
+    cc = _cache.get(cid)
+    return bool(cc) and any(n.get("name") == name for n in (cc.snap().get("data") or {}).get("nodes") or [])
+
+def _ncached(key, ttl, fn):
+    now = time.time()
+    with _ncl_lock:
+        c = _ncache.get(key)
+        if c and now - c[0] < ttl: return c[1]
+    v = fn()
+    with _ncl_lock:
+        _ncache[key] = (now, v)
+        if len(_ncache) > 300:
+            for k in sorted(_ncache, key=lambda x: _ncache[x][0])[:100]: _ncache.pop(k, None)
+    return v
+
+def node_rrd(cid, name, rng):
+    from urllib.parse import quote
+    client = _node_client(cid)
+    if client is None: raise PVEHTTPError(404, "no cluster")
+    tf = extra.RRD_FRAME[rng]
+    def go(): return extra.rrd_points(client.get(f"/nodes/{quote(name, safe='')}/rrddata?timeframe={tf}&cf=AVERAGE").get("data"))
+    return _ncached(("rrd", cid, name, rng), NODE_RRD_TTL, go)
+
+def node_detail(cid, name):
+    from urllib.parse import quote
+    client = _node_client(cid)
+    if client is None: raise PVEHTTPError(404, "no cluster")
+    q, errors = quote(name, safe=""), {}
+    def tryget(feat, sub):
+        try: return client.get(f"/nodes/{q}/{sub}").get("data")
+        except PVEHTTPError as e:
+            errors[feat] = "perm" if e.status in (401, 403) else str(e.status); return None
+        except Exception as e:
+            errors[feat] = str(e)[:80]; return None
+    def go():
+        errors.clear()
+        st = tryget("status", "status")
+        if st is None and "status" in errors: raise PVEHTTPError(502, errors["status"])
+        d = extra.node_detail(st, tryget("version", "version"), tryget("time", "time"), tryget("dns", "dns"), tryget("network", "network"),
+                              tryget("subscription", "subscription"), tryget("apt", "apt/update"), tryget("services", "services"), tryget("disks", "disks/list"))
+        d["errors"] = dict(errors)
+        return d
+    return _ncached(("detail", cid, name), NODE_DETAIL_TTL, go)
+
 # ─── Red de las VM y contenedores (para Net Monitor) ─────────────────────────
 # Por cada VM/CT se leen sus MAC (de la configuración) y sus IP: las fijas del contenedor, las que informa el agente de
 # invitado (VM) o la interfaz del contenedor. Si falta algún permiso o el agente no corre, queda solo lo que se pudo leer.
@@ -1102,6 +1170,19 @@ class H(BaseHTTPRequestHandler):
         # Nunca se envía el token de API al navegador. Pedir esta ruta marca «alguien mira» y despierta a los pollers.
         # EN: Cluster list with their last reading, per-node history and alerts (CPU > 80 % or RAM > 90 %).
         #     The API token is never sent to the browser. Requesting this route marks "someone is looking" and wakes the pollers.
+        m = re.fullmatch(r"/api/clusters/([a-zA-Z0-9\-]+)/nodes/([\w.\-]{1,64})/(rrd|detail)", path)
+        if m:
+            cid, name, what = m.groups()
+            if not _node_known(cid, name): return self._json(404, {"error": "Unknown node"})
+            try:
+                if what == "detail": return self._json(200, {"node": name, "detail": node_detail(cid, name)})
+                rng = parse_qs(urlparse(self.path).query).get("range", ["1d"])[0]
+                if rng not in extra.RRD_FRAME: return self._json(400, {"error": "Invalid range"})
+                return self._json(200, {"range": rng, "history": node_rrd(cid, name, rng)})
+            except Exception as e:
+                log.warning(f"[{cid}] node {what} query failed: {e}")
+                return self._json(502, {"error": "Could not read the node from Proxmox"})
+
         if path == "/api/clusters":
             global _last_view
             was_idle = (time.time() - _last_view) >= VIEW_GRACE
