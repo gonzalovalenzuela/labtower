@@ -125,7 +125,10 @@
   }
   function hide() { clearTimeout(showT); clearTimeout(hideT); cur = null; if (card) card.className = 'pi-ipcard'; }
   function schedHide() { clearTimeout(showT); clearTimeout(hideT); hideT = setTimeout(hide, HIDE_MS); }
-  function tgt(n) { return n && n.closest ? n.closest('[data-nethost]') : null; }
+  // Esta misma máquina (127.x, ::1, localhost) nunca está en Net Monitor: no se le pone tarjeta ni enlace.
+  // EN: This same machine (127.x, ::1, localhost) is never in Net Monitor: it gets no card and no link.
+  function isLocal(q) { q = String(q || '').trim().toLowerCase().replace(/^\[|\]$/g, ''); return /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(q) || q === '::1' || q === 'localhost'; }
+  function tgt(n) { var t = n && n.closest ? n.closest('[data-nethost]') : null; return t && !isLocal(t.getAttribute('data-nethost')) ? t : null; }
   var touch = window.matchMedia ? matchMedia('(hover: none)') : { matches: false };
 
   document.addEventListener('mouseover', function (e) {
