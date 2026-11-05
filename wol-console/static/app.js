@@ -9,7 +9,7 @@ const LANG = {
     loginTitle:'Sign in', loginSub:'Enter your credentials to continue.',
     username:'Username', password:'Password', loginBtn:'Sign in',loginFill:'Fill in all fields',wakeAll:'Wake All',typeServer:'Server',typeOther:'Other',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',
     navSection:'Navigation', actionsSection:'Actions',
-    exportJSON:'Export JSON', wakeHistory:'Wake History',
+    wakeHistory:'Wake History',
     readonlyMsg:'Read-only mode — you cannot execute actions',
     devicesTitle:'Devices',
     colName:'Name', colType:'Type', colLastWake:'Last wake', colActions:'Actions',
@@ -50,7 +50,7 @@ const LANG = {
     loginTitle:'Iniciar sesión', loginSub:'Ingresa tus credenciales para continuar.',
     username:'Usuario', password:'Contraseña', loginBtn:'Entrar',loginFill:'Completa todos los campos',wakeAll:'Wake All',typeServer:'Servidor',typeOther:'Otros',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',
     navSection:'Navegación', actionsSection:'Acciones',
-    exportJSON:'Exportar JSON', wakeHistory:'Historial Wakes',
+    wakeHistory:'Historial Wakes',
     readonlyMsg:'Modo solo lectura — no puedes ejecutar acciones',
     devicesTitle:'Dispositivos',
     colName:'Nombre', colType:'Tipo', colLastWake:'Último wake', colActions:'Acciones',
@@ -522,15 +522,6 @@ function confirmDelete(id){
   };
   document.getElementById('del-overlay').classList.add('show');
 }
-// Descarga la lista de equipos como archivo JSON.
-// EN: Download the device list as a JSON file.
-function exportJSON(){
-  const data=devices.map(d=>({...d,notes:meta[d.id]?.notes||'',lastWoke:meta[d.id]?.lastWoke||null}));
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
-  a.download='wol-devices-'+new Date().toISOString().slice(0,10)+'.json';a.click();
-  log('INFO','Exportados '+data.length+' dispositivos');
-}
 function sortBy(col){
   if(sortCol===col)sortAsc=!sortAsc;else{sortCol=col;sortAsc=true;}
   document.querySelectorAll('thead th').forEach(th=>{th.classList.remove('sorted');const a=th.querySelector('.sa');if(a)a.textContent='↕';});
@@ -654,4 +645,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ cancelEdit, clearLog, closeModals, confirmDelete, doLogin, editDevice, exportJSON, logout, openWakeAll, pickNetHost, setFilter, setLang, setTheme, showWakeLog, sortBy, submitForm, toggleNav, wakeDevice });
+if (window.cspRegister) cspRegister({ cancelEdit, clearLog, closeModals, confirmDelete, doLogin, editDevice, logout, openWakeAll, pickNetHost, setFilter, setLang, setTheme, showWakeLog, sortBy, submitForm, toggleNav, wakeDevice });
