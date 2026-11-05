@@ -4,7 +4,7 @@ set -e
 echo "labtower: stopping services..."
 # Detiene y deshabilita los servicios antes de quitar los archivos (|| true: si alguno no existe, no se aborta).
 # EN: Stop and disable the services before removing the files (|| true: if one does not exist, it does not abort).
-for svc in wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor labtower-overview; do
+for svc in labtower-wol labtower-ups labtower-auth labtower-net labtower-pve labtower-nas labtower-dns labtower-wan labtower-vpn labtower-overview wol-console admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor; do
     systemctl stop "$svc" 2>/dev/null || true
     systemctl disable "$svc" 2>/dev/null || true
 done

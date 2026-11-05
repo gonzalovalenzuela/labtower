@@ -165,8 +165,8 @@ class Wiring(unittest.TestCase):
     ROOT = Path(__file__).resolve().parents[1]
     def test_installer_nginx_and_permissions_know_the_module(self):
         r = lambda p: (self.ROOT / p).read_text()
-        for f, needles in (("debian/postinst", ('install_service "vpn-monitor"', "labtower-vpn", "vpn-monitor:vpn")), ("debian/preinst", ("labtower-vpn",)),
-                           ("debian/postrm", ("vpn-monitor.service",)), ("etc/nginx/snippets/labtower-site.conf", ("location /vpn/", "/vpn/api/login", "8089")),
+        for f, needles in (("debian/postinst", ('install_service "labtower-vpn"', "labtower-vpn", "vpn-monitor:vpn")), ("debian/preinst", ("labtower-vpn",)),
+                           ("debian/postrm", ("labtower-$u.service",)), ("etc/nginx/snippets/labtower-site.conf", ("location /vpn/", "/vpn/api/login", "8089")),
                            ("scripts/teleporter.sh", ("vpn-monitor",)), ("auth/admin_panel.py", ('"vpn"',)), ("overview/server.py", ('"vpn"',)), ("auth/auth.py", ('"vpn": "admin"',))):
             for n in needles:
                 with self.subTest(file=f, needle=n): self.assertIn(n, r(f))

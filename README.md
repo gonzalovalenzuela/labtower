@@ -358,9 +358,9 @@ sudo labtower-sftp-backup status      # resultado de la última corrida
 labtower-health         # resumen: exit 0 = ok, 1 = degradado, 2 = falla (-j para JSON)
 labtower-resources      # memoria y CPU de cada servicio (-w refresca cada 2 s)
 sudo labtower-resetpw   # olvidé la contraseña: genera una nueva para «admin» (ver más abajo)
-systemctl status wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor labtower-overview
-journalctl -u net-monitor -f        # logs de un servicio
-sudo systemctl restart net-monitor  # reiniciar uno
+systemctl status labtower-wol labtower-ups labtower-auth labtower-net labtower-pve labtower-nas labtower-dns labtower-wan labtower-vpn labtower-overview
+journalctl -u labtower-net -f        # logs de un servicio
+sudo systemctl restart labtower-net  # reiniciar uno
 ```
 
 ### Deshabilitar módulos que no usas
@@ -394,16 +394,18 @@ Cada módulo responde `GET /api/health` (200 = ok o degradado, 503 = falla). Sin
 
 | Servicio | Módulo |
 |---|---|
-| `wol-console` | WOL Console |
+| `labtower-wol` | WOL Console |
 | `labtower-ups` | UPS Monitor (antes `nut-monitor`, que chocaba con el `upsmon` de NUT) |
-| `admin-panel` | Admin Panel |
-| `net-monitor` | Net Monitor |
-| `proxmox-monitor` | Proxmox Monitor |
-| `nas-monitor` | NAS Monitor |
-| `dns-monitor` | DNS Monitor |
-| `wan-monitor` | WAN Monitor |
-| `vpn-monitor` | VPN Monitor |
+| `labtower-auth` | Admin Panel |
+| `labtower-net` | Net Monitor |
+| `labtower-pve` | Proxmox Monitor |
+| `labtower-nas` | NAS Monitor |
+| `labtower-dns` | DNS Monitor |
+| `labtower-wan` | WAN Monitor |
+| `labtower-vpn` | VPN Monitor |
 | `labtower-overview` | Resumen |
+
+Desde la 2.1.7f todos los servicios se llaman `labtower-<módulo>` (antes `wol-console`, `admin-panel`, `net-monitor`, `proxmox-monitor`, `nas-monitor`, `dns-monitor`, `wan-monitor`, `vpn-monitor`). Al actualizar, el instalador borra los nombres viejos y habilita los nuevos; los datos no se tocan.
 
 **Desinstalar:** `sudo apt remove labtower` detiene los servicios y guarda una copia de los datos en `/var/backups/labtower`. `sudo apt purge labtower` elimina además el código, los servicios, el sitio nginx y los usuarios `labtower-*`. En ambos casos `/var/lib/labtower` y `/var/backups/labtower` **no se borran**; elimínalos a mano si quieres dejar el equipo limpio.
 
@@ -415,7 +417,7 @@ Los valores por defecto sirven para la mayoría. Para cambiarlos, escribe `NOMBR
 
 ```bash
 echo 'NUT_POLL=5' | sudo tee -a /etc/default/labtower
-sudo systemctl restart wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor labtower-overview
+sudo systemctl restart labtower-wol labtower-ups labtower-auth labtower-net labtower-pve labtower-nas labtower-dns labtower-wan labtower-vpn labtower-overview
 ```
 
 | Variable | Módulo | Por defecto | Para qué |

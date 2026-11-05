@@ -308,10 +308,10 @@ class MetricsSplit(unittest.TestCase):
 class Packaging(unittest.TestCase):
     postinst = (ROOT / "debian" / "postinst").read_text()
     MODULES = {  # unit: (user, data dir, code dir)
-        "wol-console": ("labtower-wol", "wol-console"), "labtower-ups": ("labtower-nut", "nut-monitor"),
-        "admin-panel": ("labtower-auth", "auth"), "net-monitor": ("labtower-net", "net-monitor"),
-        "proxmox-monitor": ("labtower-pve", "proxmox-monitor"), "nas-monitor": ("labtower-nas", "nas-monitor"),
-        "dns-monitor": ("labtower-dns", "dns-monitor"), "wan-monitor": ("labtower-wan", "wan-monitor"),
+        "labtower-wol": ("labtower-wol", "wol-console"), "labtower-ups": ("labtower-nut", "nut-monitor"),
+        "labtower-auth": ("labtower-auth", "auth"), "labtower-net": ("labtower-net", "net-monitor"),
+        "labtower-pve": ("labtower-pve", "proxmox-monitor"), "labtower-nas": ("labtower-nas", "nas-monitor"),
+        "labtower-dns": ("labtower-dns", "dns-monitor"), "labtower-wan": ("labtower-wan", "wan-monitor"),
         "labtower-overview": ("labtower-overview", "overview"),
     }
 

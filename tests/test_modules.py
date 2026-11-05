@@ -32,8 +32,8 @@ class Helper(unittest.TestCase):
     def test_list_shows_state(self):
         helper(self.f, "disable", "dns")
         out = helper(self.f, "list").stdout
-        self.assertRegex(out, r"dns\s+dns-monitor\s+disabled")
-        self.assertRegex(out, r"vpn\s+vpn-monitor\s+enabled")
+        self.assertRegex(out, r"dns\s+labtower-dns\s+disabled")
+        self.assertRegex(out, r"vpn\s+labtower-vpn\s+enabled")
 
 class AuthApi(unittest.TestCase):
     def test_disabled_modules_reads_file_and_ignores_garbage(self):
@@ -70,7 +70,7 @@ class Wiring(unittest.TestCase):
         self.assertIn("service_is_off", t)
         svc = re.search(r'SERVICES="([^"]+)"', t).group(1).split()
         for s in svc:                                                    # every optional service is mapped by the helper and the installer
-            if s in ("admin-panel", "labtower-overview"): continue
+            if s in ("labtower-auth", "labtower-overview"): continue
             self.assertIn(s, HELPER.read_text()); self.assertIn(s + ")", p)
 
     def test_health_skips_disabled_and_home_hides_cards(self):

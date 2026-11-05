@@ -187,7 +187,7 @@ rm -f "$AUTH_LINK/sessions.json"
 # EN: Step 3b: move the module data from /opt/labtower (versions < 1.2.0u) to /var/lib/labtower/<module>/.
 # ES: Se hace con el usuario del servicio y ANTES de pasar el código a root. Las bases SQLite se copian con su API de respaldo.
 # EN: Done as the service user and BEFORE the code becomes root-owned. SQLite databases are copied with their backup API.
-systemctl stop wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor labtower-overview 2>/dev/null || true
+systemctl stop labtower-wol labtower-ups labtower-auth labtower-net labtower-pve labtower-nas labtower-dns labtower-wan labtower-vpn labtower-overview wol-console admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor 2>/dev/null || true
 MIGRATED=""
 for pair in wol-console/devices.json wol-console/wake_log.json nut-monitor/servers.json nut-monitor/history.db \
             net-monitor/hosts.json net-monitor/config.json proxmox-monitor/clusters.json proxmox-monitor/history.json; do
@@ -328,16 +328,37 @@ migrate_legacy_nut_unit() {
 }
 migrate_legacy_nut_unit
 
+# ── 4c. Migración: nombres de servicio unificados (labtower-<módulo>) ─────────
+# Hasta la 2.1.7 los servicios se llamaban wol-console, admin-panel, net-monitor, proxmox-monitor, nas-monitor, dns-monitor, wan-monitor y vpn-monitor.
+# Aquí se paran, se deshabilitan y se borran sus archivos; el paso 5 escribe los nuevos y el 8 los habilita. Solo se toca un archivo que sea de LabTower o Pi Console.
+# EN: Step 4c, migration: unified service names (labtower-<module>). Up to 2.1.7 the services were called wol-console, admin-panel, net-monitor, proxmox-monitor,
+#     nas-monitor, dns-monitor, wan-monitor and vpn-monitor. They are stopped, disabled and their files deleted; step 5 writes the new ones and step 8 enables them.
+#     A file is only touched if it belongs to LabTower or Pi Console.
+migrate_legacy_unit_names() {
+    for old in wol-console admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor; do
+        f="/etc/systemd/system/${old}.service"
+        [ -f "$f" ] || continue
+        grep -qE "Pi Console|LabTower" "$f" 2>/dev/null || continue
+        systemctl stop "$old" 2>/dev/null || true
+        systemctl disable "$old" 2>/dev/null || true
+        rm -f "$f" "/etc/systemd/system/multi-user.target.wants/${old}.service"
+        systemctl reset-failed "$old" 2>/dev/null || true
+        echo "  old service name ${old} removed (now labtower-*)"
+    done
+    systemctl daemon-reload 2>/dev/null || true
+}
+migrate_legacy_unit_names
+
 # ── 5. Instalar archivos de servicio systemd ──────────────────────────────────
 # EN: Step 5: install the systemd unit files. One template for the 6 services; they restart on failure after 5 s and log to the journal.
 # ES: Endurecimiento de systemd. Todos: sin /home, /tmp propio, kernel y cgroups de solo lectura, sin tiempo real, UMask 077, solo sockets IP/UNIX/netlink.
 #     Los que no ejecutan sudo ni ping (UPS, Proxmox, NAS, Overview) además: sin nuevos privilegios, sistema de archivos de solo lectura salvo /var/lib/labtower.
-#     wol-console, net-monitor y wan-monitor usan «ping» (capacidad de archivo) y admin-panel usa «sudo» (setuid): no llevan NoNewPrivileges ni capacidades vacías.
-#     admin-panel tampoco lleva ProtectSystem: el teleporter (vía sudo) debe escribir en /var/backups, /etc y /var/lib.
+#     labtower-wol, labtower-net y labtower-wan usan «ping» (capacidad de archivo) y labtower-auth usa «sudo» (setuid): no llevan NoNewPrivileges ni capacidades vacías.
+#     labtower-auth tampoco lleva ProtectSystem: el teleporter (vía sudo) debe escribir en /var/backups, /etc y /var/lib.
 # EN: systemd hardening. All: no /home, private /tmp, read-only kernel and cgroups, no realtime, UMask 077, only IP/UNIX/netlink sockets.
 #     Those that run neither sudo nor ping (UPS, Proxmox, NAS, Overview) also get: no new privileges, read-only filesystem except /var/lib/labtower.
-#     wol-console, net-monitor and wan-monitor use "ping" (file capability) and admin-panel uses "sudo" (setuid): no NoNewPrivileges / empty capabilities.
-#     admin-panel has no ProtectSystem either: the teleporter (through sudo) must write to /var/backups, /etc and /var/lib.
+#     labtower-wol, labtower-net and labtower-wan use "ping" (file capability) and labtower-auth uses "sudo" (setuid): no NoNewPrivileges / empty capabilities.
+#     labtower-auth has no ProtectSystem either: the teleporter (through sudo) must write to /var/backups, /etc and /var/lib.
 install_service() {
     name="$1" desc="$2" module="$3" script="$4" level="$5" user="$6" datadir="$7"
     case "$level" in
@@ -352,7 +373,7 @@ ReadWritePaths=${DATA_DIR}/${datadir}";;
     esac
     # ES: El panel de administración es el servicio de autenticación (escucha en /run/labtower/auth.sock); los demás módulos le hablan por ese socket.
     # EN: The admin panel is the authentication service (it listens on /run/labtower/auth.sock); the other modules talk to it through that socket.
-    if [ "$name" = "admin-panel" ]; then
+    if [ "$name" = "labtower-auth" ]; then
         auth_env="Environment=LABTOWER_AUTH_LISTEN=/run/labtower/auth.sock"
         auth_run="RuntimeDirectory=labtower
 RuntimeDirectoryMode=0750
@@ -362,13 +383,13 @@ RuntimeDirectoryPreserve=restart"
         auth_env="Environment=LABTOWER_AUTH_SOCKET=/run/labtower/auth.sock
 Environment=LABTOWER_MODULE=${datadir}"
         auth_run=""
-        after="After=network.target admin-panel.service"
+        after="After=network.target labtower-auth.service"
     fi
     # ES: Estas opciones de systemd instalan filtros de seguridad que en un contenedor (CT/LXC sin privilegios) activan «no new privileges»
-    #     y entonces «sudo» deja de funcionar. Solo el panel de administración usa «sudo» (restaurar respaldos): en un contenedor se omiten ahí.
+    #     y entonces «sudo» deja de funcionar. Solo el panel de administración (labtower-auth) usa «sudo» (restaurar respaldos): en un contenedor se omiten ahí.
     # EN: These systemd options install security filters that, in a container (unprivileged CT/LXC), switch on "no new privileges" and then
     #     "sudo" stops working. Only the admin panel uses "sudo" (restoring backups): inside a container they are left out for it.
-    if [ "$name" = "admin-panel" ] && systemd-detect-virt --container --quiet 2>/dev/null; then
+    if [ "$name" = "labtower-auth" ] && systemd-detect-virt --container --quiet 2>/dev/null; then
         seccomp=""
         echo "  container detected: ${name} runs without the seccomp-based options (sudo needs them off)"
     else
@@ -419,15 +440,15 @@ EOF
     echo "  service ${name} installed (user ${user})"
 }
 
-install_service "wol-console"       "WOL Console"     "wol-console"     "server.py"      fs     labtower-wol      wol-console
+install_service "labtower-wol"      "WOL Console"     "wol-console"     "server.py"      fs     labtower-wol      wol-console
 install_service "labtower-ups"      "UPS Monitor"     "nut-monitor"     "server.py"      strict labtower-nut      nut-monitor
-install_service "admin-panel"       "Admin Panel"     "auth"            "admin_panel.py" none   labtower-auth     auth
-install_service "net-monitor"       "Net Monitor"     "net-monitor"     "server.py"      fs     labtower-net      net-monitor
-install_service "proxmox-monitor"   "Proxmox Monitor" "proxmox-monitor" "server.py"      strict labtower-pve      proxmox-monitor
-install_service "nas-monitor"       "NAS Monitor"     "nas-monitor"     "server.py"      strict labtower-nas      nas-monitor
-install_service "dns-monitor"       "DNS Monitor"     "dns-monitor"     "server.py"      strict labtower-dns      dns-monitor
-install_service "wan-monitor"       "WAN Monitor"     "wan-monitor"     "server.py"      fs     labtower-wan      wan-monitor
-install_service "vpn-monitor"       "VPN Monitor"     "vpn-monitor"     "server.py"      strict labtower-vpn      vpn-monitor
+install_service "labtower-auth"     "Admin Panel"     "auth"            "admin_panel.py" none   labtower-auth     auth
+install_service "labtower-net"      "Net Monitor"     "net-monitor"     "server.py"      fs     labtower-net      net-monitor
+install_service "labtower-pve"      "Proxmox Monitor" "proxmox-monitor" "server.py"      strict labtower-pve      proxmox-monitor
+install_service "labtower-nas"      "NAS Monitor"     "nas-monitor"     "server.py"      strict labtower-nas      nas-monitor
+install_service "labtower-dns"      "DNS Monitor"     "dns-monitor"     "server.py"      strict labtower-dns      dns-monitor
+install_service "labtower-wan"      "WAN Monitor"     "wan-monitor"     "server.py"      fs     labtower-wan      wan-monitor
+install_service "labtower-vpn"      "VPN Monitor"     "vpn-monitor"     "server.py"      strict labtower-vpn      vpn-monitor
 install_service "labtower-overview" "Overview"        "overview"        "server.py"      strict labtower-overview overview
 
 # ── 6. Nginx ──────────────────────────────────────────────────────────────────
@@ -537,12 +558,12 @@ OFF_FILE=/etc/labtower/modules.disabled
 off_svc() {
     [ -f "$OFF_FILE" ] || return 1
     case "$1" in
-        wol-console) m=wol;; labtower-ups) m=nut;; net-monitor) m=net;; proxmox-monitor) m=pve;;
-        nas-monitor) m=nas;; dns-monitor) m=dns;; wan-monitor) m=wan;; vpn-monitor) m=vpn;; *) return 1;;
+        labtower-wol) m=wol;; labtower-ups) m=nut;; labtower-net) m=net;; labtower-pve) m=pve;;
+        labtower-nas) m=nas;; labtower-dns) m=dns;; labtower-wan) m=wan;; labtower-vpn) m=vpn;; *) return 1;;
     esac
     grep -qx "$m" "$OFF_FILE"
 }
-for svc in wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor labtower-overview; do
+for svc in labtower-wol labtower-ups labtower-auth labtower-net labtower-pve labtower-nas labtower-dns labtower-wan labtower-vpn labtower-overview; do
     if off_svc "$svc"; then
         systemctl disable --now "$svc" 2>/dev/null || true
         echo "  $svc disabled (turned off by the administrator)"

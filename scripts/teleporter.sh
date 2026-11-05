@@ -54,7 +54,7 @@ RESTORE_LOG="${LABTOWER_RESTORE_LOG:-/var/lib/labtower/state/restore.log}"   # r
 # EN: Data-less user used to open an untrusted backup (extract, validate JSON/SQLite). "labtower" owns nothing and runs no service any more.
 #     Every data file belongs to the user of ITS module (owner_of); the panel (labtower-auth) owns auth/ and the exchange folder.
 SANDBOX_USER="${LABTOWER_SANDBOX_USER:-labtower}"
-SERVICES="wol-console labtower-ups admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor labtower-overview"
+SERVICES="labtower-wol labtower-ups labtower-auth labtower-net labtower-pve labtower-nas labtower-dns labtower-wan labtower-vpn labtower-overview"
 SKIP_SYSTEM="${TELEPORTER_SKIP_SYSTEM:-0}"   # 1 = no systemctl/nginx/chown (tests)
 DROP_FORCE="${TELEPORTER_DROP:-0}"           # 1 = drop to the service user even with SKIP_SYSTEM (tests)
 # Trusted base for the `sfs` helper: the (root-owned) parent of the data folder, resolved once.
@@ -549,8 +549,8 @@ service_is_off() {
   local f="${LABTOWER_DISABLED_FILE:-/etc/labtower/modules.disabled}" m
   [ -f "$f" ] || return 1
   case "$1" in
-    wol-console) m=wol;; labtower-ups) m=nut;; net-monitor) m=net;; proxmox-monitor) m=pve;;
-    nas-monitor) m=nas;; dns-monitor) m=dns;; wan-monitor) m=wan;; vpn-monitor) m=vpn;; *) return 1;;
+    labtower-wol) m=wol;; labtower-ups) m=nut;; labtower-net) m=net;; labtower-pve) m=pve;;
+    labtower-nas) m=nas;; labtower-dns) m=dns;; labtower-wan) m=wan;; labtower-vpn) m=vpn;; *) return 1;;
   esac
   grep -qx "$m" "$f"
 }
@@ -747,7 +747,7 @@ take_lock() {
 }
 release_lock() { exec 9>&-; LOCK_HELD=0; }
 
-# ── admin-panel entry points (run through sudo as root; strict argument checks) ─
+# ── labtower-auth (admin panel) entry points (run through sudo as root; strict argument checks) ─
 # ES: PUNTOS DE ENTRADA DEL PANEL (corren como root vía sudo, con validación estricta). El nombre del respaldo debe cumplir este patrón: evita rutas con «../».
 NAME_RE='^((labtower|pi-console)-[A-Za-z0-9._-]{1,80}|upload-[0-9]{8}_[0-9]{6})\.tar\.gz$'
 # ES: Prepara la carpeta de intercambio con el panel (modo 700, dueño labtower-auth).
@@ -800,7 +800,7 @@ cmd_gui_restore() {  # <name> <nut:0|1> <nginx:0|1>
   local log="$RESTORE_LOG"
   release_lock   # the detached job takes it again
   spool_init; mkdir -p "$(dirname "$log")" && chmod 755 "$(dirname "$log")"; rm -f -- "$log"
-  # Detached from the admin-panel cgroup: the restore stops and restarts that very service.
+  # Detached from the labtower-auth cgroup: the restore stops and restarts that very service.
   if [ "$SKIP_SYSTEM" != "1" ] && command -v systemd-run >/dev/null 2>&1; then
     systemctl reset-failed labtower-restore.service 2>/dev/null || true
     systemd-run --quiet --collect --unit=labtower-restore \

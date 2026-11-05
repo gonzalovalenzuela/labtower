@@ -14,8 +14,8 @@ DRY="${LABTOWER_MODULES_DRY:-0}"      # 1 = do not call systemctl (tests)
 
 svc_of() {
     case "$1" in
-        wol) echo wol-console;;   nut) echo labtower-ups;;   net) echo net-monitor;;   pve) echo proxmox-monitor;;
-        nas) echo nas-monitor;;   dns) echo dns-monitor;;    wan) echo wan-monitor;;   vpn) echo vpn-monitor;;
+        wol) echo labtower-wol;;  nut) echo labtower-ups;;   net) echo labtower-net;;  pve) echo labtower-pve;;
+        nas) echo labtower-nas;;  dns) echo labtower-dns;;   wan) echo labtower-wan;;  vpn) echo labtower-vpn;;
         *) return 1;;
     esac
 }
