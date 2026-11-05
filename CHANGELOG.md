@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.7f — 2026-11-05
+
+- **Arreglo:** WAN Monitor: ya no consulta el DNS cada vez que lee su configuración. Antes mandaba al DNS de la red una consulta a api.ipify.org y dos a speed.cloudflare.com cada pocos segundos (decenas de miles al día). Ahora el nombre se resuelve al guardar y una vez antes de conectarse.
+- **Cambio:** los servicios se llaman todos `labtower-<módulo>`: labtower-wol, labtower-auth, labtower-net, labtower-pve, labtower-nas, labtower-dns, labtower-wan y labtower-vpn (labtower-ups y labtower-overview no cambian). Al actualizar, el instalador quita los nombres viejos; los datos no se tocan. Ejemplo: `journalctl -u labtower-wan`.
+- **Mejora:** la versión de LabTower aparece en el pie de todas las páginas, incluido el kiosko, el inicio y el cambio de contraseña.
+- **Mejora:** Net Monitor: el gráfico de temperatura de los switches tiene rangos (1 h, 1 día, 1 semana, 1 mes, todo).
+- **Mejora:** WAN Monitor: gráfico de las pruebas de velocidad con los mismos rangos.
+- **Mejora:** Proxmox Monitor: al hacer clic en el nombre de un nodo se abre su detalle completo, con gráficos por rango.
+- **Mejora:** DNS Monitor: «Consultas por hora» con rangos (1 día, 1 semana, 1 mes, todo) y un gráfico nuevo de actividad por cliente (Pi-hole).
+
 ## 2.1.7e — 2026-11-04
 
 - **Arreglo:** Resumen, modo kiosko: en la tarjeta VPN Monitor, «N connected» queda en una sola línea y alineado.
