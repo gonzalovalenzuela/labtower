@@ -358,22 +358,25 @@ class ClusterCache:
         self._data = {}
         self._err  = None
         self._ts   = None
+        self._kind = None
         self.wake  = threading.Event()     # set to make the poller refresh right now
 
     def update(self, data: dict):
         with self._lock:
             self._data = data
-            self._err  = None
+            self._err  = self._kind = None
             self._ts   = time.time()
 
-    def set_error(self, e: str):
+    # kind: «cert» si el certificado ya no coincide con la huella fijada (la página ofrece volver a fijarlo).
+    # EN: kind: "cert" when the certificate no longer matches the pinned fingerprint (the page offers to pin it again).
+    def set_error(self, e: str, kind=None):
         with self._lock:
-            self._err = e
+            self._err, self._kind = e, kind
 
     def snap(self) -> dict:
         with self._lock:
             return {"id": self.id, "data": dict(self._data),
-                    "error": self._err, "ts": self._ts}
+                    "error": self._err, "error_kind": self._kind if self._err else None, "ts": self._ts}
 
 # ─── Diagnóstico: reinicios, SMART ────────────────────────────────────────────
 # diag.json guarda la hora de arranque conocida de cada nodo, el registro de reinicios y los «unsafe shutdowns» vistos,
@@ -1054,7 +1057,7 @@ def _poll_cluster(cluster):
             log.debug(f"[{cluster['name']}] {len(nodes_data)} nodes in {time.time()-t0:.2f}s")
 
         except Exception as e:
-            cache.set_error(str(e))
+            cache.set_error(str(e), "cert" if isinstance(e, PVECertError) else None)
             client.close()
             log.error(f"[{cluster['name']}] poll error: {e}")
             if auth.state_changed(f"pve-cl:{cid}", "down"):

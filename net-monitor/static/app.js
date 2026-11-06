@@ -5,7 +5,7 @@ const LANG={
     netTitle:'Network Monitor',themeLight:'Light',themeDark:'Dark',
     apply:'Apply',scanNet:'Scan network',settings:'Settings',close:'Close',
     statDiscovered:'Hosts discovered',statOnline:'Online',statOffline:'Offline',
-    statOpenPorts:'Open ports',statLastScan:'Last scan',
+    statOpenPorts:'Open ports',statLastScan:'Last scan',scanFailed:'Failed',
     filterAll:'All',filterOnline:'Online',filterOffline:'Offline',
     hostsTitle:'Hosts on network',
     colOpenPorts:'Open ports',colLastSeen:'Last seen',colLatency:'Latency',colStatus:'Status',
@@ -41,7 +41,7 @@ unrev:'Unreviewed',unrevMsg:(n,names,more)=>`${n} device${n>1?'s':''} not review
     netTitle:'Monitoreo de red',themeLight:'Claro',themeDark:'Oscuro',
     apply:'Aplicar',scanNet:'Escanear red',settings:'Ajustes',close:'Cerrar',
     statDiscovered:'Hosts descubiertos',statOnline:'En línea',statOffline:'Sin conexión',
-    statOpenPorts:'Puertos abiertos',statLastScan:'Último escaneo',
+    statOpenPorts:'Puertos abiertos',statLastScan:'Último escaneo',scanFailed:'Falló',
     filterAll:'Todos',filterOnline:'En línea',filterOffline:'Sin conexión',
     hostsTitle:'Hosts en la red',
     colOpenPorts:'Puertos abiertos',colLastSeen:'Último contacto',colLatency:'Latencia',colStatus:'Estado',
@@ -586,6 +586,9 @@ function renderStats(scan){
   }else{
     document.getElementById('st-last-scan').textContent='—';
   }
+  // Último escaneo fallido: el error bajo la hora / failed last scan: the error under the time
+  const se=document.getElementById('st-scan-err');
+  if(se){se.textContent=scan?.error?t('scanFailed')+': '+scan.error:'';se.title=scan?.error||'';se.style.display=scan?.error?'':'none';}
 }
 
 // Dibuja la tabla de equipos y, si hay uno expandido, su detalle (puertos, historial de conexión, edición). Todo texto de la red pasa por esc().

@@ -26,7 +26,7 @@ const LANG={
     testFillAll:'Fill in all fields',
     fpConfirm:(fp)=>`Certificate SHA-256: ${fp} — compare it with the one shown in Proxmox (Datacenter → Node → Certificates). Press Test again to trust it and test the connection.`,
     fpNeedTest:'Run Test and confirm the certificate first',fpChanged:'Host or port changed: run Test again',
-    unpinnedWarn:'This cluster\'s certificate is not verified.',unpinnedDesc:'The connection does not check the identity of the server before sending the API token, so someone on the network could impersonate it.',unpinned:'Certificate not verified',pinCert:'Pin certificate',pinPrompt:(fp)=>`Trust this certificate for this cluster?\n\nSHA-256:\n${fp}`,pinned:'Certificate pinned',
+    unpinnedWarn:'This cluster\'s certificate is not verified.',staleTitle:'No connection to the cluster',staleAge:m=>`The data shown is from ${m}.`,certChanged:'The cluster certificate changed',certChangedDesc:'LabTower does not send the API token until the new certificate is confirmed, so nothing is being read. If you renewed or replaced the Proxmox certificate, pin it again.',repin:'Pin certificate again',unpinnedDesc:'The connection does not check the identity of the server before sending the API token, so someone on the network could impersonate it.',unpinned:'Certificate not verified',pinCert:'Pin certificate',pinPrompt:(fp)=>`Trust this certificate for this cluster?\n\nSHA-256:\n${fp}`,pinned:'Certificate pinned',
     clusterAdded:(name)=>`${name} added`,
     deleteClusterConfirm:(name)=>`Delete cluster "${name}"?`,
     cpuAlert:(pct)=>`CPU at ${pct}%`,ramAlert:(pct)=>`RAM at ${pct}%`,
@@ -71,7 +71,7 @@ const LANG={
     testFillAll:'Completa todos los campos',
     fpConfirm:(fp)=>`Certificado SHA-256: ${fp} — compáralo con el de Proxmox (Datacenter → Nodo → Certificates). Presiona Probar otra vez para confiar en él y probar la conexión.`,
     fpNeedTest:'Primero usa Probar y confirma el certificado',fpChanged:'Cambió el host o el puerto: usa Probar otra vez',
-    unpinnedWarn:'El certificado de este cluster no está verificado.',unpinnedDesc:'La conexión no comprueba la identidad del servidor antes de enviar el token de la API, así que alguien en la red podría suplantarlo.',unpinned:'Certificado sin verificar',pinCert:'Fijar certificado',pinPrompt:(fp)=>`¿Confiar en este certificado para este cluster?\n\nSHA-256:\n${fp}`,pinned:'Certificado fijado',
+    unpinnedWarn:'El certificado de este cluster no está verificado.',staleTitle:'Sin conexión con el cluster',staleAge:m=>`Los datos que ves son de ${m}.`,certChanged:'El certificado del cluster cambió',certChangedDesc:'LabTower no envía el token de la API hasta confirmar el certificado nuevo, así que no se está leyendo nada. Si renovaste o cambiaste el certificado de Proxmox, vuelve a fijarlo.',repin:'Volver a fijar certificado',unpinnedDesc:'La conexión no comprueba la identidad del servidor antes de enviar el token de la API, así que alguien en la red podría suplantarlo.',unpinned:'Certificado sin verificar',pinCert:'Fijar certificado',pinPrompt:(fp)=>`¿Confiar en este certificado para este cluster?\n\nSHA-256:\n${fp}`,pinned:'Certificado fijado',
     clusterAdded:(name)=>`${name} agregado`,
     deleteClusterConfirm:(name)=>`¿Eliminar el cluster "${name}"?`,
     cpuAlert:(pct)=>`CPU al ${pct}%`,ramAlert:(pct)=>`RAM al ${pct}%`,
@@ -312,6 +312,17 @@ function renderDashboard(){
   }
 
   main.innerHTML='';
+  // Lectura fallida con datos anteriores: se muestra el error y la antigüedad de los datos (si es el certificado, el botón para volver a fijarlo).
+  // EN: Failed reading with older data: show the error and the age of the data (if it is the certificate, the button to pin it again).
+  if(snap.error){
+    const box=document.createElement('div');box.className='stale-banner';
+    const when=snap.ts?PCT.ls(new Date(snap.ts*1000),_lang==='es'?'es-CL':'en-US',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'—';
+    const cert=snap.error_kind==='cert';
+    box.innerHTML=`<strong>⚠ ${esc(t(cert?'certChanged':'staleTitle'))}</strong> <span>${esc(cert?t('certChangedDesc'):snap.error)} ${esc(t('staleAge',when))}</span>`+
+      (cert&&isPveAdmin()?` <button class="btn-secondary" data-on-click="pinCluster">${esc(t('repin'))}</button>`:'')+
+      (cert?`<div class="stale-err">${esc(snap.error)}</div>`:'');
+    main.appendChild(box);
+  }
   const grid=document.createElement('div');grid.className='nodes-grid';
   const names=nodes.map(n=>n.name), pinnedSet=new Set(cluster.layout?.pinned||[]);
   if(isPveAdmin()&&(cluster.layout?.order?.length||cluster.layout?.pinned?.length)){

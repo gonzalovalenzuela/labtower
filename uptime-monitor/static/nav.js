@@ -114,8 +114,17 @@
       sv.setAttribute('width', '11'); sv.setAttribute('height', '11'); sv.setAttribute('viewBox', '0 0 10 10'); sv.setAttribute('aria-hidden', 'true');
       sv.innerHTML = SHAPE[b[1]];                                                 // constante propia / own constant
       a.appendChild(sv); a.appendChild(document.createTextNode(name(b[0], st.lang) + ' · ' + tr[b[1]]));
+      var why = detail(b[0]);
+      if (why) { var dd = el('span', 'gwarn-d', why.length > 180 ? why.slice(0, 179) + '…' : why); dd.title = why; a.appendChild(dd); }
       box.appendChild(a);
     });
+  }
+  // Detalle de lo que falla en un módulo: el texto de cada chequeo que no está OK (solo llega con sesión).
+  // EN: Detail of what fails in a module: the text of every check that is not OK (only sent with a session).
+  function detail(id) {
+    var ch = health && health[id] && health[id].checks, out = [];
+    if (ch) Object.keys(ch).forEach(function (k) { var c = ch[k]; if (c && c.level !== 'ok' && c.detail) out.push(String(c.detail)); });
+    return out.join(' · ');
   }
   function loadHealth() {
     try { var c = JSON.parse(sessionStorage.getItem('lt-nav-health') || 'null'); if (c && Date.now() - c.t < 45000) { health = c.m; paint(); return; } } catch (e) {}

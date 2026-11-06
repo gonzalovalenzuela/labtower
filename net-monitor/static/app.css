@@ -365,3 +365,5 @@ label.chk{flex-direction:row!important;align-items:center;gap:6px!important}
 }
 .vchart-body{padding:6px 12px 8px}
 canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
+/* Último escaneo fallido / failed last scan */
+.stat-err{font-size:11px;color:var(--red);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

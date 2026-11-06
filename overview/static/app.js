@@ -6,7 +6,7 @@ const TXT={
   mains:'On mains',batt:'On battery',lowb:'Low battery',unreach:'Unreachable',battery:'Battery',load:'Load',runtime:'Runtime',power:'Power',nodes:'Nodes',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memory',disk:'Disk',temp:'Temp',uptime:'Uptime',
   online:'Online',known:'Known',offline:'Offline',newdev:'Unreviewed devices',watchdown:'Watched device not responding',macchg:'MAC changed on',lastscan:'Last scan',scanning:'Scanning…',ceph:'Ceph',types:'By device type',nonew:'No unreviewed devices',
   ago:'ago',backup:'Backup',bkok:'OK',bkfail:'Failed',bkold:'Overdue',bkpend:'Not run yet',bkremote:'Copy on storage',bkvok:'Verified',bkvfail:'Not verified',issue_bkvfail:'Backup copy not verified on the storage',issue_bkfail:'Last backup failed',issue_bkold:'No backup for over 36 h',now:'now',min:'min',h:'h',d:'d',s:'s',power_uv:'Under-voltage',power_th:'Throttled',power_ok:'Power supply OK',invalid:'Invalid credentials',
-  issue_batt:'is running on battery',issue_lowb:'has low battery',issue_srv:'unreachable',issue_node:'node offline',issue_cl:'cluster unreachable',pa_sto_days:'{name} fills in {value} d',pa_ceph_days:'Ceph fills in {value} d',pa_lock:'{name} locked ({lock}) for {mins} min',pa_n1:'not enough RAM if {node} goes down',pa_overcommit:'RAM overcommitted ({value}%)',pa_ha:'HA {sid}: {state}',pa_ha_lrm:'HA manager not responding',pa_repl:'replication {id} failing',pa_pg:'{value} of {total} PGs not clean',pa_cert:'certificate expires in {value} d',pa_iowait:'high iowait ({value}%)',pa_swap:'swap in use ({value}%)',uf_RB:'battery needs replacing',uf_OVER:'overloaded',uf_BYPASS:'in bypass',uf_OFF:'output off',uf_FSD:'forced shutdown',uf_ALARM:'alarm',uf_alarm:'UPS alarm',uf_margin:'not enough runtime to shut down the machines',issue_cpu:'high CPU',issue_ram:'high memory',issue_ceph:'Ceph',
+  issue_batt:'is running on battery',issue_lowb:'has low battery',issue_srv:'unreachable',issue_node:'node offline',issue_cl:'cluster unreachable',issue_stale:'last reading failed, showing older data',issue_cert:'certificate changed, pin it again in Proxmox Monitor',pa_sto_days:'{name} fills in {value} d',pa_ceph_days:'Ceph fills in {value} d',pa_lock:'{name} locked ({lock}) for {mins} min',pa_n1:'not enough RAM if {node} goes down',pa_overcommit:'RAM overcommitted ({value}%)',pa_ha:'HA {sid}: {state}',pa_ha_lrm:'HA manager not responding',pa_repl:'replication {id} failing',pa_pg:'{value} of {total} PGs not clean',pa_cert:'certificate expires in {value} d',pa_iowait:'high iowait ({value}%)',pa_swap:'swap in use ({value}%)',uf_RB:'battery needs replacing',uf_OVER:'overloaded',uf_BYPASS:'in bypass',uf_OFF:'output off',uf_FSD:'forced shutdown',uf_ALARM:'alarm',uf_alarm:'UPS alarm',uf_margin:'not enough runtime to shut down the machines',issue_cpu:'high CPU',issue_ram:'high memory',issue_ceph:'Ceph',
   issue_temp:'Pi temperature high',issue_temp_srv:'Server temperature high',issue_disk_srv:'Server disk almost full',issue_mem_srv:'Server memory high',swtitle:'Switches',swup:'Switch unreachable',swtemp:'Switch temperature',swtempc:'Switch temperature critical',swloop:'loop',swerr:'new errors',swcrc:'CRC errors (cable or network card)',swflap:'link flapping',swports:'ports',issue_disk:'Pi disk almost full',issue_mem:'Pi memory high',issue_pwr:'Pi power supply problem',issue_scan:'scan error',h_temp:'Temp',h_min:'min',h_max:'max',h_uv:'Under-voltage',h_nouv:'no under-voltage',h_utemp:'UPS temperature 24 h'},
  es:{title:'Resumen',onlyProb:'Solo con problemas',sortBtn:'Ordenar',sortDone:'Listo',sortReset:'Restablecer orden',mvEarlier:'Mover antes',mvLater:'Mover después',mvDrag:'Arrastra para mover',home:'Inicio',kiosk:'Kiosko',logout:'Cerrar sesión',login:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',exitk:'Salir de kiosko',rint:'Actualizar cada',rman:'Manual',rnow:'Actualizar ahora',ascroll:'Auto-desplazar',updated:'Actualizado',allok:'Todo en orden',attn:'Atención',fail:'Falla',
   ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',dns:'DNS Monitor',wan:'WAN Monitor',vpn:'VPN Monitor',vpnwait:'Esperando la primera lectura…',vpnconn:'conectados',vpnnone:'Nadie conectado',vpnoff:'No se puede leer el estado de la VPN',upt:'Uptime Monitor',uptnone:'Sin monitores configurados',uptup:'Servicios arriba',uptdown:'Caído',uptcert:'el certificado vence en {d} d',uptcertx:'certificado vencido',net:'Net Monitor',pi:'LabTower Server',ev:'Línea de tiempo',open:'Abrir →',noups:'Sin servidores UPS configurados',nopve:'Sin clusters configurados',nonas:'Sin NAS configurados',nodns:'Sin servidores DNS configurados',dnspct:'% bloqueado',issue_dnsdown:'Servidor DNS sin conexión',dnsq:'Consultas',dnsblk:'Bloqueadas',dnsms:'Respuesta',dnsPause:'Pausar bloqueo',dnsResume:'Reanudar bloqueo',dnsP5:'5 min',dnsP30:'30 min',dnsP60:'1 hora',dnsPU:'hasta reanudar',dnsPaused:'Bloqueo pausado',dnsResumed:'Bloqueo reanudado',dnsprot:'Bloqueo',protoff:'Pausado',proton:'Activo',protfail:'Con falla',wanrtt:'Latencia',wanloss:'Pérdida',wanup:'Disponibilidad 24 h',wandown:'Bajada',wanip:'IP pública',wanstate:'Internet',wanon:'En línea',wannet:'Caído',wanlan:'Sin LAN',wanwait:'Midiendo…',issue_wandown:'Sin acceso a internet',issue_wanlan:'Red local sin respuesta',nasdisks:'Discos OK',nasvol:'Volumen',issue_nasdown:'NAS sin conexión',nonet:'Aún sin escaneo',noev:'Sin eventos todavía',
@@ -14,7 +14,7 @@ const TXT={
   mains:'En red eléctrica',batt:'Con batería',lowb:'Batería baja',unreach:'Sin conexión',battery:'Batería',load:'Carga',runtime:'Autonomía',power:'Consumo',nodes:'Nodos',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memoria',disk:'Disco',temp:'Temp',uptime:'Encendida',
   online:'En línea',known:'Conocidos',offline:'Apagados',newdev:'Equipos sin revisar',watchdown:'Equipo vigilado sin respuesta',macchg:'Cambió la MAC de',lastscan:'Último escaneo',scanning:'Escaneando…',ceph:'Ceph',types:'Por tipo de equipo',nonew:'Sin equipos por revisar',
   ago:'hace',backup:'Respaldo',bkok:'OK',bkfail:'Falló',bkold:'Atrasado',bkpend:'Sin ejecutar',bkremote:'Copia en el storage',bkvok:'Verificada',bkvfail:'Sin verificar',issue_bkvfail:'No se pudo verificar la copia del respaldo en el storage',issue_bkfail:'El último respaldo falló',issue_bkold:'Sin respaldo hace más de 36 h',now:'ahora',min:'min',h:'h',d:'d',s:'s',power_uv:'Subtensión',power_th:'Limitada',power_ok:'Fuente de poder OK',invalid:'Credenciales inválidas',
-  issue_batt:'funciona con batería',issue_lowb:'tiene batería baja',issue_srv:'sin conexión',issue_node:'nodo caído',issue_cl:'cluster sin conexión',pa_sto_days:'{name} se llena en {value} d',pa_ceph_days:'Ceph se llena en {value} d',pa_lock:'{name} bloqueado ({lock}) hace {mins} min',pa_n1:'RAM insuficiente si cae {node}',pa_overcommit:'RAM sobreasignada ({value}%)',pa_ha:'HA {sid}: {state}',pa_ha_lrm:'el gestor HA no responde',pa_repl:'replicación {id} con fallos',pa_pg:'{value} de {total} PG no limpios',pa_cert:'el certificado vence en {value} d',pa_iowait:'iowait alto ({value}%)',pa_swap:'swap en uso ({value}%)',uf_RB:'la batería necesita reemplazo',uf_OVER:'sobrecargado',uf_BYPASS:'en bypass',uf_OFF:'salida apagada',uf_FSD:'apagado forzado',uf_ALARM:'alarma',uf_alarm:'Alarma del UPS',uf_margin:'autonomía insuficiente para apagar los equipos',issue_cpu:'CPU alta',issue_ram:'memoria alta',issue_ceph:'Ceph',
+  issue_batt:'funciona con batería',issue_lowb:'tiene batería baja',issue_srv:'sin conexión',issue_node:'nodo caído',issue_cl:'cluster sin conexión',issue_stale:'la última lectura falló, se muestran datos anteriores',issue_cert:'el certificado cambió, vuelve a fijarlo en Proxmox Monitor',pa_sto_days:'{name} se llena en {value} d',pa_ceph_days:'Ceph se llena en {value} d',pa_lock:'{name} bloqueado ({lock}) hace {mins} min',pa_n1:'RAM insuficiente si cae {node}',pa_overcommit:'RAM sobreasignada ({value}%)',pa_ha:'HA {sid}: {state}',pa_ha_lrm:'el gestor HA no responde',pa_repl:'replicación {id} con fallos',pa_pg:'{value} de {total} PG no limpios',pa_cert:'el certificado vence en {value} d',pa_iowait:'iowait alto ({value}%)',pa_swap:'swap en uso ({value}%)',uf_RB:'la batería necesita reemplazo',uf_OVER:'sobrecargado',uf_BYPASS:'en bypass',uf_OFF:'salida apagada',uf_FSD:'apagado forzado',uf_ALARM:'alarma',uf_alarm:'Alarma del UPS',uf_margin:'autonomía insuficiente para apagar los equipos',issue_cpu:'CPU alta',issue_ram:'memoria alta',issue_ceph:'Ceph',
   issue_temp:'temperatura alta de la Pi',issue_temp_srv:'temperatura alta del servidor',issue_disk_srv:'disco del servidor casi lleno',issue_mem_srv:'memoria del servidor alta',swtitle:'Switches',swup:'Switch sin conexión',swtemp:'Temperatura del switch',swtempc:'Temperatura crítica del switch',swloop:'loop',swerr:'errores nuevos',swcrc:'errores CRC (cable o tarjeta de red)',swflap:'enlace rebotando',swports:'puertos',issue_disk:'disco de la Pi casi lleno',issue_mem:'memoria de la Pi alta',issue_pwr:'problema de alimentación de la Pi',issue_scan:'error de escaneo',h_temp:'Temp.',h_min:'mín',h_max:'máx',h_uv:'Subtensión',h_nouv:'sin subtensión',h_utemp:'Temperatura UPS 24 h'}
 };
 let lang='en';try{lang=localStorage.getItem('pi-lang')||''}catch(e){}
@@ -126,6 +126,8 @@ function pveChart(id){
   return '<div class="kp">'+lchart([{vals:a.map(p=>p.cpu),color:'var(--blue)'},{vals:a.map(p=>p.mem),color:'#8b5cf6'},...(a.some(p=>p.temp!=null)?[{vals:(l=>a.map(p=>l=p.temp!=null?p.temp:l))(0),color:'var(--red)'}]:[])])+
     `<div class="hc"><i style="background:var(--blue)"></i>${T('cpu')}<i style="background:#8b5cf6"></i>${T('mem')}${a.some(p=>p.temp!=null)?`<i style="background:var(--red)"></i>${T('temp')}`:''} · ${dur(a.length*300)}</div></div>`;
 }
+// Texto del error que acompaña a un aviso («: error», recortado) / error text that goes with an issue (': error', trimmed)
+function why(e){e=e==null?'':String(e).trim();return e?': '+(e.length>160?e.slice(0,159)+'…':e):''}
 function renderPVE(d){
   const el=$('c-pve');let sev='ok',body='';const cl=d.clusters||[];
   cl.forEach(c=>{
@@ -134,7 +136,8 @@ function renderPVE(d){
     let vm=0,vmT=0,ct=0,ctT=0,cpuN=0,cpuD=0,mem=0,memD=0;
     on.forEach(x=>{(x.vms||[]).filter(v=>!v.template).forEach(v=>{vmT++;if(v.status==='running')vm++});(x.cts||[]).filter(v=>!v.template).forEach(v=>{ctT++;if(v.status==='running')ct++});cpuN+=(x.cpu||0)*(x.maxcpu||0);cpuD+=x.maxcpu||0;mem+=x.mem||0;memD+=x.maxmem||0});
     const cpu=cpuD?cpuN/cpuD*100:0,mp=memD?mem/memD*100:0;
-    if(sn.error&&!nodes.length){s='crit';issues.push({lv:'crit',m:'pve',t:`${c.name}: ${T('issue_cl')}`,href:'/pve/'})}
+    if(sn.error&&!nodes.length){s='crit';issues.push({lv:'crit',m:'pve',t:`${c.name}: ${T('issue_cl')}${why(sn.error)}`,href:'/pve/'})}
+    else if(sn.error){s=worst(s,'warn');issues.push({lv:'warn',m:'pve',t:`${c.name}: ${T(sn.error_kind==='cert'?'issue_cert':'issue_stale')}${why(sn.error)}`,href:'/pve/'})}
     off.forEach(x=>{s='crit';issues.push({lv:'crit',m:'pve',t:`${c.name}/${x.name}: ${T('issue_node')}`,href:'/pve/'})});
     (c.alerts||[]).forEach(a=>{const lv=a.lv==='crit'?'crit':'warn';s=worst(s,lv);const x=T('pa_'+a.type);issues.push({lv,m:'pve',t:x!=='pa_'+a.type?`${c.name}${a.node?'/'+a.node:''}: ${x.replace(/\{(\w+)\}/g,(_,k)=>a[k]!=null?a[k]:'')}`:`${c.name}/${a.node}: ${a.type==='cpu'?T('issue_cpu'):T('issue_ram')} (${a.value}%)`,href:'/pve/'})});
     const cs=data.ceph&&data.ceph.health&&data.ceph.health.status;
@@ -175,7 +178,7 @@ function renderNAS(d){
   const el=$('c-nas');let sev='ok',body='';const L=d.nas||[];
   L.forEach(n=>{
     const sn=n.snap||{},data=sn.data||{},sy=data.system||{};let s='ok';
-    if(sn.error){s='crit';issues.push({lv:'crit',m:'nas',t:`${n.name}: ${T('issue_nasdown')}`,href:'/nas/'})}
+    if(sn.error){s='crit';issues.push({lv:'crit',m:'nas',t:`${n.name}: ${T('issue_nasdown')}${why(sn.error)}`,href:'/nas/'})}
     (data.alerts||[]).forEach(a=>{if(a.lv==='info')return;s=worst(s,a.lv);issues.push({lv:a.lv,m:'nas',t:`${n.name}: ${nasAl(a)}`,href:'/nas/'})});
     sev=worst(sev,s);
     const disks=data.disks||[],dOk=disks.filter(x=>x.lv==='ok').length,vols=(data.raids||[]).filter(x=>x.pct!=null&&!x.pool),vmax=vols.reduce((m,x)=>x.pct>m.pct?x:m,{pct:-1});
@@ -232,7 +235,7 @@ function renderDNS(d){
   const el=$('c-dns');let sev='ok',body='';const L=d.servers||[];
   L.forEach(n=>{
     const sn=n.snap||{},data=sn.data,off=!!sn.error;let s='ok';
-    if(off){s='crit';issues.push({lv:'crit',m:'dns',t:`${n.name}: ${T('issue_dnsdown')}`,href:'/dns/'})}
+    if(off){s='crit';issues.push({lv:'crit',m:'dns',t:`${n.name}: ${T('issue_dnsdown')}${why(sn.error)}`,href:'/dns/'})}
     ((data&&data.alerts)||[]).forEach(a=>{if(a.lv==='info')return;s=worst(s,a.lv);issues.push({lv:a.lv,m:'dns',t:`${n.name}: ${dnsAl(a)}`,href:'/dns/'})});
     sev=worst(sev,s);
     const pr=data?({enabled:T('proton'),disabled:T('protoff'),failed:T('protfail')}[data.blocking]||'—'):'—';
@@ -266,7 +269,7 @@ function renderVPN(d){
   if(!list.length)body=`<div class="empty">${T('vpnnone')}</div>`;
   list.forEach(n=>{
     const sn=n.snap||{},x=sn.data;
-    if(sn.error){sev=worst(sev,'warn');issues.push({lv:'warn',m:'vpn',t:`${n.name}: ${T('vpnoff')}`,href:'/vpn/'})}
+    if(sn.error){sev=worst(sev,'warn');issues.push({lv:'warn',m:'vpn',t:`${n.name}: ${T('vpnoff')}${why(sn.error)}`,href:'/vpn/'})}
     body+=`<div class="unit"><div class="uh">${esc(n.name)} ${pill(sn.error?'warn':!sn.ts?'ok':'ok',sn.error?T('attn'):!sn.ts?'…':'OK')}</div>
      <div class="row"><span class="l">${esc(({tailscale:'Tailscale',openvpn:'OpenVPN',wireguard:'WireGuard'})[n.type]||n.type)}</span><span class="v vn">${x?`${esc(x.online)} ${T('vpnconn')}`:T('vpnwait')}</span></div></div>`;
   });
@@ -281,7 +284,7 @@ function renderUptime(d){
     body+=`<div class="unit"><div class="row"><span class="l">${T('uptup')}</span><span class="v">${esc(up)} / ${esc(list.length)}</span></div></div>`;
     list.forEach(n=>{
       const days=n.cert_exp?Math.max(0,Math.floor((n.cert_exp-Date.now()/1000)/86400)):null;
-      if(n.status==='down'){sev='crit';issues.push({lv:'crit',m:'uptime',t:`${n.name}: ${T('uptdown')}`,href:'/uptime/'});
+      if(n.status==='down'){sev='crit';issues.push({lv:'crit',m:'uptime',t:`${n.name}: ${T('uptdown')}${why(n.last&&n.last.error)}`,href:'/uptime/'});
         body+=`<div class="unit"><div class="uh">${esc(n.name)} ${pill('crit',T('uptdown'))}</div>${n.last&&n.last.error?`<div class="sub">${esc(n.last.error)}</div>`:''}</div>`}
       if(n.cert==='expired'||n.cert==='warn'){const lv=n.cert==='expired'?'crit':'warn';sev=worst(sev,lv);
         const txt=n.cert==='expired'?T('uptcertx'):T('uptcert').replace('{d}',days);
@@ -456,15 +459,15 @@ async function refresh(){
   }
   const card=(id,show)=>$(id).classList.toggle('hide',!show);
   card('c-nut',!!R.nut);card('c-pve',!!R.pve);card('c-nas',!!R.nas);card('c-dns',!!R.dns);card('c-wan',!!R.wan);card('c-vpn',!!R.vpn);card('c-upt',!!R.upt);card('c-net',!!R.net);fitGrid();
-  const fail=(id,name)=>{$(id).innerHTML=`<div class="ch"><h2>${name}</h2>${pill('crit',T('unreach'))}</div>`;issues.push({lv:'crit',m:name,t:`${name}: ${T('unreach')}`});return 'crit'};
-  if(R.nut)sevs.push(modSev(mods,'c-nut','UPS','ups','/nut/',R.nut.status==='fulfilled'?renderUPS(R.nut.value):fail('c-nut',T('ups'))));
-  if(R.pve)sevs.push(modSev(mods,'c-pve','Proxmox','pve','/pve/',R.pve.status==='fulfilled'?renderPVE(R.pve.value):fail('c-pve',T('pve'))));
-  if(R.nas)sevs.push(modSev(mods,'c-nas','NAS','nas','/nas/',R.nas.status==='fulfilled'?renderNAS(R.nas.value):fail('c-nas',T('nas'))));
-  if(R.dns)sevs.push(modSev(mods,'c-dns','DNS','dns','/dns/',R.dns.status==='fulfilled'?renderDNS(R.dns.value):fail('c-dns',T('dns'))));
-  if(R.vpn)sevs.push(modSev(mods,'c-vpn','VPN','vpn','/vpn/',R.vpn.status==='fulfilled'?renderVPN(R.vpn.value):fail('c-vpn',T('vpn'))));
-  if(R.upt)sevs.push(modSev(mods,'c-upt','Uptime','uptime','/uptime/',R.upt.status==='fulfilled'?renderUptime(R.upt.value):fail('c-upt',T('upt'))));
-  if(R.wan)sevs.push(modSev(mods,'c-wan','WAN','wan','/wan/',R.wan.status==='fulfilled'?renderWAN(R.wan.value):fail('c-wan',T('wan'))));
-  if(R.net)sevs.push(modSev(mods,'c-net','Net','net','/net/',R.net.status==='fulfilled'?renderNet(R.net.value,R.sw&&R.sw.status==='fulfilled'?R.sw.value:null):fail('c-net',T('net'))));
+  const fail=(id,name,r)=>{const e=r&&r.reason&&r.reason.message;$(id).innerHTML=`<div class="ch"><h2>${name}</h2>${pill('crit',T('unreach'))}</div>`+(e?`<div class="sub">${esc(e)}</div>`:'');issues.push({lv:'crit',m:name,t:`${name}: ${T('unreach')}${why(e)}`});return 'crit'};
+  if(R.nut)sevs.push(modSev(mods,'c-nut','UPS','ups','/nut/',R.nut.status==='fulfilled'?renderUPS(R.nut.value):fail('c-nut',T('ups'),R.nut)));
+  if(R.pve)sevs.push(modSev(mods,'c-pve','Proxmox','pve','/pve/',R.pve.status==='fulfilled'?renderPVE(R.pve.value):fail('c-pve',T('pve'),R.pve)));
+  if(R.nas)sevs.push(modSev(mods,'c-nas','NAS','nas','/nas/',R.nas.status==='fulfilled'?renderNAS(R.nas.value):fail('c-nas',T('nas'),R.nas)));
+  if(R.dns)sevs.push(modSev(mods,'c-dns','DNS','dns','/dns/',R.dns.status==='fulfilled'?renderDNS(R.dns.value):fail('c-dns',T('dns'),R.dns)));
+  if(R.vpn)sevs.push(modSev(mods,'c-vpn','VPN','vpn','/vpn/',R.vpn.status==='fulfilled'?renderVPN(R.vpn.value):fail('c-vpn',T('vpn'),R.vpn)));
+  if(R.upt)sevs.push(modSev(mods,'c-upt','Uptime','uptime','/uptime/',R.upt.status==='fulfilled'?renderUptime(R.upt.value):fail('c-upt',T('upt'),R.upt)));
+  if(R.wan)sevs.push(modSev(mods,'c-wan','WAN','wan','/wan/',R.wan.status==='fulfilled'?renderWAN(R.wan.value):fail('c-wan',T('wan'),R.wan)));
+  if(R.net)sevs.push(modSev(mods,'c-net','Net','net','/net/',R.net.status==='fulfilled'?renderNet(R.net.value,R.sw&&R.sw.status==='fulfilled'?R.sw.value:null):fail('c-net',T('net'),R.net)));
   if(R.sys.status==='fulfilled')sevs.push(modSev(mods,'c-pi',(($('c-pi').querySelector('h2')||{}).textContent||'Server'),'pi','',renderPi(R.sys.value)));
   if(R.ev.status==='fulfilled')renderEvents(R.ev.value.events||[]);
   if(window.rulesUpdate){try{await rulesUpdate();sevs.push(rulesEval(R))}catch(e){}}   // reglas de alerta del administrador / admin alert rules

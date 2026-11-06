@@ -259,3 +259,8 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
 .nd-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px}
 .nd-note{font-size:10.5px;color:var(--text-dim);text-align:right}
 @media(max-width:640px){.nd-charts{grid-template-columns:1fr}.nd-l{flex-basis:38%}}
+/* Error de lectura con datos anteriores / failed reading with older data */
+.stale-banner{margin:0 0 14px;padding:10px 14px;border:1px solid rgba(239,68,68,.4);background:var(--red-dim,rgba(239,68,68,.1));border-radius:8px;font-size:12.5px;line-height:1.5;color:var(--text)}
+.stale-banner strong{color:var(--red,#ef4444)}
+.stale-banner button{width:auto;padding:3px 10px;font-size:11px;margin-left:8px}
+.stale-err{margin-top:4px;font-family:var(--mono);font-size:11px;color:var(--text-dim)}

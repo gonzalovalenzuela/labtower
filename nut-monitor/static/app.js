@@ -9,7 +9,7 @@ const LANG={
     themeLight:'Light',themeDark:'Dark',
     statTotalUPS:'Total UPS',statOnline:'Online',statOnBatt:'On battery',
     statClients:'Connected clients',statLoad:'Total load',
-    upsSummary:'UPS Summary',
+    upsSummary:'UPS Summary',srvErrSince:d=>`data shown is from ${d}`,
     colUPSServer:'UPS / Server',colStatus:'Status',colBattery:'Battery',
     colRuntime:'Runtime',colClients:'Clients',
     criticalBatt:'Critical battery!',onBattMsg:'On battery',
@@ -62,7 +62,7 @@ const LANG={
     themeLight:'Claro',themeDark:'Oscuro',
     statTotalUPS:'UPS totales',statOnline:'En línea',statOnBatt:'En batería',
     statClients:'Clientes conectados',statLoad:'Consumo total',
-    upsSummary:'Resumen de UPS',
+    upsSummary:'Resumen de UPS',srvErrSince:d=>`los datos son de ${d}`,
     colUPSServer:'UPS / Servidor',colStatus:'Estado',colBattery:'Batería',
     colRuntime:'Autonomía',colClients:'Clientes',
     criticalBatt:'¡Batería crítica!',onBattMsg:'En batería',
@@ -303,6 +303,13 @@ function renderSidebar(){
 // EN: Draw the table: gather every UPS of every server in a list, compute the header totals (online, on battery, clients and power draw in watts: ups.realpower or, if missing, voltage × current) and build each row with its state, charge, runtime and detail. The first UPS expands by itself.
 function renderDashboard(){
   const tbody=document.getElementById('ups-tbody');
+  // Servidores cuya última lectura falló: el error y desde cuándo son los datos (si hay). / Servers whose last reading failed: the error and how old the data is.
+  const se=document.getElementById('srv-errs');
+  if(se){
+    const bad=servers.filter(sv=>allData[sv.id]?.error);
+    se.innerHTML=bad.map(sv=>{const sn=allData[sv.id];return `<div class="srv-err">⚠ <b>${esc(sv.name)}</b>: ${esc(sn.error)}${sn.last_ok?` <span>· ${esc(t('srvErrSince',fdt(sn.last_ok)))}</span>`:''}</div>`;}).join('');
+    se.style.display=bad.length?'':'none';
+  }
 
   // Construir lista plana de todas las UPS
   const rows=[];
