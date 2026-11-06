@@ -256,6 +256,8 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
 .net-err{color:var(--orange);font-weight:600}
 .disk-row{display:grid;grid-template-columns:70px 1fr 56px 84px;gap:10px;align-items:center;padding:8px 16px;border-bottom:1px solid var(--border);font-size:12.5px}
 .disk-row:last-child{border-bottom:none}
+.cert-row{grid-template-columns:52px 1fr 96px 84px}
+.node-hd .btn-sm{flex:none;width:auto;padding:4px 10px;font-size:11.5px}
 .disk-row .dn{font-weight:600;color:var(--text)}
 .disk-row .dm{color:var(--text-mid);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .disk-row .dm small{color:var(--text-dim);font-family:var(--mono);margin-left:6px}
@@ -274,7 +276,7 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
 .nas-form{display:flex;flex-direction:column;gap:12px;margin-bottom:20px;max-height:62vh;overflow-y:auto;padding-right:4px}
 .nas-form select{background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:13px;padding:8px 10px;outline:none;width:100%}
 .nas-form .secret-hint{font-size:10.5px;color:var(--text-dim)}
-@media(max-width:600px){.nas-grid{grid-template-columns:1fr}.disk-row{grid-template-columns:56px 1fr 48px 72px;gap:6px;padding:8px 12px}}
+@media(max-width:600px){.nas-grid{grid-template-columns:1fr}.disk-row{grid-template-columns:56px 1fr 48px 72px;gap:6px;padding:8px 12px}.cert-row{grid-template-columns:48px 1fr 72px}.cert-row .dt{display:none}}
 
 #main-content{display:flex;flex-direction:column;gap:16px}
 

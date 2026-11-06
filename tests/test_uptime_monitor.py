@@ -27,9 +27,10 @@ def tlv(tag, body: bytes) -> bytes:
 
 
 def fake_cert(not_after: bytes, tag=0x17, version=True) -> bytes:
-    """Minimal DER certificate: only the fields walked before validity (enough for cert_not_after)."""
-    tbs = (tlv(0xA0, tlv(0x02, b"\x02")) if version else b"") + tlv(0x02, b"\x01") + tlv(0x30, b"") + tlv(0x30, tlv(0x31, b"x" * 200)) \
-        + tlv(0x30, tlv(0x17, b"240101000000Z") + tlv(tag, not_after))
+    """Minimal DER certificate: version, serial, signature, issuer, validity and subject (enough for certinfo.parse)."""
+    name = lambda cn: tlv(0x30, tlv(0x31, tlv(0x30, tlv(0x06, bytes.fromhex("550403")) + tlv(0x0C, cn))))
+    tbs = (tlv(0xA0, tlv(0x02, b"\x02")) if version else b"") + tlv(0x02, b"\x01") + tlv(0x30, b"") + name(b"Issuer " + b"x" * 200) \
+        + tlv(0x30, tlv(0x17, b"240101000000Z") + tlv(tag, not_after)) + name(b"nas.example.lan")
     return tlv(0x30, tlv(0x30, tbs) + tlv(0x30, b"") + tlv(0x03, b"\x00"))
 
 

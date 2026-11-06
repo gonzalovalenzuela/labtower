@@ -30,7 +30,6 @@ Uptime Monitor — disponibilidad de servicios por HTTP(S), TCP y DNS / service 
 # permite «X | None» en Python 3.9 / allows «X | None» on Python 3.9
 from __future__ import annotations
 
-import calendar
 import http.client
 import ipaddress
 import json
@@ -55,6 +54,8 @@ from urllib.parse import parse_qs, urlparse, urlsplit
 ThreadingHTTPServer.request_queue_size = 128
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
+import certinfo
+
 import auth
 
 HOST        = "127.0.0.1"
@@ -185,38 +186,8 @@ def target_of(m: dict) -> str:
     return f"{m.get('qname')} {m.get('rtype')}" + (f" @{m['server']}" if m.get("server") else "")
 
 # ─── Certificados / Certificates ────────────────────────────────────────────────
-# Lee notAfter de un certificado DER sin herramientas externas: Certificate ::= SEQUENCE { tbsCertificate SEQUENCE { [0] version?, serial,
-# signature, issuer, validity SEQUENCE { notBefore, notAfter }, … } … }. Devuelve epoch o None.
-# EN: Read notAfter from a DER certificate without external tools (walks the ASN.1 down to validity). Returns epoch or None.
-def _tlv(b: bytes, i: int):
-    tag = b[i]; n = b[i + 1]; i += 2
-    if n & 0x80:
-        k = n & 0x7F
-        if not 1 <= k <= 4: raise ValueError("bad length")
-        n = int.from_bytes(b[i:i + k], "big"); i += k
-    if i + n > len(b): raise ValueError("truncated")
-    return tag, i, i + n
-
-def _asn1_time(tag: int, raw: bytes) -> int:
-    s = raw.decode("ascii")
-    if tag == 0x17:                                                  # UTCTime YYMMDDHHMMSSZ
-        yy = int(s[:2]); s = ("19" if yy >= 50 else "20") + s
-    elif tag != 0x18: raise ValueError("not a time")                 # GeneralizedTime YYYYMMDDHHMMSSZ
-    return calendar.timegm(time.strptime(s[:14], "%Y%m%d%H%M%S"))
-
-def cert_not_after(der: bytes) -> int | None:
-    try:
-        _, i, _ = _tlv(der, 0)                                       # Certificate
-        _, i, _ = _tlv(der, i)                                       # tbsCertificate
-        if der[i] == 0xA0: i = _tlv(der, i)[2]                       # [0] version
-        for _ in range(3): i = _tlv(der, i)[2]                       # serial, signature, issuer
-        tag, i, _ = _tlv(der, i)                                     # validity
-        if tag != 0x30: return None
-        i = _tlv(der, i)[2]                                          # notBefore
-        tag, a, b = _tlv(der, i)                                     # notAfter
-        return _asn1_time(tag, der[a:b])
-    except (ValueError, IndexError, UnicodeDecodeError):
-        return None
+# El DER se lee con auth/certinfo.py (compartido con NAS Monitor). / The DER is read by auth/certinfo.py (shared with NAS Monitor).
+cert_not_after = certinfo.not_after
 
 # ─── Revisiones / Checks ────────────────────────────────────────────────────────
 class CheckError(Exception):

@@ -4,6 +4,7 @@ NAS Monitor — estado de uno o varios NAS Synology por SNMP / status of one or 
 """
 # NAS Monitor (puerto 8086): muestra el estado de uno o varios NAS Synology leyendo su MIB por SNMP (v3 o v2c): sistema,
 # temperatura, CPU, memoria, discos, volúmenes (RAID), red, UPS y carga de disco. Es solo lectura: no hace falta ninguna cuenta del NAS.
+# También lee el vencimiento de los certificados TLS de los puertos elegidos (por defecto 5001, DSM), con auth/certinfo.py.
 #
 # Flujo de datos:
 #   un hilo «poller» por NAS → collect() ejecuta snmpget / snmpbulkwalk (net-snmp) → NasCache guarda la última lectura
@@ -15,6 +16,7 @@ NAS Monitor — estado de uno o varios NAS Synology por SNMP / status of one or 
 # Estructura: SNMP · configuración · lectura de un NAS · caché e historial · poller · salud · HTTP.
 # EN: NAS Monitor (port 8086): shows the status of one or more Synology NAS by reading their MIB over SNMP (v3 or v2c): system,
 #     temperature, CPU, memory, disks, volumes (RAID), network, UPS and disk load. It is read-only: no NAS account is needed.
+#     It also reads the expiry of the TLS certificates on the chosen ports (default 5001, DSM), with auth/certinfo.py.
 #
 #     Data flow:
 #       one "poller" thread per NAS → collect() runs snmpget / snmpbulkwalk (net-snmp) → NasCache keeps the last reading
@@ -24,7 +26,7 @@ NAS Monitor — estado de uno o varios NAS Synology por SNMP / status of one or 
 #     and are never returned to the browser (only "has_*"). nas.json is private (0600).
 #
 #     Structure: SNMP · configuration · reading one NAS · cache and history · poller · health · HTTP.
-import json, os, re, shutil, subprocess, sys, tempfile, time, logging, threading
+import json, math, os, re, shutil, socket, subprocess, sys, tempfile, time, logging, threading
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 ThreadingHTTPServer.request_queue_size = 128
 from urllib.parse import urlparse, parse_qs
@@ -35,6 +37,7 @@ from pathlib import Path
 # EN: Shared authentication module (sibling folder /auth).
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
+import certinfo     # lectura de certificados TLS / TLS certificate reading
 sys.path.insert(0, str(Path(__file__).parent))
 import remote          # TrueNAS y OpenMediaVault por API / TrueNAS and OpenMediaVault over their APIs
 
@@ -161,7 +164,51 @@ def save_nas(items: list):
 def validate(body: dict, current=None) -> dict:
     cfg = _validate_base(body, current)
     _vol_thresholds(cfg, body, current)
+    _cert_opts(cfg, body, current)
     return cfg
+
+# Certificados: puertos TLS que se revisan en el host del NAS y días antes del vencimiento para el aviso y el crítico (por defecto 14 / 3;
+# 1–90 y crítico < aviso). Sin lista guardada: Synology revisa 5001 (DSM) y TrueNAS / OpenMediaVault su propio puerto si usan HTTPS.
+# Una lista vacía no revisa nada.
+# EN: Certificates: TLS ports checked on the NAS host and days before expiry for the warning and the critical level (default 14 / 3;
+#     1-90 and critical < warning). With no stored list: Synology checks 5001 (DSM) and TrueNAS / OpenMediaVault their own port when they
+#     use HTTPS. An empty list checks nothing.
+CERT_WARN, CERT_CRIT, CERT_MAX_PORTS = 14, 3, 8
+
+def cert_ports_default(cfg: dict) -> list:
+    if (cfg.get("type") or "synology") == "synology": return [5001]
+    return [cfg["port"]] if cfg.get("https", True) and isinstance(cfg.get("port"), int) else []
+
+def cert_ports(cfg: dict) -> list:
+    v = cfg.get("cert_ports")
+    return list(v) if isinstance(v, list) else cert_ports_default(cfg)
+
+def cert_thr(cfg: dict) -> tuple:
+    """(días de aviso, días de crítico) / (warning days, critical days)."""
+    w, c = cfg.get("cert_warn", CERT_WARN), cfg.get("cert_crit", CERT_CRIT)
+    ok = all(isinstance(v, int) and not isinstance(v, bool) for v in (w, c)) and 1 <= c < w <= 90
+    return (w, c) if ok else (CERT_WARN, CERT_CRIT)
+
+def _cert_opts(cfg: dict, body: dict, current=None) -> None:
+    cur = current or {}
+    ports = body["cert_ports"] if "cert_ports" in body else cur.get("cert_ports", cert_ports_default(cfg))
+    if isinstance(ports, str): ports = [x for x in re.split(r"[\s,;]+", ports) if x]
+    if not isinstance(ports, list) or len(ports) > CERT_MAX_PORTS: raise ValueError(f"Up to {CERT_MAX_PORTS} certificate ports")
+    out = []
+    for x in ports:
+        try:    x = int(None if isinstance(x, bool) else x)          # True/False no son puertos / True/False are not ports
+        except (TypeError, ValueError): raise ValueError("Invalid certificate port")
+        if not 1 <= x <= 65535: raise ValueError("Invalid certificate port")
+        if x not in out: out.append(x)
+    thr = {}
+    for k, d in (("cert_warn", CERT_WARN), ("cert_crit", CERT_CRIT)):
+        v = body[k] if k in body else cur.get(k, d)
+        try:    v = int(None if isinstance(v, bool) else v)
+        except (TypeError, ValueError): raise ValueError("Invalid certificate days")
+        if not 1 <= v <= 90: raise ValueError("Certificate days must be 1-90")
+        thr[k] = v
+    if thr["cert_crit"] >= thr["cert_warn"]: raise ValueError("Certificate critical days must be lower than warning days")
+    cfg["cert_ports"] = out; cfg.update(thr)
 
 # Umbrales de aviso / crítico de los volúmenes, por NAS (por defecto 90 / 95). 1–100 y aviso < crítico.
 # EN: Per-NAS volume warning / critical thresholds (default 90 / 95). 1-100 and warning < critical.
@@ -269,6 +316,7 @@ def _validate_api(typ: str, body: dict, current=None) -> dict:
 def public(n: dict) -> dict:
     out = {k: v for k, v in n.items() if k not in SECRETS and k != "tls_pin"}
     out.setdefault("type", "synology")
+    out["cert_ports"] = cert_ports(n); out["cert_warn"], out["cert_crit"] = cert_thr(n)
     for k in SECRETS: out["has_" + k] = bool(n.get(k))
     out["tls_pinned"] = bool(n.get("tls_pin"))
     return out
@@ -637,6 +685,100 @@ def _history_pruner():
             finally: c.close()
         except Exception as e: log.warning(f"could not prune the history: {e}")
 
+# ─── Certificados TLS ─────────────────────────────────────────────────────────
+# Un hilo se conecta una vez al día a los puertos de certificado de cada NAS (a la hora si un puerto falló, y enseguida al arrancar o si
+# cambian el host o los puertos); el botón «Revisar ahora» (permiso de ejecutar) fuerza una lectura. Solo lee el certificado: no lo valida ni confía en él. Los días, el nivel, las alertas y los eventos se calculan en cada lectura del NAS
+# con lo último leído, así que el aviso y el crítico llegan el día que corresponde aunque no se vuelva a conectar.
+# EN: A thread connects once a day to the certificate ports of every NAS (after an hour if a port failed, and at once at startup or when
+#     the host or the ports change); the "Check now" button (execute permission) forces a read. It only reads the certificate: it does not validate or trust it. Days, level, alerts and events are computed on every NAS reading
+#     from the last read, so the warning and the critical level arrive on the right day without reconnecting.
+CERT_EVERY, CERT_RETRY, CERT_LOOP, CERT_MIN_GAP = 86400, 3600, 30, 10
+_cert_gate = threading.Semaphore(2)        # forced checks at once / lecturas forzadas a la vez
+_CERTS: dict = {}            # nid -> {"ts", "sig", "list"}
+_cert_lock = threading.Lock()
+
+def _err_text(e) -> str:
+    return str(getattr(e, "reason", None) or getattr(e, "strerror", None) or e or type(e).__name__)[:120]
+
+def read_cert(host: str, port: int, timeout: float) -> dict:
+    """Lee el certificado de host:puerto / Read the certificate of host:port → {port, cn, issuer, not_after, self_signed} o {port, error}."""
+    e = {"port": port}
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        fam, sa = next(((f, a) for f, _, _, _, a in infos if auth.valid_target(a[0].split("%")[0])), (None, None))
+        if sa is None: raise ValueError("address not allowed")
+        p = certinfo.parse(certinfo.fetch(sa, host, timeout, fam))
+        if not p: raise ValueError("unreadable certificate")
+    except (OSError, ValueError) as ex:              # incluye ssl.SSLError y socket.timeout / includes ssl.SSLError and socket.timeout
+        e["error"] = _err_text(ex); return e
+    e.update(cn=p["subject"].get("cn", ""), issuer=p["issuer"].get("o") or p["issuer"].get("cn", ""),
+             not_after=p["not_after"], self_signed=p["self_signed"])
+    return e
+
+def cert_level(c: dict, thr: tuple, now=None) -> tuple:
+    """(nivel, días restantes) de un certificado leído: ok, warn, crit (pocos días), exp (vencido) o err.
+    EN: (level, days left) of a read certificate: ok, warn, crit (few days), exp (expired) or err."""
+    if c.get("error") or not _num(c.get("not_after")): return "err", None
+    warn, crit = thr
+    days = math.floor((c["not_after"] - (now or time.time())) / 86400)
+    return ("exp" if days < 0 else "crit" if days <= crit else "warn" if days <= warn else "ok"), days
+
+# Certificados de un NAS para la página y sus alertas («item» = «TLS :puerto»).
+# EN: Certificates of a NAS for the page and their alerts ("item" = "TLS :port").
+def cert_view(n: dict, now=None) -> tuple:
+    c = _CERTS.get(n["id"])
+    if not c: return [], []
+    thr, certs, alerts = cert_thr(n), [], []
+    for x in c["list"]:
+        lv, days = cert_level(x, thr, now)
+        certs.append({**x, "lv": lv, "days": days})
+        item = f"TLS :{x['port']}"
+        if lv == "err":   alerts.append({"lv": "warn", "type": "cert_err", "item": item, "value": x.get("error")})
+        elif lv == "exp": alerts.append({"lv": "crit", "type": "cert_exp", "item": item})
+        elif lv in ("warn", "crit"): alerts.append({"lv": lv, "type": "cert", "item": item, "value": days})
+    return certs, alerts
+
+# Eventos (con los certificados de cert_view): por vencer (aviso o crítico según los días), vencido (crítico) y renovado (info).
+# Un error de conexión no genera eventos.
+# EN: Events (from cert_view's certificates): expiring (warning or critical by days), expired (critical) and renewed (info).
+#     A connection error raises no events.
+def _cert_events(n: dict, certs: list):
+    for x in certs:
+        lv, days = x["lv"], x["days"]
+        if lv == "err": continue
+        ch = auth.state_changed(f"nas-cert:{n['id']}:{x['port']}", lv)
+        if not ch: continue
+        name, p = n["name"], x["port"]
+        if lv == "exp": auth.record_event("nas", "crit", f"{name}: certificate on port {p} expired", "nas_certexp", n=name, p=p)
+        elif lv in ("warn", "crit"): auth.record_event("nas", lv, f"{name}: certificate on port {p} expires in {days} days", "nas_cert", n=name, p=p, d=days)
+        elif ch[0] in ("warn", "crit", "exp"): auth.record_event("nas", "info", f"{name}: certificate on port {p} renewed", "nas_cert_ok", n=name, p=p)
+
+def check_certs_due(n: dict, now=None, force=False) -> bool:
+    """Revisa los certificados de un NAS si toca (o si force, salvo que se revisaran hace menos de CERT_MIN_GAP s). True si se revisaron.
+    EN: Check a NAS's certificates when due (or when forced, unless checked less than CERT_MIN_GAP s ago). True if checked."""
+    now = now or time.time()
+    ports = cert_ports(n); sig = (n.get("host"), tuple(ports))
+    c = _CERTS.get(n["id"])
+    if c and c["sig"] == sig:
+        age = now - c["ts"]
+        if age < (CERT_MIN_GAP if force else CERT_RETRY if any(x.get("error") for x in c["list"]) else CERT_EVERY): return False
+    timeout = min(max(int(n.get("timeout") or 5), 2), 10)
+    lst = [read_cert(n["host"], p, timeout) for p in ports]
+    with _cert_lock: _CERTS[n["id"]] = {"ts": now, "sig": sig, "list": lst}
+    return True
+
+def _cert_loop():
+    while True:
+        try:
+            items = load_nas()
+            for n in items: check_certs_due(n)
+            keep = {n["id"] for n in items}
+            with _cert_lock:
+                for nid in [k for k in _CERTS if k not in keep]: _CERTS.pop(nid, None)
+        except Exception as e:                       # noqa: BLE001 - the thread must survive any failure and retry
+            log.error(f"certificate check: {e}")
+        time.sleep(CERT_LOOP)
+
 # ─── Caché y hilos de consulta ────────────────────────────────────────────────
 # Última lectura de un NAS (datos, error y hora). El evento «wake» obliga al poller a refrescar de inmediato.
 # EN: Last reading of a NAS (data, error and time). The "wake" event forces the poller to refresh at once.
@@ -726,6 +868,8 @@ def _poll(nid: str):
             try:
                 snap = collect(n, prev)
                 snap["name"] = n["name"]
+                snap["certs"], cal = cert_view(n); snap["alerts"] += cal
+                _cert_events(n, snap["certs"])
                 push_history(nid, snap)
                 if record_series(nid, snap): refresh_derived(nid, snap)
                 cache.update(snap)
@@ -890,6 +1034,21 @@ class H(BaseHTTPRequestHandler):
             self.end_headers(); self.wfile.write(br); return
         if path == "/api/logout":
             auth.delete_session(tok); return self._json(200, {"ok": True})
+        # Revisar ahora los certificados de un NAS (permiso de ejecutar). Devuelve los certificados y sus alertas, y despierta al poller.
+        # EN: Check a NAS's certificates now (execute permission). Returns the certificates and their alerts, and wakes the poller.
+        mc = re.fullmatch(r"/api/nas/([A-Za-z0-9_-]{1,40})/certs", path)
+        if mc:
+            if not auth.check_permission(tok, "nas", "execute"):
+                return self._json(403 if auth.check_permission(tok, "nas", "readonly") else 401, {"error": "Execute permission required"})
+            n = next((x for x in load_nas() if x["id"] == mc.group(1)), None)
+            if not n: return self._json(404, {"error": "NAS not found"})
+            if not _cert_gate.acquire(blocking=False): return self._json(429, {"error": "Too many checks at once"})
+            try:     check_certs_due(n, force=True)
+            finally: _cert_gate.release()
+            cc = _cache.get(n["id"])
+            if cc: cc.wake.set()
+            certs, alerts = cert_view(n)
+            return self._json(200, {"ok": True, "certs": certs, "alerts": alerts})
         if not auth.check_permission(tok, "nas", "admin"):
             return self._json(403 if auth.check_permission(tok, "nas", "readonly") else 401, {"error": "Admin permission required"})
 
@@ -974,6 +1133,7 @@ if __name__ == "__main__":
     if n: log.info(f"History restored: {n} samples")
     start_all()
     threading.Thread(target=_history_pruner, daemon=True, name="history-pruner").start()
+    threading.Thread(target=_cert_loop, daemon=True, name="cert-check").start()
     try:
         srv = ThreadingHTTPServer((HOST, PORT), H)
         srv.daemon_threads = True

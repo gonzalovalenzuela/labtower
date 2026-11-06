@@ -123,6 +123,11 @@
         <div class="field"><label data-i18n="fieldVolWarn">Volume warning (%)</label><input type="number" id="f-vol-warn" value="90" min="1" max="99"></div>
         <div class="field"><label data-i18n="fieldVolCrit">Volume critical (%)</label><input type="number" id="f-vol-crit" value="95" min="2" max="100"></div>
       </div>
+      <div class="field"><label data-i18n="fieldCertPorts">Certificate ports</label><input type="text" id="f-cert-ports" value="5001" placeholder="5001, 443" maxlength="60" autocomplete="off"><span class="secret-hint" data-i18n="certPortsHint">TLS ports on this NAS whose certificate expiry is checked, comma-separated (for example 5001, 443). Empty = none.</span></div>
+      <div class="two-col">
+        <div class="field"><label data-i18n="fieldCertWarn">Certificate warning (days)</label><input type="number" id="f-cert-warn" value="14" min="2" max="90"></div>
+        <div class="field"><label data-i18n="fieldCertCrit">Certificate critical (days)</label><input type="number" id="f-cert-crit" value="3" min="1" max="89"></div>
+      </div>
       <div id="snmp-box" style="display:flex;flex-direction:column;gap:12px">
       <div class="two-col">
         <div class="field"><label data-i18n="fieldVersion">SNMP version</label>

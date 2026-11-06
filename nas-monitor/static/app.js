@@ -30,7 +30,9 @@ const LANG={
     disk:{1:'Normal',2:'Initialized',3:'Not initialized',4:'System partition failed',5:'Crashed',6:'Disconnected'},
     raid:{1:'Normal',2:'Repairing',3:'Migrating',4:'Expanding',5:'Deleting',6:'Creating',7:'Syncing',8:'Checking parity',9:'Assembling',10:'Canceling',11:'Degraded',12:'Crashed',13:'Scrubbing',14:'Deploying',15:'Undeploying',16:'Mounting cache',17:'Unmounting cache',18:'Expanding (SHR)',19:'Converting (SHR)',20:'Migrating (SHR)',21:'Unknown'},
     al:{system:'System partition failure',power:'Power supply failure',fan:'Fan failure',temp:v=>`High temperature (${v} °C)`,cpu:v=>`High CPU (${v}%)`,mem:v=>`High memory use (${v}%)`,
-        disk:(i,v)=>`${i}: ${LANG.en.disk[v]||v}`,disk_temp:(i,v)=>`${i}: ${v} °C`,raid:(i,v)=>`${i}: ${LANG.en.raid[v]||v}`,vol_full:(i,v)=>`${i} is ${v}% full`,vol_days:(i,v)=>`${i}: fills up in ~${v} days at the current growth`,remote:(i,v)=>`${i}: ${v}`,upgrade:'A system update is available'},
+        disk:(i,v)=>`${i}: ${LANG.en.disk[v]||v}`,disk_temp:(i,v)=>`${i}: ${v} °C`,raid:(i,v)=>`${i}: ${LANG.en.raid[v]||v}`,vol_full:(i,v)=>`${i} is ${v}% full`,vol_days:(i,v)=>`${i}: fills up in ~${v} days at the current growth`,remote:(i,v)=>`${i}: ${v}`,upgrade:'A system update is available',cert:(i,v)=>`${i}: certificate expires in ${v} days`,cert_exp:i=>`${i}: certificate expired`,cert_err:(i,v)=>`${i}: cannot read the certificate (${v})`},
+    certs:'Certificates',certChecking:'Reading certificates…',certSelf:'self-signed',certDaysLeft:'{n} d',certExpired:'Expired',certErr:'Error',certUntil:'Expires {d}',certCheckNow:'Check now',certChecked:'Certificates checked',certCheckErr:'Could not check the certificates',
+    fieldCertPorts:'Certificate ports',fieldCertWarn:'Certificate warning (days)',fieldCertCrit:'Certificate critical (days)',certPortsHint:'TLS ports on this NAS whose certificate expiry is checked, comma-separated (for example 5001, 443). Empty = none.',
     sessionExpired:'Session expired'},
   es:{connecting:'Conectando…',connectingMsg:'Leyendo el NAS por SNMP.',loginTitle:'Iniciar sesión',loginSub:'Ingresa tus credenciales para continuar.',
     username:'Usuario',password:'Contraseña',loginBtn:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',
@@ -61,7 +63,9 @@ const LANG={
     disk:{1:'Normal',2:'Inicializado',3:'Sin inicializar',4:'Falla de partición del sistema',5:'Dañado',6:'Desconectado'},
     raid:{1:'Normal',2:'Reparando',3:'Migrando',4:'Expandiendo',5:'Eliminando',6:'Creando',7:'Sincronizando',8:'Verificando paridad',9:'Ensamblando',10:'Cancelando',11:'Degradado',12:'Dañado',13:'Depurando datos',14:'Desplegando',15:'Retirando',16:'Montando caché',17:'Desmontando caché',18:'Expandiendo (SHR)',19:'Convirtiendo (SHR)',20:'Migrando (SHR)',21:'Desconocido'},
     al:{system:'Falla en la partición del sistema',power:'Falla en la fuente de poder',fan:'Falla en un ventilador',temp:v=>`Temperatura alta (${v} °C)`,cpu:v=>`CPU alta (${v}%)`,mem:v=>`Memoria alta (${v}%)`,
-        disk:(i,v)=>`${i}: ${LANG.es.disk[v]||v}`,disk_temp:(i,v)=>`${i}: ${v} °C`,raid:(i,v)=>`${i}: ${LANG.es.raid[v]||v}`,vol_full:(i,v)=>`${i} está al ${v}%`,vol_days:(i,v)=>`${i}: se llena en ~${v} días al ritmo actual`,remote:(i,v)=>`${i}: ${v}`,upgrade:'Hay una actualización del sistema disponible'},
+        disk:(i,v)=>`${i}: ${LANG.es.disk[v]||v}`,disk_temp:(i,v)=>`${i}: ${v} °C`,raid:(i,v)=>`${i}: ${LANG.es.raid[v]||v}`,vol_full:(i,v)=>`${i} está al ${v}%`,vol_days:(i,v)=>`${i}: se llena en ~${v} días al ritmo actual`,remote:(i,v)=>`${i}: ${v}`,upgrade:'Hay una actualización del sistema disponible',cert:(i,v)=>`${i}: el certificado vence en ${v} días`,cert_exp:i=>`${i}: certificado vencido`,cert_err:(i,v)=>`${i}: no se pudo leer el certificado (${v})`},
+    certs:'Certificados',certChecking:'Leyendo certificados…',certSelf:'autofirmado',certDaysLeft:'{n} d',certExpired:'Vencido',certErr:'Error',certUntil:'Vence el {d}',certCheckNow:'Revisar ahora',certChecked:'Certificados revisados',certCheckErr:'No se pudieron revisar los certificados',
+    fieldCertPorts:'Puertos de certificados',fieldCertWarn:'Aviso de certificado (días)',fieldCertCrit:'Crítico de certificado (días)',certPortsHint:'Puertos TLS de este NAS cuyo certificado se revisa, separados por coma (por ejemplo 5001, 443). Vacío = ninguno.',
     sessionExpired:'Sesión vencida'}
 };
 let _lang=localStorage.getItem('pi-lang')||'en';
@@ -89,6 +93,7 @@ function applyTheme(t){const p=t==='system'?(window.matchMedia('(prefers-color-s
 (()=>{const t=localStorage.getItem('pi-theme')||'dark';applyTheme(t);window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if((localStorage.getItem('pi-theme')||'dark')==='system')applyTheme('system');});setTimeout(()=>{['light','dark','system'].forEach(x=>document.getElementById('theme-'+x)?.classList.toggle('active',x===t));},0);})();
 
 function canAdmin(){return ME&&ME.permissions?.nas==='admin';}
+function canExec(){return ME&&['execute','admin'].includes(ME.permissions?.nas);}
 const _NAV_SELF='nas';
 // Navegación compartida (nav.js): mismo orden y grupos en todos los módulos. / EN: shared navigation (nav.js): same order and groups in every module.
 function renderNav(){if(window.labNav)labNav.render({self:_NAV_SELF,lang:_lang,me:ME});}
@@ -302,6 +307,20 @@ function buildDetail(n){
   if(d.ups){
     h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('ups'))}</div></div>${kv(t('model2'),esc(d.ups.model||'—'))}${kv(t('status'),esc(d.ups.status||'—'))}${kv(t('charge'),d.ups.charge==null?'—':esc(d.ups.charge)+'%')}${kv(t('loadPct'),d.ups.load==null?'—':esc(d.ups.load)+'%')}</div>`;
   }
+  // Certificados TLS de los puertos configurados: puerto, nombre y emisor, fecha de vencimiento y días restantes.
+  // EN: TLS certificates of the configured ports: port, name and issuer, expiry date and days left.
+  if((n.cert_ports||[]).length){
+    const chk=canExec()?`<button class="btn-secondary btn-sm" data-on-click="checkCerts" data-on-click-args="${jsargs([{'@':'this'},n.id])}">${esc(t('certCheckNow'))}</button>`:'';
+    h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('certs'))}</div>${chk}</div>`;
+    if(!(d.certs||[]).length)h+=`<div class="nas-empty">${esc(t('certChecking'))}</div>`;
+    (d.certs||[]).forEach(c=>{
+      const who=c.error?esc(c.error):`${esc(c.cn||'—')}<small>${esc(c.self_signed?t('certSelf'):(c.issuer||''))}</small>`;
+      const when=c.not_after?new Date(c.not_after*1000).toLocaleDateString(_lang==='es'?'es-CL':'en-US',{year:'numeric',month:'short',day:'numeric'}):'';
+      const tag=c.lv==='err'?pill('warn',t('certErr')):c.lv==='exp'?pill('crit',t('certExpired')):pill(c.lv,t('certDaysLeft').replace('{n}',c.days));
+      h+=`<div class="disk-row cert-row"><span class="dn">:${esc(c.port)}</span><span class="dm"${when?` title="${esc(t('certUntil').replace('{d}',when))}"`:''}>${who}</span><span class="dt">${esc(when)}</span>${tag}</div>`;
+    });
+    h+='</div>';
+  }
   // Actividad de disco: solo se listan los discos con actividad real; los que están en reposo se resumen en una línea (con 8 discos a 0 % eran filas de ruido).
   // EN: Disk activity: only disks with real activity are listed; idle ones are summed up in one line (eight disks at 0 % were noise).
   if((d.io||[]).length){
@@ -313,6 +332,18 @@ function buildDetail(n){
   return h;
 }
 const volW=d=>d?.thr?.vol_warn||90,volC=d=>d?.thr?.vol_crit||95;
+// Revisar ahora los certificados de un NAS: muestra el resultado al tiro y luego recarga (el poller recalcula las alertas).
+// EN: Check a NAS's certificates now: shows the result at once, then reloads (the poller recomputes the alerts).
+async function checkCerts(btn,id){
+  btn.disabled=true;btn.textContent=t('certChecking');
+  try{
+    const r=await post('api/nas/'+encodeURIComponent(id)+'/certs',{});
+    if(!r.ok){toast(r.d.error||t('certCheckErr'),true);return;}
+    const n=items.find(x=>x.id===id);if(n?.snap?.data)n.snap.data.certs=r.d.certs;
+    toast(t('certChecked'));renderAll();setTimeout(fetchAll,1500);
+  }catch(e){toast(t('certCheckErr'),true);}
+  finally{if(btn.isConnected){btn.disabled=false;btn.textContent=t('certCheckNow');}}
+}
 const CPU_W=70,CPU_C=85,MEM_W=80,MEM_C=90,DISK_HOT=55;
 
 // ── Gráficos de detalle (como los de UPS Monitor): canvas con rangos 1h / 1d / 1mo / todo, cuadrícula, valores actuales y cursor con tooltip ──
@@ -409,7 +440,7 @@ function versionChanged(){const v3=$('f-version').value==='3';$('v3-box').style.
 function levelChanged(){const l=$('f-level').value;$('auth-box').style.display=l==='noAuthNoPriv'?'none':'';$('priv-box').style.display=l==='authPriv'?'':'none';}
 // Tipos de NAS: Synology (SNMP), TrueNAS (clave de API) y OpenMediaVault (usuario y contraseña). Puerto y tiempo de espera típicos de cada uno.
 // EN: NAS types: Synology (SNMP), TrueNAS (API key) and OpenMediaVault (user and password). Typical port and timeout of each.
-const TYPE_PORT={synology:161,truenas:443,omv:443},TYPE_TIMEOUT={synology:5,truenas:8,omv:8};
+const TYPE_PORT={synology:161,truenas:443,omv:443},TYPE_TIMEOUT={synology:5,truenas:8,omv:8},TYPE_CERT={synology:'5001',truenas:'443',omv:'443'};
 function curType(){return $('f-type').value;}
 function typeChanged(){
   const ty=curType(),syn=ty==='synology',port=parseInt($('f-port').value);
@@ -423,15 +454,16 @@ function typeChanged(){
     $('f-api-secret').autocomplete='new-password';
   }
   if(!editingId&&[161,443,80].includes(port)){$('f-port').value=(ty==='omv'&&!$('f-https').checked)?80:TYPE_PORT[ty];}
-  if(!editingId)$('f-api-timeout').value=TYPE_TIMEOUT[ty];
+  if(!editingId){$('f-api-timeout').value=TYPE_TIMEOUT[ty];$('f-cert-ports').value=ty==='omv'&&!$('f-https').checked?'':TYPE_CERT[ty];}
 }
-function httpsChanged(){const p=parseInt($('f-port').value);if($('f-https').checked&&p===80)$('f-port').value=443;else if(!$('f-https').checked&&p===443)$('f-port').value=80;}
+function httpsChanged(){const p=parseInt($('f-port').value);if($('f-https').checked&&p===80)$('f-port').value=443;else if(!$('f-https').checked&&p===443)$('f-port').value=80;if(!editingId)$('f-cert-ports').value=$('f-https').checked?TYPE_CERT.omv:'';}
 function openNasForm(id){
   editingId=typeof id==='string'?id:null;
   const n=editingId?items.find(x=>x.id===editingId):null,ty=n?(n.type||'synology'):'synology';
   $('nas-form-title').textContent=t(n?'editNasTitle':'addNasTitle');
   $('f-type').value=ty;$('f-type').disabled=!!n;
   $('f-vol-warn').value=n?.vol_warn||90;$('f-vol-crit').value=n?.vol_crit||95;
+  $('f-cert-ports').value=n?(n.cert_ports||[]).join(', '):TYPE_CERT[ty];$('f-cert-warn').value=n?.cert_warn||14;$('f-cert-crit').value=n?.cert_crit||3;
   $('f-name').value=n?n.name:'';$('f-host').value=n?n.host:'';$('f-port').value=n?n.port:TYPE_PORT[ty];
   $('f-version').value=n&&ty==='synology'?n.version:'3';$('f-timeout').value=n&&ty==='synology'?n.timeout:5;
   $('f-user').value=n&&ty==='synology'?n.user:'';$('f-level').value=n&&ty==='synology'?n.level:'authPriv';
@@ -451,7 +483,7 @@ function openNasForm(id){
 }
 function formBody(){
   const ty=curType();
-  const b={type:ty,name:$('f-name').value.trim(),vol_warn:parseInt($('f-vol-warn').value)||90,vol_crit:parseInt($('f-vol-crit').value)||95,host:$('f-host').value.trim(),port:parseInt($('f-port').value)||TYPE_PORT[ty]};
+  const b={type:ty,name:$('f-name').value.trim(),vol_warn:parseInt($('f-vol-warn').value)||90,vol_crit:parseInt($('f-vol-crit').value)||95,cert_ports:$('f-cert-ports').value,cert_warn:parseInt($('f-cert-warn').value)||14,cert_crit:parseInt($('f-cert-crit').value)||3,host:$('f-host').value.trim(),port:parseInt($('f-port').value)||TYPE_PORT[ty]};
   if(ty==='synology'){
     Object.assign(b,{version:$('f-version').value,timeout:parseInt($('f-timeout').value)||5,user:$('f-user').value.trim(),level:$('f-level').value,
       auth_proto:$('f-auth-proto').value,priv_proto:$('f-priv-proto').value,
@@ -540,4 +572,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ closeModals, confirmDelete, doLogin, httpsChanged, levelChanged, logout, openNasForm, saveNas, setLang, setRange, toggleCmp, setTheme, testNas, toggleNas, toggleNav, typeChanged, versionChanged });
+if (window.cspRegister) cspRegister({ checkCerts, closeModals, confirmDelete, doLogin, httpsChanged, levelChanged, logout, openNasForm, saveNas, setLang, setRange, toggleCmp, setTheme, testNas, toggleNas, toggleNav, typeChanged, versionChanged });
