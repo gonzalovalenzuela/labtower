@@ -54,6 +54,10 @@ const LANG={
   "edit":"Edit",
   "checkNow":"Check now",
   "checking":"Checking…",
+  "dragReorder":"Drag to reorder",
+  "moveEarlier":"Move up",
+  "moveLater":"Move down",
+  "orderSaved":"Order saved",
   "saved":"Saved",
   "fillAll":"Fill in the name and the target.",
   "permReadonly":"Read-only",
@@ -148,6 +152,10 @@ const LANG={
   "edit":"Editar",
   "checkNow":"Revisar ahora",
   "checking":"Revisando…",
+  "dragReorder":"Arrastra para reordenar",
+  "moveEarlier":"Subir",
+  "moveLater":"Bajar",
+  "orderSaved":"Orden guardado",
   "saved":"Guardado",
   "fillAll":"Completa el nombre y el destino.",
   "permReadonly":"Solo lectura",
@@ -270,6 +278,7 @@ async function fetchAll(){
     const r=await fetch('api/monitors');
     if(r.status===401){location.reload();return;}
     const d=await r.json();
+    if(_dragging)return;                       // no rehacer la tabla bajo un arrastre / do not rebuild the table under a drag
     items=d.monitors||[];
     if(activeId&&!items.some(n=>n.id===activeId))activeId=null;
     if(activeId){loadRange(activeId,chartRange);if(VC.cmp.ms&&chartRange!=='all')loadRange(activeId,chartRange,false,true);}
@@ -366,7 +375,7 @@ function renderSummary(){
   const rows=items.map(n=>{
     const open=n.id===activeId,u=n.uptime||{};
     return `<tr class="nas-row${open?' expanded':''}" data-on-click="toggleMon" data-on-click-args="${jsargs([n.id])}">
-      <td><span class="cluster-dot ${dotOf(n)}"></span></td>
+      <td style="white-space:nowrap">${canAdmin()?`<span class="up-grab" data-grab title="${esc(t('dragReorder'))}" aria-hidden="true">⠿</span>`:''}<span class="cluster-dot ${dotOf(n)}"></span></td>
       <td><div class="sum-name">${esc(n.name)}</div><div class="sum-sub">${esc(n.target||'')}</div></td>
       <td><span class="up-badge">${esc(typeLabel(n))}</span></td>
       <td>${statePill(n)}</td>
@@ -379,8 +388,9 @@ function renderSummary(){
     <tr class="detail-row${open?' show':''}"><td colspan="10" class="detail-cell"><div class="nas-detail">${open?buildDetail(n):''}</div></td></tr>`;
   }).join('');
   box.innerHTML=`<div class="card"><div class="card-hd"><span class="card-title">${esc(t('summary'))}</span><span class="card-meta">${esc(items.length)}</span></div>
-    <div class="tbl-wrap"><table class="nas-table"><thead><tr><th style="width:24px"></th><th>${esc(t('colMon'))}</th><th>${esc(t('colType'))}</th><th>${esc(t('status'))}</th><th class="c-beats">${esc(t('colBeats'))}</th><th>${esc(t('col24'))}</th><th class="c-temp">${esc(t('col30'))}</th><th class="c-temp">${esc(t('colMs'))}</th><th class="c-temp">${esc(t('colCert'))}</th><th style="width:24px"></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    <div class="tbl-wrap"><table class="nas-table"><thead><tr><th style="width:${canAdmin()?44:24}px"></th><th>${esc(t('colMon'))}</th><th>${esc(t('colType'))}</th><th>${esc(t('status'))}</th><th class="c-beats">${esc(t('colBeats'))}</th><th>${esc(t('col24'))}</th><th class="c-temp">${esc(t('col30'))}</th><th class="c-temp">${esc(t('colMs'))}</th><th class="c-temp">${esc(t('colCert'))}</th><th style="width:24px"></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   fitDetail();
+  bindDrag(box);
   if(activeId)drawChart(activeId,-1);        // el canvas se rehízo con la tabla / the canvas was rebuilt with the table
 }
 function fitDetail(){const w=document.querySelector('#mon-summary .tbl-wrap');if(w)w.style.setProperty('--wrapw',w.clientWidth+'px');}
@@ -409,9 +419,49 @@ function buildDetail(n){
   h+=chartSection(n);
   const tools=[];
   if(canExec())tools.push(`<button class="btn-secondary" data-on-click="checkNow" data-on-click-args="${jsargs([n.id])}">${esc(t('checkNow'))}</button>`);
+  if(canAdmin()){const i=items.indexOf(n);tools.push(`<button class="btn-secondary" ${i<=0?'disabled':''} title="${esc(t('moveEarlier'))}" aria-label="${esc(t('moveEarlier'))}" data-on-click="moveMon" data-on-click-args="${jsargs([n.id,-1])}">↑</button>`,`<button class="btn-secondary" ${i>=items.length-1?'disabled':''} title="${esc(t('moveLater'))}" aria-label="${esc(t('moveLater'))}" data-on-click="moveMon" data-on-click-args="${jsargs([n.id,1])}">↓</button>`);}
   if(canAdmin())tools.push(`<button class="btn-secondary" data-on-click="openForm" data-on-click-args="${jsargs([n.id])}">${esc(t('edit'))}</button>`,`<button class="btn-mok" data-on-click="confirmDelete" data-on-click-args="${jsargs([n.id,n.name])}">${esc(t('delete'))}</button>`);
   if(tools.length)h+=`<div class="nas-tools">${tools.join(' ')}</div>`;
   return h;
+}
+// ── Orden manual (solo administradores): arrastrar el asa ⠿ de una fila sobre otra, o los botones ↑ ↓ del detalle (pantallas táctiles).
+//    Se guarda en el servidor, así todos los navegadores ven el mismo orden.
+// EN: Manual order (administrators only): drag a row's ⠿ handle onto another row, or the ↑ ↓ buttons of the detail (touch screens).
+//     It is stored on the server, so every browser sees the same order.
+let _dragging=false;
+function moveTo(dragId,targetId){
+  const ids=items.map(n=>n.id),from=ids.indexOf(dragId),to=ids.indexOf(targetId);
+  if(from<0||to<0||from===to)return;
+  const [it]=items.splice(from,1);items.splice(to,0,it);      // queda en el lugar de la fila soltada / takes the dropped-on row's place
+  renderAll();saveOrder();
+}
+function moveMon(id,dir){const i=items.findIndex(n=>n.id===id),j=i+dir;if(i<0||j<0||j>=items.length)return;moveTo(id,items[j].id);}
+async function saveOrder(){
+  try{const {ok,d}=await post('api/order',{order:items.map(n=>n.id)});if(!ok)throw new Error(d.error||'Error');toast(t('orderSaved'));}
+  catch(e){toast(e.message,true);fetchAll();}
+}
+function bindDrag(box){
+  if(!canAdmin())return;
+  box.querySelectorAll('tr.nas-row').forEach(row=>{
+    const id=JSON.parse(row.getAttribute('data-on-click-args'))[0],grab=row.querySelector('[data-grab]');
+    if(grab){
+      grab.addEventListener('mousedown',()=>{row.draggable=true;});
+      grab.addEventListener('mouseup',()=>{row.draggable=false;});
+      grab.addEventListener('click',e=>e.stopPropagation());   // el asa no abre el detalle / the handle does not open the detail
+    }
+    row.addEventListener('dragstart',e=>{
+      if(!row.draggable){e.preventDefault();return;}
+      _dragging=true;row.classList.add('dragging');e.dataTransfer.setData('text/plain',id);e.dataTransfer.effectAllowed='move';
+    });
+    row.addEventListener('dragend',()=>{_dragging=false;row.draggable=false;row.classList.remove('dragging');box.querySelectorAll('.drop-target').forEach(x=>x.classList.remove('drop-target'));});
+    row.addEventListener('dragover',e=>{if(!_dragging)return;e.preventDefault();e.dataTransfer.dropEffect='move';row.classList.add('drop-target');});
+    row.addEventListener('dragleave',()=>row.classList.remove('drop-target'));
+    row.addEventListener('drop',e=>{
+      e.preventDefault();row.classList.remove('drop-target');_dragging=false;
+      const drag=e.dataTransfer.getData('text/plain');
+      if(drag&&drag!==id)moveTo(drag,id);
+    });
+  });
 }
 async function checkNow(id){
   try{const {ok,d}=await post('api/monitors/'+encodeURIComponent(id)+'/check',{});if(!ok)throw new Error(d.error||'Error');toast(t('checking'));setTimeout(fetchAll,2500);}
@@ -525,4 +575,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ checkNow, closeModals, confirmDelete, doLogin, logout, openForm, saveMon, setLang, setRange, setTheme, testMon, toggleCmp, toggleMon, toggleNav, typeChanged });
+if (window.cspRegister) cspRegister({ checkNow, closeModals, confirmDelete, doLogin, logout, moveMon, openForm, saveMon, setLang, setRange, setTheme, testMon, toggleCmp, toggleMon, toggleNav, typeChanged });

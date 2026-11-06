@@ -171,6 +171,11 @@ def validate(body: dict, current: dict | None = None) -> dict:
         cfg["expect_ip"] = ip
     return cfg
 
+def reorder(items: list, order: list) -> list:
+    """Monitors in the given id order; unknown ids are ignored and monitors not listed keep their order at the end."""
+    pos = {mid: i for i, mid in enumerate(dict.fromkeys(order))}
+    return sorted(items, key=lambda m: pos.get(m.get("id"), len(pos)))        # sorted() is stable
+
 def target_of(m: dict) -> str:
     """Short description of what a monitor checks."""
     if m["type"] == "http": return m.get("url", "")
@@ -687,6 +692,18 @@ class H(BaseHTTPRequestHandler):
             finally: _test_gate.release()
             return self._json(200, {"ok": r["ok"], "ms": r.get("ms"), "error": r.get("error"), "code": r.get("code"), "ips": r.get("ips"),
                                     "cert_exp": r.get("cert_exp")})
+
+        # Orden manual de los monitores (arrastrar y soltar): se guarda en uptime.json, así todos los navegadores ven el mismo.
+        # Los ids que no vengan quedan al final, en su orden actual. / EN: Manual monitor order (drag and drop), stored in uptime.json
+        # so every browser sees the same; ids not sent stay at the end, in their current order.
+        if path == "/api/order":
+            order = body.get("order")
+            if not (isinstance(order, list) and len(order) <= MAX_MON and all(isinstance(x, str) and re.fullmatch(_ID, x) for x in order)):
+                return self._json(400, {"error": "Invalid order"})
+            with _cfg_lock:
+                items = load_monitors()
+                save_monitors(reorder(items, order))
+            return self._json(200, {"ok": True})
 
         m = re.fullmatch(r"/api/monitors/" + _ID, path)
         if m:

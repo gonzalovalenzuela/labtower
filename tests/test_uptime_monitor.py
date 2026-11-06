@@ -69,6 +69,11 @@ class Validate(unittest.TestCase):
             with self.assertRaises(ValueError): m.validate({"type": "tcp", "name": "x", "host": "169.254.169.254", "port": 80})
             with self.assertRaises(m.CheckError): m._connect_addr("127.0.0.1", 80, allow_loopback=False)      # checked again on connect
 
+    def test_reorder_keeps_unlisted_at_the_end(self):
+        items = [{"id": k} for k in "abcd"]
+        self.assertEqual([x["id"] for x in m.reorder(items, ["c", "zz", "a", "c"])], ["c", "a", "b", "d"])
+        self.assertEqual([x["id"] for x in m.reorder(items, [])], list("abcd"))
+
     def test_expect_and_target(self):
         self.assertEqual(m.parse_expect("200-299,301"), [(200, 299), (301, 301)])
         self.assertTrue(m._code_ok(301, "200-299,301")); self.assertFalse(m._code_ok(302, "200-299,301"))
@@ -267,6 +272,25 @@ class Api(unittest.TestCase):
         self.assertEqual(self.srv.call("DELETE", f"/api/monitors/{mid}", token=self.ro)[0], 403)
         self.assertEqual(self.srv.call("DELETE", f"/api/monitors/{mid}", token=self.admin)[0], 200)
         self.assertEqual(self.srv.call("GET", f"/api/monitors/{mid}/history", token=self.ro)[0], 404)
+
+    def test_order_is_saved_by_admins_only(self):
+        ids = []
+        for nm in ("A", "B", "C"):
+            _, j = self.srv.call("POST", "/api/monitors", {"type": "tcp", "name": nm, "host": "192.0.2.9", "port": 22}, token=self.admin); ids.append(j["monitor"]["id"])
+        try:
+            names = lambda: [x["name"] for x in self.srv.call("GET", "/api/monitors", token=self.ro)[1]["monitors"]]
+            self.assertEqual(names(), ["A", "B", "C"])
+            self.assertEqual(self.srv.call("POST", "/api/order", {"order": [ids[2], ids[0], ids[1]]}, token=self.ro)[0], 403)
+            self.assertEqual(self.srv.call("POST", "/api/order", {"order": [ids[2], ids[0], ids[1]]}, token=self.ex)[0], 403)
+            self.assertEqual(self.srv.call("POST", "/api/order", {"order": [ids[2], ids[0], ids[1]]}, token=self.admin)[0], 200)
+            self.assertEqual(names(), ["C", "A", "B"])
+            self.assertEqual(self.srv.call("POST", "/api/order", {"order": [ids[1]]}, token=self.admin)[0], 200)
+            self.assertEqual(names(), ["B", "C", "A"])                                  # the rest keeps its order at the end
+            for bad in ({"order": "x"}, {"order": ["../x"]}, {"order": [1]}, {}):
+                self.assertEqual(self.srv.call("POST", "/api/order", bad, token=self.admin)[0], 400, bad)
+            self.assertEqual(self.srv.call("POST", "/api/order", {"order": [ids[0]]}, token=self.admin, headers={"Sec-Fetch-Site": "cross-site"})[0], 403)
+        finally:
+            for i in ids: self.srv.call("DELETE", f"/api/monitors/{i}", token=self.admin)
 
     def test_test_endpoint_runs_one_check(self):
         with mock.patch.object(m, "run_check", return_value={"ok": False, "ms": None, "error": "timed out"}):

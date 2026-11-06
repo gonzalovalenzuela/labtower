@@ -287,6 +287,7 @@ labtower-health
 - **DNS:** resolves a name (A or AAAA) with the server's resolver or with a given DNS server; if an expected IP is set, it has to be among the answers.
 - **Failures before down:** failed checks in a row before it is marked down (3 by default, 1 to 6). Meanwhile it shows "Pending" and counts as up.
 - **Events:** down, up again, certificate expiring and certificate expired, on the Overview timeline. The Overview card shows how many services are up, the ones that are down and the certificates about to expire.
+- **Order:** an administrator reorders the monitors by dragging a row's ⠿ handle onto another row, or with the ↑ ↓ buttons of the detail (on touch screens). The order is stored on the server and is the same in every browser.
 - **Security:** HTTP cannot target this machine or link-local addresses (checked on save and again on connect). TCP and DNS may look at the own machine.
 - The history lives in the module's `metrics.db`: every check for 2 days and an hourly summary for 365 days (`UPTIME_KEEP_DAYS`). It is included in backups.
 

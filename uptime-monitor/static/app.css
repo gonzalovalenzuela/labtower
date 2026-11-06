@@ -349,3 +349,9 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
 .up-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
 .nas-form .hide{display:none}
 @media(max-width:760px){.nas-table .c-beats{display:none}}
+/* Orden manual: asa de arrastre y fila destino / EN: manual order: drag handle and drop target */
+.up-grab{cursor:grab;color:var(--text-dim);font-size:15px;line-height:1;padding:2px 8px 2px 0;opacity:.75;user-select:none;vertical-align:middle}
+.up-grab:hover{color:var(--upt);opacity:1}
+.nas-table tbody tr.nas-row.dragging{opacity:.45}
+.nas-table tbody tr.nas-row.drop-target{outline:2px dashed var(--upt);outline-offset:-2px}
+.nas-tools button:disabled{opacity:.35;cursor:default}

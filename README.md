@@ -287,6 +287,7 @@ labtower-health
 - **DNS:** resuelve un nombre (A o AAAA) con el resolvedor del servidor o con un servidor DNS dado; si se indica una IP esperada, tiene que estar entre las respuestas.
 - **Fallos para marcar caído:** revisiones fallidas seguidas antes de marcarlo caído (3 por defecto, de 1 a 6). Mientras tanto queda «Pendiente» y cuenta como arriba.
 - **Eventos:** caído, vuelve a estar arriba, certificado por vencer y certificado vencido, en la línea de tiempo del Resumen. La tarjeta del Resumen muestra cuántos servicios están arriba, los caídos y los certificados por vencer.
+- **Orden:** un administrador reordena los monitores arrastrando el asa ⠿ de una fila sobre otra, o con los botones ↑ ↓ del detalle (en pantallas táctiles). El orden se guarda en el servidor y es el mismo en todos los navegadores.
 - **Seguridad:** HTTP no puede apuntar a esta máquina ni a direcciones link-local (se comprueba al guardar y otra vez al conectar). TCP y DNS sí pueden mirar la propia máquina.
 - El historial vive en `metrics.db` del módulo: cada revisión 2 días y un resumen por hora 365 días (`UPTIME_KEEP_DAYS`). Entra en los respaldos.
 
