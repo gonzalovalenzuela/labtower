@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.8c — 2026-11-06
+
+- **Arreglo:** Proxmox Monitor: si una lectura falla, la página muestra el error y la hora de los datos que se ven. Antes seguía mostrando datos viejos sin avisar.
+- **Nuevo:** Proxmox Monitor: si el certificado del cluster cambió, la página lo explica y ofrece «Volver a fijar certificado» (administradores). Mientras no se confirme, LabTower no envía el token.
+- **Mejora:** el aviso «Atención» de cada módulo muestra el detalle de lo que falla, no solo «Con avisos».
+- **Arreglo:** Resumen: Proxmox con una lectura fallida ya no aparece como OK. Los avisos de NAS, DNS y VPN sin conexión, servicio caído en Uptime y módulo sin respuesta incluyen el error.
+- **Mejora:** UPS Monitor muestra los servidores NUT con error sobre la tabla, y Net Monitor muestra el error del último escaneo.
+
 ## 2.1.8b — 2026-11-06
 
 - **Nuevo:** NAS Monitor: vencimiento de los certificados TLS de cada NAS. Revisa los puertos que elijas (por defecto 5001 en Synology y el puerto HTTPS en TrueNAS y OpenMediaVault). Solo lee el certificado, así que sirve también con autofirmados.
