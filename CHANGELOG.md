@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.8d — 2026-11-06
+
+- **Arreglo:** Proxmox Monitor: si el certificado cambió y el cluster no tiene datos (falla desde la primera lectura, por ejemplo después de reiniciar), la página quedaba en «Conectando…» y no se podía volver a fijar. Ahora explica el cambio y muestra «Volver a fijar certificado».
+- **Nuevo:** Proxmox Monitor: botón ✎ para editar un cluster (nombre, host, puerto, usuario y token). El secreto vacío conserva el guardado; si cambian host o puerto hay que confirmar el certificado con «Probar». El cambio se aplica sin reiniciar.
+
 ## 2.1.8c — 2026-11-06
 
 - **Arreglo:** Proxmox Monitor: si una lectura falla, la página muestra el error y la hora de los datos que se ven. Antes seguía mostrando datos viejos sin avisar.
