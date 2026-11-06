@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.8b — 2026-11-06
+
+- **Nuevo:** NAS Monitor: vencimiento de los certificados TLS de cada NAS. Revisa los puertos que elijas (por defecto 5001 en Synology y el puerto HTTPS en TrueNAS y OpenMediaVault). Solo lee el certificado, así que sirve también con autofirmados.
+- **Nuevo:** NAS Monitor: sección Certificados con nombre, emisor, fecha y días restantes. Aviso a los 14 días y crítico a los 3, ajustables por NAS; vencido es crítico.
+- **Nuevo:** NAS Monitor: los certificados se revisan una vez al día (a la hora si un puerto falló) y con el botón «Revisar ahora» (permiso de ejecutar).
+- **Nuevo:** Resumen: alertas y eventos de certificados de NAS: por vencer, vencido y renovado.
+- **Nuevo:** Uptime Monitor: los monitores se reordenan arrastrando y soltando (botones ↑ ↓ en pantallas táctiles).
+
 ## 2.1.8a — 2026-11-06
 
 - **Nuevo:** Uptime Monitor (`/uptime/`, servicio `labtower-uptime`). Revisa servicios por HTTP(S), TCP y DNS cada cierto intervalo (60 s por defecto, de 20 s a 1 h). HTTP(S): código de respuesta esperado (200-399 por defecto) y palabra clave opcional. DNS: registro A o AAAA, con el resolvedor del servidor o uno dado, e IP esperada opcional.
