@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="icon" type="image/png" href="data:image/png;base64,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">
+<meta name="author" content="Gonzalo Valenzuela">
+<meta name="description" content="LabTower — Homelab dashboard · Uptime Monitor module">
+<meta name="version" content="1.0.0">
+<title>Uptime Monitor</title>
+<script src="theme.js"></script>
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="ipcard.css">
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="nav.css">
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-logo-ico"><img src="/icons/uptime.png" alt="" width="36" height="36"></div>
+      <div><div style="font-size:15px;font-weight:600">Uptime Monitor</div><div style="font-size:10px;color:var(--text-dim);font-family:var(--mono)">HTTP(S) · TCP · DNS</div></div>
+    </div>
+    <div style="font-size:18px;font-weight:600;margin-bottom:4px" data-i18n="loginTitle">Sign in</div>
+    <div style="font-size:13px;color:var(--text-dim);margin-bottom:22px" data-i18n="loginSub">Enter your credentials to continue.</div>
+    <div class="login-err" id="login-err"></div>
+    <div class="lfield"><label data-i18n="username">Username</label><input type="text" id="l-user" autocomplete="username" autofocus></div>
+    <div class="lfield"><label data-i18n="password">Password</label><input type="password" id="l-pass"></div>
+    <div class="remember-row"><label class="remember-chk"><input type="checkbox" id="l-rem" data-on-change="@disable-unless-checked" data-on-change-args="[&quot;l-remsel&quot;]"><span data-i18n="rememberMe">Remember me</span></label><select id="l-remsel" disabled aria-label="Remember me"><option value="day" data-i18n="rem1d">1 day</option><option value="week" data-i18n="rem1w">1 week</option><option value="month" data-i18n="rem1m">1 month</option><option value="forever" data-i18n="remForever">Forever</option></select></div>
+    <button class="btn-login" id="btn-l" data-on-click="doLogin" data-i18n="loginBtn">Sign in</button>
+  </div>
+</div>
+
+<div class="nav-backdrop" data-on-click="toggleNav" data-on-click-args="[false]"></div>
+<aside class="sidebar">
+  <div class="sb-logo">
+    <div class="sb-icon"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+    <div><div class="sb-name">Uptime Monitor</div><div class="sb-ver">HTTP(S) · TCP · DNS</div></div>
+  </div>
+  <div class="sb-sec">
+    <div class="sb-lbl" data-i18n="navSection">Navigation</div>
+    <div id="nav-items"></div>
+  </div>
+  <div class="sb-sec">
+    <div class="sb-lbl" data-i18n="navMon">Monitors</div>
+    <div class="cluster-list" id="mon-list"></div>
+    <div class="btn-add-cluster" id="btn-add-mon" data-on-click="openForm" style="display:none">
+      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span data-i18n="addMon">Add monitor</span>
+    </div>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <button class="nav-toggle" id="nav-toggle" aria-label="Menu" aria-expanded="false" data-on-click="toggleNav"><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg></button>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="topbar-title" id="tb-title">Uptime Monitor</span>
+      <span class="topbar-sub" id="tb-sub"></span>
+    </div>
+    <div class="tb-right">
+      <div class="lang-btns">
+        <button class="lang-btn" id="lang-en" data-on-click="setLang" data-on-click-args="[&quot;en&quot;]">EN</button>
+        <button class="lang-btn" id="lang-es" data-on-click="setLang" data-on-click-args="[&quot;es&quot;]">ES</button>
+      </div>
+      <div class="theme-btns">
+        <button class="theme-btn" id="theme-light" data-on-click="setTheme" data-on-click-args="[&quot;light&quot;]"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><span data-i18n="themeLight">Light</span></button>
+        <button class="theme-btn" id="theme-dark" data-on-click="setTheme" data-on-click-args="[&quot;dark&quot;]"><svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span data-i18n="themeDark">Dark</span></button>
+        <button class="theme-btn" id="theme-system" data-on-click="setTheme" data-on-click-args="[&quot;system&quot;]"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="9" x2="17" y2="9"/><line x1="7" y1="14" x2="17" y2="14"/><line x1="16" y1="18" x2="16.01" y2="18"/></svg>Auto</button>
+      </div>
+      <span id="clock"></span>
+      <div style="width:1px;height:20px;background:var(--border);margin:0 4px;flex-shrink:0"></div>
+      <div class="topbar-user">
+        <div class="topbar-avatar" id="avatar">?</div>
+        <div class="topbar-user-info">
+          <span class="topbar-user-name" id="me-name">—</span>
+          <span class="topbar-user-role" id="me-role">—</span>
+        </div>
+      </div>
+      <button class="btn-logout" data-on-click="logout">
+        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-ico upt"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div><div><div class="stat-val" id="st-up">—</div><div class="stat-lbl" data-i18n="statUp"></div></div></div>
+      <div class="stat-card"><div class="stat-ico orange"><svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div><div class="stat-val" id="st-down">—</div><div class="stat-lbl" data-i18n="statDown"></div></div></div>
+      <div class="stat-card"><div class="stat-ico green"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div><div class="stat-val" id="st-pct">—</div><div class="stat-lbl" data-i18n="statPct"></div></div></div>
+      <div class="stat-card"><div class="stat-ico blue"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div><div><div class="stat-val" id="st-cert">—</div><div class="stat-lbl" data-i18n="statCert"></div></div></div>
+    </div>
+
+    <div id="mon-summary"></div>
+
+    <div id="main-content">
+      <div class="state-msg"><strong data-i18n="noMon">No monitors yet</strong><span data-i18n="noMonHint">Add an HTTP(S), TCP or DNS monitor to get started.</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Uptime Monitor (página del módulo, servida en /uptime/). Estructura: login · barra lateral con los monitores · tabla con todos y detalle (porcentajes, gráfico de respuesta, certificado) · diálogo de alta / edición. -->
+<!-- EN: Uptime Monitor (module page, served at /uptime/). Structure: login · sidebar with the monitors · table with all of them and the detail (percentages, response-time chart, certificate) · add / edit dialog. -->
+<div class="overlay" id="add-overlay">
+  <div class="modal" style="max-width:540px;width:95%">
+    <h3 id="form-title" data-i18n="addMonTitle">Add monitor</h3>
+    <p id="add-hint"></p>
+    <div class="nas-form">
+      <div class="two-col">
+        <div class="field"><label data-i18n="fieldType">Type</label>
+          <select id="f-type" data-on-change="typeChanged"><option value="http">HTTP(S)</option><option value="tcp">TCP</option><option value="dns">DNS</option></select></div>
+        <div class="field"><label data-i18n="fieldName">Name</label><input type="text" id="f-name" maxlength="60" autocomplete="off"></div>
+      </div>
+      <div id="http-box" style="display:flex;flex-direction:column;gap:12px">
+        <div class="field"><label>URL</label><input type="text" id="f-url" placeholder="https://nas.example.lan:5001/" autocomplete="off" data-on-change="typeChanged"></div>
+        <div class="two-col">
+          <div class="field"><label data-i18n="fieldExpect">Expected status codes</label><input type="text" id="f-expect" value="200-399" autocomplete="off"></div>
+          <div class="field"><label data-i18n="fieldKeyword">Keyword (optional)</label><input type="text" id="f-keyword" maxlength="100" autocomplete="off"></div>
+        </div>
+        <div id="tls-box" class="two-col">
+          <div class="field"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="f-insecure"><span data-i18n="fieldInsecure">Do not verify the certificate</span></label><span class="secret-hint" data-i18n="insecureHint"></span></div>
+          <div class="field"><label data-i18n="fieldCertDays">Warn days before expiry</label><input type="number" id="f-cert-days" value="14" min="1" max="90"></div>
+        </div>
+      </div>
+      <div id="tcp-box" class="two-col" style="display:none">
+        <div class="field"><label>Host / IP</label><input type="text" id="f-host" placeholder="192.0.2.20" autocomplete="off"></div>
+        <div class="field"><label data-i18n="fieldPort">Port</label><input type="number" id="f-port" min="1" max="65535" placeholder="22"></div>
+      </div>
+      <div id="dns-box" style="display:none;flex-direction:column;gap:12px">
+        <div class="two-col">
+          <div class="field"><label data-i18n="fieldQname">Name to resolve</label><input type="text" id="f-qname" placeholder="nas.example.lan" autocomplete="off"></div>
+          <div class="field"><label data-i18n="fieldRtype">Record</label><select id="f-rtype"><option value="A">A (IPv4)</option><option value="AAAA">AAAA (IPv6)</option></select></div>
+        </div>
+        <div class="two-col">
+          <div class="field"><label data-i18n="fieldServer">DNS server (optional)</label><input type="text" id="f-server" placeholder="192.0.2.53" autocomplete="off"><span class="secret-hint" data-i18n="serverHint"></span></div>
+          <div class="field"><label data-i18n="fieldExpectIp">Expected IP (optional)</label><input type="text" id="f-expect-ip" placeholder="192.0.2.20" autocomplete="off"></div>
+        </div>
+      </div>
+      <div class="two-col" style="grid-template-columns:1fr 1fr 1fr">
+        <div class="field"><label data-i18n="fieldInterval">Interval (s)</label><input type="number" id="f-interval" value="60" min="20" max="3600"></div>
+        <div class="field"><label data-i18n="fieldTimeout">Timeout (s)</label><input type="number" id="f-timeout" value="10" min="2" max="30"></div>
+        <div class="field"><label data-i18n="fieldDownAfter">Failures before down</label><input type="number" id="f-down-after" value="3" min="1" max="6"></div>
+      </div>
+      <span class="secret-hint" data-i18n="downAfterHint"></span>
+      <div class="test-result" id="test-result"></div>
+    </div>
+    <div class="modal-acts">
+      <button class="btn-mc" data-on-click="closeModals" data-i18n="cancel">Cancel</button>
+      <button class="btn-secondary" id="btn-test" data-on-click="testMon" style="width:auto;padding:8px 14px" data-i18n="test">Test</button>
+      <button class="btn-primary" id="btn-save" data-on-click="saveMon" style="width:auto;padding:8px 14px" data-i18n="save">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="del-overlay">
+  <div class="modal"><h3 data-i18n="deleteMon">Delete monitor</h3><p id="del-msg"></p>
+  <div class="modal-acts"><button class="btn-mc" data-on-click="closeModals" data-i18n="cancel">Cancel</button><button class="btn-mok" id="del-btn" data-i18n="delete">Delete</button></div></div>
+</div>
+
+<div id="toast"></div>
+
+<script src="csp-bind.js"></script>
+<script src="timefmt.js"></script>
+<script src="nav.js"></script>
+<script src="charts.js"></script>
+<script src="app.js"></script>
+<script src="footer.js"></script>
+<script src="ipcard.js"></script>
+</body>
+</html>

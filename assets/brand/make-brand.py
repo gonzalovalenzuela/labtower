@@ -22,6 +22,7 @@ MODULES = [
     ("dns",      "DNS Monitor",             "#10b981"),
     ("wan",      "WAN Monitor",             "#0ea5e9"),
     ("vpn",      "VPN Monitor",             "#6366f1"),
+    ("uptime",   "Uptime Monitor",          "#84cc16"),
     ("wol",      "WOL Console",             "#4361ee"),
     ("admin",    "Admin Panel",             "#f0527a"),
 ]
@@ -66,6 +67,9 @@ def solid(name, dark):
     elif name == "vpn":         # padlock with a keyhole
         g = (f'<path d="M7.4 11 V7.6 a4.6 4.6 0 0 1 9.2 0 V11" fill="none" stroke="{S}" stroke-width="2.6" stroke-linecap="round"/>'
              f'<rect x="3.6" y="10.6" width="16.8" height="11" rx="3" fill="{F}"/><circle cx="12" cy="15.2" r="1.7" fill="{D}"/><path d="M12 16 V18.6" stroke="{D}" stroke-width="2" stroke-linecap="round"/>')
+    elif name == "uptime":      # heartbeat line on a screen
+        g = (f'<rect x="2.4" y="3.6" width="19.2" height="16.8" rx="3.2" fill="{F}"/>'
+             f'<path d="M5 12.4 H8.4 L10.3 7.8 L13.5 16.8 L15.3 12.4 H19" fill="none" stroke="{D}" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>')
     elif name == "wol":         # lightning bolt
         g = f'<path d="M13 2 L3.6 13.6 H11.6 L10.8 22 L20.6 10.2 H12.4 Z" fill="{F}" stroke="{F}" stroke-width="1.2" stroke-linejoin="round"/>'
     elif name == "admin":       # shield

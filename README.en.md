@@ -24,6 +24,7 @@
 | **DNS Monitor** | `/dns/` | 8087 | Pi-hole (v5 and v6) and AdGuard Home: queries, % blocked, top lists, upstream DNS and pausing the blocking |
 | **WAN Monitor** | `/wan/` | 8088 | Internet uplink: latency, loss, outages (local or on the line, by asking the router), public IP and a scheduled speed test |
 | **VPN Monitor** | `/vpn/` | 8089 | Who is connected to Tailscale, OpenVPN and WireGuard: since when, from which address and how much traffic, with connect / disconnect alerts |
+| **Uptime Monitor** | `/uptime/` | 8090 | HTTP(S), TCP and DNS services: 24 h, 7 and 30 day uptime, response time and certificate expiry |
 | **WOL Console** | `/wol/` | 8080 | Powers on machines with Wake-on-LAN |
 | **Admin Panel** | `/admin/` | 8082 | Users, permissions, 2FA, sessions, audit log, backups and system health |
 
@@ -145,6 +146,7 @@ labtower-health
 - **NAS:** per NAS, status, CPU and memory (12 h chart with temperature), healthy disks, temperature and the fullest volume.
 - **Network:** hosts online, known and offline, last scan, device types and new hosts from the last 48 h.
 - **VPN:** how many clients are connected per server; the detail (who, from where, traffic) is in VPN Monitor.
+- **Uptime:** how many services are up, the ones that are down and the certificates about to expire.
 - **Server (LabTower Server):** temperature, CPU, memory, disk, uptime and power supply status. On a Raspberry Pi only, it adds a 24 h temperature chart with under-voltage and throttling marks (kept 7 days in `metrics.db`).
 - **Event timeline:** important changes with their time (UPS on battery, node down, Ceph change, new or vanished hosts). The modules record them even when nobody has the page open: last 300 events or 30 days.
 - **Global search** (top bar or the `/` key): Net Monitor hosts, UPS, Proxmox VMs and containers, NAS, DNS servers and WOL devices; it only shows what each user can see.
@@ -277,6 +279,17 @@ labtower-health
   ```
   If SSH fails with "Permission denied" it is almost always permissions: `chmod 755 ~`, `chmod 700 ~/.ssh` and `chmod 600 ~/.ssh/authorized_keys`. With certificate-only authentication the user column is empty and LabTower shows the certificate's *Common Name*.
 
+### Uptime Monitor
+- Checks at an interval whether a service answers and keeps the history: a bar with the last 50 checks, 24 h, 7 and 30 day uptime, a response-time chart (1h, 1d, 1w, 1mo and all ranges, with "vs previous", red bands where it was down and marks for its events, like the other modules) and the certificate expiry. Up to 100 monitors.
+- **Permission:** give users the **uptime** permission in *Admin Panel → Users*. "Execute" can press *Check now*; "administrator" can add, edit and delete monitors.
+- **HTTP(S):** `GET` to the URL. It is up when the status code is in the list (`200-399` by default; `200,301` or ranges work) and, if set, the page contains the keyword (case-insensitive). Redirects are not followed. On https the certificate expiry is read and a warning comes N days before (14 by default). For a self-signed certificate (Proxmox, NAS) tick **Do not verify the certificate**: the expiry is still checked.
+- **TCP:** opens a connection to the port (SSH, SMB, MQTT, a database…).
+- **DNS:** resolves a name (A or AAAA) with the server's resolver or with a given DNS server; if an expected IP is set, it has to be among the answers.
+- **Failures before down:** failed checks in a row before it is marked down (3 by default, 1 to 6). Meanwhile it shows "Pending" and counts as up.
+- **Events:** down, up again, certificate expiring and certificate expired, on the Overview timeline. The Overview card shows how many services are up, the ones that are down and the certificates about to expire.
+- **Security:** HTTP cannot target this machine or link-local addresses (checked on save and again on connect). TCP and DNS may look at the own machine.
+- The history lives in the module's `metrics.db`: every check for 2 days and an hourly summary for 365 days (`UPTIME_KEEP_DAYS`). It is included in backups.
+
 ### DNS Monitor
 - **Upstream health:** every 60 s `example.com` is asked directly to each upstream DNS reported by Pi-hole or AdGuard Home; the list shows whether it answers and how fast. One that does not answer raises an alert (critical if none answers) and an event on the Overview timeline. DoH/DoT, this machine and link-local addresses are not probed.
 - **Queries per hour and per client:** "Queries per hour" with ranges (1 day, 1 week, 1 month, all) and, on Pi-hole, a per-client activity chart.
@@ -364,7 +377,7 @@ sudo labtower-sftp-backup status      # result of the last run
 labtower-health         # summary: exit 0 = ok, 1 = degraded, 2 = failed (-j for JSON)
 labtower-resources      # memory and CPU per service (-w refreshes every 2 s)
 sudo labtower-resetpw   # forgot the password: generates a new one for "admin" (see below)
-systemctl status labtower-wol labtower-ups labtower-auth labtower-net labtower-pve labtower-nas labtower-dns labtower-wan labtower-vpn labtower-overview
+systemctl status labtower-wol labtower-ups labtower-auth labtower-net labtower-pve labtower-nas labtower-dns labtower-wan labtower-vpn labtower-uptime labtower-overview
 journalctl -u labtower-net -f        # logs of one service
 sudo systemctl restart labtower-net  # restart one
 ```
@@ -375,7 +388,7 @@ In **Admin Panel → Modules** (only for someone who administers every module) y
 
 ```bash
 sudo labtower-modules list              # state of every module
-sudo labtower-modules disable vpn       # turn off (wol nut net pve nas dns wan vpn)
+sudo labtower-modules disable vpn       # turn off (wol nut net pve nas dns wan vpn uptime)
 sudo labtower-modules enable vpn        # turn it back on
 ```
 
@@ -409,6 +422,7 @@ Each module answers `GET /api/health` (200 = ok or degraded, 503 = failed). With
 | `labtower-dns` | DNS Monitor |
 | `labtower-wan` | WAN Monitor |
 | `labtower-vpn` | VPN Monitor |
+| `labtower-uptime` | Uptime Monitor |
 | `labtower-overview` | Overview |
 
 Since 2.1.8 every service is called `labtower-<module>` (formerly `wol-console`, `admin-panel`, `net-monitor`, `proxmox-monitor`, `nas-monitor`, `dns-monitor`, `wan-monitor`, `vpn-monitor`). When upgrading, the installer removes the old names and enables the new ones; the data is not touched.
@@ -423,7 +437,7 @@ The defaults suit most setups. To change them, write `NAME=value` in `/etc/defau
 
 ```bash
 echo 'NUT_POLL=5' | sudo tee -a /etc/default/labtower
-sudo systemctl restart labtower-wol labtower-ups labtower-auth labtower-net labtower-pve labtower-nas labtower-dns labtower-wan labtower-vpn labtower-overview
+sudo systemctl restart labtower-wol labtower-ups labtower-auth labtower-net labtower-pve labtower-nas labtower-dns labtower-wan labtower-vpn labtower-uptime labtower-overview
 ```
 
 | Variable | Module | Default | Purpose |
@@ -488,6 +502,7 @@ labtower/
 ├── dns-monitor/       # DNS Monitor (Pi-hole / AdGuard Home)
 ├── wan-monitor/       # WAN Monitor (internet and router check)
 ├── vpn-monitor/       # VPN Monitor (Tailscale, OpenVPN, WireGuard)
+├── uptime-monitor/    # Uptime Monitor (HTTP(S), TCP, DNS)
 ├── overview/          # Overview
 ├── home/              # home page and icons
 ├── etc/               # nginx, backup.conf, cron

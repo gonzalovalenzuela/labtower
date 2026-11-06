@@ -3,7 +3,7 @@ import json, re, shutil, subprocess, unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-MODULES = ["auth", "dns-monitor", "nas-monitor", "net-monitor", "nut-monitor", "proxmox-monitor", "vpn-monitor", "wan-monitor", "wol-console"]
+MODULES = ["auth", "dns-monitor", "nas-monitor", "net-monitor", "nut-monitor", "proxmox-monitor", "uptime-monitor", "vpn-monitor", "wan-monitor", "wol-console"]
 
 JS = r"""
 const fs=require('fs'),vm=require('vm');

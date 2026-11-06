@@ -22,7 +22,7 @@ if [ "$1" = "purge" ]; then
         rm -f /etc/systemd/system/nut-monitor.service
     fi
     rm -f /etc/systemd/system/labtower-overview.service
-    for u in wol auth net pve nas dns wan vpn; do rm -f "/etc/systemd/system/labtower-$u.service"; done
+    for u in wol auth net pve nas dns wan vpn uptime; do rm -f "/etc/systemd/system/labtower-$u.service"; done
     # nombres anteriores a la 2.1.7f / EN: names used up to 2.1.7
     for u in wol-console admin-panel net-monitor proxmox-monitor nas-monitor dns-monitor wan-monitor vpn-monitor; do rm -f "/etc/systemd/system/$u.service"; done
     systemctl daemon-reload 2>/dev/null || true
@@ -41,7 +41,7 @@ if [ "$1" = "purge" ]; then
         chown -R -h root:root /var/lib/labtower 2>/dev/null || true
         chmod 700 /var/lib/labtower 2>/dev/null || true
     fi
-    for u in auth wol nut net pve nas dns wan vpn overview; do userdel "labtower-$u" 2>/dev/null || true; done
+    for u in auth wol nut net pve nas dns wan vpn uptime overview; do userdel "labtower-$u" 2>/dev/null || true; done
     userdel labtower 2>/dev/null || true
     getent group labtower >/dev/null 2>&1 && groupdel labtower 2>/dev/null || true
     echo "labtower: purged (backups in /var/backups/labtower)"

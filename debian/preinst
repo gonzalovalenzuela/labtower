@@ -21,7 +21,7 @@ user_of() {
     case "$(basename "$(dirname "$1")")" in
         auth|teleporter) echo labtower-auth;; wol-console) echo labtower-wol;; nut-monitor) echo labtower-nut;;
         net-monitor) echo labtower-net;; proxmox-monitor) echo labtower-pve;; nas-monitor) echo labtower-nas;;
-        dns-monitor) echo labtower-dns;; wan-monitor) echo labtower-wan;; vpn-monitor) echo labtower-vpn;; overview) echo labtower-overview;; *) echo labtower;;
+        dns-monitor) echo labtower-dns;; wan-monitor) echo labtower-wan;; vpn-monitor) echo labtower-vpn;; uptime-monitor) echo labtower-uptime;; overview) echo labtower-overview;; *) echo labtower;;
     esac
 }
 if command -v runuser >/dev/null 2>&1; then
@@ -40,6 +40,7 @@ if command -v runuser >/dev/null 2>&1; then
         /var/lib/labtower/dns-monitor/dns.json \
         /var/lib/labtower/wan-monitor/wan.json \
         /var/lib/labtower/vpn-monitor/vpn.json \
+        /var/lib/labtower/uptime-monitor/uptime.json \
         /opt/labtower/auth/users.json \
         /opt/labtower/wol-console/devices.json \
         /opt/labtower/nut-monitor/servers.json \

@@ -24,6 +24,7 @@
 | **DNS Monitor** | `/dns/` | 8087 | Pi-hole (v5 y v6) y AdGuard Home: consultas, % bloqueado, tops, DNS de salida y pausa del bloqueo |
 | **WAN Monitor** | `/wan/` | 8088 | Salida a internet: latencia, pérdida, cortes (local o de la línea, consultando al router), IP pública y prueba de velocidad programada |
 | **VPN Monitor** | `/vpn/` | 8089 | Quién está conectado a Tailscale, OpenVPN y WireGuard: desde cuándo, desde qué dirección y cuánto tráfico, con avisos de conexión y desconexión |
+| **Uptime Monitor** | `/uptime/` | 8090 | Servicios HTTP(S), TCP y DNS: disponibilidad de 24 h, 7 y 30 días, tiempo de respuesta y vencimiento de certificados |
 | **WOL Console** | `/wol/` | 8080 | Enciende equipos con Wake-on-LAN |
 | **Admin Panel** | `/admin/` | 8082 | Usuarios, permisos, 2FA, sesiones, auditoría, respaldos y salud del sistema |
 
@@ -144,6 +145,7 @@ labtower-health
 - **Proxmox:** nodos en línea, VMs y CTs corriendo, CPU y memoria (gráfico de 12 h), salud de Ceph.
 - **NAS:** por cada NAS, estado, CPU y memoria (gráfico de 12 h con temperatura), discos sanos, temperatura y el volumen más lleno.
 - **VPN:** cuántos clientes hay conectados por servidor; el detalle (quién, desde dónde, tráfico) está en VPN Monitor.
+- **Uptime:** cuántos servicios están arriba, los caídos y los certificados por vencer.
 - **Red:** equipos en línea, conocidos y apagados, último escaneo, reparto por tipo y equipos nuevos de las últimas 48 h.
 - **Servidor (LabTower Server):** temperatura, CPU, memoria, disco, tiempo encendida y estado de la fuente de poder. Solo en una Raspberry Pi agrega el gráfico de 24 h de temperatura con marcas de bajo voltaje y limitación (se guarda 7 días en `metrics.db`).
 - **Línea de tiempo:** cambios importantes con hora (UPS a batería, nodo caído, cambio de Ceph, equipos nuevos o que dejaron de responder). Los guardan los módulos, aunque nadie tenga la página abierta: últimos 300 eventos o 30 días.
@@ -277,6 +279,17 @@ labtower-health
   ```
   Si el SSH falla con «Permission denied» casi siempre son permisos: `chmod 755 ~`, `chmod 700 ~/.ssh` y `chmod 600 ~/.ssh/authorized_keys`. Con autenticación solo por certificado, la columna de usuario viene vacía y LabTower muestra el *Common Name*.
 
+### Uptime Monitor
+- Revisa cada cierto intervalo si un servicio responde y guarda el historial: barra con las últimas 50 revisiones, disponibilidad de 24 h, 7 y 30 días, gráfico del tiempo de respuesta (rangos 1h, 1d, 1w, 1mo y todo, con «vs anterior», franjas rojas donde estuvo caído y marcas de sus eventos, igual que los demás módulos) y vencimiento del certificado. Hasta 100 monitores.
+- **Permiso:** da el permiso **uptime** a los usuarios en *Admin Panel → Usuarios*. Con «ejecutar» se puede pulsar *Revisar ahora*; con «administrador», agregar, editar y borrar monitores.
+- **HTTP(S):** `GET` a la URL. Está arriba si el código de respuesta está en la lista (por defecto `200-399`; acepta `200,301` o rangos) y, si se indica, la página contiene la palabra clave (sin distinguir mayúsculas). No se siguen redirecciones. En https se lee la fecha de vencimiento del certificado y se avisa N días antes (14 por defecto). Para un certificado autofirmado (Proxmox, NAS) marca **No verificar el certificado**: igual se revisa el vencimiento.
+- **TCP:** abre una conexión al puerto (SSH, SMB, MQTT, una base de datos…).
+- **DNS:** resuelve un nombre (A o AAAA) con el resolvedor del servidor o con un servidor DNS dado; si se indica una IP esperada, tiene que estar entre las respuestas.
+- **Fallos para marcar caído:** revisiones fallidas seguidas antes de marcarlo caído (3 por defecto, de 1 a 6). Mientras tanto queda «Pendiente» y cuenta como arriba.
+- **Eventos:** caído, vuelve a estar arriba, certificado por vencer y certificado vencido, en la línea de tiempo del Resumen. La tarjeta del Resumen muestra cuántos servicios están arriba, los caídos y los certificados por vencer.
+- **Seguridad:** HTTP no puede apuntar a esta máquina ni a direcciones link-local (se comprueba al guardar y otra vez al conectar). TCP y DNS sí pueden mirar la propia máquina.
+- El historial vive en `metrics.db` del módulo: cada revisión 2 días y un resumen por hora 365 días (`UPTIME_KEEP_DAYS`). Entra en los respaldos.
+
 ### DNS Monitor
 - **Salud de los DNS de salida:** cada 60 s se le pregunta `example.com` directamente a cada DNS de salida que informa Pi-hole o AdGuard Home; la lista muestra si responde y en cuánto. Uno que no responde genera una alerta (crítica si ninguno responde) y un evento en la línea de tiempo del Resumen. No se sondean DoH/DoT, esta máquina ni direcciones link-local.
 - **Consultas por hora y por cliente:** «Consultas por hora» con rangos (1 día, 1 semana, 1 mes, todo) y, en Pi-hole, un gráfico de actividad por cliente.
@@ -364,7 +377,7 @@ sudo labtower-sftp-backup status      # resultado de la última corrida
 labtower-health         # resumen: exit 0 = ok, 1 = degradado, 2 = falla (-j para JSON)
 labtower-resources      # memoria y CPU de cada servicio (-w refresca cada 2 s)
 sudo labtower-resetpw   # olvidé la contraseña: genera una nueva para «admin» (ver más abajo)
-systemctl status labtower-wol labtower-ups labtower-auth labtower-net labtower-pve labtower-nas labtower-dns labtower-wan labtower-vpn labtower-overview
+systemctl status labtower-wol labtower-ups labtower-auth labtower-net labtower-pve labtower-nas labtower-dns labtower-wan labtower-vpn labtower-uptime labtower-overview
 journalctl -u labtower-net -f        # logs de un servicio
 sudo systemctl restart labtower-net  # reiniciar uno
 ```
@@ -375,7 +388,7 @@ En **Admin Panel → Módulos** (solo para quien administra todos los módulos) 
 
 ```bash
 sudo labtower-modules list              # estado de cada módulo
-sudo labtower-modules disable vpn       # apagar (wol nut net pve nas dns wan vpn)
+sudo labtower-modules disable vpn       # apagar (wol nut net pve nas dns wan vpn uptime)
 sudo labtower-modules enable vpn        # volver a encender
 ```
 
@@ -409,6 +422,7 @@ Cada módulo responde `GET /api/health` (200 = ok o degradado, 503 = falla). Sin
 | `labtower-dns` | DNS Monitor |
 | `labtower-wan` | WAN Monitor |
 | `labtower-vpn` | VPN Monitor |
+| `labtower-uptime` | Uptime Monitor |
 | `labtower-overview` | Resumen |
 
 Desde la 2.1.8 todos los servicios se llaman `labtower-<módulo>` (antes `wol-console`, `admin-panel`, `net-monitor`, `proxmox-monitor`, `nas-monitor`, `dns-monitor`, `wan-monitor`, `vpn-monitor`). Al actualizar, el instalador borra los nombres viejos y habilita los nuevos; los datos no se tocan.
@@ -423,7 +437,7 @@ Los valores por defecto sirven para la mayoría. Para cambiarlos, escribe `NOMBR
 
 ```bash
 echo 'NUT_POLL=5' | sudo tee -a /etc/default/labtower
-sudo systemctl restart labtower-wol labtower-ups labtower-auth labtower-net labtower-pve labtower-nas labtower-dns labtower-wan labtower-vpn labtower-overview
+sudo systemctl restart labtower-wol labtower-ups labtower-auth labtower-net labtower-pve labtower-nas labtower-dns labtower-wan labtower-vpn labtower-uptime labtower-overview
 ```
 
 | Variable | Módulo | Por defecto | Para qué |
@@ -488,6 +502,7 @@ labtower/
 ├── dns-monitor/       # DNS Monitor (Pi-hole / AdGuard Home)
 ├── wan-monitor/       # WAN Monitor (internet y chequeo del router)
 ├── vpn-monitor/       # VPN Monitor (Tailscale, OpenVPN, WireGuard)
+├── uptime-monitor/    # Uptime Monitor (HTTP(S), TCP, DNS)
 ├── overview/          # Resumen
 ├── home/              # página de inicio e iconos
 ├── etc/               # nginx, backup.conf, cron

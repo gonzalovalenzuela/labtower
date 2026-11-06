@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SIDE = {"wol-console": "wol", "nut-monitor": "nut", "net-monitor": "net", "proxmox-monitor": "pve", "nas-monitor": "nas",
-        "dns-monitor": "dns", "wan-monitor": "wan", "vpn-monitor": "vpn", "auth": "admin"}
+        "dns-monitor": "dns", "wan-monitor": "wan", "vpn-monitor": "vpn", "uptime-monitor": "uptime", "auth": "admin"}
 
 class Nav(unittest.TestCase):
     def test_every_page_loads_the_shared_menu(self):
@@ -100,7 +100,7 @@ class Nav(unittest.TestCase):
         for old in ('id="bl"', "data-theme-toggle", 'id="bo"'):
             self.assertNotIn(old, top)                                  # no duplicated controls in the page header
         self.assertNotIn('id="chips"', html); self.assertNotIn("renderChips", js)
-        self.assertIn("function applySeverity", js); self.assertEqual(js.count("modSev(mods,"), 9)
+        self.assertIn("function applySeverity", js); self.assertEqual(js.count("modSev(mods,"), 10)
 
     def test_phone_bar_has_a_sign_out_tab_that_uses_the_modules_own_button(self):
         """ES: En el móvil toda sección tiene «Salir» en la barra inferior (la barra del módulo se oculta); usa el .btn-logout propio. EN: every section has Sign out in the phone bottom bar."""

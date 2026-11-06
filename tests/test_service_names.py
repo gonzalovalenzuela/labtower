@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-NEW = ["labtower-wol", "labtower-ups", "labtower-auth", "labtower-net", "labtower-pve", "labtower-nas", "labtower-dns", "labtower-wan", "labtower-vpn", "labtower-overview"]
+NEW = ["labtower-wol", "labtower-ups", "labtower-auth", "labtower-net", "labtower-pve", "labtower-nas", "labtower-dns", "labtower-wan", "labtower-vpn", "labtower-uptime", "labtower-overview"]
 OLD = ["wol-console", "admin-panel", "net-monitor", "proxmox-monitor", "nas-monitor", "dns-monitor", "wan-monitor", "vpn-monitor"]
 r = lambda p: (ROOT / p).read_text()
 
@@ -24,7 +24,7 @@ class ServiceNames(unittest.TestCase):
 
     def test_every_module_maps_to_its_labtower_service(self):
         for m, svc in (("wol", "labtower-wol"), ("nut", "labtower-ups"), ("net", "labtower-net"), ("pve", "labtower-pve"),
-                       ("nas", "labtower-nas"), ("dns", "labtower-dns"), ("wan", "labtower-wan"), ("vpn", "labtower-vpn")):
+                       ("nas", "labtower-nas"), ("dns", "labtower-dns"), ("wan", "labtower-wan"), ("vpn", "labtower-vpn"), ("uptime", "labtower-uptime")):
             with self.subTest(module=m):
                 self.assertRegex(r("scripts/labtower-modules"), rf"{m}\) echo {svc};;")
                 self.assertIn(f"{svc}) m={m};;", r("debian/postinst"))

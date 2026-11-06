@@ -10,6 +10,7 @@ const H = {
        dnsN: 'DNS Monitor', dnsD: 'Pi-hole y AdGuard Home — consultas, bloqueo y servidores DNS',
        wanN: 'WAN Monitor', wanD: 'Salida a internet — latencia, cortes, IP pública y velocidad',
        vpnN: 'VPN Monitor', vpnD: 'Tailscale, OpenVPN y WireGuard — quién está conectado y desde cuándo',
+       uptN: 'Uptime Monitor', uptD: 'Servicios HTTP(S), TCP y DNS — disponibilidad, latencia y certificados',
        wolN: 'WOL Console', wolD: 'Wake-on-LAN — enciende equipos remotamente',
        admN: 'Admin Panel', admD: 'Usuarios y permisos, 2FA, respaldos y salud del sistema',
        gPower: 'Energía y servidores', gNet: 'Red', gTools: 'Herramientas', gSys: 'Sistema',
@@ -23,6 +24,7 @@ const H = {
        dnsN: 'DNS Monitor', dnsD: 'Pi-hole and AdGuard Home — queries, blocking and DNS servers',
        wanN: 'WAN Monitor', wanD: 'Internet connection — latency, outages, public IP and speed',
        vpnN: 'VPN Monitor', vpnD: 'Tailscale, OpenVPN and WireGuard — who is connected and since when',
+       uptN: 'Uptime Monitor', uptD: 'HTTP(S), TCP and DNS services — uptime, latency and certificates',
        wolN: 'WOL Console', wolD: 'Wake-on-LAN — turn devices on remotely',
        admN: 'Admin Panel', admD: 'Users and permissions, 2FA, backups and system health',
        gPower: 'Power & servers', gNet: 'Network', gTools: 'Tools', gSys: 'System',
@@ -43,7 +45,7 @@ for (const el of document.querySelectorAll('[data-h]')) {
 // ok → verde «activo», degraded → amarillo «con avisos», fail (503) → rojo «con fallas», sin respuesta → gris «sin respuesta».
 // EN: Status of every module, next to the arrow of its card: it queries its public /api/health (no session; only the overall status) with a 3 s timeout.
 //     ok → green "active", degraded → yellow "warnings", fail (503) → red "failing", no answer → grey "no response".
-const SERVICES = ['overview', 'wol', 'nut', 'net', 'pve', 'nas', 'dns', 'wan', 'vpn', 'admin'];
+const SERVICES = ['overview', 'wol', 'nut', 'net', 'pve', 'nas', 'dns', 'wan', 'vpn', 'uptime', 'admin'];
 const stateOf = {};
 for (const card of document.querySelectorAll('.app-card')) {
   const id = (card.getAttribute('href') || '').split('/')[1];

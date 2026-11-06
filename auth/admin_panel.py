@@ -64,12 +64,12 @@ def _grant_denied(actor_perms, current, wanted):
 # EN: Does the target have a higher level than the actor on any module? Then the actor cannot delete them or change their password.
 def _outranks(actor_perms, target_perms):
     return any(_lvl(target_perms, k) > _lvl(actor_perms, k) for k in PERM_KEYS)
-PERM_KEYS = ("wol", "nut", "net", "pve", "nas", "dns", "wan", "vpn")          # one explicit level per module
+PERM_KEYS = ("wol", "nut", "net", "pve", "nas", "dns", "wan", "vpn", "uptime")          # one explicit level per module
 
 # ─── Health (aggregate of every module) ───────────────────────────────────────
 # Puertos de los otros servicios, usados para consultar su /api/health.
 # EN: Ports of the other services, used to query their /api/health.
-MODULES = {"wol": 8080, "nut": 8081, "net": 8083, "pve": 8084, "nas": 8086, "dns": 8087, "wan": 8088, "vpn": 8089, "overview": 8085}
+MODULES = {"wol": 8080, "nut": 8081, "net": 8083, "pve": 8084, "nas": 8086, "dns": 8087, "wan": 8088, "vpn": 8089, "uptime": 8090, "overview": 8085}
 
 # Pregunta a un módulo cómo está. Devuelve su informe JSON o None si no responde. Un 503 también trae
 # informe (significa «hay un fallo grave»), por eso se lee igual.
@@ -137,7 +137,10 @@ class H(BaseHTTPRequestHandler):
     # Solo se registran las respuestas de error (código ≥ 400) para no llenar el journal.
     # EN: Only error responses (code ≥ 400) are logged, so the journal does not fill up.
     def log_message(self, fmt, *a):
-        if int(a[1]) >= 400: log.warning(f"{self.client_address[0]} {a[1]}")
+        # send_error() llega aquí con (código, mensaje) y un 501 de HEAD trae el mensaje en a[1]: solo se registra un código numérico.
+        # EN: send_error() arrives here with (code, message) and a HEAD 501 carries the message in a[1]: only a numeric code is logged.
+        c = str(a[1]) if len(a) > 1 else ""
+        if c.isdigit() and int(c) >= 400: log.warning(f"{self.client_address[0]} {c}")
 
     # Responde JSON con el código dado; Cache-Control: no-store evita que el navegador guarde datos sensibles.
     # EN: Reply with JSON and the given code; Cache-Control: no-store keeps the browser from storing sensitive data.
@@ -730,7 +733,7 @@ class H(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     try:
-        if auth.ensure_permissions(): log.info("'net'/'pve'/'nas'/'dns'/'wan'/'vpn' permissions filled in")
+        if auth.ensure_permissions(): log.info("'net'/'pve'/'nas'/'dns'/'wan'/'vpn'/'uptime' permissions filled in")
     except Exception as e:
         log.warning(f"Permissions: {e}")
     # Servicio de autenticación para los demás módulos (socket Unix). Sin LABTOWER_AUTH_LISTEN (desarrollo) no se abre.

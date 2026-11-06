@@ -51,14 +51,14 @@ class Events(unittest.TestCase):
         self.assertTrue({"wan", "nut"} <= mods(""))
 
 class Engine(unittest.TestCase):
-    MODS = ["dns-monitor", "nas-monitor", "wan-monitor", "nut-monitor", "net-monitor"]
+    MODS = ["dns-monitor", "nas-monitor", "wan-monitor", "nut-monitor", "net-monitor", "uptime-monitor"]
     def test_identical_copies_and_loaded(self):
         ref = (ROOT / "dns-monitor/static/charts.js").read_text()
         for m in self.MODS:
             self.assertEqual((ROOT / m / "static/charts.js").read_text(), ref, m)
             self.assertIn('<script src="charts.js"></script>', (ROOT / m / "static/index.html").read_text(), m)
     def test_no_module_draws_its_own_line_charts(self):
-        for m, f in (("nut-monitor", "app.js"), ("dns-monitor", "app.js"), ("nas-monitor", "app.js"), ("wan-monitor", "app.js"), ("net-monitor", "switches.js")):
+        for m, f in (("nut-monitor", "app.js"), ("dns-monitor", "app.js"), ("nas-monitor", "app.js"), ("wan-monitor", "app.js"), ("net-monitor", "switches.js"), ("uptime-monitor", "app.js")):
             src = (ROOT / m / "static" / f).read_text()
             self.assertIn("VC.draw(", src, m)
             self.assertNotIn("createLinearGradient", src, m)

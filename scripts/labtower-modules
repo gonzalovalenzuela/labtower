@@ -3,7 +3,7 @@
 #   labtower-modules list              module, service and state (enabled / disabled)
 #   labtower-modules disable <module>  stop the service and keep it off (also after restarts, updates and restores)
 #   labtower-modules enable <module>   start it again
-# Modules: wol nut net pve nas dns wan vpn.  The Admin Panel and the Overview cannot be turned off.
+# Modules: wol nut net pve nas dns wan vpn uptime.  The Admin Panel and the Overview cannot be turned off.
 # ES: Apaga y enciende los módulos que no usas (como root). El estado queda en /etc/labtower/modules.disabled (una línea por módulo apagado);
 #     el instalador, el reinicio de servicios y las restauraciones de respaldo no arrancan los módulos apagados. El Admin Panel lo ejecuta por sudo,
 #     una regla por módulo y acción, y este script valida el módulo contra una lista fija.
@@ -16,17 +16,18 @@ svc_of() {
     case "$1" in
         wol) echo labtower-wol;;  nut) echo labtower-ups;;   net) echo labtower-net;;  pve) echo labtower-pve;;
         nas) echo labtower-nas;;  dns) echo labtower-dns;;   wan) echo labtower-wan;;  vpn) echo labtower-vpn;;
+        uptime) echo labtower-uptime;;
         *) return 1;;
     esac
 }
-IDS="wol nut net pve nas dns wan vpn"
+IDS="wol nut net pve nas dns wan vpn uptime"
 is_off() { [ -f "$FILE" ] && grep -qx -- "$1" "$FILE"; }
 write_state() {  # write_state <ids to keep off…>  (atomic, sorted, no duplicates)
     local tmp; tmp="$(mktemp "${FILE}.XXXXXX")" || exit 1
-    printf '%s\n' "$@" | grep -E '^(wol|nut|net|pve|nas|dns|wan|vpn)$' | sort -u > "$tmp"
+    printf '%s\n' "$@" | grep -E '^(wol|nut|net|pve|nas|dns|wan|vpn|uptime)$' | sort -u > "$tmp"
     chmod 0644 "$tmp"; mv -f -- "$tmp" "$FILE"
 }
-current_off() { [ -f "$FILE" ] && grep -E '^(wol|nut|net|pve|nas|dns|wan|vpn)$' "$FILE"; return 0; }
+current_off() { [ -f "$FILE" ] && grep -E '^(wol|nut|net|pve|nas|dns|wan|vpn|uptime)$' "$FILE"; return 0; }
 
 if [ "$(id -u)" != "0" ] && [ "$DRY" != "1" ]; then echo "labtower-modules: run it as root (sudo labtower-modules)" >&2; exit 1; fi
 action="${1:-list}"
@@ -34,7 +35,7 @@ case "$action" in
     list)
         for id in $IDS; do
             if is_off "$id"; then st=disabled; else st=enabled; fi
-            printf '%-4s %-17s %s\n' "$id" "$(svc_of "$id")" "$st"
+            printf '%-6s %-17s %s\n' "$id" "$(svc_of "$id")" "$st"
         done;;
     disable|enable)
         id="${2:-}"

@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 HELPER = ROOT / "scripts" / "labtower-modules"
-IDS = ("wol", "nut", "net", "pve", "nas", "dns", "wan", "vpn")
+IDS = ("wol", "nut", "net", "pve", "nas", "dns", "wan", "vpn", "uptime")
 
 def helper(f, *args):
     env = {**{k: v for k, v in os.environ.items() if not k.startswith("LABTOWER_")},
@@ -48,9 +48,9 @@ class AuthApi(unittest.TestCase):
 
 class Wiring(unittest.TestCase):
     def test_every_module_reports_disabled_in_api_me_and_hides_nav(self):
-        for d in ("overview", "wol-console", "dns-monitor", "net-monitor", "proxmox-monitor", "vpn-monitor", "wan-monitor", "nas-monitor", "nut-monitor"):
+        for d in ("overview", "wol-console", "dns-monitor", "net-monitor", "proxmox-monitor", "vpn-monitor", "uptime-monitor", "wan-monitor", "nas-monitor", "nut-monitor"):
             self.assertIn("auth.disabled_modules()", (ROOT / d / "server.py").read_text(), d)
-        for d in ("wol-console", "dns-monitor", "net-monitor", "proxmox-monitor", "vpn-monitor", "wan-monitor", "nas-monitor", "nut-monitor", "auth", "overview"):
+        for d in ("wol-console", "dns-monitor", "net-monitor", "proxmox-monitor", "vpn-monitor", "uptime-monitor", "wan-monitor", "nas-monitor", "nut-monitor", "auth", "overview"):
             self.assertIn("me.disabled", (ROOT / d / "static" / "nav.js").read_text(), d)       # the shared menu hides disabled modules
 
     def test_admin_api_requires_full_admin_and_audits(self):

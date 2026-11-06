@@ -414,7 +414,7 @@ def ensure_initial_user() -> bool:
         pw = _random_password()
         users = {"admin": {
             "password_hash": _hash(pw),
-            "permissions": {"wol": "admin", "nut": "admin", "net": "admin", "pve": "admin", "nas": "admin", "dns": "admin", "wan": "admin", "vpn": "admin", "serials": "readonly"},
+            "permissions": {"wol": "admin", "nut": "admin", "net": "admin", "pve": "admin", "nas": "admin", "dns": "admin", "wan": "admin", "vpn": "admin", "uptime": "admin", "serials": "readonly"},
             "created": int(time.time()),
             "must_change_password": True,
         }}
@@ -536,7 +536,7 @@ SERIALS = "serials"
 
 # EN: Migration that runs when each service starts: gives an explicit "net" and "pve" level to users
 #     created before those modules existed. It is idempotent (if they are already there, nothing changes).
-def ensure_permissions(modules=("net", "pve", "nas", "dns", "wan", "vpn")) -> bool:
+def ensure_permissions(modules=("net", "pve", "nas", "dns", "wan", "vpn", "uptime")) -> bool:
     """One-time migration at service start: give every user an EXPLICIT level for `modules`.
 
     Users that predate a module get "admin" if they administer WOL, else "readonly" (what the
@@ -1170,7 +1170,7 @@ def password_guard_ok(username):
     throttle_clear("pw:" + str(username))
 
 # ¿La sesión del token tiene al menos el nivel «required» sobre el recurso (wol, nut, net, pve)?
-# EN: Does the token's session have at least the "required" level on the resource (wol, nut, net, pve, nas, dns, wan, vpn)?
+# EN: Does the token's session have at least the "required" level on the resource (wol, nut, net, pve, nas, dns, wan, vpn, uptime)?
 def check_permission(token: str, resource: str, required: str) -> bool:
     s = get_session(token)
     if not s: return False
@@ -1189,7 +1189,7 @@ def without_serials(vars_: dict) -> dict:
 # Módulos que el admin apagó (labtower-modules). El archivo tiene un id por línea; si no existe, no hay ninguno apagado.
 # EN: Modules the admin turned off (labtower-modules). The file has one id per line; if it is missing nothing is disabled.
 DISABLED_FILE = os.environ.get("LABTOWER_DISABLED_FILE", "/etc/labtower/modules.disabled")
-OPTIONAL_MODULES = ("wol", "nut", "net", "pve", "nas", "dns", "wan", "vpn")
+OPTIONAL_MODULES = ("wol", "nut", "net", "pve", "nas", "dns", "wan", "vpn", "uptime")
 def disabled_modules() -> list:
     try:
         with open(DISABLED_FILE, encoding="utf-8") as f:
@@ -1850,6 +1850,10 @@ CREATE TABLE IF NOT EXISTS wan_speed   (ts INTEGER PRIMARY KEY, down REAL, up RE
 CREATE TABLE IF NOT EXISTS wan_outages (start INTEGER PRIMARY KEY, end INTEGER, scope TEXT);
 CREATE TABLE IF NOT EXISTS wan_traces  (start INTEGER PRIMARY KEY, dest TEXT, text TEXT);
 CREATE TABLE IF NOT EXISTS wan_ips     (ts INTEGER PRIMARY KEY, ip TEXT NOT NULL, prev TEXT);
+CREATE TABLE IF NOT EXISTS uptime_beats  (mid TEXT NOT NULL, ts INTEGER NOT NULL, st INTEGER NOT NULL, ms REAL,
+                                          PRIMARY KEY (mid, ts)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS uptime_hourly (mid TEXT NOT NULL, hour INTEGER NOT NULL, n INTEGER NOT NULL, down INTEGER NOT NULL,
+                                          ms_sum REAL NOT NULL, ms_n INTEGER NOT NULL, PRIMARY KEY (mid, hour)) WITHOUT ROWID;
 """
 
 def metrics_conn():

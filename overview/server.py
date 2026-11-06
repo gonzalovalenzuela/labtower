@@ -38,7 +38,7 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 # Qué permiso hace falta para ver los eventos de cada módulo.
 # EN: Which permission is needed to see each module's events.
-EVENT_MODULES = ("nut", "net", "pve", "nas", "dns", "wan", "vpn")
+EVENT_MODULES = ("nut", "net", "pve", "nas", "dns", "wan", "vpn", "uptime")
 
 
 # ─── Historial de la Pi (temperatura y bajo voltaje) ─────────────────────────────────────
@@ -194,7 +194,10 @@ def is_admin(tok):
 class H(BaseHTTPRequestHandler):
     timeout = 30
     def log_message(self, fmt, *a):
-        if int(a[1]) >= 400: log.warning(f"{self.client_address[0]} {a[1]}")
+        # send_error() llega aquí con (código, mensaje) y un 501 de HEAD trae el mensaje en a[1]: solo se registra un código numérico.
+        # EN: send_error() arrives here with (code, message) and a HEAD 501 carries the message in a[1]: only a numeric code is logged.
+        c = str(a[1]) if len(a) > 1 else ""
+        if c.isdigit() and int(c) >= 400: log.warning(f"{self.client_address[0]} {c}")
 
     def _json(self, code, payload, extra_headers=()):
         body = json.dumps(payload).encode()

@@ -57,6 +57,12 @@
       "accent-light": "#b9baf9",
       "accent-dim": "#262b54"
     },
+    "uptime": {
+      "name": "Uptime Monitor",
+      "accent": "#84cc16",
+      "accent-light": "#c8e896",
+      "accent-dim": "#2c3d2d"
+    },
     "wol": {
       "name": "WOL Console",
       "accent": "#4361ee",

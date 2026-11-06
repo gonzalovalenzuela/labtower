@@ -292,7 +292,10 @@ class H(BaseHTTPRequestHandler):
     timeout = 30      # a stalled client must not hold a thread forever
 
     def log_message(self, fmt, *a):
-        if int(a[1]) >= 400: log.warning(f"{self.client_address[0]} {a[1]}")
+        # send_error() llega aquí con (código, mensaje) y un 501 de HEAD trae el mensaje en a[1]: solo se registra un código numérico.
+        # EN: send_error() arrives here with (code, message) and a HEAD 501 carries the message in a[1]: only a numeric code is logged.
+        c = str(a[1]) if len(a) > 1 else ""
+        if c.isdigit() and int(c) >= 400: log.warning(f"{self.client_address[0]} {c}")
 
     # IP del cliente para el límite de encendidos. Usa auth.client_ip (X-Real-IP de nginx, solo si la conexión es local): X-Forwarded-For lo puede falsear el cliente.
     # EN: Client IP for the wake-up limit. Uses auth.client_ip (nginx's X-Real-IP, only if the connection is local): X-Forwarded-For can be forged by the client.

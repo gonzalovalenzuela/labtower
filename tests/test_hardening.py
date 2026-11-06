@@ -6,7 +6,7 @@ from tests import support
 ROOT = Path(__file__).resolve().parent.parent
 wan = support.load("wan-monitor/server.py")
 SERVERS = ["nas-monitor/server.py", "net-monitor/server.py", "nut-monitor/server.py", "overview/server.py",
-           "proxmox-monitor/server.py", "vpn-monitor/server.py", "wol-console/server.py", "auth/admin_panel.py"]
+           "proxmox-monitor/server.py", "vpn-monitor/server.py", "uptime-monitor/server.py", "wol-console/server.py", "auth/admin_panel.py"]
 
 
 class EmptyBody(unittest.TestCase):
@@ -25,6 +25,19 @@ class EmptyBody(unittest.TestCase):
         h.headers = Hd({"Content-Length": "9"}); h.rfile = io.BytesIO(b"not json!!")
         self.assertIsNone(h._body())
 
+
+class UnsupportedMethod(unittest.TestCase):
+    """HEAD (u otro método sin manejador) recibe 501; antes log_message lanzaba ValueError y la conexión se cortaba sin respuesta.
+    EN: HEAD (or any method without a handler) gets 501; log_message used to raise ValueError and the connection was dropped."""
+    def test_head_gets_501_everywhere(self):
+        import http.client
+        for rel in SERVERS + ["dns-monitor/server.py", "wan-monitor/server.py"]:
+            with self.subTest(module=rel):
+                srv = support.Server(support.load(rel).H)
+                try:
+                    c = http.client.HTTPConnection("127.0.0.1", srv.port, timeout=10); c.request("HEAD", "/")
+                    self.assertEqual(c.getresponse().status, 501); c.close()
+                finally: srv.close()
 
 class WanUrls(unittest.TestCase):
     def setUp(self):                      # the harness relaxes valid_target for its local fake servers: use the real one here

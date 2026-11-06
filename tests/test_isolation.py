@@ -312,6 +312,7 @@ class Packaging(unittest.TestCase):
         "labtower-auth": ("labtower-auth", "auth"), "labtower-net": ("labtower-net", "net-monitor"),
         "labtower-pve": ("labtower-pve", "proxmox-monitor"), "labtower-nas": ("labtower-nas", "nas-monitor"),
         "labtower-dns": ("labtower-dns", "dns-monitor"), "labtower-wan": ("labtower-wan", "wan-monitor"),
+        "labtower-vpn": ("labtower-vpn", "vpn-monitor"), "labtower-uptime": ("labtower-uptime", "uptime-monitor"),
         "labtower-overview": ("labtower-overview", "overview"),
     }
 
@@ -322,7 +323,7 @@ class Packaging(unittest.TestCase):
             self.assertTrue(m, unit)
             self.assertIn(user, m.group(0)); self.assertTrue(m.group(0).rstrip().endswith(datadir), unit)
             users.add(user)
-        self.assertEqual(len(users), 9)                      # nobody shares a user
+        self.assertEqual(len(users), 11)                     # nobody shares a user
         self.assertNotRegex(self.postinst, r"(?m)^User=labtower$")
 
     def test_modules_may_only_write_their_own_folder(self):

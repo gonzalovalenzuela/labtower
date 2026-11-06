@@ -18,13 +18,14 @@
     dns: {href: '/dns/', label: 'DNS Monitor', svg: '<circle cx="12" cy="12" r="9"/><line x1="3" y1="12" x2="21" y2="12"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/>'},
     wan: {href: '/wan/', label: 'WAN Monitor', svg: '<path d="M5 12.55a11 11 0 0 1 14 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>'},
     vpn: {href: '/vpn/', label: 'VPN Monitor', svg: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'},
+    uptime: {href: '/uptime/', label: 'Uptime Monitor', svg: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>'},
     wol: {href: '/wol/', label: 'WOL Console', svg: '<polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/>'},
     admin: {href: '/admin/', label: 'Admin Panel', svg: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'}
   };
   var G = [
     {items: ['home', 'overview']},
     {es: 'Energía y servidores', en: 'Power & servers', items: ['nut', 'pve', 'nas']},
-    {es: 'Red', en: 'Network', items: ['net', 'dns', 'wan', 'vpn']},
+    {es: 'Red', en: 'Network', items: ['net', 'dns', 'wan', 'vpn', 'uptime']},
     {es: 'Herramientas', en: 'Tools', items: ['wol']},
     {es: 'Sistema', en: 'System', items: ['admin']}
   ];

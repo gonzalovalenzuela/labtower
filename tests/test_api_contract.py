@@ -14,6 +14,7 @@ PROTECTED_GET = [
     ("dns-monitor/server.py", ["/api/dns"]),
     ("wan-monitor/server.py", ["/api/wan"]),
     ("vpn-monitor/server.py", ["/api/vpn"]),
+    ("uptime-monitor/server.py", ["/api/monitors"]),
 ]
 # (módulo, ruta POST de escritura, cuerpo)
 WRITE_POST = [
@@ -25,6 +26,7 @@ WRITE_POST = [
     ("dns-monitor/server.py", "/api/dns", {"name": "x", "url": "192.0.2.9", "password": "p"}),
     ("wan-monitor/server.py", "/api/wan/config", {"interval": 60}),
     ("vpn-monitor/server.py", "/api/vpn", {"type": "tailscale", "name": "x", "api_key": "tskey-api-abcdef123"}),
+    ("uptime-monitor/server.py", "/api/monitors", {"type": "tcp", "name": "x", "host": "192.0.2.9", "port": 22}),
 ]
 
 class ApiContract(unittest.TestCase):

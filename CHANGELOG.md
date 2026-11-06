@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.8a — 2026-11-06
+
+- **Nuevo:** Uptime Monitor (`/uptime/`, servicio `labtower-uptime`). Revisa servicios por HTTP(S), TCP y DNS cada cierto intervalo (60 s por defecto, de 20 s a 1 h). HTTP(S): código de respuesta esperado (200-399 por defecto) y palabra clave opcional. DNS: registro A o AAAA, con el resolvedor del servidor o uno dado, e IP esperada opcional.
+- **Nuevo:** Uptime Monitor: un servicio se marca caído después de 3 fallos seguidos (configurable de 1 a 6); mientras tanto queda «Pendiente».
+- **Nuevo:** Uptime Monitor: barra con las últimas 50 revisiones, disponibilidad de 24 h, 7 y 30 días, y gráfico del tiempo de respuesta con rangos (1 h, 1 día, 1 semana, 1 mes, todo) y comparación con el periodo anterior, igual que los demás módulos.
+- **Nuevo:** Uptime Monitor: vencimiento de certificados HTTPS, con aviso 14 días antes por defecto. «No verificar el certificado» acepta un certificado autofirmado (Proxmox, NAS) y sigue revisando el vencimiento.
+- **Nuevo:** Resumen: tarjeta de Uptime (servicios arriba, caídos y certificados por vencer) y eventos en la línea de tiempo: caído, vuelve a estar arriba, certificado por vencer y certificado vencido.
+- **Nuevo:** permiso «Uptime Monitor» por usuario en el Admin Panel. Al actualizar, quien administra WOL queda como administrador y el resto con solo lectura. El módulo va en el grupo Red del menú y en la página de inicio, entra en los respaldos y se puede apagar con `labtower-modules`.
+- **Arreglo:** todos los servicios: una petición HEAD o mal formada dejaba un error en el journal y cortaba la conexión sin respuesta. Ahora responden 501.
+
 ## 2.1.8 — 2026-11-05
 
 - **Cambio:** los servicios se llaman todos `labtower-<módulo>`: labtower-wol, labtower-auth, labtower-net, labtower-pve, labtower-nas, labtower-dns, labtower-wan y labtower-vpn (labtower-ups y labtower-overview no cambian). Al actualizar, el instalador quita los nombres viejos; los datos no se tocan. Ejemplo: `journalctl -u labtower-wan`.
