@@ -6,7 +6,7 @@ const LANG={
     statNodesOnline:'Nodes online',statVMsRunning:'VMs running',
     statCTsRunning:'CTs running',statAvgCPU:'Avg CPU',statAvgRAM:'Avg RAM',
     noClusters:'No clusters configured',noClustersHint:'Add a Proxmox cluster to get started.',
-    addClusterTitle:'Add Proxmox cluster',
+    addClusterTitle:'Add Proxmox cluster',editClusterTitle:'Edit Proxmox cluster',editCluster:'Edit cluster',save:'Save',tokenKeep:'Empty = keep current',clusterSaved:(name)=>`${name} saved`,
     addClusterHint:'You need an API Token in Proxmox: Datacenter → API Tokens → Add',
     fieldName:'Name',fieldPort:'Port',fieldPVEUser:'PVE User',
     formatLabel:'Format',cancel:'Cancel',test:'Test',delete:'Delete',
@@ -51,7 +51,7 @@ const LANG={
     statNodesOnline:'Nodos en línea',statVMsRunning:'VMs en ejecución',
     statCTsRunning:'CTs corriendo',statAvgCPU:'CPU promedio',statAvgRAM:'RAM promedio',
     noClusters:'Sin clusters configurados',noClustersHint:'Agrega un cluster Proxmox para comenzar.',
-    addClusterTitle:'Agregar cluster Proxmox',
+    addClusterTitle:'Agregar cluster Proxmox',editClusterTitle:'Editar cluster Proxmox',editCluster:'Editar cluster',save:'Guardar',tokenKeep:'Vacío = conservar el actual',clusterSaved:(name)=>`${name} guardado`,
     addClusterHint:'Necesitas un API Token en Proxmox: Datacenter → API Tokens → Add',
     fieldName:'Nombre',fieldPort:'Puerto',fieldPVEUser:'Usuario PVE',
     formatLabel:'Formato',cancel:'Cancelar',test:'Probar',delete:'Eliminar',
@@ -239,7 +239,7 @@ function renderSidebar(){
   clusters.forEach(c=>{
     const snap=c.snap;
     const isActive=c.id===activeId;
-    const dotCls=!snap?.ts?'loading':snap?.error?'err':'ok';
+    const dotCls=!snap?.ts&&!snap?.error?'loading':snap?.error?'err':'ok';
     const nodeCount=(snap?.data?.nodes||[]).length;
     const div=document.createElement('div');
     div.className='cluster-nav'+(isActive?' active':'');
@@ -249,7 +249,7 @@ function renderSidebar(){
         <div class="cluster-nav-name ${isActive?'act':''}">${esc(c.name)}</div>
         <div class="cluster-nav-host"><span data-nethost="${esc(c.host)}">${esc(c.host)}</span>:${c.port}${nodeCount?' · '+t('nodeCountNav',nodeCount):''}</div>
       </div>
-      ${c.id!=='local'&&ME?.permissions?.pve==='admin'?`<button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;padding:2px 4px" data-on-click="confirmDelete" data-on-click-args="${jsargs([c.id,c.name])}" data-on-click-stop="1">✕</button>`:''}`;
+      ${c.id!=='local'&&ME?.permissions?.pve==='admin'?`<button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;padding:2px 4px" title="${esc(t('editCluster'))}" aria-label="${esc(t('editCluster'))}" data-on-click="openEditCluster" data-on-click-args="${jsargs([c.id])}" data-on-click-stop="1">✎</button><button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;padding:2px 4px" title="${esc(t('deleteCluster'))}" aria-label="${esc(t('deleteCluster'))}" data-on-click="confirmDelete" data-on-click-args="${jsargs([c.id,c.name])}" data-on-click-stop="1">✕</button>`:''}`;
     list.appendChild(div);
   });
 }
@@ -299,10 +299,17 @@ function renderDashboard(){
   if(pb){pb.style.display=cluster.pinned?'none':'';pb.textContent='⚠ '+t('unpinned')+' — '+t('pinCert');}
   const main=document.getElementById('main-content');
 
-  if(!snap?.ts){
+  if(!snap?.ts&&!snap?.error){
     main.innerHTML='<div class="state-msg"><strong>'+esc(t('connecting'))+'</strong>'+esc(t('connectingMsg'))+'</div>';return;
   }
+  // Sin datos y con error (también si falló desde la primera lectura). Si es el certificado, se explica y se ofrece volver a fijarlo.
+  // EN: No data and an error (also when it failed from the first reading). If it is the certificate, explain it and offer to pin it again.
   if(snap.error&&!snap.data?.nodes?.length){
+    if(snap.error_kind==='cert'){
+      main.innerHTML=`<div class="state-msg err"><strong>${esc(t('certChanged'))}</strong>${esc(t('certChangedDesc'))}<br><br><span style="font-size:12px;font-family:var(--mono)">${esc(snap.error)}</span>`+
+        (isPveAdmin()?`<br><br><button class="btn-primary" style="width:auto;padding:8px 14px;background:var(--pve)" data-on-click="pinCluster">${esc(t('repin'))}</button>`:'')+'</div>';
+      return;
+    }
     main.innerHTML=`<div class="state-msg err"><strong>${t('connError')||'Connection error'}</strong>${esc(snap.error)}<br><br><span style="font-size:12px;font-family:var(--mono)">${t('connErrorHint')||'Check host, port and API token'}</span></div>`;return;
   }
 
@@ -955,7 +962,26 @@ function toggleSection(id){
 // ── Add cluster ───────────────────────────────────────────────────────────────
 // AGREGAR CLUSTER (dos pasos, por seguridad del certificado). 1.º «Probar»: se muestra la huella SHA-256 del certificado que presenta el servidor, sin enviar todavía el token. 2.º El administrador la compara y vuelve a pulsar «Probar»: se prueba con esa huella fijada. Solo entonces se puede guardar.
 // EN: ADD CLUSTER (two steps, for certificate security). 1st "Test": the SHA-256 fingerprint of the certificate the server presents is shown, without sending the token yet. 2nd The administrator compares it and presses "Test" again: it is tested with that fingerprint pinned. Only then can it be saved.
-function openAddCluster(){document.getElementById('add-overlay').classList.add('show');document.getElementById('f-name').focus();}
+// Mismo formulario para agregar y editar. Al editar, el secreto queda vacío (vacío = conservar el guardado) y solo si cambian host
+// o puerto hay que volver a confirmar el certificado con «Probar».
+// EN: Same form to add and edit. When editing the secret stays empty (empty = keep the stored one) and the certificate must be
+//     confirmed again with "Test" only if host or port change.
+let editingId=null;
+function fillClusterForm(c){
+  const v=(id,x)=>{document.getElementById(id).value=x;};
+  v('f-name',c?c.name:'');v('f-host',c?c.host:'');v('f-port',c?(c.port||8006):8006);v('f-user',c?c.user:'');v('f-tname',c?c.token_name:'');v('f-tval','');
+  document.getElementById('f-tval').placeholder=c?t('tokenKeep'):'xxxxxxxx-xxxx-...';
+  document.querySelector('#add-overlay h3').textContent=t(c?'editClusterTitle':'addClusterTitle');
+  document.getElementById('btn-save').textContent=t(c?'save':'addCluster');
+  const res=document.getElementById('test-result');res.className='test-result';res.textContent='';
+  pendingFp=null;
+}
+function openAddCluster(){editingId=null;fillClusterForm(null);document.getElementById('add-overlay').classList.add('show');document.getElementById('f-name').focus();}
+function openEditCluster(id){
+  const c=clusters.find(x=>x.id===id);if(!c)return;
+  editingId=id;fillClusterForm(c);document.getElementById('add-overlay').classList.add('show');document.getElementById('f-name').focus();
+}
+function editedMoved(host,port){const c=editingId&&clusters.find(x=>x.id===editingId);return !c||c.host!==host||(c.port||8006)!==port;}
 
 // Huella mostrada al administrador en el diálogo; se invalida si cambia host o puerto.
 // EN: Fingerprint shown to the administrator in the dialog; invalidated if host or port changes.
@@ -969,7 +995,7 @@ async function testCluster(){
   const user=document.getElementById('f-user').value.trim();
   const tname=document.getElementById('f-tname').value.trim();
   const tval=document.getElementById('f-tval').value.trim();
-  if(!host||!user||!tname||!tval){res.className='test-result fail show';res.textContent='✕ '+t('testFillAll');return;}
+  if(!host||!user||!tname||(!tval&&!editingId)){res.className='test-result fail show';res.textContent='✕ '+t('testFillAll');return;}
   btn.innerHTML='<span class="spin">⟳</span>';btn.disabled=true;
   try{
     if(!pendingFp||pendingFp.hp!==host+':'+port){          // step 1: show the certificate, token not sent yet
@@ -980,7 +1006,7 @@ async function testCluster(){
       res.className='test-result show';res.textContent=t('fpConfirm',d0.fingerprint);return;
     }
     pendingFp.confirmed=true;                               // step 2: pinned test
-    const r=await fetch('api/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host,port,user,token_name:tname,token_value:tval,fingerprint:pendingFp.fp})});
+    const r=await fetch('api/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host,port,user,token_name:tname,token_value:tval,fingerprint:pendingFp.fp,...(editingId?{id:editingId}:{})})});
     const d=await r.json();
     if(d.ok){res.className='test-result ok show';res.textContent=t('testConnected',d.version,d.nodes);log('OK','Test OK: '+host);}
     else{res.className='test-result fail show';res.textContent='✕ '+d.error;}
@@ -998,16 +1024,18 @@ async function saveCluster(){
   const tname=document.getElementById('f-tname').value.trim();
   const tval=document.getElementById('f-tval').value.trim();
   const btn=document.getElementById('btn-save');
-  if(!name||!host||!user||!tname||!tval){toast(t('testFillAll'),true);return;}
-  if(!pendingFp||!pendingFp.confirmed){toast(t('fpNeedTest'),true);return;}
-  if(pendingFp.hp!==host+':'+port){toast(t('fpChanged'),true);return;}
+  if(!name||!host||!user||!tname||(!tval&&!editingId)){toast(t('testFillAll'),true);return;}
+  const needFp=!editingId||editedMoved(host,port);           // editing without moving keeps the pinned certificate
+  if(needFp&&(!pendingFp||!pendingFp.confirmed)){toast(t('fpNeedTest'),true);return;}
+  if(pendingFp&&pendingFp.confirmed&&pendingFp.hp!==host+':'+port){toast(t('fpChanged'),true);return;}
+  const fp=pendingFp&&pendingFp.confirmed?pendingFp.fp:undefined,edit=editingId;
   btn.disabled=true;btn.innerHTML='<span class="spin">⟳</span>';
   try{
-    const r=await fetch('api/clusters',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,host,port,user,token_name:tname,token_value:tval,fingerprint:pendingFp.fp})});
+    const r=await fetch('api/clusters'+(edit?'/'+encodeURIComponent(edit):''),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,host,port,user,token_name:tname,token_value:tval,fingerprint:fp})});
     const d=await r.json();if(!r.ok)throw new Error(d.error||'HTTP '+r.status);
-    pendingFp=null;toast(t('clusterAdded',name));closeModals();await fetchAll();selectCluster(d.cluster.id);
+    pendingFp=null;editingId=null;toast(t(edit?'clusterSaved':'clusterAdded',name));closeModals();await fetchAll();selectCluster(d.cluster.id);
   }catch(e){toast(e.message,true);}
-  finally{btn.disabled=false;btn.textContent=t('addCluster');}
+  finally{btn.disabled=false;btn.textContent=t(editingId?'save':'addCluster');}
 }
 
 // Para clusters antiguos sin certificado fijado: muestra la huella actual, pide confirmación y la guarda.
@@ -1112,4 +1140,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ bkSetDays, closeModals, confirmDelete, doLogin, logout, moveNode, openAddCluster, pinCluster, toggleStopped, resetLayout, saveCluster, toggleBkIgnore, bkSelToggle, bkSelMode, bkBulk, toggleDiag, toggleDiagAll, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection, toggleNode, setNRange });
+if (window.cspRegister) cspRegister({ bkSetDays, closeModals, confirmDelete, openEditCluster, doLogin, logout, moveNode, openAddCluster, pinCluster, toggleStopped, resetLayout, saveCluster, toggleBkIgnore, bkSelToggle, bkSelMode, bkBulk, toggleDiag, toggleDiagAll, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection, toggleNode, setNRange });

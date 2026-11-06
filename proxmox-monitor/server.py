@@ -135,6 +135,7 @@ class PVEClient:
     """PVE API client with a persistent HTTPS connection (avoids a TLS handshake on every poll)."""
     def __init__(self, host, port, user, token_name, token_value, verify_ssl=False, fingerprint=None):
         self.host, self.port = host, int(port)
+        self.sig = (host, int(port), user, token_name, token_value, bool(verify_ssl))   # connection data, see _client_for
         self.fingerprint = _fp_norm(fingerprint)          # pinned SHA-256 of the server certificate
         self.headers = {
             "Authorization": f"PVEAPIToken={user}!{token_name}={token_value}",
@@ -227,6 +228,37 @@ _cl_lock = threading.RLock()      # hold around load_clusters() → modify → s
 
 # Lee clusters.json (con la red de seguridad de auth.read_json).
 # EN: Read clusters.json (with the safety net of auth.read_json).
+# Valida los campos de un cluster (alta o edición). En edición, un secreto vacío conserva el guardado.
+# EN: Validate a cluster's fields (add or edit). When editing, an empty secret keeps the stored one.
+def cluster_fields(body: dict, current=None) -> dict:
+    g = lambda k: str(body.get(k) or "").strip()
+    host, name, user, tname, tval = g("host"), g("name"), g("user"), g("token_name"), g("token_value")
+    if not tval and current is not None: tval = current.get("token_value", "")
+    try: port = int(body.get("port", 8006))
+    except (TypeError, ValueError): raise ValueError("Invalid port")
+    if not all([host, name, user, tname, tval]): raise ValueError("All fields are required")
+    if not auth.valid_target(host): raise ValueError("Invalid host (this machine and link-local addresses are not allowed)")
+    if len(name) > 60 or re.search(r"[\x00-\x1f\x7f]", name): raise ValueError("Invalid name")
+    if not re.fullmatch(r"[A-Za-z0-9_.@!-]{1,64}", user) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", tname):
+        raise ValueError("Invalid user or token name")
+    if not 1 <= port <= 65535: raise ValueError("Invalid port")
+    if len(tval) > 256 or re.search(r"[\x00-\x1f\x7f\s]", tval): raise ValueError("Invalid token secret")
+    return {"name": name, "host": host, "port": port, "user": user, "token_name": tname, "token_value": tval}
+
+# Cliente para la configuración actual de un cluster: si host, puerto, usuario o token no cambiaron se reutiliza (y adopta una
+# huella fijada después); si cambiaron (el cluster se editó) se cierra y se crea otro. Así una edición se aplica sin reiniciar.
+# EN: Client for a cluster's current configuration: if host, port, user or token did not change it is reused (and adopts a
+#     fingerprint pinned later); if they changed (the cluster was edited) it is closed and a new one is made. An edit applies without a restart.
+def _client_for(cur: dict, client=None):
+    sig = (cur["host"], int(cur.get("port", 8006)), cur["user"], cur["token_name"], cur["token_value"], bool(cur.get("verify_ssl", False)))
+    if client is not None and client.sig == sig:
+        fp = _fp_norm(cur.get("fingerprint"))
+        if fp != client.fingerprint: client.fingerprint = fp; client.close()
+        return client
+    if client is not None: client.close()
+    return PVEClient(host=cur["host"], port=cur.get("port", 8006), user=cur["user"], token_name=cur["token_name"],
+                     token_value=cur["token_value"], verify_ssl=cur.get("verify_ssl", False), fingerprint=cur.get("fingerprint"))
+
 def load_clusters() -> list:
     return auth.read_json(DATA_FILE, [], list)
 
@@ -501,12 +533,7 @@ def _smart_loop(cluster, cache):
         try:
             cur = next((c for c in load_clusters() if c["id"] == cid), None)
             if cur is None: break
-            if client is None:
-                client = PVEClient(host=cur["host"], port=cur.get("port", 8006), user=cur["user"], token_name=cur["token_name"],
-                                   token_value=cur["token_value"], verify_ssl=cur.get("verify_ssl", False), fingerprint=cur.get("fingerprint"))
-            else:
-                fp = _fp_norm(cur.get("fingerprint"))
-                if fp != client.fingerprint: client.fingerprint = fp; client.close()
+            client = _client_for(cur, client)
             _smart_round(cur, client, cache)
         except Exception as e:
             log.warning(f"[{cluster['name']}] SMART round: {e}")
@@ -581,12 +608,7 @@ def _backup_loop(cluster, cache):
         try:
             cur = next((c for c in load_clusters() if c["id"] == cid), None)
             if cur is None: break
-            if client is None:
-                client = PVEClient(host=cur["host"], port=cur.get("port", 8006), user=cur["user"], token_name=cur["token_name"],
-                                   token_value=cur["token_value"], verify_ssl=cur.get("verify_ssl", False), fingerprint=cur.get("fingerprint"))
-            else:
-                fp = _fp_norm(cur.get("fingerprint"))
-                if fp != client.fingerprint: client.fingerprint = fp; client.close()
+            client = _client_for(cur, client)
             _backup_round(cur, client, cache)
         except Exception as e:
             log.warning(f"[{cluster['name']}] backup round: {e}")
@@ -737,12 +759,7 @@ def _extra_loop(cluster, cache):
         try:
             cur = next((c for c in load_clusters() if c["id"] == cid), None)
             if cur is None: break
-            if client is None:
-                client = PVEClient(host=cur["host"], port=cur.get("port", 8006), user=cur["user"], token_name=cur["token_name"],
-                                   token_value=cur["token_value"], verify_ssl=cur.get("verify_ssl", False), fingerprint=cur.get("fingerprint"))
-            else:
-                fp = _fp_norm(cur.get("fingerprint"))
-                if fp != client.fingerprint: client.fingerprint = fp; client.close()
+            client = _client_for(cur, client)
             _extra_round(cur, client, cache)
         except Exception as e:
             log.warning(f"[{cluster['name']}] extra round: {e}")
@@ -881,12 +898,7 @@ def _guest_loop(cluster, cache):
         try:
             cur = next((c for c in load_clusters() if c["id"] == cid), None)
             if cur is None: break
-            if client is None:
-                client = PVEClient(host=cur["host"], port=cur.get("port", 8006), user=cur["user"], token_name=cur["token_name"],
-                                   token_value=cur["token_value"], verify_ssl=cur.get("verify_ssl", False), fingerprint=cur.get("fingerprint"))
-            else:
-                fp = _fp_norm(cur.get("fingerprint"))
-                if fp != client.fingerprint: client.fingerprint = fp; client.close()
+            client = _client_for(cur, client)
             _guest_round(cur, client, cache)
         except Exception as e:
             log.warning(f"[{cluster['name']}] guest network round: {e}")
@@ -1010,10 +1022,8 @@ def _poll_cluster(cluster):
         try:
             cur = next((c for c in load_clusters() if c["id"] == cid), None)
             gone = cur is None
-            if cur is not None:                  # picks up a certificate pinned while running
-                fp = _fp_norm(cur.get("fingerprint"))
-                if fp != client.fingerprint:
-                    client.fingerprint = fp; client.close()
+            if cur is not None:                  # picks up a pinned certificate or an edit while running
+                client = _client_for(cur, client); cluster = cur
         except Exception as e:                    # never let the poller thread die on a config hiccup
             log.error(f"[{cluster['name']}] config read: {e}"); gone = False
         if gone:
@@ -1370,27 +1380,14 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/clusters":
             if not auth.check_permission(tok, "pve", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
-            host  = str(body.get("host","")).strip()
-            name  = str(body.get("name","")).strip()
-            user  = str(body.get("user","")).strip()
-            tname = str(body.get("token_name","")).strip()
-            tval  = str(body.get("token_value","")).strip()
-            try: port = int(body.get("port", 8006))
-            except (TypeError, ValueError): return self._json(400, {"error": "Invalid port"})
-            if not all([host,name,user,tname,tval]):
-                return self._json(400, {"error": "All fields are required"})
-            if not auth.valid_target(host): return self._json(400, {"error": "Invalid host (this machine and link-local addresses are not allowed)"})
-            if len(name) > 60 or re.search(r"[\x00-\x1f\x7f]", name): return self._json(400, {"error": "Invalid name"})
-            if not re.fullmatch(r"[A-Za-z0-9_.@!-]{1,64}", user) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", tname):
-                return self._json(400, {"error": "Invalid user or token name"})
-            if not 1 <= port <= 65535: return self._json(400, {"error": "Invalid port"})
+            try: f = cluster_fields(body)
+            except ValueError as e: return self._json(400, {"error": str(e)})
             fp = _fp_norm(body.get("fingerprint"))
             if not fp:
                 return self._json(400, {"error": "Certificate fingerprint required: run Test and confirm it"})
             import uuid
-            cluster = {"id": str(uuid.uuid4()), "name": name, "host": host,
-                       "port": port, "user": user, "token_name": tname,
-                       "token_value": tval, "verify_ssl": False, "fingerprint": fp}
+            host, port = f["host"], f["port"]
+            cluster = {"id": str(uuid.uuid4()), **f, "verify_ssl": False, "fingerprint": fp}
             with _cl_lock:
                 clusters = load_clusters()
                 if any(c["host"]==host and c.get("port")==port for c in clusters):
@@ -1400,6 +1397,35 @@ class H(BaseHTTPRequestHandler):
             ensure_poller(cluster)
             # never echo the API token back
             self._json(201, {"cluster": {k: v for k, v in cluster.items() if k != "token_value"}})
+
+        # Edición de un cluster: nombre, host, puerto, usuario y token (un secreto vacío conserva el guardado). Si cambia host o
+        # puerto se exige la huella confirmada otra vez («Probar»); si no, se conserva la fijada (o se adopta la confirmada).
+        # El poller y los demás hilos toman los datos nuevos en su próxima vuelta. Nunca devuelve el token.
+        # EN: Edit a cluster: name, host, port, user and token (an empty secret keeps the stored one). If host or port change the
+        #     confirmed fingerprint is required again ("Test"); otherwise the pinned one is kept (or the confirmed one adopted).
+        #     The poller and the other threads pick up the new data on their next pass. Never returns the token.
+        elif re.match(r'^/api/clusters/[a-zA-Z0-9\-]+$', path):
+            if not auth.check_permission(tok, "pve", "admin"):
+                return self._json(403, {"error": "Admin permission required"})
+            cid = path.split("/")[3]
+            with _cl_lock:
+                clusters = load_clusters()
+                c = next((x for x in clusters if x["id"] == cid), None)
+                if not c: return self._json(404, {"error": "Not found"})
+                try: f = cluster_fields(body, c)
+                except ValueError as e: return self._json(400, {"error": str(e)})
+                fp = _fp_norm(body.get("fingerprint"))
+                moved = (f["host"], f["port"]) != (c["host"], c.get("port", 8006))
+                if moved and not fp:
+                    return self._json(400, {"error": "Certificate fingerprint required: run Test and confirm it"})
+                if any(x["id"] != cid and x["host"] == f["host"] and x.get("port") == f["port"] for x in clusters):
+                    return self._json(409, {"error": "That host:port already exists"})
+                c.update(f)
+                if fp: c["fingerprint"] = fp
+                save_clusters(clusters)
+            cc = _cache.get(cid)
+            if cc: cc.wake.set()
+            self._json(200, {"cluster": {k: v for k, v in c.items() if k != "token_value"}})
 
         # Paso 1 del alta: devuelve la huella del certificado que presenta el servidor (no se envía ningún token).
         # EN: Step 1 of adding: returns the fingerprint of the certificate the server presents (no token is sent).
@@ -1455,6 +1481,8 @@ class H(BaseHTTPRequestHandler):
             user  = str(body.get("user","")).strip()
             tname = str(body.get("token_name","")).strip()
             tval  = str(body.get("token_value","")).strip()
+            if not tval and body.get("id"):           # editing: an empty secret means the stored one / editando: secreto vacío = el guardado
+                tval = next((x["token_value"] for x in load_clusters() if x["id"] == body.get("id")), "")
             try:
                 fp = _fp_norm(body.get("fingerprint"))
                 if not fp: return self._json(400, {"error": "Certificate fingerprint required"})
