@@ -38,4 +38,4 @@ jobs:
       - name: shellcheck (errors)
         run: |
           sudo apt-get install -y shellcheck >/dev/null
-          shellcheck -S error scripts/teleporter.sh scripts/labtower-* debian/postinst debian/preinst debian/prerm debian/postrm
+          shellcheck -S error scripts/teleporter.sh scripts/labtower-* scripts/build-deb debian/postinst debian/preinst debian/prerm debian/postrm

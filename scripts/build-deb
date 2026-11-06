@@ -1,0 +1,80 @@
+#!/bin/bash
+# build-deb — arma labtower_<versión>_all.deb desde el último commit (git archive HEAD), con dpkg-deb.
+#   scripts/build-deb [carpeta de salida]      (por defecto, la raíz del repo)
+# Funciona en Debian/Ubuntu y en macOS (brew install dpkg). No necesita root: dpkg-deb --root-owner-group deja todo a nombre de root.
+# ES: Contenido del paquete:
+#   /opt/labtower              todo lo versionado, menos lo que no corre en el servidor (tests, docs, assets, debian, etc, scripts, README, CHANGELOG…)
+#   /etc                       los archivos de etc/ (todos son conffiles, ordenados)
+#   /usr/local/bin             los comandos de administración y el enlace «teleporter»
+#   /usr/share/doc/labtower    CHANGELOG.md, LICENSE, README.md y copyright
+# Antes de armar revisa que VERSION, debian/control y la entrada superior de CHANGELOG.md digan lo mismo. Los cambios sin commit NO entran.
+# EN: build-deb — builds labtower_<version>_all.deb from the last commit (git archive HEAD) with dpkg-deb.
+#     Works on Debian/Ubuntu and macOS (brew install dpkg). No root needed: dpkg-deb --root-owner-group makes everything root-owned.
+#     Contents: /opt/labtower (everything tracked except what does not run on the server), /etc (the files of etc/, all conffiles, sorted),
+#     /usr/local/bin (admin commands + the "teleporter" link), /usr/share/doc/labtower. VERSION, debian/control and the top CHANGELOG.md entry
+#     must agree. Uncommitted changes are NOT included.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="${1:-$ROOT}"
+EXCLUDE_TOP=" .github .gitignore .gitleaks.toml CHANGELOG.md CHANGELOG.en.md LICENSE README.md README.en.md RELEASE_NOTES_2.0.md assets docs tests scripts debian etc CLAUDE.md "
+BIN="labtower-health labtower-https labtower-modules labtower-resetpw labtower-resources labtower-sftp-backup teleporter.sh"
+EXEC_OPT="auth/resetpw.py"
+
+die() { echo "build-deb: $*" >&2; exit 1; }
+command -v dpkg-deb >/dev/null 2>&1 || die "dpkg-deb not found (Debian: apt install dpkg-dev · macOS: brew install dpkg)"
+command -v git >/dev/null 2>&1 || die "git not found"
+
+# ── Versión: las tres fuentes deben coincidir / Version: the three sources must agree
+VER="$(tr -d '[:space:]' < "$ROOT/VERSION")"
+CTRL="$(sed -n 's/^Version:[[:space:]]*//p' "$ROOT/debian/control" | head -1)"
+TOP="$(sed -n 's/^## \([^ ]*\).*/\1/p' "$ROOT/CHANGELOG.md" | head -1)"
+[ "$VER" = "$CTRL" ] && [ "$VER" = "$TOP" ] || die "version mismatch: VERSION=$VER debian/control=$CTRL CHANGELOG.md=$TOP"
+[ "$(git -C "$ROOT" show HEAD:VERSION | tr -d '[:space:]')" = "$VER" ] || die "VERSION $VER is not committed yet"
+if [ -n "$(git -C "$ROOT" status --porcelain --untracked-files=no)" ]; then
+    echo "build-deb: WARNING: there are uncommitted changes; they are NOT in the package (it is built from HEAD)" >&2
+fi
+
+TMP="$(mktemp -d)"
+trap 'rm -rf -- "$TMP"' EXIT
+SRC="$TMP/src"; PKG="$TMP/pkg"
+mkdir -p "$SRC" "$PKG/DEBIAN" "$PKG/opt/labtower" "$PKG/usr/local/bin" "$PKG/usr/share/doc/labtower" "$PKG/etc/systemd/system"
+git -C "$ROOT" archive --format=tar HEAD | tar -x -C "$SRC"
+# Fecha de los archivos y del paquete = la del commit (builds repetibles). / File and package dates = the commit's (repeatable builds).
+SOURCE_DATE_EPOCH="$(git -C "$ROOT" log -1 --format=%ct)"
+export SOURCE_DATE_EPOCH
+
+# ── /opt/labtower
+for e in "$SRC"/* "$SRC"/.[!.]*; do
+    [ -e "$e" ] || continue
+    n="$(basename -- "$e")"
+    case "$EXCLUDE_TOP" in *" $n "*) continue;; esac
+    cp -R -- "$e" "$PKG/opt/labtower/"
+done
+# ── /etc, /usr/local/bin y documentación / /etc, /usr/local/bin and docs
+cp -R -- "$SRC/etc/." "$PKG/etc/"
+for b in $BIN; do cp -- "$SRC/scripts/$b" "$PKG/usr/local/bin/$b"; done
+ln -s teleporter.sh "$PKG/usr/local/bin/teleporter"
+cp -- "$SRC/CHANGELOG.md" "$SRC/LICENSE" "$SRC/README.md" "$PKG/usr/share/doc/labtower/"
+cp -- "$SRC/debian/copyright" "$PKG/usr/share/doc/labtower/copyright"
+# ── DEBIAN: control, scripts y conffiles (todo /etc, como debhelper) / control, scripts and conffiles (all of /etc, like debhelper)
+cp -- "$SRC/debian/control" "$SRC/debian/postinst" "$SRC/debian/postrm" "$SRC/debian/preinst" "$SRC/debian/prerm" "$PKG/DEBIAN/"
+(cd "$PKG" && find etc -type f | LC_ALL=C sort | sed 's#^#/#') > "$PKG/DEBIAN/conffiles"
+
+# ── Permisos: carpetas 755, archivos 644; ejecutables solo los comandos, los scripts del paquete y resetpw.py
+# EN: Permissions: folders 755, files 644; executable only the commands, the package scripts and resetpw.py
+find "$PKG" -type d -exec chmod 755 {} +
+find "$PKG" -type f -exec chmod 644 {} +
+chmod 755 "$PKG/DEBIAN/postinst" "$PKG/DEBIAN/postrm" "$PKG/DEBIAN/preinst" "$PKG/DEBIAN/prerm"
+for b in $BIN; do chmod 755 "$PKG/usr/local/bin/$b"; done
+for f in $EXEC_OPT; do chmod 755 "$PKG/opt/labtower/$f"; done
+
+mkdir -p "$OUT"
+DEB="$OUT/labtower_${VER}_all.deb"
+dpkg-deb --root-owner-group -Zxz --build "$PKG" "$DEB" >/dev/null
+dpkg-deb --field "$DEB" Version | grep -qx "$VER" || die "the built package does not report version $VER"
+if command -v sha256sum >/dev/null 2>&1; then SUM="$(sha256sum "$DEB")"; else SUM="$(shasum -a 256 "$DEB")"; fi
+echo "built: $DEB"
+echo "files in /opt/labtower: $(find "$PKG/opt/labtower" -type f | wc -l | tr -d ' ')"
+echo "sha256: ${SUM%% *}"
+echo "SHA256SUMS line: ${SUM%% *}  $(basename -- "$DEB")"
