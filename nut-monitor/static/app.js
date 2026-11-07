@@ -36,7 +36,7 @@ const LANG={
     avStreak:'Online streak',avSince:'since monitoring began',avOnBatt:'On battery now',av24:'Availability 24 h',av7:'Availability 7 d',av30:'Availability 30 d',avLast:'Last outage',avNone:'None recorded',avCount:'Outages (30 d)',avMin:'min. charge',
     chartTitle_voltage:'Input vs output voltage',
     chartLegend_input:'Input',chartLegend_output:'Output',chartLegend_watts:'Watts',
-    chartTitle_power:'Power consumption',chartTitle_temp:'UPS temperature',chartLegend_temp:'Temperature (°C)',
+    chartTitle_power:'Power consumption',chartTitle_temp:'UPS temperature',chartLegend_temp:'Temperature (°C)',chartTitle_runtime:'Runtime',chartLegend_runtime:'Runtime (min)',
     filterAll:'All',filterActivity:'Activity',filterClear:'Clear',
     noDataChart:'No consumption data for this period',
     accumulating:'Accumulating data…',
@@ -89,7 +89,7 @@ const LANG={
     avStreak:'Tiempo en línea',avSince:'desde que se monitorea',avOnBatt:'En batería ahora',av24:'Disponibilidad 24 h',av7:'Disponibilidad 7 d',av30:'Disponibilidad 30 d',avLast:'Último corte',avNone:'Ninguno registrado',avCount:'Cortes (30 d)',avMin:'carga mín.',
     chartTitle_voltage:'Voltaje entrada vs salida',
     chartLegend_input:'Entrada',chartLegend_output:'Salida',chartLegend_watts:'Watts',
-    chartTitle_power:'Consumo',chartTitle_temp:'Temperatura de la UPS',chartLegend_temp:'Temperatura (°C)',
+    chartTitle_power:'Consumo',chartTitle_temp:'Temperatura de la UPS',chartLegend_temp:'Temperatura (°C)',chartTitle_runtime:'Autonomía',chartLegend_runtime:'Autonomía (min)',
     filterAll:'Todo',filterActivity:'Actividad',filterClear:'Limpiar',
     noDataChart:'Sin datos de consumo en este período',
     accumulating:'Acumulando datos…',
@@ -544,6 +544,7 @@ function renderDashboard(){
         ${nutChartHtml(key,'v')}
         ${nutChartHtml(key,'w')}
         ${parseFloat(row.v['ups.temperature']||row.v['battery.temperature']||0)>0?nutChartHtml(key,'t'):''}
+        ${runtime>0?nutChartHtml(key,'r'):''}
       </div>
     </td>`;
     newTbody.appendChild(dtr);
@@ -582,6 +583,7 @@ function toggleExpand(key,row){
 const vchartRanges = {};  // { key: '1h'|'1d'|'1mo'|'all' }
 const wchartRanges = {};  // idem para watts
 const tchartRanges = {};  // idem para la temperatura de la UPS / same for the UPS temperature
+const rchartRanges = {};  // idem para la autonomía (battery.runtime) / same for the runtime (battery.runtime)
 
 // Historial por rango: el servidor devuelve cada rango ya reducido (agrupado por tiempo).
 // Cada rango se pide solo cuando algún gráfico lo usa y se vuelve a pedir a su propio
@@ -629,20 +631,14 @@ window.addEventListener('resize',()=>{clearTimeout(window._fitT);window._fitT=se
 // Dibuja los gráficos de una UPS.
 // EN: Draw a UPS's charts.
 function drawChartsFor(key){
-  const id = key.replace(/[^a-z0-9]/gi,'-');
-  const vr = vchartRanges[key]||DEFAULT_RANGE, wr = wchartRanges[key]||DEFAULT_RANGE;
-  const tr = tchartRanges[key]||DEFAULT_RANGE;
-  const vrows = rangeRows(key,vr), wrows = rangeRows(key,wr), trows = rangeRows(key,tr);
-  if(vrows) drawNutChart('v', key, vrows, vr);
-  if(wrows) drawNutChart('w', key, wrows, wr);
-  if(trows) drawNutChart('t', key, trows, tr);
+  Object.keys(NUT_CH).forEach(ty=>{const r=NUT_CH[ty].ranges[key]||DEFAULT_RANGE, rows=rangeRows(key,r); if(rows) drawNutChart(ty, key, rows, r);});
 }
 // Vuelve a pedir y dibujar los gráficos del rango elegido.
 // EN: Request and draw again the charts of the chosen range.
 async function refreshRangeCharts(key){
-  const ranges = new Set([vchartRanges[key]||DEFAULT_RANGE, wchartRanges[key]||DEFAULT_RANGE, tchartRanges[key]||DEFAULT_RANGE]);
+  const ranges = new Set(Object.values(NUT_CH).map(C=>C.ranges[key]||DEFAULT_RANGE));
   const jobs=[...ranges].map(r=>fetchRangeHistory(key, r));
-  [['v',vchartRanges],['w',wchartRanges],['t',tchartRanges]].forEach(([ty,st])=>{const r=st[key]||DEFAULT_RANGE;if(VC.cmp[key+'|'+ty]&&r!=='all')jobs.push(fetchRangeHistory(key,r,true));});
+  Object.keys(NUT_CH).forEach(ty=>{const r=NUT_CH[ty].ranges[key]||DEFAULT_RANGE;if(VC.cmp[key+'|'+ty]&&r!=='all')jobs.push(fetchRangeHistory(key,r,true));});
   await Promise.all(jobs);
   drawChartsFor(key);
 }
@@ -650,12 +646,11 @@ async function refreshRangeCharts(key){
 // Cambia el rango de un gráfico (botones 1 h / 1 d / 1 mes / todo).
 // EN: Change a chart's range (1 h / 1 d / 1 month / all buttons).
 async function setVChartRange(btn, key, type){
-  type = type||'v';
-  const pfx = type==='w' ? 'wchart' : type==='t' ? 'tchart' : 'vchart';
-  const cid = pfx+'-filters-'+key.replace(/[^a-z0-9]/gi,'-');
+  type = NUT_CH[type] ? type : 'v';
+  const cid = NUT_CH[type].pfx+'-filters-'+key.replace(/[^a-z0-9]/gi,'-');
   document.querySelectorAll('#'+cid+' .vchart-filter:not(.vchart-cmp)').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  const store = type==='w' ? wchartRanges : type==='t' ? tchartRanges : vchartRanges;
+  const store = NUT_CH[type].ranges;
   store[key] = btn.dataset.range;
   await fetchRangeHistory(key, store[key]);
   if(VC.cmp[key+'|'+type]&&store[key]!=='all') await fetchRangeHistory(key, store[key], true);
@@ -677,17 +672,24 @@ function filterHistory(history, range){
   return history.filter(p=>p.ts>=(ref-cutoff));
 }
 
-// Los tres gráficos de la UPS (voltaje, consumo y temperatura) los dibuja el motor común VC (charts.js), igual que en los demás módulos.
-// EN: The three UPS charts (voltage, power and temperature) are drawn by the shared VC engine (charts.js), like in the other modules.
+// Los gráficos de la UPS (voltaje, consumo, temperatura y autonomía) los dibuja el motor común VC (charts.js), igual que en los demás módulos.
+// EN: The UPS charts (voltage, power, temperature and runtime) are drawn by the shared VC engine (charts.js), like in the other modules.
 const NUT_CH = {
   v: {pfx:'vchart', tip:'vtooltip', title:'chartTitle_voltage', ranges:vchartRanges},
   w: {pfx:'wchart', tip:'wtooltip', title:'chartTitle_power',   ranges:wchartRanges},
-  t: {pfx:'tchart', tip:'ttooltip', title:'chartTitle_temp',    ranges:tchartRanges}
+  t: {pfx:'tchart', tip:'ttooltip', title:'chartTitle_temp',    ranges:tchartRanges},
+  r: {pfx:'rchart', tip:'rtooltip', title:'chartTitle_runtime', ranges:rchartRanges}
 };
 function nutSeries(type){
   if(type==='w') return {keys:['watts'], series:[{k:'watts',c:'#f97316',l:t('chartLegend_watts'),f:v=>Math.round(v)+' W'}],
     axis:v=>Math.round(v)+'W', pl:40, pr:36, scale:vals=>[0,Math.ceil(Math.max(...vals)*1.15)||10],
     extra:p=>p.load?[t('gaugeLabel_load')+': '+Math.round(p.load)+'%']:[]};
+  // Autonomía: el historial la guarda en segundos y se dibuja en minutos; el tooltip agrega la batería y la carga.
+  // EN: Runtime: the history stores it in seconds and it is drawn in minutes; the tooltip adds the battery charge and the load.
+  if(type==='r') return {keys:['rtmin'], series:[{k:'rtmin',c:'#8b5cf6',l:t('chartLegend_runtime'),f:v=>Math.round(v)+' min'}],
+    axis:v=>Math.round(v)+'m', pl:40, pr:40, scale:vals=>[0,Math.ceil(Math.max(...vals)*1.15)||10],
+    prep:p=>({rtmin:p.runtime>0?p.runtime/60:null}),
+    extra:p=>[p.charge?'🔋 '+t('gaugeLabel_battery')+': '+Math.round(p.charge)+'%':'',p.load?t('gaugeLabel_load')+': '+Math.round(p.load)+'%':''].filter(Boolean)};
   if(type==='t') return {keys:['temp'], series:[{k:'temp',c:'#ef4444',l:t('chartLegend_temp'),f:v=>v.toFixed(1)+' °C'}],
     axis:v=>Math.round(v)+'°', pl:34, pr:30, scale:vals=>{const lo=Math.floor(Math.min(...vals)-2);return [lo,Math.max(Math.ceil(Math.max(...vals)+2),lo+6)]},
     extra:()=>[]};
@@ -708,7 +710,8 @@ function drawNutChart(type,key,rows,range){
   const C=NUT_CH[type], id=key.replace(/[^a-z0-9]/gi,'-'), cv=document.getElementById(C.pfx+'-'+id); if(!cv) return;
   const S=nutSeries(type), ups=key.split('/').slice(1).join('/');
   const cmpOn=VC.cmp[key+'|'+type]&&range!=='all', prev=cmpOn?rangeRows(key,range,true):null;
-  VC.draw(cv,{pts:nz(filterHistory(rows,range),S.keys), prev:prev?nz(prev,S.keys):null, series:S.series, range, h:null, pl:S.pl, pr:S.pr, scale:S.scale,
+  const fix=r=>r&&S.prep?r.map(p=>Object.assign({},p,S.prep(p))):r;
+  VC.draw(cv,{pts:nz(fix(filterHistory(rows,range)),S.keys), prev:prev?nz(fix(prev),S.keys):null, series:S.series, range, h:null, pl:S.pl, pr:S.pr, scale:S.scale,
     axis:S.axis, lastLabels:true, extra:S.extra, mod:'nut', evFilter:e=>!e.p||!e.p.n||e.p.n===ups, tipId:C.tip+'-'+id});
 }
 async function toggleVCmp(btn,key,type){
