@@ -72,7 +72,7 @@ input.err{border-color:var(--red);box-shadow:0 0 0 3px var(--red-dim)}
 }
 /* ── Main ── */
 .main{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-width:0;min-height:100vh}
-.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;min-height:54px;flex-wrap:wrap;row-gap:6px;display:flex;align-items:center;justify-content:space-between;gap:16px;position:sticky;top:0;z-index:50}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:6px 24px;min-height:54px;flex-wrap:wrap;row-gap:6px;display:flex;align-items:center;justify-content:space-between;gap:16px;position:sticky;top:0;z-index:50}
 .tb-left{display:flex;align-items:center;gap:10px;flex:1}
 .tb-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .search-wrap{position:relative;max-width:260px;width:100%}
@@ -103,6 +103,11 @@ input.err{border-color:var(--red);box-shadow:0 0 0 3px var(--red-dim)}
 .stat-body .stat-lbl{font-size:11px;color:var(--text-dim);margin-top:2px;font-weight:500}
 /* ── Grid ── */
 .main-grid{display:grid;grid-template-columns:1fr 316px;gap:18px;align-items:start}
+/* Si no hay espacio para la tabla y el panel «Agregar equipo» lado a lado (se mide el área de contenido, no la ventana: la barra lateral
+   también ocupa), el panel pasa abajo. EN: If the table and the "Add device" panel do not fit side by side (the content area is measured, not
+   the window: the sidebar takes room too), the panel moves below. */
+.content{container-type:inline-size}
+@container (max-width:1080px){.main-grid{grid-template-columns:minmax(0,1fr)}}
 /* ── Card ── */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
 .card-hd{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -192,9 +197,6 @@ td{padding:10px 16px;vertical-align:middle}
 #wakeall-list{max-height:150px;overflow-y:auto;margin-bottom:18px;border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 12px;font-size:12px;font-family:var(--mono);color:var(--text-mid);display:flex;flex-direction:column;gap:4px;background:var(--bg)}
 .spin{display:inline-block;animation:spin .5s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-@media(max-width:1180px){
-  .main-grid{grid-template-columns:1fr}     /* tablets: the 'Add device' panel goes below the table instead of squeezing it */
-}
 @media(max-width:960px){
   .sidebar{display:none}.main{margin-left:0}
   .stats-row{grid-template-columns:1fr 1fr}

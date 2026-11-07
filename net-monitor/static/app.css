@@ -50,7 +50,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 .dot-Windows{background:#0078d4}.dot-Linux{background:#f97316}.dot-macOS{background:#8b5cf6}.dot-iOS{background:#22c55e}.dot-IoT{background:#eab308}.dot-Android{background:#ef4444}.dot-BSD{background:#14b8a6}.dot-Desconocido{background:#94a3b8}
 /* Main */
 .main{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-width:0;min-height:100vh}
-.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;min-height:54px;flex-wrap:wrap;row-gap:6px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:6px 24px;min-height:54px;flex-wrap:wrap;row-gap:6px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
 .topbar-title{white-space:nowrap;font-size:14px;font-weight:600;color:var(--text)}
 .tb-actions{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
 .overlay{position:fixed;inset:0;background:rgba(15,20,30,.45);backdrop-filter:blur(2px);z-index:8000;display:none;align-items:center;justify-content:center}
@@ -358,11 +358,6 @@ label.chk{flex-direction:row!important;align-items:center;gap:6px!important}
 .vchart-filter{font-size:11px;font-weight:500;padding:3px 9px;min-width:34px;border-radius:99px;border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer;transition:all .15s}
 .vchart-filter:hover{border-color:var(--border-b);color:var(--text)}
 .vchart-filter.active{background:var(--blue);border-color:var(--blue);color:#fff}
-/* Same layout in both charts on narrow screens: title + ranges on the first line, legend below */
-@media(max-width:700px){
-  .vchart-header{grid-template-columns:1fr auto;grid-template-areas:"title filters" "legend legend"}
-  .vchart-legend{justify-content:flex-start}
-}
 .vchart-body{padding:6px 12px 8px}
 canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
 /* Último escaneo fallido / failed last scan */

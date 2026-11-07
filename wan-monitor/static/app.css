@@ -53,7 +53,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 .btn-add-cluster svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.5;flex-shrink:0}
 /* Main */
 .main{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-width:0;min-height:100vh}
-.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;min-height:54px;flex-wrap:wrap;row-gap:6px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:6px 24px;min-height:54px;flex-wrap:wrap;row-gap:6px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
 .topbar-title{white-space:nowrap;font-size:14px;font-weight:600;color:var(--text)}
 .topbar-sub{font-size:12px;color:var(--text-dim);font-family:var(--mono)}
 .tb-actions{display:inline-flex;align-items:center;gap:8px}
@@ -280,6 +280,8 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
 .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
 .wan-table{width:100%;border-collapse:collapse}
 .wan-table thead th{padding:7px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);white-space:nowrap}
+/* Títulos de columna largos («Tiempo entre cortes») saltan de línea si la tabla no cabe. EN: Long column titles ("Time between outages") wrap if the table does not fit. */
+@container (max-width:900px){.wan-table thead th{white-space:normal;vertical-align:bottom}}
 .wan-table tbody td{padding:9px 14px;font-size:13px;border-bottom:1px solid var(--border);white-space:nowrap;vertical-align:middle}
 .wan-table tbody tr:last-child td{border-bottom:none}
 .wan-table tbody tr{cursor:pointer;transition:background .12s}
@@ -287,7 +289,9 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
 .wan-table tbody tr.sel{background:var(--wan-dim,rgba(14,165,233,.1));box-shadow:inset 3px 0 0 var(--wan)}
 .sum-name{font-weight:600;color:var(--text)}
 .sum-sub{font-size:11px;color:var(--text-dim);font-family:var(--mono)}
-@media (max-width:760px){.wan-table .c-model,.wan-table .c-temp{display:none}.wan-table thead th,.wan-table tbody td{padding-left:8px;padding-right:8px}}
+/* Nombre y destino largos (URL, host) saltan de línea en vez de ensanchar la tabla. EN: Long names and targets (URL, host) wrap instead of widening the table. */
+.wan-table .sum-name,.wan-table .sum-sub{white-space:normal;overflow-wrap:anywhere;min-width:16ch}
+@container (max-width:760px){.wan-table .c-model,.wan-table .c-temp{display:none}.wan-table thead th,.wan-table tbody td{padding-left:8px;padding-right:8px}}
 
 /* Fila expandible del resumen y su detalle (mismo estilo que UPS Monitor) / Expandable summary row and its detail (same look as UPS Monitor) */
 .wan-table tbody tr.wan-row.expanded{background:var(--wan-dim,rgba(14,165,233,.1));box-shadow:inset 3px 0 0 var(--wan)}
@@ -307,6 +311,8 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
 .circle-bg{fill:none;stroke:var(--bg);stroke-width:4.5}
 .circle-fill{fill:none;stroke-width:4.5;stroke-linecap:round;transition:stroke-dashoffset .8s ease,stroke .3s}
 .circle-val{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)}
+/* Texto largo (p. ej. 99.236%) en letra más chica para que quepa en el anillo. EN: Long text (e.g. 99.236%) in a smaller font so it fits the ring. */
+.circle-val.sm{font-size:9.5px;letter-spacing:-.04em}
 .gauge-unit{font-size:10px;color:var(--text-dim);min-height:12px}
 .gauge-num{display:flex;align-items:center;justify-content:center;height:56px}
 .runtime-num{font-family:var(--mono);font-size:20px;font-weight:600;color:var(--text);line-height:1}
@@ -325,9 +331,13 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
 .vchart-tooltip{position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:7px 10px;font-size:11px;font-family:var(--mono);color:var(--text);pointer-events:none;z-index:100;box-shadow:var(--shadow-md,var(--shadow));white-space:nowrap;display:none}
 .vchart-tooltip.show{display:block}
 @media(max-width:1180px){.wan-gauges{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:760px){.wan-gauges{grid-template-columns:1fr 1fr}.wan-table .c-spark{display:none}.vchart-header{grid-template-columns:1fr auto;grid-template-areas:"title filters" "legend legend"}.vchart-legend{justify-content:flex-start}}
+@media(max-width:760px){.wan-gauges{grid-template-columns:1fr 1fr}.wan-table .c-spark{display:none}}
 
-@media(max-width:1180px){.wan-table .c-spark,.wan-table .c-model{display:none}}
+/* Si la tabla no cabe en su tarjeta (se mide la tarjeta, no la ventana: la barra lateral también ocupa espacio), se ocultan el modelo y la
+   gráfica pequeña. EN: If the table does not fit its card (the card is measured, not the window: the sidebar takes room too), the model and
+   the small chart are hidden. */
+.tbl-wrap{container-type:inline-size}
+@container (max-width:1100px){.wan-table .c-spark,.wan-table .c-model{display:none}}
 
 /* WAN Monitor */
 .wan-gauges{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}

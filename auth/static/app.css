@@ -29,7 +29,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 .btn-logout{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px;padding:2px 4px;transition:color .15s;line-height:1}
 .btn-logout:hover{color:var(--red)}
 .main{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-width:0}
-.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;min-height:54px;flex-wrap:wrap;row-gap:6px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:6px 24px;min-height:54px;flex-wrap:wrap;row-gap:6px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
 .topbar-title{white-space:nowrap;font-size:14px;font-weight:600;color:var(--text)}
 .content{padding:24px;display:flex;flex-direction:column;gap:20px}
 .stats-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
@@ -55,6 +55,9 @@ tbody tr:last-child{border-bottom:none}
 tbody tr:hover{background:var(--bg)}
 td{padding:11px 16px;vertical-align:middle}
 .uname{font-weight:600;font-size:13.5px;color:var(--text)}
+/* En la tabla (que se desplaza de lado) el usuario y las fechas van en una línea; en celular, donde cada usuario es una tarjeta, el nombre puede saltar.
+   EN: In the table (which scrolls sideways) the user and the dates stay on one line; on phones, where each user is a card, the name may wrap. */
+#users-table .uname,#users-table .ucreated{white-space:nowrap}
 .ucreated{font-size:11px;color:var(--text-dim);font-family:var(--mono)}
 .perm-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;text-transform:uppercase;letter-spacing:.3px}
 .perm-admin{background:var(--purple-dim);color:var(--purple)}
@@ -209,6 +212,7 @@ input.err{border-color:var(--red)}
   #users-table,#users-table tbody{display:block;width:100%}
   #users-tbody tr{display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;padding:12px 14px}
   #users-tbody td{padding:0;display:block;min-width:0}
+  #users-table .uname{white-space:normal;overflow-wrap:anywhere}
   #users-tbody td:first-child{grid-column:1;grid-row:1}
   #users-tbody td.col-actions{grid-column:2;grid-row:1;white-space:nowrap}
   #users-tbody td[data-label]{grid-column:1/-1;display:flex;align-items:center;gap:10px}

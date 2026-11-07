@@ -37,12 +37,20 @@ body{font-family:var(--sans);font-variant-numeric:tabular-nums}
 .card,.node-card,.stat-card,.vchart-section{border-color:var(--border);box-shadow:var(--shadow)}
 /* Títulos de bloque estilo NOC: pequeños, en mayúsculas y espaciados. EN: NOC-style block titles: small, uppercase, spaced. */
 .ch h2,.card-title,.section-title,.vchart-title{font-size:12px!important;font-weight:650;text-transform:uppercase;letter-spacing:.09em;color:var(--text-mid)}
+/* Cabecera de los gráficos según el ancho de su tarjeta (no de la ventana): título, leyenda y rangos en una fila; en una tarjeta angosta, la leyenda baja
+   a una segunda fila, y en una muy angosta cada parte va en su fila. EN: Chart header by the width of its card (not the window): title, legend and
+   ranges in one row; in a narrow card the legend moves to a second row, and in a very narrow one each part gets its own row. */
+.vchart-section{container-type:inline-size}
+@container (max-width:600px){.vchart-header{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"title filters" "legend legend"}.vchart-legend{justify-content:flex-start}}
+@container (max-width:380px){.vchart-header{grid-template-columns:minmax(0,1fr);grid-template-areas:"title" "filters" "legend"}.vchart-filters{flex-wrap:wrap}}
 /* Cifras grandes y seguras, estilo Apple. EN: Big, confident figures, Apple style. */
 .kpi b,.stat-val,.gauge-num,.runtime-num,.circle-val{font-weight:700;letter-spacing:-.03em}
 .kpi,.stat-card .stat-val{font-feature-settings:"tnum"}
 .kpi{border-radius:12px}
 /* Barra superior translúcida y lateral más oscuro, con marca de acento en el elemento activo (estilo vSphere). EN: translucent top bar and darker sidebar with an accent mark on the active item (vSphere style). */
 .topbar{background:var(--glass)!important;-webkit-backdrop-filter:saturate(1.6) blur(18px);backdrop-filter:saturate(1.6) blur(18px);border-bottom-color:var(--border)}
+/* Si la barra superior no cabe en una fila, el grupo de la derecha baja pero sigue a la derecha. EN: If the top bar does not fit one row, the right-hand group wraps but stays on the right. */
+.topbar>:last-child:not(:first-child){margin-left:auto}
 .sidebar{background:var(--sidebar-bg)!important;border-right-color:var(--border)}
 .nav-item{border-radius:6px}
 .nav-item.active{box-shadow:inset 3px 0 0 currentColor;border-radius:0 8px 8px 0}

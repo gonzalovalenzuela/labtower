@@ -556,7 +556,7 @@ function speedCard(){
   let body;
   if(!last)body=`<div class="wan-empty">${esc(t('speedNone'))}</div>`;
   else if(last.error)body=`<div class="wan-empty" style="color:var(--red)">${esc(t('speedErr'))}: ${esc(last.error)}</div>`;
-  else body=`<div class="wan-gauges" style="grid-template-columns:repeat(3,1fr);padding:12px 14px">${bigNum(t('speedDown'),last.down==null?'—':fmtNum(Math.round(last.down*10)/10),'Mb/s','var(--green)')}${bigNum(t('speedUp'),last.up==null?'—':fmtNum(Math.round(last.up*10)/10),last.up==null?'':'Mb/s','var(--blue)')}${bigNum(t('speedPing'),last.ping==null?'—':last.ping,last.ping==null?'':'ms')}</div>
+  else body=`<div class="wan-gauges" style="grid-template-columns:repeat(3,1fr);padding:12px 14px">${bigNum(t('speedDown'),last.down==null?'—':fmtNum(Math.round(last.down*10)/10),'Mb/s','var(--green)')}${bigNum(t('speedUp'),last.up==null?'—':fmtNum(Math.round(last.up*10)/10),last.up==null?'':'Mb/s','var(--blue)')}${bigNum(t('speedPing'),last.ping==null?'—':fmtNum(Math.round(last.ping*10)/10),last.ping==null?'':'ms')}</div>
     ${planRows(cfg,sp,last)}${speedExtra()}${kv(t('speedServer'),esc(last.server||'—')+(cfg.engine&&cfg.engine!=='builtin'?' <span class="sum-sub">'+esc(cfg.engine==='ookla'?'Ookla':'LibreSpeed')+'</span>':''))}${kv(t('lastCheck'),esc(fmtDate(last.ts)))}`;
   const next=!cfg.enabled||!cfg.every_minutes?t('speedOff'):(W.next_speed?t('speedNext',fmtDate(W.next_speed)):'');
   return `<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('speed'))}</div>${btn}</div>${body}<div class="wan-note">${esc(next)}<br>${esc(t('speedHint'))}</div></div>`;
@@ -792,7 +792,7 @@ function bar(p,w=80,c=92,color){p=Math.max(0,Math.min(100,Number(p)||0));return 
 function kv(k,v){return `<div class="kv"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`;}
 function ring(label,pct,color,txt){
   const C=2*Math.PI*14.5,p=pct==null?0:Math.max(0,Math.min(100,pct));
-  return `<div class="gauge-box"><span class="gauge-lbl">${esc(label)}</span><div class="circle-wrap"><svg viewBox="0 0 36 36"><circle class="circle-bg" cx="18" cy="18" r="14.5"/><circle class="circle-fill" cx="18" cy="18" r="14.5" style="opacity:${pct==null?0:1};stroke:${color};stroke-dasharray:${C};stroke-dashoffset:${C*(1-p/100)}"/></svg><div class="circle-val">${esc(txt==null?(pct==null?'—':Math.round(pct)+'%'):txt)}</div></div></div>`;
+  return `<div class="gauge-box"><span class="gauge-lbl">${esc(label)}</span><div class="circle-wrap"><svg viewBox="0 0 36 36"><circle class="circle-bg" cx="18" cy="18" r="14.5"/><circle class="circle-fill" cx="18" cy="18" r="14.5" style="opacity:${pct==null?0:1};stroke:${color};stroke-dasharray:${C};stroke-dashoffset:${C*(1-p/100)}"/></svg><div class="circle-val${String(txt==null?(pct==null?'—':Math.round(pct)+'%'):txt).length>5?' sm':''}">${esc(txt==null?(pct==null?'—':Math.round(pct)+'%'):txt)}</div></div></div>`;
 }
 function bigNum(label,val,unit,color){
   return `<div class="gauge-box"><span class="gauge-lbl">${esc(label)}</span><div class="gauge-num"><span class="runtime-num" style="color:${color||'var(--text)'}">${esc(val)}</span></div><span class="gauge-unit">${esc(unit||'')}</span></div>`;

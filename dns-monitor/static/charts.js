@@ -102,7 +102,11 @@
     marks(ctx, cv, o.mod, pts, xOf, PT, H2, o.evFilter);
     ctx.fillStyle = cDim; ctx.font = '9px DM Mono,monospace'; ctx.textAlign = 'center';
     const step = Math.max(1, Math.floor(N / 5)), longRange = range === '1w' || range === '1mo' || range === 'all';
-    for (let i = 0; i < N; i += step) { const d = new Date(pts[i].ts * 1000); ctx.fillText(longRange ? d.toLocaleDateString(loc(), {day: '2-digit', month: '2-digit'}) : PCT.time(d), xOf(i), H - 3); }
+    // Etiquetas de tiempo centradas en su punto, pero sin salirse del borde del gráfico. EN: Time labels centred on their point, but never past the chart edge.
+    for (let i = 0; i < N; i += step) {
+      const d = new Date(pts[i].ts * 1000), tx = longRange ? d.toLocaleDateString(loc(), {day: '2-digit', month: '2-digit'}) : PCT.time(d), hw = ctx.measureText(tx).width / 2;
+      ctx.fillText(tx, Math.max(hw + 1, Math.min(W - hw - 1, xOf(i))), H - 3);
+    }
     if (o.lastLabels) {                                                      // current value at the right edge (UPS charts)
       const last = pts[N - 1]; ctx.font = 'bold 9px DM Mono,monospace'; ctx.textAlign = 'left';
       S.forEach((x, si) => { if (last[x.k] != null) { ctx.fillStyle = x.c; ctx.fillText(x.f(Number(last[x.k])).replace(/\s+/g, ''), W - PR + 4, yOf(Number(last[x.k])) + 3 + si * 9); } });

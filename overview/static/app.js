@@ -271,7 +271,7 @@ function renderVPN(d){
     const sn=n.snap||{},x=sn.data;
     if(sn.error){sev=worst(sev,'warn');issues.push({lv:'warn',m:'vpn',t:`${n.name}: ${T('vpnoff')}${why(sn.error)}`,href:'/vpn/'})}
     body+=`<div class="unit"><div class="uh">${esc(n.name)} ${pill(sn.error?'warn':!sn.ts?'ok':'ok',sn.error?T('attn'):!sn.ts?'…':'OK')}</div>
-     <div class="row"><span class="l">${esc(({tailscale:'Tailscale',openvpn:'OpenVPN',wireguard:'WireGuard'})[n.type]||n.type)}</span><span class="v vn">${x?`${esc(x.online)} ${T('vpnconn')}`:T('vpnwait')}</span></div></div>`;
+     <div class="row"><span class="l">${esc(({tailscale:'Tailscale',openvpn:'OpenVPN',wireguard:'WireGuard'})[n.type]||n.type)}</span><span class="v vn">${x&&x.online!=null?`${esc(x.online)} ${T('vpnconn')}`:T(sn.error?'vpnoff':'vpnwait')}</span></div></div>`;
   });
   el.innerHTML=`<div class="ch"><h2>${T('vpn')}</h2>${pill(sev,sev==='ok'?'OK':T('attn'))}<a class="go" href="/vpn/">${T('open')}</a></div>`+body;
   return sev;

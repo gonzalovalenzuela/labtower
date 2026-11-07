@@ -53,7 +53,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 .btn-add-cluster svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.5;flex-shrink:0}
 /* Main */
 .main{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-width:0;min-height:100vh}
-.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;min-height:54px;flex-wrap:wrap;row-gap:6px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:6px 24px;min-height:54px;flex-wrap:wrap;row-gap:6px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
 .topbar-title{white-space:nowrap;font-size:14px;font-weight:600;color:var(--text)}
 .topbar-sub{font-size:12px;color:var(--text-dim);font-family:var(--mono)}
 .tb-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
@@ -286,7 +286,9 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
 .nas-table tbody tr.sel{background:var(--vpn-dim,rgba(99,102,241,.1));box-shadow:inset 3px 0 0 var(--vpn)}
 .sum-name{font-weight:600;color:var(--text)}
 .sum-sub{font-size:11px;color:var(--text-dim);font-family:var(--mono)}
-@media (max-width:760px){.nas-table .c-model,.nas-table .c-temp{display:none}.nas-table thead th,.nas-table tbody td{padding-left:8px;padding-right:8px}}
+/* Nombre y destino largos (URL, host) saltan de línea en vez de ensanchar la tabla. EN: Long names and targets (URL, host) wrap instead of widening the table. */
+.nas-table .sum-name,.nas-table .sum-sub{white-space:normal;overflow-wrap:anywhere;min-width:16ch}
+@container (max-width:760px){.nas-table .c-model,.nas-table .c-temp{display:none}.nas-table thead th,.nas-table tbody td{padding-left:8px;padding-right:8px}}
 
 /* Fila expandible del resumen y su detalle (mismo estilo que UPS Monitor) / Expandable summary row and its detail (same look as UPS Monitor) */
 .nas-table tbody tr.nas-row.expanded{background:var(--vpn-dim,rgba(99,102,241,.1));box-shadow:inset 3px 0 0 var(--vpn)}
@@ -324,9 +326,13 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
 .vchart-tooltip{position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:7px 10px;font-size:11px;font-family:var(--mono);color:var(--text);pointer-events:none;z-index:100;box-shadow:var(--shadow-md,var(--shadow));white-space:nowrap;display:none}
 .vchart-tooltip.show{display:block}
 @media(max-width:1180px){.nas-gauges{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:760px){.nas-gauges{grid-template-columns:1fr 1fr}.nas-table .c-spark{display:none}.vchart-header{grid-template-columns:1fr auto;grid-template-areas:"title filters" "legend legend"}.vchart-legend{justify-content:flex-start}}
+@media(max-width:760px){.nas-gauges{grid-template-columns:1fr 1fr}.nas-table .c-spark{display:none}}
 
-@media(max-width:1180px){.nas-table .c-spark,.nas-table .c-model{display:none}}
+/* Si la tabla no cabe en su tarjeta (se mide la tarjeta, no la ventana: la barra lateral también ocupa espacio), se ocultan el modelo y la
+   gráfica pequeña. EN: If the table does not fit its card (the card is measured, not the window: the sidebar takes room too), the model and
+   the small chart are hidden. */
+.tbl-wrap{container-type:inline-size}
+@container (max-width:1100px){.nas-table .c-spark,.nas-table .c-model{display:none}}
 /* Teléfono: tabla resumen más compacta para que quepan todas las columnas sin cortarse / EN: Phone: compact summary table so every column fits */
 @media(max-width:520px){.nas-table thead th{padding:7px 4px;font-size:9.5px;letter-spacing:.1px}.nas-table tbody td{padding:9px 4px;font-size:12px}.nas-table thead th:first-child,.nas-table tbody td:first-child{padding-left:8px}.nas-table .sum-sub{font-size:10px}.nas-table .pill,.nas-table .badge{font-size:10px;padding:2px 6px}}
 
