@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.8e — 2026-11-07
+
+- **Nuevo:** UPS Monitor: gráfico de autonomía por UPS, en minutos, con la batería y la carga en el detalle. Solo aparece si la UPS informa la autonomía.
+- **Arreglo:** Proxmox Monitor: los encabezados de los gráficos del nodo se desalineaban. Ahora los gráficos se ordenan en 4, 2 o 1 columna según el ancho disponible.
+- **Arreglo:** presentación en todas las resoluciones y módulos: la cabecera de los gráficos, las columnas de las tablas y los textos largos se ajustan al ancho de su tarjeta en vez de montarse o cortarse. Las etiquetas del eje ya no se salen del gráfico y la barra superior deja margen cuando pasa a dos filas.
+
 ## 2.1.8d — 2026-11-06
 
 - **Arreglo:** Proxmox Monitor: si el certificado cambió y el cluster no tiene datos (falla desde la primera lectura, por ejemplo después de reiniciar), la página quedaba en «Conectando…» y no se podía volver a fijar. Ahora explica el cambio y muestra «Volver a fijar certificado».
