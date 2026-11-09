@@ -282,6 +282,12 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
 .wan-table thead th{padding:7px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);white-space:nowrap}
 /* Títulos de columna largos («Tiempo entre cortes») saltan de línea si la tabla no cabe. EN: Long column titles ("Time between outages") wrap if the table does not fit. */
 @container (max-width:900px){.wan-table thead th{white-space:normal;vertical-align:bottom}}
+/* Calidad y disponibilidad: 11 columnas; los encabezados pasan a dos líneas y el relleno se achica antes de desbordar.
+   EN: Quality and availability: 11 columns; headers wrap to two lines and padding shrinks before overflowing. */
+.st-table thead th{white-space:normal;vertical-align:bottom}
+@container (max-width:1100px){.wan-table.st-table thead th,.wan-table.st-table tbody td{padding-left:8px;padding-right:8px}}
+@container (max-width:800px){.wan-table.st-table thead th,.wan-table.st-table tbody td{padding-left:5px;padding-right:5px}}
+@container (max-width:720px){.wan-table.st-table thead th,.wan-table.st-table tbody td{padding-left:3px;padding-right:3px}}
 .wan-table tbody td{padding:9px 14px;font-size:13px;border-bottom:1px solid var(--border);white-space:nowrap;vertical-align:middle}
 .wan-table tbody tr:last-child td{border-bottom:none}
 .wan-table tbody tr{cursor:pointer;transition:background .12s}

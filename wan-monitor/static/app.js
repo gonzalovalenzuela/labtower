@@ -117,6 +117,8 @@ const LANG={
  "stSamples": "Samples",
  "stAvail": "Availability",
  "stOutN": "Outages",
+ "stOutLan": "LAN outages",
+ "stOutWan": "WAN outages",
  "stOutMean": "Mean duration",
  "stOutLong": "Longest",
  "stMtbf": "Time between outages",
@@ -310,6 +312,8 @@ const LANG={
  "stSamples": "Muestras",
  "stAvail": "Disponibilidad",
  "stOutN": "Cortes",
+ "stOutLan": "Cortes LAN",
+ "stOutWan": "Cortes WAN",
  "stOutMean": "Duración media",
  "stOutLong": "El más largo",
  "stMtbf": "Tiempo entre cortes",
@@ -531,11 +535,14 @@ function miniBars(items,color){
 function statsCard(){
   const st=W.stats;if(!st)return '';
   const L=st.latency||{},A=st.avail||{};
-  const row=(lab,k)=>{const l=L[k]||{},a=A[k]||{};
-    return `<tr><td>${esc(lab)}</td><td>${l.n?ms(l.p50):'—'}</td><td>${l.n?ms(l.p95):'—'}</td><td>${l.n?ms(l.p99):'—'}</td><td>${a.pct==null?'—':esc(a.pct)+'%'}</td><td>${a.count==null?'—':(a.count?esc(a.count):esc(t('stNone')))}</td><td>${a.mean==null?'—':esc(fmtDur(a.mean))}</td><td>${a.longest?esc(fmtDur(a.longest)):'—'}</td><td>${a.mtbf==null?'—':esc(fmtDur(a.mtbf))}</td></tr>`;};
+  // Cortes de la red local y de la WAN (WAN = todo lo que no es la red local: WAN del router e Internet).
+  // EN: Local network and WAN outages (WAN = everything that is not the local network: router WAN and Internet).
+  const lanWan=a=>{const s=a.scopes||{};return a.count==null?['—','—']:[esc(s.lan||0),esc((s.wan||0)+(s.internet||0))];};
+  const row=(lab,k)=>{const l=L[k]||{},a=A[k]||{},[lan,wan]=lanWan(a);
+    return `<tr><td>${esc(lab)}</td><td>${l.n?ms(l.p50):'—'}</td><td>${l.n?ms(l.p95):'—'}</td><td>${l.n?ms(l.p99):'—'}</td><td>${a.pct==null?'—':esc(a.pct)+'%'}</td><td>${a.count==null?'—':(a.count?esc(a.count):esc(t('stNone')))}</td><td>${lan}</td><td>${wan}</td><td>${a.mean==null?'—':esc(fmtDur(a.mean))}</td><td>${a.longest?esc(fmtDur(a.longest)):'—'}</td><td>${a.mtbf==null?'—':esc(fmtDur(a.mtbf))}</td></tr>`;};
   const sc=A['30d']&&A['30d'].count?A['30d'].scopes:null;
   const scTxt=sc?['lan','wan','internet'].filter(k=>sc[k]).map(k=>t(k==='lan'?'scopeLan':k==='wan'?'scopeWan':'scopeInternet')+': '+sc[k]).join(' · '):'';
-  return `<div class="node-card wide"><div class="node-hd"><div class="node-name">${esc(t('stTitle'))}</div></div><div class="tbl-wrap"><table class="wan-table"><thead><tr><th></th><th>${esc(t('stP50'))}</th><th>p95</th><th>p99</th><th>${esc(t('stAvail'))}</th><th>${esc(t('stOutN'))}</th><th>${esc(t('stOutMean'))}</th><th>${esc(t('stOutLong'))}</th><th>${esc(t('stMtbf'))}</th></tr></thead><tbody>${row('24 h','24h')}${row('7 d','7d')}${row('30 d','30d')}</tbody></table></div>${scTxt?`<div class="wan-note">${esc(t('stByScope'))} (30 d): ${esc(scTxt)}</div>`:''}</div>`;
+  return `<div class="node-card wide"><div class="node-hd"><div class="node-name">${esc(t('stTitle'))}</div></div><div class="tbl-wrap"><table class="wan-table st-table"><thead><tr><th></th><th>${esc(t('stP50'))}</th><th>p95</th><th>p99</th><th>${esc(t('stAvail'))}</th><th>${esc(t('stOutN'))}</th><th>${esc(t('stOutLan'))}</th><th>${esc(t('stOutWan'))}</th><th>${esc(t('stOutMean'))}</th><th>${esc(t('stOutLong'))}</th><th>${esc(t('stMtbf'))}</th></tr></thead><tbody>${row('24 h','24h')}${row('7 d','7d')}${row('30 d','30d')}</tbody></table></div>${scTxt?`<div class="wan-note">${esc(t('stByScope'))} (30 d): ${esc(scTxt)}</div>`:''}</div>`;
 }
 function speedExtra(){
   const sp=W.stats&&W.stats.speed;if(!sp||!sp.n)return '';
