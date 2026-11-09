@@ -65,9 +65,9 @@ All screens (light and dark, 4 sizes) are in [`docs/screenshots/`](docs/screensh
 - **Install on a VM or a Raspberry Pi (Debian 12+, Ubuntu, DietPi or Raspberry Pi OS):**
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.8/labtower_2.1.8_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.9/labtower_2.1.9_all.deb
 sudo apt-get update
-sudo apt-get install -y ./labtower_2.1.8_all.deb
+sudo apt-get install -y ./labtower_2.1.9_all.deb
 ```
 
 Use `apt-get install ./file.deb`, not `dpkg -i`, so `apt` installs the dependencies. Then open `http://<labtower-ip>/`.
@@ -116,8 +116,8 @@ librespeed-cli --version
 ## Update
 
 ```bash
-wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.8/labtower_2.1.8_all.deb
-sudo apt-get install -y ./labtower_2.1.8_all.deb
+wget https://github.com/gonzalovalenzuela/labtower/releases/download/2.1.9/labtower_2.1.9_all.deb
+sudo apt-get install -y ./labtower_2.1.9_all.deb
 labtower-health
 ```
 

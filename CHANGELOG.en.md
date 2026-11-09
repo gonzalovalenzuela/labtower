@@ -2,6 +2,57 @@
 
 English version of the release notes, from 2.0 on. The full history, including development builds, is in [CHANGELOG.md](CHANGELOG.md) (Spanish).
 
+## 2.1.9 — 2026-11-09
+
+### New module: Uptime Monitor
+- **New:** Uptime Monitor (`/uptime/`, service `labtower-uptime`). Checks services over HTTP(S), TCP and DNS at an interval (60 s by default, from 20 s to 1 h). HTTP(S): expected response code and optional keyword. DNS: A or AAAA record, with the server's resolver or a given one, and an optional expected IP.
+- **New:** a service is marked down after 3 failures in a row (configurable from 1 to 6); until then it shows "Pending".
+- **New:** a bar with the last 50 checks, 24 h, 7 and 30-day availability, and a response-time chart with ranges and comparison with the previous period.
+- **New:** HTTPS certificate expiry, warning 14 days ahead. "Do not verify the certificate" accepts self-signed ones and still checks the expiry.
+- **New:** monitors are reordered by dragging (↑ ↓ buttons on touch screens).
+- **New:** per-user "Uptime Monitor" permission. On upgrade, whoever administers WOL becomes administrator and the rest get read-only. It is included in backups and can be turned off with `labtower-modules`.
+- **New:** Overview: Uptime card and events for down, recovered and certificate expiring or expired.
+
+### Overview and all modules
+- **Improvement:** each module's "Attention" notice shows the detail of what is failing. Proxmox with a failed read no longer shows as OK, and the NAS, DNS, VPN, Uptime and unresponsive-module notices include the error.
+- **Fix:** on refresh, the page jumped to another position in Safari (iPhone, iPad and Mac). The view now stays put in every module.
+- **Fix:** layout at every resolution, down to 320 px: charts, tables, figure cards and long texts fit their card's width instead of overlapping or spilling out.
+- **Fix:** a HEAD or malformed request left an error in the journal and dropped the connection. Every service now answers 501.
+
+### Installed app (iPhone, iPad, Android)
+- **New:** when the server does not answer, it shows "No connection to LabTower" and retries on its own. HTTPS only; it stores no data.
+- **New:** pulling down from the top reloads the page.
+- **Improvement:** the status bar follows the theme chosen in LabTower and the launch screen is light or dark according to the device theme.
+
+### Proxmox Monitor
+- **New:** ✎ button to edit a cluster (name, host, port, user and token) without restarting. An empty secret keeps the stored one; if the host or port changes, the certificate must be confirmed.
+- **New:** if the cluster certificate changed, the page explains it and offers "Pin certificate again", also when there is no data. Until it is confirmed, the token is not sent.
+- **Fix:** if a read fails, the page shows the error and the time of the data on screen, instead of old data without notice.
+- **Fix:** node charts are laid out in 4, 2 or 1 column depending on the width, with aligned headers.
+
+### NAS Monitor
+- **New:** expiry of each NAS's TLS certificates, on the ports you choose. Warning at 14 days and critical at 3, adjustable. Daily check and a "Check now" button.
+- **New:** Overview: alerts and events for NAS certificates expiring, expired and renewed.
+
+### UPS Monitor
+- **New:** runtime chart per UPS, in minutes, with the battery and load in the tooltip. Only shown if the UPS reports its runtime.
+- **Improvement:** NUT servers with an error are shown above the table.
+
+### WAN Monitor
+- **New:** in "Quality and availability", "LAN outages" and "WAN outages" columns next to the total.
+- **Security:** the router certificate fingerprint is pinned. If it changes, the connection is dropped before the user and password are sent; saving the router settings learns it again.
+
+### Net Monitor and Switch Monitor
+- **New:** a warning when a switch port stays below its usual speed (for example 1G to 100M from a cable or a stuck port), in Net Monitor and in the Overview.
+- **New:** a switch can be paused without deleting it, useful when another LabTower install already watches it: these switches allow a single session.
+- **Fix:** "SessionExpired" right after logging in to a switch, caused by an old cookie sent along with the new one.
+- **Fix:** the Pi-hole dot stayed grey even when connected. It now shows the real state: green connected, orange failing, grey not configured.
+- **Fix:** after a failure, Pi-hole did not reconnect until the next scan. It now retries on its own.
+- **Improvement:** the last scan's error is shown.
+
+### Code
+- **Improvement:** code cleanup. Errors that used to be lost are now logged, and file and command reads catch only the expected errors.
+
 ## 2.1.8 — 2026-11-05
 
 - **Change:** all services are now named `labtower-<module>`: labtower-wol, labtower-auth, labtower-net, labtower-pve, labtower-nas, labtower-dns, labtower-wan and labtower-vpn (labtower-ups and labtower-overview are unchanged). On upgrade the installer removes the old names; your data is not touched. Example: `journalctl -u labtower-wan`.
