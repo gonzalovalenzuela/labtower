@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.1.8g — 2026-11-09
+
+- **Nuevo:** LabTower instalado en la pantalla de inicio (iPhone, iPad, Android): si el servidor no responde, muestra «Sin conexión con LabTower» y reintenta solo. Solo con HTTPS; no guarda datos.
+- **Nuevo:** instalado, deslizar hacia abajo desde arriba recarga la página.
+- **Mejora:** la barra de estado sigue el tema elegido en LabTower y la pantalla de arranque usa el fondo claro u oscuro según el tema del equipo.
+- **Arreglo:** Uptime Monitor no tenía el ícono ni el título de app web.
+- **Arreglo:** Net Monitor: el punto de Pi-hole quedaba gris aunque estuviera conectado. Ahora muestra el estado real: verde conectado, naranjo con falla o conectando, gris sin configurar.
+- **Arreglo:** Net Monitor: tras una falla, Pi-hole no se volvía a conectar hasta el siguiente escaneo o hasta guardar los ajustes. Ahora se reintenta solo.
+- **Nuevo:** Switch Monitor: aviso cuando un puerto queda bajo su velocidad habitual (por ejemplo, de 1G a 100M por un cable o un puerto trabado), en Net Monitor y en el Resumen.
+- **Nuevo:** Switch Monitor: un switch se puede pausar sin borrarlo. Sirve cuando otra instalación de LabTower ya lo vigila, porque estos switches admiten una sola sesión.
+- **Arreglo:** Switch Monitor: «SessionExpired» después de iniciar sesión, por una cookie vieja que se enviaba junto a la nueva. El mensaje ahora indica que el switch admite una sola sesión.
+
 ## 2.1.8f — 2026-11-09
 
 - **Nuevo:** WAN Monitor: en «Calidad y disponibilidad», columnas «Cortes LAN» y «Cortes WAN» junto al total, para 24 h, 7 y 30 días. WAN incluye los cortes de causa Internet.
