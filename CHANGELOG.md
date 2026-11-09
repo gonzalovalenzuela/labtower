@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.8f — 2026-11-09
+
+- **Nuevo:** WAN Monitor: en «Calidad y disponibilidad», columnas «Cortes LAN» y «Cortes WAN» junto al total, para 24 h, 7 y 30 días. WAN incluye los cortes de causa Internet.
+- **Arreglo:** al refrescarse, la página saltaba a otra posición en Safari (iPhone, iPad y Mac). Ahora la vista se mantiene en todos los módulos.
+- **Arreglo:** en pantallas de 320 px, las tarjetas de cifras (DNS, Uptime, VPN), el detalle del nodo en Proxmox y el botón CSV de UPS Monitor se salían de la pantalla.
+- **Seguridad:** WAN Monitor fija la huella del certificado del router, como NAS, DNS y Proxmox. Si el certificado cambia, la conexión se corta antes de enviar el usuario y la contraseña. Guardar los ajustes del router la vuelve a aprender.
+- **Mejora:** limpieza del código: los errores que antes se perdían ahora quedan en el log (última conexión, bloqueo por intentos, permisos de la configuración SNMP, eventos de Ceph), y las lecturas de archivos y comandos capturan solo los errores esperables.
+
 ## 2.1.8e — 2026-11-07
 
 - **Nuevo:** UPS Monitor: gráfico de autonomía por UPS, en minutos, con la batería y la carga en el detalle. Solo aparece si la UPS informa la autonomía.
