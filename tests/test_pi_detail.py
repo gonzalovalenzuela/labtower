@@ -1,7 +1,12 @@
 """Detalle de la Raspberry Pi: lectores de sesiones (utmp y logind), forma de la respuesta y reparto entre administradores y lectores."""
-import os, struct, tempfile, unittest
+import os
+import struct
+import tempfile
+import unittest
 from pathlib import Path
+
 from tests import support
+
 auth = support.auth
 
 def utmp_record(user, tty, host, since, typ=7):

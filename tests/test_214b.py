@@ -1,5 +1,11 @@
 """2.1.4b: edad de batería en meses, purga de equipos sin conexión, color por velocidad, pausa de Pi-hole en el Resumen."""
-import datetime, json, re, subprocess, unittest
+import datetime
+import json
+import re
+import subprocess
+import unittest
+from pathlib import Path
+
 from tests import support
 from tests.support import ADMIN
 
@@ -59,24 +65,24 @@ class Front(unittest.TestCase):
         out = subprocess.run(["node", "-e", src + f"console.log(JSON.stringify({expr}))"], capture_output=True, text=True, check=True)
         return json.loads(out.stdout)
     def test_speed_classes(self):
-        s = open("net-monitor/static/switches.js", encoding="utf-8").read()
+        s = Path("net-monitor/static/switches.js").read_text(encoding="utf-8")
         fn = re.search(r"const SPD_CLS = .*?;\n", s).group(0)
         self.assertEqual([self.run_js(fn, f"SPD_CLS({m})") for m in (0, 10, 100, 1000, 2500, 10000)],
                          ["", "s10m", "s100m", "s1g", "s25g", "s10g"])
     def test_overview_pause_button_registered(self):
-        s = open("overview/static/app.js", encoding="utf-8").read()
+        s = Path("overview/static/app.js").read_text(encoding="utf-8")
         self.assertIn("document.addEventListener('click',dnsAct)", s)
         self.assertIn("'/dns/api/dns/'", s); self.assertIn("/blocking", s)
         self.assertEqual(s.count("dnsPause:"), 2)
     def test_proxmox_toggle(self):
-        a = open("proxmox-monitor/static/app.js", encoding="utf-8").read(); h = open("proxmox-monitor/static/index.html", encoding="utf-8").read()
+        a = Path("proxmox-monitor/static/app.js").read_text(encoding="utf-8"); h = Path("proxmox-monitor/static/index.html").read_text(encoding="utf-8")
         self.assertIn("toggleStopped", a); self.assertIn('data-on-click="toggleStopped"', h)
         self.assertEqual(a.count("hideStopped:"), 2)
     def test_proxmox_state_declared_before_first_use(self):
-        a = open("proxmox-monitor/static/app.js", encoding="utf-8").read()       # setLang runs on load and calls stoppedBtn()
+        a = Path("proxmox-monitor/static/app.js").read_text(encoding="utf-8")       # setLang runs on load and calls stoppedBtn()
         self.assertLess(a.index("let _hideStopped"), a.index("(()=>setLang(_lang))();"))
     def test_overview_pause_hidden_in_kiosk(self):
-        self.assertIn("body.kiosk .dnsctl", open("overview/static/app.css", encoding="utf-8").read())
+        self.assertIn("body.kiosk .dnsctl", Path("overview/static/app.css").read_text(encoding="utf-8"))
 
 if __name__ == "__main__":
     unittest.main()

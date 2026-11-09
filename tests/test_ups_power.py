@@ -1,6 +1,9 @@
 """UPS Monitor: banderas de estado, alarmas, margen de apagado y calidad de la red / status flags, alarms, shutdown margin and mains quality."""
-import time, unittest
+import time
+import unittest
+
 from tests import support
+
 
 class Pure(unittest.TestCase):
     @classmethod
@@ -32,7 +35,7 @@ class Pure(unittest.TestCase):
 
     def test_quality_counts_runs_not_samples_and_ignores_outage_and_noise(self):
         now = 10 ** 9; rows = []
-        for i in range(0, 2000):
+        for i in range(2000):
             t = now - 86400 + i * 40; v = 230.0
             if 100 <= i < 110: v = 190.0            # sag (10 samples)
             if 500 == i: v = 260.0                  # single stray reading: noise

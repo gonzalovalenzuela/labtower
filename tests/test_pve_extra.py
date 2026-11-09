@@ -1,6 +1,7 @@
 """Proxmox Monitor: información adicional (tendencias, estados, bloqueos, capacidad, HA, replicación, tareas, nodos) /
 extra information (trends, states, locks, capacity, HA, replication, tasks, nodes)."""
 import unittest
+
 from tests import support
 
 m = support.load("proxmox-monitor/server.py")

@@ -1,5 +1,6 @@
 """Shared navigation: one menu (nav.js) in every module and in the Overview, same order as the home page."""
-import re, unittest
+import re
+import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -26,7 +27,7 @@ class Nav(unittest.TestCase):
 
     def test_home_cards_follow_the_menu_order(self):
         nav = (ROOT / "assets" / "nav.js").read_text()
-        groups = re.search(r"var G = \[(.*?)\n  \];", nav, re.S).group(1)
+        groups = re.search(r"var G = \[(.*?)\n  \];", nav, re.DOTALL).group(1)
         want = re.findall(r"'(\w+)'", " ".join(re.findall(r"items: \[([^\]]*)\]", groups)))
         want = [x for x in want if x != "home"]
         home = re.findall(r'class="app-card" href="/(\w+)/"', (ROOT / "home" / "index.html").read_text())

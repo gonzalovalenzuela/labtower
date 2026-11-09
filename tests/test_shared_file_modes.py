@@ -1,7 +1,12 @@
 """2.1.3i: los archivos que un módulo publica para otro (modo 0640) no pueden quedar 0600 por el umask 077 de los servicios."""
-import os, stat, tempfile, unittest
+import os
+import stat
+import tempfile
+import unittest
 from pathlib import Path
+
 from tests.support import auth
+
 
 class Modes(unittest.TestCase):
     def test_640_survives_umask_077(self):

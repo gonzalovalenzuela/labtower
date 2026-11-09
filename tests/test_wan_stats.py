@@ -1,5 +1,7 @@
 """WAN Monitor: percentiles, calidad por destino, velocidad contra el plan, disponibilidad / MTBF y eventos sostenidos."""
-import time, unittest
+import time
+import unittest
+
 from tests import support
 
 m = support.load("wan-monitor/server.py")

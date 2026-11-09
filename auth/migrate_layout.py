@@ -11,7 +11,11 @@ unprivileged user that can already read the source (never as root over a folder 
 
     migrate_layout.py split-metrics <old metrics.db> <output folder>
 """
-import os, shutil, sqlite3, sys, tempfile
+import os
+import shutil
+import sqlite3
+import sys
+import tempfile
 
 # Tabla → módulo (nombre de su carpeta de datos). / Table → module (name of its data folder).
 OWNERS = {
@@ -83,7 +87,7 @@ def split_metrics(src, outdir):
 def main(argv):
     if len(argv) == 4 and argv[1] == "split-metrics":
         try: res = split_metrics(argv[2], argv[3])
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             print(f"error: {e}", file=sys.stderr); return 1
         for m, t in res.items(): print(f"{m}: {', '.join(t)}")
         return 0

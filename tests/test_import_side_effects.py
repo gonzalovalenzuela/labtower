@@ -1,6 +1,11 @@
 """Importar un módulo no debe crear archivos, carpetas ni hilos: eso se hace al arrancar (bloque __main__)."""
-import os, subprocess, sys, tempfile, unittest
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
 from pathlib import Path
+
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = ["auth/auth.py", "auth/admin_panel.py", "auth/teleporter_api.py", "wol-console/server.py", "nut-monitor/server.py",
            "net-monitor/server.py", "proxmox-monitor/server.py", "nas-monitor/server.py", "dns-monitor/server.py", "wan-monitor/server.py", "vpn-monitor/server.py", "uptime-monitor/server.py", "overview/server.py"]
@@ -18,7 +23,7 @@ class ImportSideEffects(unittest.TestCase):
         for rel in MODULES:
             with self.subTest(module=rel), tempfile.TemporaryDirectory() as tmp:
                 env = dict(os.environ, LABTOWER_USERS=os.path.join(tmp, "users.json"), LABTOWER_SESSIONS=os.path.join(tmp, "sessions.json"))
-                r = subprocess.run([sys.executable, "-I", "-c", PROBE, str(ROOT / rel), str(ROOT / "auth")], env=env, capture_output=True, text=True, timeout=60)
+                r = subprocess.run([sys.executable, "-I", "-c", PROBE, str(ROOT / rel), str(ROOT / "auth")], env=env, capture_output=True, text=True, timeout=60, check=False)
                 self.assertEqual(r.returncode, 0, r.stderr[-400:])
                 self.assertEqual(sorted(os.listdir(tmp)), [], f"{rel} creó archivos al importarse")
                 self.assertIn("THREADS:\n", r.stdout + "\n", f"{rel} arrancó hilos al importarse: {r.stdout}")

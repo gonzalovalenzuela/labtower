@@ -22,7 +22,7 @@ def percentile(vals, p):
     v = sorted(x for x in (_f(a) for a in vals) if x is not None)
     if not v: return None
     k = (len(v) - 1) * p / 100.0
-    lo, hi = int(math.floor(k)), int(math.ceil(k))
+    lo, hi = math.floor(k), math.ceil(k)
     return v[lo] if lo == hi else v[lo] + (v[hi] - v[lo]) * (k - lo)
 
 def latency_stats(rtts):

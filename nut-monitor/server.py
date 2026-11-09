@@ -28,17 +28,28 @@
 #
 #     File structure: SQLite · servers · watts calculation · NUT client · cache ·
 #     pollers · health · HTTP handler.
-import datetime, json, os, re, socket, time, logging, threading, sys, sqlite3
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+import datetime
+import json
+import logging
+import os
+import re
+import socket
+import sqlite3
+import sys
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
 ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
-from urllib.parse import urlparse, parse_qs
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 # Auth compartido
 # Módulo compartido de autenticación (carpeta hermana /auth).
 # EN: Shared authentication module (sibling folder /auth).
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
+
 sys.path.insert(0, str(Path(__file__).parent))
 import battery
 import power
@@ -49,10 +60,10 @@ HOST        = "127.0.0.1"
 PORT        = 8081
 # Cada cuántos segundos se consulta a upsd (variable NUT_POLL, 10 por defecto).
 # EN: How often upsd is queried, in seconds (NUT_POLL variable, 10 by default).
-POLL_SEC    = int(os.environ.get("NUT_POLL", 10))
+POLL_SEC    = int(os.environ.get("NUT_POLL", "10"))
 # Tiempo que necesitan los equipos conectados para apagarse (s): si la autonomía útil es menor, se avisa.
 # EN: Time the connected machines need to shut down (s): if the usable runtime is shorter, a warning is raised.
-SHUTDOWN_SEC = int(os.environ.get("NUT_SHUTDOWN_SEC", 300))
+SHUTDOWN_SEC = int(os.environ.get("NUT_SHUTDOWN_SEC", "300"))
 STATIC_DIR  = Path(__file__).parent / "static"
 # servers.json: lista de servidores NUT configurados. history.db: historial en SQLite.
 # EN: servers.json: list of configured NUT servers. history.db: history in SQLite.
@@ -218,7 +229,7 @@ def aging_async(sid, ups):
             _aging_busy.add(k)
             def run():
                 try: aging(sid, ups)
-                except Exception as e: log.debug(f"aging bg: {e}")
+                except Exception as e: log.debug(f"aging bg: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
                 finally:
                     with _aging_busy_lock: _aging_busy.discard(k)
             threading.Thread(target=run, daemon=True, name="nut-aging").start()
@@ -268,9 +279,9 @@ def battery_info(sid, ups, vars_):
     bd = md or battery.best_battery_date(vars_)
     if bd and (datetime.date.today() - bd).days < 365: out["age_months"] = battery.age_months(bd)
     try: out["aging"] = aging_async(sid, ups)
-    except Exception as e: log.debug(f"aging: {e}")
+    except Exception as e: log.debug(f"aging: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
     try: out["tests"] = selftest_log(sid, ups)
-    except Exception as e: log.debug(f"selftest_log: {e}")
+    except Exception as e: log.debug(f"selftest_log: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
     tn = vars_.get("ups.test.result")
     if isinstance(tn, str) and tn.strip():
         out["test_now"] = {"result": tn.strip()[:80], "kind": battery.classify_test(tn), "ts": None}
@@ -306,7 +317,7 @@ def _outages_backfill(conn):
     for r in conn.execute("SELECT srv_id, ups FROM history GROUP BY srv_id, ups HAVING MAX(vin) > 100").fetchall():
         sid, ups = r[0], r[1]
         start = last = None; low = None
-        def close():
+        def close(sid=sid, ups=ups):
             nonlocal n, start, last, low
             if start is not None:
                 conn.execute("INSERT INTO outages (srv_id,ups,t_start,t_end,min_charge,src) VALUES (?,?,?,?,?, 'hist')",
@@ -382,7 +393,7 @@ def ups_stats(sid, ups):
 # se escribe de inmediato, porque ahí es cuando más importa no perder datos.
 # Reduce el desgaste de la SD: se acumulan las filas y se escriben juntas cada DB_FLUSH_SEC segundos.
 # EN: Reduces SD wear: rows are accumulated and written together every DB_FLUSH_SEC seconds.
-DB_FLUSH_SEC = int(os.environ.get("NUT_DB_FLUSH", 60))
+DB_FLUSH_SEC = int(os.environ.get("NUT_DB_FLUSH", "60"))
 # Sentencia de inserción de una fila de historial.
 # EN: Insert statement for one history row.
 _INSERT_SQL = """
@@ -420,7 +431,7 @@ def db_flush(timeout=3):
     # timeout: desde el handler de SIGTERM (hilo principal) el lock podría estar tomado
     if not _db_lock.acquire(timeout=timeout): return
     try: _flush_locked()
-    except Exception as e: log.error(f"db_flush: {e}")
+    except Exception as e: log.error(f"db_flush: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
     finally: _db_lock.release()
 
 # Agrega una lectura al búfer. Escribe de inmediato si el UPS NO está en línea (batería, carga baja…), porque
@@ -441,7 +452,7 @@ def db_insert(srv_id, ups, entry, urgent=False):
             del _ins_buf[:len(_ins_buf)-5000]
         if urgent or time.time() - _ins_last >= DB_FLUSH_SEC:
             try: _flush_locked()
-            except Exception as e: log.error(f"db flush: {e}")
+            except Exception as e: log.error(f"db flush: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
 
 # Historial de un UPS reducido a unos `limit` puntos: agrupa por intervalos iguales de tiempo y promedia
 # cada uno. Es el único acceso de lectura al historial.
@@ -510,7 +521,7 @@ def db_prune():
 # EN: Wrapper that logs the error instead of letting the thread die.
 def _db_prune_safe():
     try: db_prune()
-    except Exception as e: log.error(f"db_prune: {e}")
+    except Exception as e: log.error(f"db_prune: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
 
 # ─── Servidores ───────────────────────────────────────────────────────────────
 # Candado de la lista de servidores. Regla: cargar → modificar → guardar dentro de este candado.
@@ -604,10 +615,9 @@ class NUTClient:
             if not line: break
             lines.append(line)
             if is_list:
-                if line.startswith("END LIST") or line.startswith("ERR"): break
+                if line.startswith(("END LIST", "ERR")): break
             else:
-                if line.startswith("VAR ") or line.startswith("VER ") or \
-                   line.startswith("ERR") or line.startswith("OK"): break
+                if line.startswith(("VAR ", "VER ", "ERR", "OK")): break
         return lines
 
     # Si upsd responde un error (por ejemplo DATA-STALE: el driver dejó de enviar datos), se levanta una excepción en vez de tratarlo como «sin datos».
@@ -641,7 +651,7 @@ class NUTClient:
             with self._conn() as s: lines = self._cmd(s, f"LIST CLIENT {ups}")
             return [m.group(1) for line in lines
                     for m in [re.match(r'^CLIENT \S+ (\S+)$', line)] if m]
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.debug(f"list_clients: {e}"); return []
 
     # Versión del servidor NUT.
@@ -661,7 +671,7 @@ def _status_event(sid, name, status, entry):
     mode = "lb" if "LB" in words else "ob" if "OB" in words else "ol" if "OL" in words else "other"
     ch = auth.state_changed(f"nut:{sid}:{name}", mode)
     if not ch: return
-    old, new = ch
+    _old, new = ch
     pct = f"{entry.get('charge', 0):.0f} %"
     if new == "lb":      auth.record_event("nut", "crit", f"{name}: low battery ({pct})", "ups_lowb", n=name, pct=pct)
     elif new == "ob":    auth.record_event("nut", "warn", f"{name}: on battery ({pct})", "ups_batt", n=name, pct=pct)
@@ -764,7 +774,7 @@ class SCache:
             selftest_track(self.id, name, vars_, entry["ts"])
             _status_event(self.id, name, status, entry)
             _power_events(self.id, name, vars_)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.debug(f"db_insert error: {e}")
 
     # Guarda el último error de conexión para mostrarlo en la página.
@@ -783,7 +793,7 @@ class SCache:
                 out[n] = dict(ups_stats(self.id, n))        # a copy: the cached one is shared
                 out[n]["battery"] = battery_info(self.id, n, ups_snap[n])
                 out[n]["power"] = power_info(self.id, n, ups_snap[n])
-            except Exception as e: log.debug(f"ups_stats: {e}")
+            except Exception as e: log.debug(f"ups_stats: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         return out
 
     # Instantánea para la API: estado actual más historial según el rango pedido (1h, 1d, 1w, 1mo, all).
@@ -870,7 +880,7 @@ def _poll(server):
                 target = (cur["host"], int(cur["port"]))
                 nut = NUTClient(*target); cache.reset()
                 log.info(f"Poller → {cur['name']} ({target[0]}:{target[1]}) (edited)")
-        except Exception as e:                # never let the poller thread die
+        except Exception as e:                # never let the poller thread die  # noqa: BLE001
             log.error(f"poll config: {e}"); cur = None
         if cur is None and not any(s["id"] == sid for s in _safe_servers()):
             return
@@ -886,9 +896,9 @@ def _poll(server):
                 cache.update(u["name"], vars_, clients, ver)
         except ConnectionRefusedError:
             cache.set_error(f"upsd not available at {server['host']}:{server['port']}")
-        except socket.timeout:
+        except TimeoutError:
             cache.set_error("Timeout connecting to upsd")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             cache.set_error(str(e)); log.error(f"poll error: {e}")
         poll_n += 1
         # Limpiar DB cada 1440 polls (~4h con poll=10s)
@@ -902,7 +912,7 @@ def _poll(server):
 # EN: Server list that never raises (returns empty on a read error).
 def _safe_servers():
     try: return load_servers()
-    except Exception: return []
+    except (OSError, ValueError): return []
 
 # Al arrancar: prepara la base y lanza un hilo de consulta por servidor.
 # EN: On startup: prepare the database and launch one polling thread per server.
@@ -934,7 +944,7 @@ def health_report(detailed=False):
             finally:
                 conn.close()
             c["database"] = auth.chk(auth.OK)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - el error queda guardado y se muestra / the error is kept and shown
             c["database"] = auth.chk(auth.FAIL, f"database error: {e}")
         finally:
             _db_lock.release()
@@ -985,7 +995,7 @@ def net_names() -> dict:
             n = str(h.get("alias") or h.get("hostname") or "").strip()
             n = re.sub(r"[\x00-\x1f\x7f]", "", n)[:60]
             if n and isinstance(ip, str) and len(ip) <= 45: out[ip] = n
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.debug(f"net names: {e}")
     _names_cache[0], _names_cache[1] = now, out
     return out
@@ -1112,7 +1122,8 @@ class H(BaseHTTPRequestHandler):
             range_secs = {"1h":3600,"1d":86400,"1w":604800,"1mo":2592000}
             if range_ in range_secs: since = now - range_secs[range_]
             rows = db_query(sid, ups, since_ts=since, limit=8640)
-            import csv, io
+            import csv
+            import io
             buf = io.StringIO()
             writer = csv.writer(buf)
             writer.writerow(["timestamp","datetime","charge_pct","runtime_s","load_pct","vin_v","vout_v","watts","temp_c"])
@@ -1222,7 +1233,7 @@ class H(BaseHTTPRequestHandler):
                 nut  = NUTClient(host, port, timeout=4)
                 ups  = nut.list_ups(); ver = nut.get_version()
                 self._json(200, {"ok": True, "ups_count": len(ups), "ups": ups, "version": ver})
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                 self._json(200, {"ok": False, "error": re.sub(r"[\x00-\x1f\x7f]", " ", str(e))[:120]})
         else:
             self._json(404, {"error": "Not found"})
@@ -1283,7 +1294,8 @@ class H(BaseHTTPRequestHandler):
 #     systemd stops the service with SIGTERM, so a handler is installed that empties the buffer before finishing.
 if __name__ == "__main__":
     auth.prepare_module(DATA_DIR, Path(__file__).parent, LEGACY_FILES)
-    import signal, atexit
+    import atexit
+    import signal
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     start_all()
     atexit.register(db_flush)

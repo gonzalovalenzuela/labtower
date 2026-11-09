@@ -28,18 +28,33 @@ DNS Monitor — estado de uno o varios Pi-hole (v6 y v5) o AdGuard Home / status
 #     followed (credentials never go to another site) and the address is reduced to scheme://host[:port].
 #
 #     Structure: validation · HTTP client · Pi-hole · AdGuard · reading one server · cache and history · poller · health · HTTP.
-import base64, http.client, json, os, re, socket, sqlite3, ssl, sys, time, logging, threading, uuid
+import base64
+import http.client
+import json
+import logging
+import math
+import os
+import re
+import socket
+import sqlite3
+import ssl
+import sys
+import threading
+import time
+import uuid
 from datetime import date, timedelta
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
 ThreadingHTTPServer.request_queue_size = 128
-from urllib.parse import urlparse, parse_qs, urlencode
 from collections import deque as _deque
 from pathlib import Path
+from urllib.parse import parse_qs, urlencode, urlparse
 
 # Módulo compartido de autenticación (carpeta hermana /auth).
 # EN: Shared authentication module (sibling folder /auth).
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
+
 sys.path.insert(0, str(Path(__file__).parent))
 import dnsq
 
@@ -51,8 +66,8 @@ STATIC_DIR = Path(__file__).parent / "static"
 DATA_DIR   = auth.module_dir("dns-monitor")          # solo la ruta; la carpeta se crea al arrancar / EN: path only, created at startup
 LEGACY_FILES = ()
 DATA_FILE  = DATA_DIR / "dns.json"
-POLL_ACTIVE = float(os.environ.get("DNS_POLL_ACTIVE", 15))   # seconds, while someone is watching
-POLL_IDLE   = float(os.environ.get("DNS_POLL_IDLE", 60))     # seconds, when nobody has the page open
+POLL_ACTIVE = float(os.environ.get("DNS_POLL_ACTIVE", "15"))   # seconds, while someone is watching
+POLL_IDLE   = float(os.environ.get("DNS_POLL_IDLE", "60"))     # seconds, when nobody has the page open
 VIEW_GRACE  = 30
 HIST_EVERY  = 60                                              # history sampling period (s)
 _HIST_MAX   = 720                                             # ~12 h at 60 s
@@ -195,7 +210,7 @@ def _g(d, *keys, default=None):
         d = d.get(k)
     return default if d is None else d
 
-def _num(x): return isinstance(x, (int, float)) and not isinstance(x, bool) and x == x
+def _num(x): return isinstance(x, (int, float)) and not isinstance(x, bool) and not math.isnan(x)
 
 # Reparte (marca de tiempo, total, bloqueadas) en 24 tramos de una hora que terminan ahora; para el gráfico de barras.
 # EN: Spread (timestamp, total, blocked) into 24 one-hour bins ending now; for the bar chart.
@@ -310,7 +325,7 @@ def pihole_collect(cfg, st):
         def get5(params):
             try:
                 j = _ph5(cfg, params); return j if isinstance(j, dict) else None
-            except DnsError as e: warnings.append(f"{list(params)[0]}: {e}"); return None
+            except DnsError as e: warnings.append(f"{next(iter(params))}: {e}"); return None
         ti = get5({"topItems": 10})
         snap["top_domains"] = [{"name": k, "count": v} for k, v in sorted((_g(ti, "top_queries", default={}) or {}).items(), key=lambda kv: -kv[1])][:10]
         snap["top_blocked"] = [{"name": k, "count": v} for k, v in sorted((_g(ti, "top_ads", default={}) or {}).items(), key=lambda kv: -kv[1])][:10]
@@ -451,7 +466,7 @@ def resolve_compare(cfg: dict, name: str, qtype: str) -> dict:
 def collect(cfg: dict, st: dict) -> dict:
     snap = pihole_collect(cfg, st) if cfg["type"] == "pihole" else adguard_collect(cfg, st)
     try: probe_upstreams(snap, st)
-    except Exception as e: log.warning(f"upstream probe: {e}")
+    except Exception as e: log.warning(f"upstream probe: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
     snap["alerts"] = compute_alerts(snap)
     return snap
 
@@ -668,7 +683,7 @@ def push_history(sid: str, snap: dict):
             c.execute("INSERT OR REPLACE INTO dns_samples (sid,ts,total,blocked,pct,ms) VALUES (?,?,?,?,?,?)", (sid, pt["ts"], pt["total"], pt["blocked"], pt["pct"], pt["ms"]))
             c.commit()
         finally: c.close()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"could not store the history sample: {e}")
 
 def get_history(sid: str) -> list:
@@ -688,7 +703,7 @@ def load_history() -> int:
             for sid, ts, total, blocked, pct, ms in rows:
                 if sid not in keep: continue
                 _HISTORY.setdefault(sid, _deque(maxlen=_HIST_MAX)).append({"ts": ts, "total": total, "blocked": blocked, "pct": pct, "ms": ms}); n += 1
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"could not load the history: {e}")
     return n
 
@@ -709,13 +724,13 @@ def history_range(sid: str, range_: str, prev: bool = False) -> list:
         rows = c.execute("SELECT ts,total,blocked,pct,ms FROM dns_samples WHERE sid = ? AND ts >= ? AND ts < ? ORDER BY ts", (sid, win[0], win[1])).fetchall()
     finally: c.close()
     step = 1 if len(rows) <= RANGE_POINTS else -(-len(rows) // RANGE_POINTS)
+    def avg(grp, k):
+        v = [r[k] for r in grp if r[k] is not None]
+        return round(sum(v) / len(v), 2) if v else None
     out = []
     for i in range(0, len(rows), step):
         grp = rows[i:i + step]
-        def avg(k):
-            v = [r[k] for r in grp if r[k] is not None]
-            return round(sum(v) / len(v), 2) if v else None
-        out.append({"ts": grp[len(grp) // 2][0], "total": avg(1), "blocked": avg(2), "pct": avg(3), "ms": avg(4)})
+        out.append({"ts": grp[len(grp) // 2][0], "total": avg(grp, 1), "blocked": avg(grp, 2), "pct": avg(grp, 3), "ms": avg(grp, 4)})
     return out
 
 def forget_history(sid: str):
@@ -726,7 +741,7 @@ def forget_history(sid: str):
         c = auth.metrics_conn()
         try: c.execute("DELETE FROM dns_samples WHERE sid = ?", (sid,)); c.execute("DELETE FROM dns_hourly WHERE sid = ?", (sid,)); c.commit()
         finally: c.close()
-    except Exception as e: log.warning(f"could not delete the history: {e}")
+    except Exception as e: log.warning(f"could not delete the history: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
 
 def _history_pruner():
     while True:
@@ -735,7 +750,7 @@ def _history_pruner():
             c = auth.metrics_conn()
             try: c.execute("DELETE FROM dns_samples WHERE ts < ?", (int(time.time()) - HIST_KEEP,)); c.commit()
             finally: c.close()
-        except Exception as e: log.warning(f"could not prune the history: {e}")
+        except Exception as e: log.warning(f"could not prune the history: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
 
 # ─── Caché y hilos de consulta ────────────────────────────────────────────────
 class DnsCache:
@@ -777,7 +792,7 @@ def _poll(sid: str):
     while True:
         try:
             n = next((x for x in load_servers() if x["id"] == sid), None)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.error(f"[{sid}] config read: {e}"); n = False
         if n is None: return
         if n:
@@ -792,7 +807,7 @@ def _poll(sid: str):
                 if auth.state_changed(f"dns-dn:{sid}", "up"):
                     auth.record_event("dns", "info", f"{n['name']}: reachable again", "dns_up", n=n["name"])
                 log.debug(f"[{n['name']}] read in {time.time() - t0:.2f}s")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
                 cache.set_error(str(e)[:200])
                 log.error(f"[{n['name']}] poll error: {e}")
                 if auth.state_changed(f"dns-dn:{sid}", "down"):
@@ -913,7 +928,7 @@ class H(BaseHTTPRequestHandler):
             if rng not in RANGE_SECS and rng != "all": return self._json(400, {"error": "Invalid range"})
             prev = parse_qs(urlparse(self.path).query).get("prev", ["0"])[0] == "1"
             try: return self._json(200, {"range": rng, "prev": prev, "history": history_range(mh.group(1), rng, prev)})
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                 log.warning(f"history query failed: {e}"); return self._json(500, {"error": "Could not read the history"})
         mc = re.fullmatch(r"/api/dns/([A-Za-z0-9_-]{1,40})/clients", path)
         if mc:
@@ -969,7 +984,7 @@ class H(BaseHTTPRequestHandler):
             cc = _cache.get(n["id"])
             try:
                 set_blocking(n, cc.state if cc else {}, body["enabled"], secs)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                 return self._json(502, {"error": str(e)[:200]})
             who = (auth.get_session(tok) or {}).get("username", "?")
             log.info(f"{who}: {'resume' if body['enabled'] else 'pause'} blocking on {n['name']}")
@@ -1014,7 +1029,7 @@ class H(BaseHTTPRequestHandler):
             if not _test_gate.acquire(blocking=False): return self._json(429, {"error": "Too many tests at once"})
             try:
                 return self._json(200, {"ok": True, **test_connection(cfg)})
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                 return self._json(200, {"ok": False, "error": str(e)[:200]})
             finally: _test_gate.release()
 
@@ -1057,7 +1072,7 @@ if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     try:
         if auth.ensure_permissions(("dns",)): log.info("'dns' permissions updated")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"Permissions: {e}")
     log.info(f"DNS Monitor en http://{HOST}:{PORT} — poll {POLL_ACTIVE:g}s active / {POLL_IDLE:g}s idle")
     n = load_history()

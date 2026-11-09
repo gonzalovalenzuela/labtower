@@ -4,7 +4,9 @@ Funciones puras (sin red ni base de datos) para probarlas con datos de ejemplo; 
 EN: UPS Monitor — battery health: estimated runtime, ageing and self-tests.
     Pure functions (no network, no database) so they can be tested with sample data; server.py uses them with the real readings.
 """
-import datetime, re
+import datetime
+import math
+import re
 
 AGING_WARN_PCT = -20.0          # % change of the full-battery runtime that is worth a warning
 BATTERY_OLD_YEARS = 4.0         # sealed lead-acid batteries last about 3-5 years
@@ -13,7 +15,7 @@ def _f(x):
     try:
         if isinstance(x, bool) or x is None or x == "": return None
         v = float(x)
-        return v if v == v and abs(v) != float("inf") else None
+        return v if math.isfinite(v) else None
     except (TypeError, ValueError, OverflowError):
         return None
 

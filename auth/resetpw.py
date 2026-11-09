@@ -5,10 +5,16 @@ Runs as the authentication user (labtower-auth), started by /usr/local/bin/labto
 the new password is hashed the same way, every session of that account is closed, the login brakes are cleared and the audit log records it.
 ES: Restablece la contraseña de un usuario desde la consola. Por defecto es aleatoria y obliga a cambiarla en el próximo inicio de sesión.
 """
-from __future__ import annotations  # permite «X | None» en Python 3.9 / allows «X | None» on Python 3.9
-import argparse, getpass, os, sys
+# permite «X | None» en Python 3.9 / allows «X | None» on Python 3.9
+from __future__ import annotations
+
+import argparse
+import getpass
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import auth  # noqa: E402
+import auth
 
 
 def reset(username: str, password: str | None = None, keep_2fa: bool = True, must_change: bool = True):

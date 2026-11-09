@@ -1,8 +1,19 @@
 """NAS Monitor: lectura SNMP (con net-snmp simulado y con un snmpd real si existe), validación, secretos, permisos y alertas."""
-import json, os, shutil, socket, stat, subprocess, sys, tempfile, textwrap, time, unittest
+import json
+import os
+import shutil
+import socket
+import stat
+import subprocess
+import sys
+import tempfile
+import textwrap
+import time
+import unittest
 from pathlib import Path
+
 from tests import support
-from tests.support import ADMIN, READONLY, NONE
+from tests.support import ADMIN, NONE, READONLY
 
 m = support.load("nas-monitor/server.py")
 ROOT = Path(__file__).resolve().parents[1]
@@ -130,7 +141,7 @@ class Trends(unittest.TestCase):
         os.environ["PATH"] = fake_bin(tmp) + os.pathsep + old; os.environ["FAKE_STEP"] = step
         try:
             prev = {}; Path(step).write_text("0"); m.collect(m.validate(CFG3), prev)
-            Path(step).write_text("1"); time.sleep(0.05); eth = [x for x in m.collect(m.validate(CFG3), prev)["net"] if x["name"] == "eth0"][0]
+            Path(step).write_text("1"); time.sleep(0.05); eth = next(x for x in m.collect(m.validate(CFG3), prev)["net"] if x["name"] == "eth0")
             self.assertTrue(eth["up"]); self.assertEqual((eth["err_in"], eth["err_out"]), (123, 1)); self.assertTrue(eth["err_rate"] > 0)
         finally:
             os.environ["PATH"] = old; os.environ.pop("FAKE_STEP", None); shutil.rmtree(tmp, ignore_errors=True)
@@ -392,7 +403,7 @@ class RealSnmpd(unittest.TestCase):
         for _ in range(60):
             try:
                 if m.snmp_get(cfg, ["1.3.6.1.2.1.1.5.0"]): break
-            except Exception: pass
+            except Exception: pass  # noqa: BLE001, S110 - snmpd todavía arrancando: se reintenta / EN: snmpd still starting: retry
             time.sleep(0.5)
         else:
             cls.proc.kill(); raise unittest.SkipTest("snmpd no arrancó en este entorno")
@@ -400,7 +411,7 @@ class RealSnmpd(unittest.TestCase):
     def tearDownClass(cls):
         cls.proc.terminate()
         try: cls.proc.wait(5)
-        except Exception: cls.proc.kill()
+        except subprocess.TimeoutExpired: cls.proc.kill()
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
     def check(self, cfg):

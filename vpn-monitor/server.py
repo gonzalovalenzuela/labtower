@@ -22,13 +22,26 @@ VPN Monitor — clientes conectados a Tailscale, OpenVPN y WireGuard / connected
 #     in authorized_keys; the command is fixed (never from the browser); the server host key is accepted once and then enforced.
 #     Sessions: the module records when each client was seen connected / gone (vpn.json = servers, state.json = sessions); connect / disconnect
 #     events go to the Overview timeline.
-import json, os, re, subprocess, sys, time, logging, threading, urllib.request, urllib.error, urllib.parse, shutil
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+import json
+import logging
+import math
+import os
+import re
+import shutil
+import subprocess
+import sys
+import threading
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
 ThreadingHTTPServer.request_queue_size = 128
-from urllib.parse import urlparse, parse_qs
 from collections import deque as _deque
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
@@ -44,8 +57,8 @@ LAST_FILE  = DATA_DIR / "last.json"      # last reading of each server: shown ri
 SSH_DIR    = DATA_DIR / "ssh"
 SSH_KEY    = SSH_DIR / "id_ed25519"
 KNOWN      = SSH_DIR / "known_hosts"
-POLL_ACTIVE = float(os.environ.get("VPN_POLL_ACTIVE", 20))
-POLL_IDLE   = float(os.environ.get("VPN_POLL_IDLE", 60))
+POLL_ACTIVE = float(os.environ.get("VPN_POLL_ACTIVE", "20"))
+POLL_IDLE   = float(os.environ.get("VPN_POLL_IDLE", "60"))
 VIEW_GRACE  = 30
 WG_FRESH    = 180            # s: a WireGuard peer with a handshake newer than this is connected
 TS_FRESH    = 300            # s: Tailscale fallback when the API does not say connectedToControl
@@ -65,7 +78,7 @@ _state_lock = threading.RLock()
 CMD_WG = "wg show all dump"
 DEFAULT_OVPN_STATUS = "/run/openvpn-server/status-server.log"
 
-def _num(x): return isinstance(x, (int, float)) and not isinstance(x, bool) and x == x
+def _num(x): return isinstance(x, (int, float)) and not isinstance(x, bool) and not math.isnan(x)
 
 # ─── Configuración / Configuration ──────────────────────────────────────────────
 def load_vpn() -> list:
@@ -161,11 +174,11 @@ def ssh_keygen() -> str:
     if not SSH_KEY.exists():
         if not shutil.which("ssh-keygen"): raise RuntimeError("ssh-keygen is not installed (apt install openssh-client)")
         SSH_DIR.mkdir(parents=True, exist_ok=True); os.chmod(SSH_DIR, 0o700)
-        r = subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "labtower-vpn", "-f", str(SSH_KEY)], capture_output=True, text=True, timeout=20)
+        r = subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "labtower-vpn", "-f", str(SSH_KEY)], capture_output=True, text=True, timeout=20, check=False)
         if r.returncode != 0: raise RuntimeError("Could not create the SSH key")
         os.chmod(SSH_KEY, 0o600)
     if not SSH_KEY.with_suffix(".pub").exists():
-        r = subprocess.run(["ssh-keygen", "-y", "-f", str(SSH_KEY)], capture_output=True, text=True, timeout=20)
+        r = subprocess.run(["ssh-keygen", "-y", "-f", str(SSH_KEY)], capture_output=True, text=True, timeout=20, check=False)
         if r.returncode == 0: SSH_KEY.with_suffix(".pub").write_text(r.stdout)
     return ssh_pub()
 
@@ -181,7 +194,7 @@ def ssh_run(cfg: dict, command: str) -> str:
            "-o", "StrictHostKeyChecking=accept-new", "-o", f"UserKnownHostsFile={KNOWN}", "-o", f"ConnectTimeout={t}",
            "-o", "LogLevel=ERROR", "-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=2", "-o", "PasswordAuthentication=no",
            f"{cfg['ssh_user']}@{cfg['host']}", command]
-    try: r = subprocess.run(cmd, capture_output=True, text=True, timeout=t + 8, env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(DATA_DIR)})
+    try: r = subprocess.run(cmd, capture_output=True, text=True, timeout=t + 8, env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(DATA_DIR)}, check=False)
     except subprocess.TimeoutExpired: raise RuntimeError("SSH timed out")
     if r.returncode != 0:
         e = (r.stderr or "").strip().splitlines()
@@ -191,7 +204,7 @@ def ssh_run(cfg: dict, command: str) -> str:
 def forget_host(host: str, port: int):
     """Drop the stored host key (used when a server's address changes)."""
     if KNOWN.exists() and shutil.which("ssh-keygen"):
-        subprocess.run(["ssh-keygen", "-q", "-f", str(KNOWN), "-R", host if port == 22 else f"[{host}]:{port}"], capture_output=True, timeout=10)
+        subprocess.run(["ssh-keygen", "-q", "-f", str(KNOWN), "-R", host if port == 22 else f"[{host}]:{port}"], capture_output=True, timeout=10, check=False)
 
 # ─── Lectura de cada fuente / Reading each source ─────────────────────────────
 def parse_wireguard(text: str, aliases: dict, now: float) -> list:
@@ -222,7 +235,7 @@ def _ovpn_ip(real: str) -> str:
         m = re.fullmatch(r"(\d+\.\d+\.\d+\.\d+):\d+", a)
         if m: return m.group(1)
         if a.count(":") == 1: a = a.rsplit(":", 1)[0]
-    m = re.fullmatch(r"::ffff:(\d+\.\d+\.\d+\.\d+)(?::\d+)?", a, re.I)
+    m = re.fullmatch(r"::ffff:(\d+\.\d+\.\d+\.\d+)(?::\d+)?", a, re.IGNORECASE)
     return m.group(1) if m else a
 
 def parse_openvpn(text: str) -> list:
@@ -254,7 +267,7 @@ def parse_openvpn(text: str) -> list:
     return out
 
 def _iso(s):
-    try: return int(datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp())
+    try: return int(datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp())  # noqa: FURB162 - Python 3.9 no acepta «Z» / EN: Python 3.9 does not accept «Z»
     except (TypeError, ValueError): return None
 
 def parse_tailscale(devs: list, now: float) -> list:
@@ -273,7 +286,7 @@ def parse_tailscale(devs: list, now: float) -> list:
     return out
 
 def fetch_tailscale(cfg: dict, now: float) -> list:
-    url = "https://api.tailscale.com/api/v2/tailnet/%s/devices?fields=all" % urllib.parse.quote(cfg.get("tailnet") or "-", safe="")
+    url = "https://api.tailscale.com/api/v2/tailnet/{}/devices?fields=all".format(urllib.parse.quote(cfg.get("tailnet") or "-", safe=""))
     req = urllib.request.Request(url, headers={"Authorization": "Bearer " + cfg["api_key"], "Accept": "application/json", "User-Agent": "labtower-vpn"})
     try:
         with urllib.request.urlopen(req, timeout=int(cfg.get("timeout", 10))) as r:  # constant https://api.tailscale.com URL  # nosec B310
@@ -379,7 +392,7 @@ def _poll(nid: str):
     if not cache: return
     while True:
         try: n = next((x for x in load_vpn() if x["id"] == nid), None)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.error(f"[{nid}] config read: {e}"); n = False
         if n is None: return
         if n:
@@ -392,7 +405,7 @@ def _poll(nid: str):
                 save_last(nid, snap)
                 if auth.state_changed(f"vpn-dn:{nid}", "up"):
                     auth.record_event("vpn", "info", f"{n['name']}: reachable again", "vpn_reach", n=n["name"])
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
                 cache.set_error(str(e)[:200])
                 log.error(f"[{n['name']}] poll error: {e}")
                 if auth.state_changed(f"vpn-dn:{nid}", "down"):
@@ -561,7 +574,7 @@ class H(BaseHTTPRequestHandler):
             except ValueError as e: return self._json(400, {"error": str(e)})
             if not _test_gate.acquire(blocking=False): return self._json(429, {"error": "Too many tests at once"})
             try: return self._json(200, {"ok": True, **test_connection(cfg)})
-            except Exception as e: return self._json(200, {"ok": False, "error": str(e)[:200]})
+            except Exception as e: return self._json(200, {"ok": False, "error": str(e)[:200]})  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
             finally: _test_gate.release()
 
         m = re.fullmatch(r"/api/vpn/([a-zA-Z0-9\-]+)", path)
@@ -602,7 +615,7 @@ if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     try:
         if auth.ensure_permissions(("vpn",)): log.info("'vpn' permissions updated")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"Permissions: {e}")
     log.info(f"VPN Monitor en http://{HOST}:{PORT} — poll {POLL_ACTIVE:g}s active / {POLL_IDLE:g}s idle")
     start_all()

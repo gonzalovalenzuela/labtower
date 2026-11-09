@@ -34,13 +34,14 @@ import sqlite3
 import sys
 import threading
 import time
-import urllib.parse
 import urllib.error
+import urllib.parse
 import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path
+from types import MappingProxyType
 
-import auth      # valid_target(): the switch address cannot be this machine or a link-local address / la dirección no puede ser esta máquina ni de enlace local
+import auth  # valid_target(): the switch address cannot be this machine or a link-local address / la dirección no puede ser esta máquina ni de enlace local
 
 
 class SessionExpired(Exception):
@@ -68,7 +69,8 @@ def _num(v):
 
 
 class BaseDriver:
-    FORBIDDEN = set()
+    # Rutas que nunca se piden (reinicio, borrado, firmware); de solo lectura. / EN: Paths never requested (reboot, reset, firmware); read-only.
+    FORBIDDEN = frozenset()
 
     def __init__(self, name, host, user, password, timeout=8, gap=0.3, session_file=None):
         self.name, self.host = name, host
@@ -153,11 +155,11 @@ class BaseDriver:
 # --------------------------------------------------------------------------- ZX310S
 class ZXDriver(BaseDriver):
     DRIVER = "zx"
-    FORBIDDEN = {"clear_statistics.json", "system_reboot.json", "factory_reset.json",
-                 "mac_clear_dynamic_mac_entries.json", "config/download", "firmware/download"}
+    FORBIDDEN = frozenset({"clear_statistics.json", "system_reboot.json", "factory_reset.json",
+                           "mac_clear_dynamic_mac_entries.json", "config/download", "firmware/download"})
     # índice del JSON -> puerto del frontal (los SFP+ vienen cruzados) / JSON index -> front-panel port (SFP+ are crossed)
-    JSON_TO_FRONT = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 10, 10: 9}
-    MAC_TO_FRONT = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 10, 13: 9}
+    JSON_TO_FRONT = MappingProxyType({1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 10, 10: 9})
+    MAC_TO_FRONT = MappingProxyType({1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 10, 13: 9})
 
     def login(self):
         q = urllib.parse.urlencode({"loginusr": md5(self.user), "loginpwd": md5(self.password)})
@@ -269,7 +271,7 @@ def find_table(html, first_cell):
 
 class HCDriver(BaseDriver):
     DRIVER = "hc"
-    FORBIDDEN = {"reset.cgi", "save.cgi", "reboot.cgi", "logout.cgi", "fwug.cgi", "config_back.cgi"}
+    FORBIDDEN = frozenset({"reset.cgi", "save.cgi", "reboot.cgi", "logout.cgi", "fwug.cgi", "config_back.cgi"})
 
     def __init__(self, *a, mac_paginate=False, **kw):
         super().__init__(*a, **kw)
@@ -348,7 +350,7 @@ class HCDriver(BaseDriver):
         hdr = [h.lower().replace(" ", "") for h in (stats[0] if stats else [])]
         ix_tx = next((i for i, h in enumerate(hdr) if "tx" in h and "byte" in h), None)
         ix_rx = next((i for i, h in enumerate(hdr) if "rx" in h and "byte" in h), None)
-        count = lambda r, i: (_num(r[i].replace(",", "")) if i is not None and i < len(r) else None)  # noqa: E731
+        count = lambda r, i: (_num(r[i].replace(",", "")) if i is not None and i < len(r) else None)
         ports = []
         for r in stats[1:]:
             if len(r) < 7 or not r[0].startswith("Port "):
@@ -495,7 +497,7 @@ class SNMPClient:
 
     def _parse(self, data):
         _, msg, _ = _ber_read(data, 0)
-        _ver, _comm, (ptag, pdu) = _ber_seq(msg)[:3]
+        _ver, _comm, (_ptag, pdu) = _ber_seq(msg)[:3]
         f = _ber_seq(pdu)
         if int.from_bytes(f[0][1], "big") != self._rid:
             return None  # respuesta de otra petición / reply to another request
@@ -547,7 +549,7 @@ class SNMPDriver(BaseDriver):
     Q_FDB_PORT = "1.3.6.1.2.1.17.7.1.2.2.1.2"   # dot1qTpFdbPort (fdbId.mac)
     D_FDB_PORT = "1.3.6.1.2.1.17.4.3.1.2"       # dot1dTpFdbPort (mac)
     DOT3 = "1.3.6.1.2.1.10.7.2.1"               # EtherLike-MIB dot3StatsTable: .2 AlignmentErrors, .3 FCSErrors (CRC), index = ifIndex
-    VIRTUAL = re.compile(r"^(vlan|loopback|null|port-?channel|link.?aggregation|tunnel|lo\d*$)", re.I)
+    VIRTUAL = re.compile(r"^(vlan|loopback|null|port-?channel|link.?aggregation|tunnel|lo\d*$)", re.IGNORECASE)
     PORT_NAME = re.compile(r"\d+/\d+/(\d+)")
 
     def __init__(self, name, host, community, port=161, **kw):
@@ -575,7 +577,7 @@ class SNMPDriver(BaseDriver):
     def _collect(self, with_macs):
         with self.lock:
             sysv = self.snmp.get([f"{self.SYS}.{n}.0" for n in (1, 3, 5)] + [self.BRIDGE_ADDR])
-            col = lambda base, c: self.snmp.walk(f"{base}.{c}")  # noqa: E731
+            col = lambda base, c: self.snmp.walk(f"{base}.{c}")
             if_type, if_descr = col(self.IF, 3), col(self.IF, 2)
             admin, oper = col(self.IF, 7), col(self.IF, 8)
             in_err, out_err = col(self.IF, 14), col(self.IF, 20)
@@ -598,7 +600,7 @@ class SNMPDriver(BaseDriver):
             # EN: physical ports: ifType 6 (ethernetCsmacd); numbered by bridge port
             # Se descartan las interfaces virtuales que algunos equipos declaran como ethernet (p. ej. «Vlan-interface1» del TP-Link).
             # EN: Virtual interfaces some devices declare as ethernet (e.g. the TP-Link's "Vlan-interface1") are skipped.
-            pname = lambda i: _s(x[1].get(str(i))) or _s(if_descr.get(str(i))) or ""  # noqa: E731
+            pname = lambda i: _s(x[1].get(str(i))) or _s(if_descr.get(str(i))) or ""
             phys = sorted(int(i) for i, t in if_type.items() if t == 6 and not self.VIRTUAL.match(pname(i)))
             port_no = {i: int(bp[str(i)]) if str(i) in bp else n
                        for n, i in enumerate(phys, 1)}
@@ -610,7 +612,7 @@ class SNMPDriver(BaseDriver):
             ports = []
             for i in phys:
                 k = str(i)
-                g = lambda c: x[c].get(k)  # noqa: E731
+                g = lambda c, k=k: x[c].get(k)
                 up = oper.get(k) == 1
                 spd = g(15) or (if_speed.get(k) or 0) // 1_000_000
                 hc = all(g(c) is not None for c in (6, 10))
@@ -685,8 +687,8 @@ def build_driver(cfg, session_dir=None):
 # EN: The manager stores the switches in switches.json (mode 600), polls each one in its own thread every POLL seconds,
 #     computes rates between samples, detects changes (events), keeps history in SQLite (switches.db) and builds the
 #     response the "Switch Monitor" tab shows. Nothing here writes to the switches.
-TEMP_WARN = float(os.environ.get("SWITCH_TEMP_WARN", 70))
-TEMP_CRIT = float(os.environ.get("SWITCH_TEMP_CRIT", 80))
+TEMP_WARN = float(os.environ.get("SWITCH_TEMP_WARN", "70"))
+TEMP_CRIT = float(os.environ.get("SWITCH_TEMP_CRIT", "80"))
 POLL_DEFAULT, POLL_MIN, POLL_MAX = 60, 30, 3600
 MAC_EVERY = 300                    # la tabla MAC pesa más: se lee cada 5 min / the MAC table is heavier: read every 5 min
 FLAP_WINDOW = 600                  # s: un enlace que cambia FLAP_COUNT veces en esta ventana está «rebotando» / a link that changes FLAP_COUNT times in this window is "flapping"
@@ -775,9 +777,9 @@ def validate(body, current=None):
         try:
             est = int(body.get("est_bytes", cur.get("est_bytes", EST_DEFAULT)))
         except (TypeError, ValueError):
-            raise ValueError("Invalid bytes-per-packet estimate (0 to %d)" % EST_MAX)
+            raise ValueError(f"Invalid bytes-per-packet estimate (0 to {EST_MAX})")
         if not 0 <= est <= EST_MAX:
-            raise ValueError("Invalid bytes-per-packet estimate (0 to %d)" % EST_MAX)
+            raise ValueError(f"Invalid bytes-per-packet estimate (0 to {EST_MAX})")
         cfg["est_bytes"] = est
     return cfg
 
@@ -833,7 +835,7 @@ class Manager:
                 self.cfg = d
         except FileNotFoundError:
             pass
-        except Exception as e:
+        except (OSError, ValueError, TypeError) as e:
             self._say("warning", f"switches.json unreadable: {e}")
 
     def _save(self):
@@ -1090,9 +1092,9 @@ class Manager:
                 if len(dq) >= 2 and total > dq[-2][1] and now - rec["err_ev"].get(n, 0) >= ERR_EVENT_GAP:
                     rec["err_ev"][n] = now
                     if crc_up:   # CRC errors point to cable / connector / NIC: say so instead of the generic notice
-                        events.append(("warn", f"{cfg['name']}/{n}: {cq[-1][1] - cq[-2][1]} new CRC errors (cable or network card)", "sw_crc", dict(n=cfg["name"], p=n, d=cq[-1][1] - cq[-2][1])))
+                        events.append(("warn", f"{cfg['name']}/{n}: {cq[-1][1] - cq[-2][1]} new CRC errors (cable or network card)", "sw_crc", {"n": cfg["name"], "p": n, "d": cq[-1][1] - cq[-2][1]}))
                     else:
-                        events.append(("warn", f"{cfg['name']}/{n}: {total - dq[-2][1]} new errors", "sw_err", dict(n=cfg["name"], p=n, d=total - dq[-2][1])))
+                        events.append(("warn", f"{cfg['name']}/{n}: {total - dq[-2][1]} new errors", "sw_err", {"n": cfg["name"], "p": n, "d": total - dq[-2][1]}))
                 st = "up" if p["link_up"] else "down"
                 old_st = rec["linkst"].get(n)
                 rec["linkst"][n] = st
@@ -1103,22 +1105,22 @@ class Manager:
                     recent = [x for x in fl if now - x <= FLAP_WINDOW]
                     if len(recent) >= FLAP_COUNT and now - rec["flap_ev"].get(n, 0) >= FLAP_EVENT_GAP:
                         rec["flap_ev"][n] = now
-                        events.append(("warn", f"{cfg['name']}/{n}: link flapping ({len(recent)} changes in {FLAP_WINDOW // 60} min)", "sw_flap", dict(n=cfg["name"], p=n, c=len(recent), m=FLAP_WINDOW // 60)))
+                        events.append(("warn", f"{cfg['name']}/{n}: link flapping ({len(recent)} changes in {FLAP_WINDOW // 60} min)", "sw_flap", {"n": cfg["name"], "p": n, "c": len(recent), "m": FLAP_WINDOW // 60}))
                 ch = self._changed(f"sw-link:{sid}:{n}", st)
                 if ch and watched:
-                    events.append(("info" if st == "up" else "warn", f"{cfg['name']}/{n}: link {st}", "sw_link", dict(n=cfg["name"], p=n, st=st)))
+                    events.append(("info" if st == "up" else "warn", f"{cfg['name']}/{n}: link {st}", "sw_link", {"n": cfg["name"], "p": n, "st": st}))
                 if p.get("loop_detected") is not None and not watched:
                     ch = self._changed(f"sw-loop:{sid}:{n}", "loop" if p["loop_detected"] else "ok")
                     if ch and ch[1] == "loop":
-                        events.append(("warn", f"{cfg['name']}/{n}: loop detected", "sw_loop", dict(n=cfg["name"], p=n)))
+                        events.append(("warn", f"{cfg['name']}/{n}: loop detected", "sw_loop", {"n": cfg["name"], "p": n}))
         if self._changed(f"sw-dn:{sid}", "up"):
-            events.append(("info", f"{cfg['name']}: switch reachable again", "sw_up", dict(n=cfg["name"])))
+            events.append(("info", f"{cfg['name']}: switch reachable again", "sw_up", {"n": cfg["name"]}))
         t = snap["system"].get("temperature_c")
         if t is not None:
             lv = "crit" if t >= TEMP_CRIT else "warn" if t >= TEMP_WARN else "ok"
             ch = self._changed(f"sw-temp:{sid}", lv)
             if ch:
-                events.append(("info" if lv == "ok" else lv, f"{cfg['name']}: temperature {t:g} °C", "sw_temp" if lv != "ok" else "sw_temp_ok", dict(n=cfg["name"], t=round(t))))
+                events.append(("info" if lv == "ok" else lv, f"{cfg['name']}: temperature {t:g} °C", "sw_temp" if lv != "ok" else "sw_temp_ok", {"n": cfg["name"], "t": round(t)}))
         for lv, text, key, params in events:
             self._event(lv, text, key, **params)
         self._db_write(sid, now, snap, rates)
@@ -1515,10 +1517,10 @@ def _cli(argv):
     ap.add_argument("--no-macs", action="store_true")
     a = ap.parse_args(argv)
     res = {}
-    data = json.load(open(a.config))
+    data = json.loads(Path(a.config).read_text(encoding="utf-8"))
     # Acepta el formato de LabTower ({"switches":[…]}) y una lista simple. / EN: Accepts LabTower's format ({"switches":[…]}) and a plain list.
     for s in (data.get("switches", []) if isinstance(data, dict) else data):
-        pw = os.environ.get(s.get("pass_env", ""), "") or (open(s["pass_file"]).read().strip() if s.get("pass_file") else "")
+        pw = os.environ.get(s.get("pass_env", ""), "") or (Path(s["pass_file"]).read_text(encoding="utf-8").strip() if s.get("pass_file") else "")
         cfg = {"name": s["name"], "driver": s["driver"], "host": s["host"], "user": s.get("user", "admin"), "password": pw,
                "community": os.environ.get(s.get("community_env", ""), "") or s.get("community", ""), "port": s.get("port", 161),
                "mac_paginate": s.get("mac_paginate", False)}

@@ -1,10 +1,15 @@
 """2.1.3f: segundo factor TOTP (RFC 6238), códigos de recuperación y registro de auditoría."""
-import json, time, unittest
-from tests.support import auth, load, make_user, Server, ADMIN
+import json
+import time
+import unittest
+from typing import ClassVar
+
+from tests.support import ADMIN, Server, auth, load, make_user
+
 
 class Req:
     client_address = ("127.0.0.1", 1)
-    headers = {"X-Real-IP": "198.51.100.9", "User-Agent": "t"}
+    headers: ClassVar[dict] = {"X-Real-IP": "198.51.100.9", "User-Agent": "t"}
 
 def now_code(secret, off=0):
     return auth.totp_at(secret, int(time.time() // 30) + off)
@@ -32,7 +37,7 @@ class Totp(unittest.TestCase):
 
 class LoginFlow(unittest.TestCase):
     def setUp(self):
-        self.user = "tf%d" % (time.time_ns() % 10**9)
+        self.user = f"tf{time.time_ns() % 10**9}"
         make_user(self.user, ADMIN, "Passw0rd-long-1")
         auth.throttle_clear("ip:198.51.100.9"); auth.throttle_clear("u:" + self.user)
 
@@ -65,7 +70,7 @@ class LoginFlow(unittest.TestCase):
 
     def test_wrong_password_does_not_reveal_2fa(self):
         self.enable()
-        u, err = auth.login(Req(), self.user, "wrong-wrong-wrong")
+        _u, err = auth.login(Req(), self.user, "wrong-wrong-wrong")
         self.assertEqual(err, (401, "Invalid credentials"))
 
     def test_wrong_codes_lock_the_account(self):
@@ -76,23 +81,23 @@ class LoginFlow(unittest.TestCase):
         auth.throttle_clear("ip:198.51.100.9"); auth.throttle_clear("u:" + self.user)
 
     def test_recovery_code_works_once(self):
-        sec, rec = self.enable()
-        u, err = auth.login(Req(), self.user, "Passw0rd-long-1", rec[0].upper())
+        _sec, rec = self.enable()
+        _u, err = auth.login(Req(), self.user, "Passw0rd-long-1", rec[0].upper())
         self.assertIsNone(err)
-        u, err = auth.login(Req(), self.user, "Passw0rd-long-1", rec[0])
+        _u, err = auth.login(Req(), self.user, "Passw0rd-long-1", rec[0])
         self.assertEqual(err[0], 401)
         self.assertEqual(auth.totp_status(self.user)["recovery_left"], 9)
         self.assertTrue(any(e["x"] == "2fa_recovery_used" and e["a"] == self.user for e in auth.read_audit(50)))
 
     def test_disable_and_secret_not_in_login_result_of_other_user(self):
-        sec, rec = self.enable()
+        _sec, _rec = self.enable()
         self.assertTrue(auth.totp_disable(self.user))
-        u, err = auth.login(Req(), self.user, "Passw0rd-long-1")
+        _u, err = auth.login(Req(), self.user, "Passw0rd-long-1")
         self.assertIsNone(err)
         self.assertFalse(auth.totp_disable(self.user))
 
     def test_login_session_passes_the_code(self):
-        sec, rec = self.enable()
+        _sec, rec = self.enable()
         r, err = auth.login_session(Req(), self.user, "Passw0rd-long-1", None)
         self.assertEqual(err, (401, auth.NEED_CODE))
         r, err = auth.login_session(Req(), self.user, "Passw0rd-long-1", None, rec[1])
@@ -112,7 +117,7 @@ class Audit(unittest.TestCase):
         old = (auth.AUDIT_MAX, auth._audit_lines[0])
         auth.AUDIT_MAX = 20; auth._audit_lines[0] = 0
         try:
-            for i in range(450): auth.audit("t", "x%d" % i)
+            for i in range(450): auth.audit("t", f"x{i}")
             n = len(auth.AUDIT_FILE.read_text().splitlines())
             self.assertLess(n, 450)
             self.assertEqual(auth.read_audit(1)[0]["x"], "x449")
@@ -127,7 +132,7 @@ class AdminPanel(unittest.TestCase):
     def tearDownClass(cls): cls.srv.close()
     def setUp(self):
         self.pw = "Passw0rd-long-1"
-        self.name = "ap%d" % (time.time_ns() % 10**9)
+        self.name = f"ap{time.time_ns() % 10**9}"
         self.tok = make_user(self.name, ADMIN, self.pw)
         auth.throttle_clear("ip:198.51.100.7"); auth.throttle_clear("u:" + self.name)
 
@@ -150,7 +155,7 @@ class AdminPanel(unittest.TestCase):
         self.assertTrue(next(u for u in users if u["username"] == self.name)["totp"])
         self.assertNotIn("secret", json.dumps(users))
         # another admin resets it
-        other = "ot%d" % (time.time_ns() % 10**9)
+        other = f"ot{time.time_ns() % 10**9}"
         tok2 = make_user(other, ADMIN, self.pw)
         auth.throttle_clear("u:" + other)
         st, _ = s.call("POST", "/api/2fa/reset", {"current_password": self.pw, "username": self.name}, tok2)

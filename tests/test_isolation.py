@@ -1,11 +1,26 @@
 """Aislamiento entre módulos (2.1.3) / module isolation: authentication service, data layout, units and migration."""
-import contextlib, json, os, re, socket, sqlite3, subprocess, sys, tempfile, textwrap, time, unittest
+import contextlib
+import json
+import os
+import re
+import socket
+import sqlite3
+import subprocess
+import sys
+import tempfile
+import textwrap
+import time
+import unittest
 from pathlib import Path
+from typing import ClassVar
+
 from tests import support
+
 auth = support.auth
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "auth"))
-import authrpc, migrate_layout  # noqa: E402
+import authrpc
+import migrate_layout
 
 
 def sock_path():
@@ -29,7 +44,7 @@ class ServiceLogic(unittest.TestCase):
     def test_event_module_comes_from_the_caller_not_from_the_request(self):
         r = self.svc.handle("wol", {"op": "event", "level": "warn", "text": "x", "module": "net", "k": "a", "params": {"module": "nut", "n": 1}})
         self.assertEqual(r, {"ok": True})
-        caller, level, text, k, params = self.fa.events[0]
+        caller, _level, _text, _k, params = self.fa.events[0]
         self.assertEqual(caller, "wol"); self.assertNotIn("module", params)
 
     def test_reserved_parameter_names_cannot_collide_with_record_event_arguments(self):
@@ -178,7 +193,7 @@ class RemoteClient(unittest.TestCase):
         self.addCleanup(lambda: setattr(auth, "REMOTE", self.saved[0]) or setattr(auth, "AUTH_SOCKET", self.saved[1]))
 
     class H:
-        client_address = ("127.0.0.1", 1); headers = {"X-Real-IP": "198.51.100.77", "User-Agent": "ua"}
+        client_address = ("127.0.0.1", 1); headers: ClassVar[dict] = {"X-Real-IP": "198.51.100.77", "User-Agent": "ua"}
 
     def test_login_session_logout_through_the_service(self):
         r, err = auth.login_session(self.H(), "alice", "Sup3r-secret-pass", False)
@@ -213,7 +228,7 @@ class RemoteClient(unittest.TestCase):
         self.assertEqual({e["m"] for e in mine}, {"wol"})                   # never "net" / "nut": the name comes from the operating system user
 
     def test_a_flood_of_bogus_tokens_does_not_grow_the_cache_without_bound(self):
-        for i in range(2300): auth.get_session("%064x" % i)
+        for i in range(2300): auth.get_session(f"{i:064x}")
         self.assertLessEqual(len(auth._remote_cache), 2048)
 
     def test_service_down_fails_closed_and_the_breaker_avoids_piling_up(self):
@@ -228,7 +243,7 @@ class RemoteClient(unittest.TestCase):
             r, err = auth.login_session(self.H(), "alice", "Sup3r-secret-pass", False)
             self.assertIsNone(r); self.assertEqual(err[0], 503)
             t0 = time.monotonic()
-            for i in range(50): self.assertIsNone(auth.get_session("%064x" % i))
+            for i in range(50): self.assertIsNone(auth.get_session(f"{i:064x}"))
             self.assertLess(time.monotonic() - t0, 0.5)
             self.assertEqual(calls, ["session"])           # the breaker let only the first one through
         finally:
@@ -302,12 +317,12 @@ class MetricsSplit(unittest.TestCase):
 
     def test_damaged_source_is_refused(self):
         d = tempfile.mkdtemp(); src = os.path.join(d, "metrics.db"); Path(src).write_bytes(b"not a database" * 100)
-        with self.assertRaises(Exception): migrate_layout.split_metrics(src, os.path.join(d, "o"))
+        with self.assertRaises(sqlite3.DatabaseError): migrate_layout.split_metrics(src, os.path.join(d, "o"))
 
 
 class Packaging(unittest.TestCase):
     postinst = (ROOT / "debian" / "postinst").read_text()
-    MODULES = {  # unit: (user, data dir, code dir)
+    MODULES: ClassVar[dict] = {  # unit: (user, data dir, code dir)
         "labtower-wol": ("labtower-wol", "wol-console"), "labtower-ups": ("labtower-nut", "nut-monitor"),
         "labtower-auth": ("labtower-auth", "auth"), "labtower-net": ("labtower-net", "net-monitor"),
         "labtower-pve": ("labtower-pve", "proxmox-monitor"), "labtower-nas": ("labtower-nas", "nas-monitor"),
@@ -319,7 +334,7 @@ class Packaging(unittest.TestCase):
     def test_every_service_has_its_own_user_and_folder(self):
         users = set()
         for unit, (user, datadir) in self.MODULES.items():
-            m = re.search(r'^install_service "%s"\s+.*$' % re.escape(unit), self.postinst, re.M)
+            m = re.search(rf'^install_service "{re.escape(unit)}"\s+.*$', self.postinst, re.MULTILINE)
             self.assertTrue(m, unit)
             self.assertIn(user, m.group(0)); self.assertTrue(m.group(0).rstrip().endswith(datadir), unit)
             users.add(user)
@@ -341,7 +356,7 @@ class Packaging(unittest.TestCase):
 
     def test_shell_syntax_of_every_maintainer_script(self):
         for f in ("postinst", "preinst", "prerm", "postrm"):
-            self.assertEqual(subprocess.run(["bash", "-n", str(ROOT / "debian" / f)]).returncode, 0, f)
+            self.assertEqual(subprocess.run(["bash", "-n", str(ROOT / "debian" / f)], check=False).returncode, 0, f)
 
     def test_modules_never_touch_the_authentication_files(self):
         bad = re.compile(r"auth\.(USERS_FILE|SESSIONS_FILE|THROTTLE_FILE|EVENTS_FILE|INITIAL_PW_FILE|load_users|save_users|create_session|users_lock|authenticate|login\()")
@@ -357,14 +372,16 @@ class Packaging(unittest.TestCase):
 
 class TeleporterLayout(unittest.TestCase):
     def build(self, d):
-        import io, tarfile, hashlib
+        import hashlib
+        import io
+        import tarfile
         old = os.path.join(d, "old-metrics.db")
         MetricsSplit().make_old(d); os.rename(os.path.join(d, "metrics.db"), old)
         users = json.dumps({"admin": {"password_hash": "scrypt$x", "permissions": {"wol": "admin"}}}).encode()
         members = {"data/users.json": users, "data/metrics.db": Path(old).read_bytes()}
         members["backup.json"] = json.dumps({"hostname": "t", "date": "d", "teleporter_version": "x", "package_version": "y"}).encode()
-        sums = "".join("%s  %s\n" % (hashlib.sha256(v).hexdigest(), k) for k, v in sorted(members.items()) if k != "backup.json")
-        sums += "%s  backup.json\n" % hashlib.sha256(members["backup.json"]).hexdigest()
+        sums = "".join(f"{hashlib.sha256(v).hexdigest()}  {k}\n" for k, v in sorted(members.items()) if k != "backup.json")
+        sums += "{}  backup.json\n".format(hashlib.sha256(members["backup.json"]).hexdigest())
         members["SHA256SUMS"] = sums.encode()
         arc = os.path.join(d, "old.tar.gz")
         with tarfile.open(arc, "w:gz") as t:
@@ -380,7 +397,7 @@ class TeleporterLayout(unittest.TestCase):
                    TELEPORTER_SKIP_SYSTEM="1", LABTOWER_NGINX_CONF=os.path.join(d, "n.conf"), LABTOWER_NGINX_ENABLED=os.path.join(d, "ne.conf"),
                    LABTOWER_NUT_DIR=os.path.join(d, "nut"))
         env.pop("SUDO_USER", None)
-        r = subprocess.run(["bash", str(ROOT / "scripts" / "teleporter.sh"), "restore", arc, "-y"], env=env, capture_output=True, text=True, timeout=120)
+        r = subprocess.run(["bash", str(ROOT / "scripts" / "teleporter.sh"), "restore", arc, "-y"], env=env, capture_output=True, text=True, timeout=120, check=False)
         self.assertIn("RESULT:", r.stdout, r.stdout + r.stderr)
         self.assertTrue(os.path.isfile(os.path.join(data, "auth", "users.json")), r.stdout + r.stderr)
         self.assertFalse(os.path.exists(os.path.join(data, "users.json")))
@@ -401,9 +418,9 @@ class TeleporterLayout(unittest.TestCase):
         env.pop("SUDO_USER", None)
         arc = os.path.join(d, "b.tar.gz")
         try:
-            r = subprocess.run(["bash", str(ROOT / "scripts" / "teleporter.sh"), "backup", arc], env=env, capture_output=True, text=True, timeout=120)
+            r = subprocess.run(["bash", str(ROOT / "scripts" / "teleporter.sh"), "backup", arc], env=env, capture_output=True, text=True, timeout=120, check=False)
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-            self.assertIn("SQLite OK", subprocess.run(["bash", str(ROOT / "scripts" / "teleporter.sh"), "check", arc], env=env, capture_output=True, text=True, timeout=120).stdout)
+            self.assertIn("SQLite OK", subprocess.run(["bash", str(ROOT / "scripts" / "teleporter.sh"), "check", arc], env=env, capture_output=True, text=True, timeout=120, check=False).stdout)
         finally:
             c.close()
 
@@ -418,7 +435,7 @@ class TeleporterLayout(unittest.TestCase):
         helpers = src_sh[src_sh.index("as_service() {"):src_sh.index("is_secret() {")]
         helpers2 = src_sh[src_sh.index("in_dir_as_service() {"):src_sh.index("validate_json() {")]
         script = 'SKIP_SYSTEM=1; DROP_FORCE=0\n' + helpers + helpers2 + fn + 'validate_sqlite "$1"\n'
-        r = subprocess.run(["bash", "-c", script, "x", snap], capture_output=True, text=True, timeout=60)
+        r = subprocess.run(["bash", "-c", script, "x", snap], capture_output=True, text=True, timeout=60, check=False)
         self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_owner_mapping_and_modes(self):

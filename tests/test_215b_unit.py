@@ -1,5 +1,9 @@
 """2.1.5b: en un contenedor, el servicio del panel (que usa sudo) no lleva las opciones de systemd que activan «no new privileges»."""
-import os, shutil, subprocess, tempfile, unittest
+import os
+import shutil
+import subprocess
+import tempfile
+import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -15,11 +19,11 @@ def units(in_container):
     try:
         (tmp / "bin").mkdir(); (tmp / "out").mkdir()
         fake = tmp / "bin" / "systemd-detect-virt"
-        fake.write_text("#!/bin/sh\nexit %d\n" % (0 if in_container else 1)); fake.chmod(0o755)
+        fake.write_text(f"#!/bin/sh\nexit {0 if in_container else 1}\n"); fake.chmod(0o755)
         script = fn.replace("/etc/systemd/system/", str(tmp / "out") + "/") + '\nDATA_DIR=/var/lib/labtower PI_HOME=/opt/labtower\n' \
             'install_service labtower-auth "Admin Panel" auth admin_panel.py none labtower-auth auth >/dev/null\n' \
             'install_service labtower-ups "UPS Monitor" nut-monitor server.py strict labtower-nut nut-monitor >/dev/null\n'
-        r = subprocess.run(["bash", "-c", script], env={**os.environ, "PATH": f"{tmp / 'bin'}:{os.environ['PATH']}"}, capture_output=True, text=True)
+        r = subprocess.run(["bash", "-c", script], env={**os.environ, "PATH": f"{tmp / 'bin'}:{os.environ['PATH']}"}, capture_output=True, text=True, check=False)
         assert r.returncode == 0, r.stderr
         return {p.name: p.read_text() for p in (tmp / "out").iterdir()}
     finally:

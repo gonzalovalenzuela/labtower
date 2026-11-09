@@ -1,5 +1,6 @@
 """2.1.5a: el selector de «Subir respaldo» del Admin Panel acepta también los .gpg (los respaldos descargados salen cifrados)."""
-import re, unittest
+import re
+import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent

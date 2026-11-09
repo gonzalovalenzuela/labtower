@@ -1,10 +1,23 @@
 """WAN Monitor: validación, sondas (ping simulado y TCP real), cortes, IP pública, test de velocidad contra un servidor local, permisos y alertas."""
-import http.client, json, os, pathlib, shutil, socket, stat, sys, tempfile, textwrap, threading, time, unittest
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+import http.client
+import json
+import os
+import pathlib
+import shutil
+import socket
+import stat
+import sys
+import tempfile
+import textwrap
+import threading
+import time
+import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
+
 from tests import support
-from tests.support import ADMIN, READONLY, NONE
+from tests.support import ADMIN, NONE, READONLY
 
 m = support.load("wan-monitor/server.py")
 
@@ -286,7 +299,7 @@ class Http(WithFakePing):
 
     def test_history_and_cross_site(self):
         self.assertEqual(self.srv.call("GET", "/api/wan/history?range=zz", token=self.ro)[0], 400)
-        s, j = self.srv.call("POST", "/api/wan/config", {"interval": 60}, token=self.admin, headers={"Sec-Fetch-Site": "cross-site"}); self.assertEqual(s, 403)
+        s, _j = self.srv.call("POST", "/api/wan/config", {"interval": 60}, token=self.admin, headers={"Sec-Fetch-Site": "cross-site"}); self.assertEqual(s, 403)
 
     def test_probe_loop_end_to_end(self):
         os.environ["FAKE_PING_DOWN"] = ""; m.save_config(m.validate({"interval": 10, "dns_name": "", "ip_url": "", "gateway": ""}))

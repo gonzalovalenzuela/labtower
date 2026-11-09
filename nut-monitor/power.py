@@ -73,7 +73,7 @@ def quality(rows, nominal, now, windows=(("24h", 86400), ("7d", 604800))):
             vs = [v for _, v in pts]
             r.update(min=round(min(vs), 1), max=round(max(vs), 1), avg=round(sum(vs) / len(vs), 1))
             run = []; kind = None; last_t = None
-            def close():
+            def close(r=r):
                 nonlocal run, kind
                 if kind and len(run) >= MIN_RUN: r[kind] += 1
                 run = []; kind = None

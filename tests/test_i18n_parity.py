@@ -1,5 +1,9 @@
 """Traducciones: cada módulo tiene las mismas claves en inglés y en español, y los textos de los eventos del Resumen también / every module has the same keys in English and Spanish."""
-import json, re, shutil, subprocess, unittest
+import json
+import re
+import shutil
+import subprocess
+import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -24,7 +28,7 @@ class Parity(unittest.TestCase):
     def test_every_module_has_the_same_keys_in_en_and_es(self):
         for m in MODULES:
             with self.subTest(module=m):
-                out = subprocess.run(["node", "-e", JS, str(ROOT / m / "static" / "app.js")], capture_output=True, text=True, timeout=30)
+                out = subprocess.run(["node", "-e", JS, str(ROOT / m / "static" / "app.js")], capture_output=True, text=True, timeout=30, check=False)
                 self.assertEqual(out.returncode, 0, out.stderr)
                 d = json.loads(out.stdout); en, es = set(d["en"]), set(d["es"])
                 self.assertEqual(sorted(en - es), [], "missing in ES"); self.assertEqual(sorted(es - en), [], "missing in EN")

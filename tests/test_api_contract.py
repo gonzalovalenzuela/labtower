@@ -1,7 +1,9 @@
 """Contrato de las APIs: sin sesión → 401, lectura sola no escribe, y las peticiones entre sitios se bloquean."""
 import unittest
+from typing import ClassVar
+
 from tests import support
-from tests.support import ADMIN, READONLY, NONE
+from tests.support import ADMIN, NONE, READONLY
 
 # (módulo, ruta GET que pide sesión)
 PROTECTED_GET = [
@@ -30,7 +32,7 @@ WRITE_POST = [
 ]
 
 class ApiContract(unittest.TestCase):
-    servers = {}
+    servers: ClassVar[dict] = {}
     @classmethod
     def setUpClass(cls):
         cls.admin = support.make_user("adm", ADMIN); cls.ro = support.make_user("rdo", READONLY); cls.nobody = support.make_user("nob", NONE)

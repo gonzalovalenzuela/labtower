@@ -1,5 +1,6 @@
 """La portada muestra el estado de cada módulo, junto a la flecha de su tarjeta, con su /api/health público."""
-import re, unittest
+import re
+import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent

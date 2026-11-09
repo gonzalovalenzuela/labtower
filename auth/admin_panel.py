@@ -14,19 +14,26 @@
 #       · health helpers  → queries each module's /api/health and builds the summary
 #       · class H         → HTTP handler: do_GET, do_POST, do_PUT and do_DELETE
 #       · final block     → permission migration and server startup
-import json, os, sys, time, logging, re
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+import json
+import logging
+import os
+import re
+import sys
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
 ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
-from urllib.parse import urlparse, parse_qs
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 # El módulo auth vive en la misma carpeta; se agrega al path para poder importarlo al ejecutar el script directamente.
 # EN: The auth module lives in the same folder; it is added to the path so it can be imported when the script is run directly.
 sys.path.insert(0, str(Path(__file__).parent))
-import auth
 import authrpc
-import teleporter_api as tp
 import qrsvg
+import teleporter_api as tp
+
+import auth
 
 # Solo escucha en loopback: el acceso desde la red pasa por nginx (puerto 80), que es quien aplica cabeceras de seguridad.
 # EN: Listens on loopback only: network access goes through nginx (port 80), which applies the security headers.
@@ -76,7 +83,8 @@ MODULES = {"wol": 8080, "nut": 8081, "net": 8083, "pve": 8084, "nas": 8086, "dns
 # EN: Ask a module how it is doing. Returns its JSON report or None if it does not answer. A 503 also carries a
 #     report (it means "there is a serious failure"), so it is read as well.
 def _module_health(name, port, tok):
-    import urllib.request, urllib.error
+    import urllib.error
+    import urllib.request
     hdr = {"Authorization": f"Bearer {tok}"} if tok else {}
     try:
         req = urllib.request.Request(f"http://127.0.0.1:{port}/api/health", headers=hdr)
@@ -84,8 +92,8 @@ def _module_health(name, port, tok):
             return json.loads(r.read())
     except urllib.error.HTTPError as e:              # 503 still carries the report
         try: return json.loads(e.read())
-        except Exception: return None
-    except Exception:
+        except Exception: return None  # noqa: BLE001 - red o servicio externo: cualquier fallo es «sin respuesta» / network or external service: any failure means «no answer»
+    except Exception:  # noqa: BLE001 - red o servicio externo: cualquier fallo es «sin respuesta» / network or external service: any failure means «no answer»
         return None
 
 # Resumen de salud del sistema: chequeos propios (usuarios, sesiones, disco, respaldo, fuente de la Pi)
@@ -124,8 +132,8 @@ def set_module(mid, enable):
     cmd = ["sudo", "-n", MODULES_CMD, "enable" if enable else "disable", mid]
     if os.environ.get("LABTOWER_MODULES_CMD"): cmd = cmd[2:]      # tests: run the stub directly
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)  # nosec B603
-    except Exception as e:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)  # nosec B603
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
         return False, str(e)
     return r.returncode == 0, (r.stdout + r.stderr).strip()[-300:]
 
@@ -734,7 +742,7 @@ if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     try:
         if auth.ensure_permissions(): log.info("'net'/'pve'/'nas'/'dns'/'wan'/'vpn'/'uptime' permissions filled in")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"Permissions: {e}")
     # Servicio de autenticación para los demás módulos (socket Unix). Sin LABTOWER_AUTH_LISTEN (desarrollo) no se abre.
     # EN: Authentication service for the other modules (Unix socket). Without LABTOWER_AUTH_LISTEN (development) it is not opened.

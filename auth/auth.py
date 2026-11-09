@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 LabTower — Auth Module
 Gestión de usuarios, sesiones y permisos compartido por todos los módulos.
@@ -45,8 +44,27 @@ file, fsync and rename) so no data is lost or corrupted by power cuts.
 #
 #     Convention: comments are written in Spanish first and then in English (marked "EN:"). The
 #     English docstrings describe what each function does; the comments explain why.
-from __future__ import annotations  # permite «X | None» en Python 3.9 / allows «X | None» on Python 3.9
-import base64, copy, functools, json, os, re, hashlib, hmac, secrets, struct, time, logging, threading, glob, stat, shutil, subprocess, sqlite3
+# permite «X | None» en Python 3.9 / allows «X | None» on Python 3.9
+from __future__ import annotations
+
+import base64
+import copy
+import functools
+import glob
+import hashlib
+import hmac
+import json
+import logging
+import os
+import re
+import secrets
+import shutil
+import sqlite3
+import stat
+import struct
+import subprocess
+import threading
+import time
 from pathlib import Path
 
 try:
@@ -128,7 +146,7 @@ def adopt_legacy(old_dir, new_dir, names):
                 shutil.copyfile(old, new)
             os.chmod(new, 0o600)
             log.info(f"adopted {old} -> {new}")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"could not adopt {old}: {e}")
 
 # Duración de una sesión sin actividad.
@@ -215,7 +233,7 @@ def read_json(path, default, kind=None):
                     log.error(f"{path} is unreadable; using {p.name}")
                 return data
             log.error(f"{p}: unexpected content")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.error(f"{p}: {e}")
     return default() if callable(default) else copy.deepcopy(default)
 
@@ -251,7 +269,7 @@ def write_json(path, obj, indent=2, mode=0o600):
             raw = path.read_bytes()
             json.loads(raw)
             atomic_write(path.with_name(path.name + ".bak"), raw, mode)
-        except Exception:
+        except (OSError, ValueError):  # archivo actual dañado: se conserva el .bak anterior / EN: current file damaged: keep the older .bak
             pass                      # the current file is already damaged: keep the older .bak
     atomic_write(path, json.dumps(obj, indent=indent), mode)
 
@@ -355,7 +373,7 @@ def _verify(stored, password: str) -> bool:
         dk = hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), n=int(n), r=int(r), p=int(p),
                             dklen=len(want) // 2, maxmem=128 * 1024 * 1024)
         return hmac.compare_digest(dk.hex(), want)
-    except Exception:
+    except Exception:  # noqa: BLE001 - falla cerrada: cualquier error rechaza la contraseña / fails closed: any error rejects the password
         return False
 
 # Política de contraseñas: mínimo 8 caracteres (sin contar espacios de los extremos), distinta del nombre de usuario y fuera de una lista corta de
@@ -504,7 +522,7 @@ def _users_cached() -> dict:
             try:
                 if ensure_initial_user():
                     return _users_cached()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
                 log.error(f"cannot create the initial administrator: {e}")
             return {}
         sig = ("missing",)
@@ -522,7 +540,7 @@ def _users_cached() -> dict:
                 return data
         except FileNotFoundError:
             continue
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.error(f"{p}: {e}")
     log.error(f"{USERS_FILE} is missing or corrupt and there is no usable backup: no user can "
               f"log in until it is restored (or {INIT_MARKER} is removed to start from scratch)")
@@ -580,7 +598,7 @@ def save_users(users: dict):
             try:
                 json.loads(USERS_FILE.read_text())
                 atomic_write(USERS_FILE.with_name(USERS_FILE.name + ".bak"), USERS_FILE.read_bytes())
-            except Exception:
+            except (OSError, ValueError):  # archivo actual dañado: se conserva el .bak anterior / EN: current file damaged: keep the older .bak
                 pass
         atomic_write(USERS_FILE, json.dumps(users, indent=2))
         _mark_initialized()
@@ -603,7 +621,7 @@ def _load_sessions() -> dict:
             if isinstance(data, dict):
                 _scache["sig"], _scache["data"] = sig, data
                 return data
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"sessions.json: {e}")
     _scache["sig"], _scache["data"] = None, {}
     return {}
@@ -632,7 +650,7 @@ def create_session(username: str, permissions: dict, ttl: int = SESSION_TTL, han
         try:
             meta = {"ip": client_ip(handler)[:64],
                     "ua": re.sub(r"[\x00-\x1f\x7f]", "", handler.headers.get("User-Agent") or "")[:200]}
-        except Exception:
+        except Exception:  # noqa: BLE001 - dato opcional: si falla, queda vacío / optional value: empty on failure
             meta = {}
     with _sessions_lock:
         sessions = _load_sessions()
@@ -651,8 +669,8 @@ def create_session(username: str, permissions: dict, ttl: int = SESSION_TTL, han
             users = load_users(); u = users.get(username)
             if isinstance(u, dict) and time.time() - int(u.get("last_login") or 0) > 30:
                 u["last_login"] = int(time.time()); save_users(users)
-    except Exception:
-        pass
+    except Exception as e:       # la sesión sigue siendo válida; solo se registra / EN: the session is still valid; only logged  # noqa: BLE001
+        log.warning(f"last login not saved for {username}: {e}")
     return token
 
 # Valida un token y devuelve la sesión o None. Reglas:
@@ -708,7 +726,7 @@ def delete_session(token: str):
         with _remote_cache_lock:                      # drop the cached answer first: a closed session must not survive for the cache's second
             for pending in (False, True): _remote_cache.pop((_tkey(token), pending), None)
         try: _rpc("logout", token=token)
-        except Exception as e: log.warning(f"logout: {e}")
+        except Exception as e: log.warning(f"logout: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         return
     with _sessions_lock:
         sessions = _load_sessions()
@@ -806,7 +824,7 @@ def _remote_session(token: str, allow_pending: bool):
         if hit and now - hit[0] < REMOTE_CACHE_SECONDS: return copy.deepcopy(hit[1])
     try:
         r = _rpc("session", token=token, allow_pending=bool(allow_pending))
-    except Exception:                                  # _rpc already logged it (once per second)
+    except Exception:                                  # _rpc already logged it (once per second)  # noqa: BLE001
         return None
     sess = r.get("session") if isinstance(r.get("session"), dict) else None
     with _remote_cache_lock:
@@ -842,7 +860,7 @@ def authenticate(username: str, password: str) -> dict | None:
                     users[username]["must_change_password"] = True    # old fixed-salt hash: ask for a new password
                     save_users(users)
             user = copy.deepcopy(user); user["must_change_password"] = True
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"could not upgrade the password hash of {username}: {e}")
     return copy.deepcopy(user)
 
@@ -871,7 +889,7 @@ def _th_read():
         return d if isinstance(d, dict) else {}
     except FileNotFoundError:
         return {}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"{THROTTLE_FILE}: {e}")
         return {}
 
@@ -907,7 +925,7 @@ def throttle_fail(key: str, max_fails: int = MAX_FAILS, window: int = WINDOW, lo
             locked = _th_bump(d, key, now, max_fails, window, lockout)
             atomic_write(THROTTLE_FILE, json.dumps(d))
         return locked
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"login-throttle file unusable, using memory: {e}")
         with _mem_lock:
             return _th_bump(_mem_fails, key, now, max_fails, window, lockout)
@@ -918,8 +936,8 @@ def throttle_clear(key: str):
         with _throttle_lock:
             d = _th_read()
             if d.pop(key, None) is not None: atomic_write(THROTTLE_FILE, json.dumps(d))
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
+        log.warning(f"throttle not cleared: {e}")
     with _mem_lock: _mem_fails.pop(key, None)
 
 # IP real del cliente. Detrás de nginx todas las peticiones llegan desde 127.0.0.1, así que solo en ese caso
@@ -967,7 +985,8 @@ def valid_host(h) -> bool:
 # allow_loopback=True (NUT only): the own machine is accepted, link-local / 0.0.0.0 / multicast still are not.
 # resolve=False: only the checks that need no DNS lookup (literal IPs, "localhost"); used when a stored configuration is read again.
 def valid_target(h, allow_loopback: bool = False, resolve: bool = True) -> bool:
-    import ipaddress, socket
+    import ipaddress
+    import socket
     if not valid_host(h): return False
     name = h.strip("[]").lower()
     if (name == "localhost" or name.endswith(".localhost")) and not allow_loopback: return False
@@ -1002,7 +1021,7 @@ def totp_at(secret: str, step: int) -> str:
     key = base64.b32decode(secret + "=" * (-len(secret) % 8), casefold=True)
     h = hmac.new(key, struct.pack(">Q", step), "sha1").digest()
     o = h[-1] & 15
-    return "%06d" % ((int.from_bytes(h[o:o + 4], "big") & 0x7fffffff) % 1000000)
+    return f"{(int.from_bytes(h[o:o + 4], 'big') & 0x7fffffff) % 1000000:06d}"
 
 def totp_check(secret: str, code, last: int = 0, now: float | None = None) -> int | None:
     """Return the time step of a valid code (±1 step of tolerance, never one already used), or None."""
@@ -1022,7 +1041,7 @@ def _rkey(code: str) -> str:
     return hashlib.sha256(re.sub(r"[^0-9a-z]", "", str(code).lower()).encode()).hexdigest()
 
 def _new_recovery() -> list:
-    return ["%s-%s" % (secrets.token_hex(2), secrets.token_hex(2)) for _ in range(10)]
+    return [f"{secrets.token_hex(2)}-{secrets.token_hex(2)}" for _ in range(10)]
 
 @_local
 def totp_status(username: str) -> dict:
@@ -1146,7 +1165,7 @@ def login_session(handler, username, password, remember=None, code=None):
         try:
             ua = re.sub(r"[\x00-\x1f\x7f]", "", handler.headers.get("User-Agent") or "")[:200]
             r = _rpc("login", ip=client_ip(handler), ua=ua, username=username, password=password, remember=remember, code=(code or "")[:32])
-        except Exception:
+        except Exception:  # noqa: BLE001 - red o servicio externo: cualquier fallo es «sin respuesta» / network or external service: any failure means «no answer»
             return None, (503, "Authentication service unavailable")
         if isinstance(r.get("login"), dict): return r["login"], None
         code = r.get("status") if isinstance(r.get("status"), int) else 500
@@ -1269,7 +1288,7 @@ def serve_asset(handler, static_dir, path) -> bool:
         st = p.stat(); data = p.read_bytes()
     except OSError:
         return False
-    etag = '"%x-%x"' % (int(st.st_mtime), st.st_size)
+    etag = f'"{int(st.st_mtime):x}-{st.st_size:x}"'
     handler.send_response(304 if handler.headers.get("If-None-Match") == etag else 200)
     handler.send_header("ETag", etag)
     handler.send_header("Cache-Control", "no-cache")
@@ -1329,7 +1348,7 @@ def _update_fetch() -> dict:
 def _update_refresh():
     try:
         try: info = _update_fetch(); err = ""
-        except Exception as e: info, err = {}, f"{type(e).__name__}: {e}"[:160]
+        except Exception as e: info, err = {}, f"{type(e).__name__}: {e}"[:160]  # noqa: BLE001 - el error queda guardado y se muestra / the error is kept and shown
         with _update_lock:
             cur = read_json(UPDATE_FILE, {}, dict)
             cur.update(info); cur["checked"] = int(time.time()); cur["error"] = err
@@ -1345,10 +1364,10 @@ def update_info(force=False) -> dict:
     enabled = os.environ.get("LABTOWER_UPDATE_CHECK", "1").strip() != "0"
     age = time.time() - int(cur.get("checked", 0) or 0)
     wait = UPDATE_RETRY if cur.get("error") else UPDATE_EVERY
-    if enabled and (force or age > wait) and not _update_busy[0]:
-        if not force or age > 30:                                        # a manual check at most every 30 s
-            _update_busy[0] = True
-            threading.Thread(target=_update_refresh, daemon=True).start()
+    # una revisión manual como máximo cada 30 s / EN: a manual check at most every 30 s
+    if enabled and (force or age > wait) and not _update_busy[0] and (not force or age > 30):
+        _update_busy[0] = True
+        threading.Thread(target=_update_refresh, daemon=True).start()
     mine, last = version_key(version()), version_key(cur.get("latest"))
     return {"enabled": enabled, "current": version(), "latest": cur.get("latest") or "", "url": cur.get("url") or "", "published": cur.get("published") or "",
             "newer": bool(mine and last and last > mine), "checked": cur.get("checked") or 0, "error": cur.get("error") or ""}
@@ -1375,7 +1394,7 @@ def record_event(module, level, text, k=None, **params):
     and records it under the module's own name (taken from the operating-system user, not from `module`)."""
     if REMOTE:
         try: _rpc("event", retries=1, level=level, text=str(text)[:200], k=k, params={a: b for a, b in params.items() if isinstance(b, (int, float, str))})
-        except Exception as e: log.debug(f"record_event: {e}")
+        except Exception as e: log.debug(f"record_event: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         return
     try:
         now = int(time.time())
@@ -1388,7 +1407,7 @@ def record_event(module, level, text, k=None, **params):
             if k: e["k"] = k; e["p"] = {a: (b if isinstance(b, (int, float)) else str(b)[:80]) for a, b in params.items()}
             ev.append(e)
             write_json(EVENTS_FILE, ev[-EVENTS_MAX:], indent=None)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.debug(f"record_event: {e}")
 
 # ─── Registro de auditoría ───────────────────────────────────────────────────────────────────────────
@@ -1406,7 +1425,7 @@ def audit(actor, action, target="", detail="", ip="", module="auth"):
     clean = lambda v, n: re.sub(r"[\x00-\x1f\x7f]", " ", str(v or ""))[:n]
     if REMOTE:
         try: _rpc("audit", retries=1, actor=clean(actor, 64), action=clean(action, 48), target=clean(target, 128), detail=clean(detail, 200), ip=clean(ip, 64))
-        except Exception as e: log.debug(f"audit: {e}")
+        except Exception as e: log.debug(f"audit: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         return
     try:
         rec = json.dumps({"t": int(time.time()), "a": clean(actor, 64), "x": clean(action, 48), "g": clean(target, 128),
@@ -1420,7 +1439,7 @@ def audit(actor, action, target="", detail="", ip="", module="auth"):
                 lines = AUDIT_FILE.read_text().splitlines()
                 if len(lines) > AUDIT_MAX + 200:
                     atomic_write(AUDIT_FILE, "\n".join(lines[-AUDIT_MAX:]) + "\n")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.debug(f"audit: {e}")
 
 @_local
@@ -1456,7 +1475,7 @@ def state_changed(key, state):
 def read_events(modules=None, limit=100):
     if REMOTE:
         try: return _rpc("events", retries=2, modules=list(modules) if modules is not None else None, limit=limit).get("events") or []
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"events unavailable: {e}")
             return []
     ev = read_json(EVENTS_FILE, [], list)
@@ -1480,7 +1499,7 @@ def _cpu_percent():
         if not prev or total == prev[1]:
             return None if not prev else 0.0
         return round(100.0 * (1 - (idle - prev[0]) / (total - prev[1])), 1)
-    except Exception:
+    except (OSError, ValueError, IndexError):
         return None
 
 # Resultado de `labtower-sftp-backup verify` (comprobación en el storage); None si nunca corrió o el archivo no sirve.
@@ -1494,7 +1513,7 @@ def _backup_verify():
         return {"state": "ok" if d.get("ok") is True else "fail", "time": t if isinstance(t, (int, float)) and not isinstance(t, bool) else None,
                 "file": str(d.get("file") or "")[:120], "age_h": d.get("age_h") if isinstance(d.get("age_h"), (int, float)) else None,
                 "count": d.get("count") if isinstance(d.get("count"), int) else None, "message": str(d.get("message") or "")[:220]}
-    except Exception:
+    except (OSError, ValueError):
         return None
 
 def backup_status():
@@ -1506,7 +1525,7 @@ def backup_status():
         txt = Path(f).read_text()
         if not txt.strip(): raise FileNotFoundError(f)          # empty file: same as «never ran»
         d = json.loads(txt)
-        if not isinstance(d, dict): raise ValueError("not an object")
+        if not isinstance(d, dict): raise ValueError("not an object")  # noqa: TRY004 - validación de entrada; quien llama espera ValueError / EN: input validation, callers expect ValueError
         out = {"state": "ok" if d.get("ok") is True else "fail", "time": d.get("time"), "file": d.get("file") or "",
                "size": d.get("size"), "message": str(d.get("message") or "")[:220]}
         v = _backup_verify()
@@ -1514,7 +1533,7 @@ def backup_status():
         return out
     except FileNotFoundError:
         pass
-    except Exception:
+    except (OSError, ValueError):
         return {"state": "unknown"}          # empty or corrupt file: shown as «sin datos», never an error
     try:
         user = ""
@@ -1522,9 +1541,13 @@ def backup_status():
             m = re.match(r"\s*SFTP_USER\s*=\s*(\S*)", ln)
             if m: user = m.group(1)
         return {"state": "pending" if user else "off"}
-    except Exception:
+    except (OSError, ValueError):
         return {"state": "off"}
 
+# Datos del sistema (/proc, /sys, ip, utmp): cada lectura es opcional. Si un archivo falta o cambia de formato
+# (CT, otra distribución), ese dato queda vacío y el resto se muestra igual; por eso los «except» de esta sección callan.
+# EN: System data (/proc, /sys, ip, utmp): every read is optional. If a file is missing or has another format
+# (CT, another distribution), that value stays empty and the rest is still shown; that is why the «except» here stay silent.
 def system_stats():
     """Snapshot of the machine: temp (°C), cpu %, load, memory, disk, uptime, model, power flags."""
     out = {"model": None, "temp": None, "cpu": _cpu_percent(), "load": None, "cores": os.cpu_count() or 1,
@@ -1537,7 +1560,7 @@ def system_stats():
         except OSError: continue
     for f in ("/sys/class/thermal/thermal_zone0/temp",):
         try: out["temp"] = round(int(Path(f).read_text().strip()) / 1000.0, 1); break
-        except Exception: continue
+        except (OSError, ValueError): continue
     try:
         m = {}
         with open("/proc/meminfo") as f:
@@ -1545,21 +1568,21 @@ def system_stats():
                 k, v = line.split(":", 1); m[k] = int(v.split()[0]) * 1024
         total = m.get("MemTotal", 0); avail = m.get("MemAvailable", m.get("MemFree", 0))
         if total: out["mem"] = {"total": total, "used": total - avail, "pct": round(100.0 * (total - avail) / total, 1)}
-    except Exception: pass
+    except (OSError, ValueError, IndexError): pass
     try:
         st = os.statvfs("/")
         total = st.f_blocks * st.f_frsize; free = st.f_bavail * st.f_frsize
         if total: out["disk"] = {"total": total, "used": total - free, "pct": round(100.0 * (total - free) / total, 1)}
     except OSError: pass
     try: out["uptime"] = int(float(Path("/proc/uptime").read_text().split()[0]))
-    except Exception: pass
+    except (OSError, ValueError, IndexError): pass
     try:
         if _is_raspberry_pi():
             bits = _read_throttled()
             if bits is not None:
                 out["power"] = {"under_voltage": bool(bits & 0x1), "throttled": bool(bits & 0x4),
                                 "temp_limit": bool(bits & 0x8), "since_boot": bool(bits & 0xF0000)}
-    except Exception: pass
+    except Exception: pass  # noqa: BLE001, S110
     out["backup"] = backup_status()
     return out
 
@@ -1578,7 +1601,7 @@ _SKIP_FS = {"proc", "sysfs", "devtmpfs", "devpts", "tmpfs", "cgroup", "cgroup2",
 
 def _read(path, default=""):
     try: return Path(path).read_text().strip()
-    except Exception: return default
+    except (OSError, ValueError): return default
 
 def _cpu_times():
     """Per-core jiffies: [(idle, total), …] with the aggregate first."""
@@ -1589,7 +1612,7 @@ def _cpu_times():
                 if not line.startswith("cpu"): break
                 p = line.split(); v = [int(x) for x in p[1:8]]
                 out.append((v[3] + v[4], sum(v)))
-    except Exception: pass
+    except (OSError, ValueError, IndexError): pass
     return out
 
 def _proc_times():
@@ -1603,7 +1626,7 @@ def _proc_times():
             name = raw[raw.index("(") + 1:raw.rindex(")")]
             f = raw[raw.rindex(")") + 2:].split()
             res[int(d)] = (name, int(f[11]) + int(f[12]), int(f[21]) * page, f[0])
-        except Exception: continue
+        except (OSError, ValueError, IndexError): continue
     return res
 
 def _uid_name(pid):
@@ -1612,14 +1635,14 @@ def _uid_name(pid):
         uid = os.stat(f"/proc/{pid}").st_uid
         try: return pwd.getpwuid(uid).pw_name
         except KeyError: return str(uid)
-    except Exception: return ""
+    except OSError: return ""
 
 def _utmp_users(path="/run/utmp"):
     """Sessions in /run/utmp (same data as the old «who»). struct utmp is 384 bytes on Linux."""
     import struct
     out = []
     try: data = Path(path).read_bytes()
-    except Exception: return out
+    except OSError: return out
     for i in range(0, len(data) - 383, 384):
         r = data[i:i + 384]
         if struct.unpack_from("<h", r, 0)[0] != 7: continue          # USER_PROCESS
@@ -1639,7 +1662,7 @@ def _logind_users(path="/run/systemd/sessions"):
         try:
             for line in Path(path, n).read_text().splitlines():
                 if "=" in line: k, v = line.split("=", 1); kv[k] = v
-        except Exception: continue
+        except (OSError, ValueError): continue
         if kv.get("CLASS", "user") != "user" or kv.get("STATE") == "closing" or not kv.get("USER"): continue
         try: since = int(kv.get("REALTIME", "0")) // 1000000
         except ValueError: since = 0
@@ -1651,12 +1674,13 @@ def _proc_users(proc="/proc"):
     """Fallback when neither utmp nor logind know the sessions (minimal images such as DietPi, Debian 13 without utmp).
     Looks for the processes that exist only while someone is logged in: «sshd-session: user@pts/0» and login shells («-bash») with a terminal.
     ES: Respaldo cuando ni utmp ni logind conocen las sesiones: busca los procesos de una sesión abierta (sshd y shells de login con terminal)."""
-    import pwd, re
+    import pwd
+    import re
     out = []
     try:
         btime = int(next(l.split()[1] for l in Path(proc, "stat").read_text().splitlines() if l.startswith("btime ")))
         hz = os.sysconf("SC_CLK_TCK")
-    except Exception: btime, hz = 0, 100
+    except (OSError, ValueError, IndexError, StopIteration): btime, hz = 0, 100
     try: pids = [n for n in os.listdir(proc) if n.isdigit()]
     except OSError: return out
     ssh = re.compile(r"^sshd(?:-session)?: ([^@\s\[]+)@(\S+)$")
@@ -1674,9 +1698,9 @@ def _proc_users(proc="/proc"):
                 major, minor = (tty_nr >> 8) & 0xfff, (tty_nr & 0xff) | ((tty_nr >> 12) & 0xfff00)
                 tty = f"pts/{minor}" if major in range(136, 144) else f"tty{minor}" if major == 4 else ""
                 try: user = pwd.getpwuid(os.stat(Path(proc, pid)).st_uid).pw_name
-                except Exception: user = ""
+                except (OSError, KeyError): user = ""
             if user and tty: out.append({"user": user, "tty": tty, "host": "", "since": since})
-        except Exception: continue
+        except (OSError, ValueError, IndexError): continue
     return out
 
 def _logged_users():
@@ -1692,10 +1716,10 @@ def _net_info(full=False):
     ifs = []
     addrs = {}
     try:
-        o = subprocess.run(["ip", "-j", "addr"], capture_output=True, text=True, timeout=3).stdout
+        o = subprocess.run(["ip", "-j", "addr"], capture_output=True, text=True, timeout=3, check=False).stdout
         for it in json.loads(o or "[]"):
             addrs[it.get("ifname")] = [f'{a.get("local")}/{a.get("prefixlen")}' for a in it.get("addr_info", []) if a.get("family") in ("inet", "inet6") and a.get("scope") != "host"]
-    except Exception: pass
+    except Exception: pass  # noqa: BLE001, S110
     base = Path("/sys/class/net")
     try: names = sorted(os.listdir(base))
     except OSError: names = []
@@ -1724,7 +1748,7 @@ def _disk_info():
                 total = st.f_blocks * st.f_frsize; free = st.f_bavail * st.f_frsize
                 if total: out.append({"dev": dev, "mount": mp.replace("\\040", " "), "fs": fs, "total": total, "used": total - free,
                                       "pct": round(100.0 * (total - free) / total, 1)})
-    except Exception: pass
+    except (OSError, ValueError): pass
     return out
 
 _THROTTLE_BITS = [(0, "under_voltage", True), (1, "freq_capped", True), (2, "throttled", True), (3, "soft_temp_limit", True),
@@ -1745,7 +1769,7 @@ def system_detail(full=False):
     try:
         u = os.uname()
         out["host"] = {"hostname": u.nodename, "kernel": u.release, "arch": u.machine}
-    except Exception: out["host"] = {}
+    except (OSError, AttributeError): out["host"] = {}
     osr = {}
     for line in _read("/etc/os-release").splitlines():
         if "=" in line: k, v = line.split("=", 1); osr[k] = v.strip('"')
@@ -1753,7 +1777,7 @@ def system_detail(full=False):
     try:
         import platform
         out["host"]["python"] = platform.python_version()
-    except Exception: pass
+    except (ImportError, ValueError): pass
     out["boot"] = int(time.time() - out["uptime"]) if out.get("uptime") is not None else None
     out["time"] = int(time.time())
     out["tz"] = time.strftime("%Z")
@@ -1771,7 +1795,7 @@ def system_detail(full=False):
         out["mem_detail"] = {"total": m.get("MemTotal"), "available": m.get("MemAvailable"), "free": m.get("MemFree"),
                              "buffers": m.get("Buffers"), "cached": m.get("Cached"),
                              "swap_total": m.get("SwapTotal"), "swap_used": (m.get("SwapTotal", 0) - m.get("SwapFree", 0))}
-    except Exception: out["mem_detail"] = None
+    except (OSError, ValueError, IndexError): out["mem_detail"] = None
     out["disks"] = _disk_info()
     out["net"] = _net_info(full)
     out["procs_total"] = len(p1) if full else None
@@ -1781,14 +1805,14 @@ def system_detail(full=False):
             out["throttle"] = {"raw": f"0x{bits:X}", "now": [n for b, n, now in _THROTTLE_BITS if now and bits & (1 << b)],
                                "since_boot": [n for b, n, now in _THROTTLE_BITS if not now and bits & (1 << b)]}
         else: out["throttle"] = None
-    except Exception: out["throttle"] = None
+    except Exception: out["throttle"] = None  # noqa: BLE001 - dato opcional: si falla, queda vacío / optional value: empty on failure
     # Más sensores térmicos / other thermal zones
     zones = []
     try:
         for z in sorted(Path("/sys/class/thermal").glob("thermal_zone*")):
             v = _read(z / "temp")
             if v.lstrip("-").isdigit(): zones.append({"name": _read(z / "type") or z.name, "temp": round(int(v) / 1000.0, 1)})
-    except Exception: pass
+    except (OSError, ValueError): pass
     out["thermal"] = zones
     out["full"] = bool(full)
     if full:
@@ -1806,9 +1830,9 @@ def system_detail(full=False):
         out["top_cpu"], out["top_mem"] = top_cpu, top_mem
         failed = []
         try:
-            o = subprocess.run(["systemctl", "--failed", "--no-legend", "--plain", "--no-pager"], capture_output=True, text=True, timeout=4).stdout
+            o = subprocess.run(["systemctl", "--failed", "--no-legend", "--plain", "--no-pager"], capture_output=True, text=True, timeout=4, check=False).stdout
             failed = [ln.split()[0] for ln in o.splitlines() if ln.strip()]
-        except Exception: failed = None
+        except (OSError, subprocess.SubprocessError): failed = None
         out["failed_units"] = failed
     return out
 
@@ -1902,7 +1926,7 @@ def check_file(path, writable_dir=True, must_exist=False):
             with open(path, "rb") as f: json.loads(f.read() or b"null")
         elif must_exist:
             return chk(FAIL, f"{path.name} missing")
-    except Exception as e:
+    except (OSError, ValueError) as e:
         return chk(FAIL, f"{path.name} unreadable: {e}")
     if writable_dir and not os.access(path.parent, os.W_OK):
         return chk(FAIL, f"{path.parent} not writable")
@@ -1919,7 +1943,7 @@ def check_common():
         for k in ("users", "sessions"):
             v = r.get(k) if isinstance(r, dict) else None
             out[k] = v if isinstance(v, dict) and v.get("level") in (OK, WARN, FAIL) else chk(FAIL, "no answer from the authentication service")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - red o servicio externo: cualquier fallo es «sin respuesta» / network or external service: any failure means «no answer»
         out["users"] = chk(FAIL, f"authentication service unavailable: {str(e)[:80]}")
         out["sessions"] = chk(FAIL, "authentication service unavailable")
     out["disk"] = _check_disk(DATA_ROOT)
@@ -1940,7 +1964,7 @@ def events_check():
     try:
         v = _rpc("health", retries=2).get("checks", {}).get("events")
         if isinstance(v, dict) and v.get("level") in (OK, WARN, FAIL): return v
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - red o servicio externo: cualquier fallo es «sin respuesta» / network or external service: any failure means «no answer»
         return chk(FAIL, f"authentication service unavailable: {str(e)[:80]}")
     return chk(FAIL, "no answer from the authentication service")
 
@@ -1977,7 +2001,7 @@ def _read_throttled():
     """Raspberry Pi firmware 'throttled' bit mask, or None when it cannot be read."""
     cmd = os.environ.get("LABTOWER_VCGENCMD") or shutil.which("vcgencmd") or "/usr/bin/vcgencmd"
     try:
-        out = subprocess.run([cmd, "get_throttled"], capture_output=True, text=True, timeout=3).stdout
+        out = subprocess.run([cmd, "get_throttled"], capture_output=True, text=True, timeout=3, check=False).stdout
         return int(out.split("=")[1].strip(), 16)
     except (OSError, ValueError, IndexError, subprocess.SubprocessError):
         pass

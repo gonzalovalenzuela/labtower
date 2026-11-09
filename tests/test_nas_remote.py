@@ -1,6 +1,19 @@
 """NAS Monitor: TrueNAS (JSON-RPC por WebSocket) y OpenMediaVault (rpc.php) con servidores simulados / with simulated servers."""
-import base64, hashlib, json, os, shutil, socket, ssl, stat, struct, subprocess, tempfile, threading, unittest
+import base64
+import hashlib
+import json
+import os
+import shutil
+import socket
+import ssl
+import stat
+import struct
+import subprocess
+import tempfile
+import threading
+import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
 from tests import support
 from tests.support import ADMIN, READONLY
 
@@ -195,7 +208,7 @@ class TrueNas(unittest.TestCase):
         self.assertEqual([(d["name"], d["lv"], d["temp"]) for d in snap["disks"]], [("sda", "ok", 35.0), ("sdb", "crit", 61.0)])
         kinds = {(a["type"], a["lv"]) for a in snap["alerts"]}
         for want in [("raid", "warn"), ("vol_full", "warn"), ("disk", "crit"), ("remote", "crit")]: self.assertIn(want, kinds)
-        self.assertEqual([a for a in snap["alerts"] if a["type"] == "remote"][0]["value"], "Device: /dev/sdb, SMART failed")     # the dismissed one is not listed
+        self.assertEqual(next(a for a in snap["alerts"] if a["type"] == "remote")["value"], "Device: /dev/sdb, SMART failed")     # the dismissed one is not listed
         self.assertEqual(snap["io"][0]["load"], 3.5)
         self.assertEqual(len(cfg["tls_pin"]), 64)                                       # the fingerprint was learned
         self.assertFalse(any(x in ("pool.create", "pool.delete") for x in srv.log if isinstance(x, str)))

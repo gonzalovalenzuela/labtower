@@ -3,8 +3,17 @@ ES: Cada adaptador habla con un tipo de router y devuelve lo mismo: {ok, wan_up,
     pudo saber. Solo lee: nunca cambia nada en el router. Solo biblioteca estándar.
 EN: Each adapter talks to one router type and returns the same thing: {ok, wan_up, ip, uptime, error}. `wan_up` is True/False as the router reports it, or None when it
     could not be told. Read only: it never changes anything on the router. Standard library only."""
-import base64, hashlib, hmac, http.cookiejar, json, os, re, ssl, time
-import urllib.error, urllib.request
+import base64
+import hashlib
+import hmac
+import http.cookiejar
+import json
+import os
+import re
+import ssl
+import time
+import urllib.error
+import urllib.request
 
 TYPES = ("huawei", "openwrt", "ddwrt", "tplink")
 TIMEOUT = 6
@@ -33,7 +42,7 @@ class Http:
             with self.opener.open(req, timeout=TIMEOUT) as r: return r.status, r.read(MAX_BODY).decode("utf-8", "replace")
         except urllib.error.HTTPError as e:
             try: txt = e.read(MAX_BODY).decode("utf-8", "replace")
-            except Exception: txt = ""
+            except Exception: txt = ""  # noqa: BLE001 - red o servicio externo: cualquier fallo es «sin respuesta» / network or external service: any failure means «no answer»
             return e.code, txt
         except (urllib.error.URLError, OSError, ssl.SSLError) as e:
             raise RouterError("no connection to the router: " + str(getattr(e, "reason", e))[:100])
@@ -92,7 +101,7 @@ def check_huawei(c, http):
         return _res(str(d.get("Status")) == "Connected", ip, up, "Status=" + str(d.get("Status")))
     finally:
         try: post("api/system/user_logout", {})
-        except Exception: pass
+        except Exception: pass  # noqa: BLE001, S110 - limpieza al terminar; un fallo no cambia el resultado / EN: cleanup; a failure does not change the result
 
 # ─── OpenWrt (ubus por HTTP / ubus over HTTP, uhttpd-mod-ubus) ───────────────────────────────────
 def check_openwrt(c, http):
@@ -118,10 +127,10 @@ def check_openwrt(c, http):
         return _res(bool(d.get("up")), addr, int(up) if isinstance(up, (int, float)) else None, f"{c['interface']} proto={d.get('proto', '?')}")
     finally:
         try: call(sid, "session", "destroy", {})
-        except Exception: pass
+        except Exception: pass  # noqa: BLE001, S110 - limpieza al terminar; un fallo no cambia el resultado / EN: cleanup; a failure does not change the result
 
 # ─── DD-WRT (páginas «live» con HTTP básico / "live" pages with HTTP basic) ──────────────────────
-_RE_KV = re.compile(r"\{(\w+)::(.*?)\}", re.S)
+_RE_KV = re.compile(r"\{(\w+)::(.*?)\}", re.DOTALL)
 _IP4 = re.compile(r"^\d{1,3}(?:\.\d{1,3}){3}$")
 
 def parse_ddwrt(text):
@@ -152,7 +161,7 @@ def check_ddwrt(c, http):
 # ES: Los TP-Link nuevos (Archer/Deco con inicio cifrado) no se pueden leer sin cifrado propio: se avisa.
 # EN: Newer TP-Link models (Archer/Deco with encrypted login) cannot be read this way: a clear message is returned.
 def parse_tplink(text):
-    m = re.search(r"var\s+wanPara\s*=\s*new\s+Array\s*\((.*?)\)\s*;", text, re.S)
+    m = re.search(r"var\s+wanPara\s*=\s*new\s+Array\s*\((.*?)\)\s*;", text, re.DOTALL)
     if not m: return None, None
     toks = [x.strip().strip('"\'') for x in m.group(1).split(",")]
     ip = next((x for x in toks[:6] if _IP4.match(x)), None)
@@ -180,7 +189,7 @@ def check(c, host):
         http = Http(f"{scheme}://{host}:{int(c['port'])}", verify=False, basic=basic)
         out.update(ADAPTERS[c["type"]](c, http)); out["ts"] = int(time.time())
     except RouterError as e: out["error"] = str(e)[:200]
-    except Exception as e: out["error"] = f"{type(e).__name__}: {e}"[:200]
+    except Exception as e: out["error"] = f"{type(e).__name__}: {e}"[:200]  # noqa: BLE001 - el error queda guardado y se muestra / the error is kept and shown
     return out
 
 def classify_scope(gateway_ok, router):

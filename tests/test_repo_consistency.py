@@ -1,6 +1,12 @@
 """Coherencia del repositorio: versión única, copias compartidas idénticas, textos en los dos idiomas y sintaxis de JS y shell."""
-import hashlib, re, shutil, subprocess, unittest
+import hashlib
+import re
+import shutil
+import subprocess
+import unittest
 from pathlib import Path
+from typing import ClassVar
+
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = ["wol-console", "nut-monitor", "net-monitor", "proxmox-monitor", "nas-monitor", "dns-monitor", "wan-monitor", "vpn-monitor", "uptime-monitor", "overview", "auth"]
 
@@ -8,8 +14,8 @@ class Versions(unittest.TestCase):
     def test_version_file_control_and_changelog_agree(self):
         v = (ROOT / "VERSION").read_text().strip()
         self.assertRegex(v, r"^\d+\.\d+(\.\d+)?[a-z]?$")
-        ctrl = re.search(r"^Version:\s*(\S+)", (ROOT / "debian/control").read_text(), re.M).group(1)
-        top = re.search(r"^## (\S+)", (ROOT / "CHANGELOG.md").read_text(), re.M).group(1)
+        ctrl = re.search(r"^Version:\s*(\S+)", (ROOT / "debian/control").read_text(), re.MULTILINE).group(1)
+        top = re.search(r"^## (\S+)", (ROOT / "CHANGELOG.md").read_text(), re.MULTILINE).group(1)
         self.assertEqual((ctrl, top), (v, v), "VERSION, debian/control y la primera entrada del CHANGELOG deben coincidir")
 
 class License(unittest.TestCase):
@@ -32,7 +38,7 @@ class License(unittest.TestCase):
 
 class SharedAssets(unittest.TestCase):
     """Estos archivos se copian a mano a varias carpetas: si una copia cambia sola, la página se comporta distinto según el módulo."""
-    SHARED = ["charts.js", "timefmt.js", "csp-bind.js", "footer.js", "ipcard.js", "ipcard.css", "theme.js", "theme.css", "nav.js", "nav.css"]
+    SHARED = ("charts.js", "timefmt.js", "csp-bind.js", "footer.js", "ipcard.js", "ipcard.css", "theme.js", "theme.css", "nav.js", "nav.css")
     def test_copies_are_identical(self):
         for name in self.SHARED:
             with self.subTest(file=name):
@@ -97,7 +103,7 @@ class Languages(unittest.TestCase):
         for m in MODULES:
             f = ROOT / m / "static" / "app.js"
             with self.subTest(module=m):
-                r = subprocess.run(["node", "-e", NODE_KEYS, str(f)], capture_output=True, text=True)
+                r = subprocess.run(["node", "-e", NODE_KEYS, str(f)], capture_output=True, text=True, check=False)
                 self.assertEqual(r.returncode, 0, r.stderr[-300:])
                 d = json.loads(r.stdout)
                 self.assertFalse(d.get("missing"), "no se encontró la tabla de textos (const LANG / TXT)")
@@ -110,7 +116,7 @@ class JavaScriptSyntax(unittest.TestCase):
     def test_all_static_js_parses(self):
         for f in sorted(ROOT.glob("*/static/*.js")):
             with self.subTest(file=str(f.relative_to(ROOT))):
-                r = subprocess.run(["node", "--check", str(f)], capture_output=True, text=True)
+                r = subprocess.run(["node", "--check", str(f)], capture_output=True, text=True, check=False)
                 self.assertEqual(r.returncode, 0, r.stderr[-300:])
 
 @unittest.skipUnless(shutil.which("bash"), "bash no está instalado")
@@ -122,13 +128,13 @@ class ShellSyntax(unittest.TestCase):
             head = f.read_text(errors="ignore").splitlines()[:1]
             if not head or "sh" not in head[0]: continue
             with self.subTest(file=str(f.relative_to(ROOT))):
-                self.assertEqual(subprocess.run(["bash", "-n", str(f)], capture_output=True, text=True).returncode, 0)
+                self.assertEqual(subprocess.run(["bash", "-n", str(f)], capture_output=True, text=True, check=False).returncode, 0)
 if __name__ == "__main__": unittest.main()
 
 
 class Rename(unittest.TestCase):
     """El proyecto se llamaba Pi Console hasta la 1.4. El nombre viejo solo puede quedar donde sirve para migrar o para leer cosas antiguas."""
-    ALLOWED = {"CHANGELOG.md", "CHANGELOG.en.md", "README.md", "README.en.md", "RELEASE_NOTES_2.0.md", "debian/postinst", "debian/postrm", "debian/control", "auth/auth.py",
+    ALLOWED: ClassVar[set] = {"CHANGELOG.md", "CHANGELOG.en.md", "README.md", "README.en.md", "RELEASE_NOTES_2.0.md", "debian/postinst", "debian/postrm", "debian/control", "auth/auth.py",
                "auth/teleporter_api.py", "scripts/teleporter.sh", "tests/test_repo_consistency.py", "tests/test_service_names.py"}
     def test_old_name_only_where_it_is_needed(self):
         out = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
@@ -137,7 +143,7 @@ class Rename(unittest.TestCase):
             p = ROOT / rel
             if rel in self.ALLOWED or not p.is_file() or p.suffix in (".png", ".jpg", ".ico"):
                 continue
-            if re.search(r"pi-console|Pi Console|PICONSOLE|piconsole", p.read_text(errors="ignore"), re.I):
+            if re.search(r"pi-console|Pi Console|PICONSOLE|piconsole", p.read_text(errors="ignore"), re.IGNORECASE):
                 bad.append(rel)
         self.assertEqual(bad, [], "nombre antiguo fuera de los archivos de migración")
 

@@ -106,6 +106,6 @@ def latency_summary(points):
     n = len(points)
     if not n: return {"n": 0, "avg": None, "p95": None, "max": None, "loss": None}
     v = sorted(m for _, m, ok in points if ok and _num(m) is not None)
-    p95 = v[min(len(v) - 1, int(math.ceil(0.95 * len(v))) - 1)] if v else None
+    p95 = v[min(len(v) - 1, math.ceil(0.95 * len(v)) - 1)] if v else None
     return {"n": n, "avg": round(sum(v) / len(v), 1) if v else None, "p95": round(p95, 1) if p95 is not None else None,
             "max": round(max(v), 1) if v else None, "loss": round(100.0 * sum(1 for _, _, ok in points if not ok) / n, 2)}

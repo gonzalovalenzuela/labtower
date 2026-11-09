@@ -1,10 +1,19 @@
 """2.1.3g: aviso de versión nueva a partir de las versiones publicadas."""
-import json, os, tempfile, threading, time, unittest
+import json
+import os
+import tempfile
+import threading
+import time
+import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from tests.support import auth, load, make_user, Server, ADMIN
+from pathlib import Path
+from typing import ClassVar
+
+from tests.support import ADMIN, Server, auth, load, make_user
+
 
 class Gh(BaseHTTPRequestHandler):
-    body = {}; status = 200; hits = 0
+    body: ClassVar[dict] = {}; status = 200; hits = 0
     def do_GET(self):
         Gh.hits += 1
         self.send_response(Gh.status); self.send_header("Content-Type", "application/json"); self.end_headers()
@@ -96,9 +105,11 @@ if __name__ == "__main__":
 class UpdateCommands(unittest.TestCase):
     """2.1.4a: el aviso muestra los comandos wget + apt install con enlace directo a la última versión."""
     def run_js(self, latest):
-        import subprocess, re, json as j
-        src = open("auth/static/app.js", encoding="utf-8").read()
-        fn = re.search(r"function upCmds\(u\) \{.*?\n\}\n", src, re.S).group(0)
+        import json as j
+        import re
+        import subprocess
+        src = Path("auth/static/app.js").read_text(encoding="utf-8")
+        fn = re.search(r"function upCmds\(u\) \{.*?\n\}\n", src, re.DOTALL).group(0)
         out = subprocess.run(["node", "-e", fn + f"console.log(JSON.stringify(upCmds({{latest:{j.dumps(latest)}}})))"], capture_output=True, text=True, check=True)
         return j.loads(out.stdout)
     def test_commands(self):
@@ -111,6 +122,6 @@ class UpdateCommands(unittest.TestCase):
         for bad in ("", "latest", "2.1; rm -rf /", "../x", "2.1 5"):
             self.assertEqual(self.run_js(bad), "")
     def test_registered_and_translated(self):
-        src = open("auth/static/app.js", encoding="utf-8").read()
+        src = Path("auth/static/app.js").read_text(encoding="utf-8")
         self.assertRegex(src, r"cspRegister\(\{[^}]*upCopyCmd")
         self.assertEqual(src.count("upCopied:"), 2)

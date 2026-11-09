@@ -1,6 +1,9 @@
 """Proxmox Monitor: reinicios, quórum de corosync, OSD de Ceph y SMART / reboots, corosync quorum, Ceph OSDs and SMART."""
-import json, tempfile, unittest
+import json
+import tempfile
+import unittest
 from pathlib import Path
+
 from tests import support
 from tests.support import ADMIN
 

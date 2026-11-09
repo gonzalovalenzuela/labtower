@@ -1,5 +1,6 @@
 """2.1.4j: Net Monitor toma los nombres de Pi-hole también de «Local DNS» y de las concesiones DHCP / names also from Local DNS and DHCP leases."""
 import unittest
+
 from tests import support
 
 net = support.load("net-monitor/server.py")
@@ -30,7 +31,8 @@ class PinRenewal(unittest.TestCase):
         self.assertFalse(net._may_repin(now + 10, (now - 100, now - 5), now, same_id=True))     # an expired replacement is never taken
         self.assertFalse(net._may_repin(now + 10, None, now, same_id=True))
     def test_cert_validity_reads_a_real_certificate(self):
-        import subprocess, tempfile
+        import subprocess
+        import tempfile
         with tempfile.TemporaryDirectory() as d:
             subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", d + "/k", "-out", d + "/c.pem", "-days", "2", "-subj", "/CN=t"], capture_output=True, check=True)
             der = subprocess.run(["openssl", "x509", "-in", d + "/c.pem", "-outform", "DER"], capture_output=True, check=True).stdout
@@ -89,7 +91,9 @@ if __name__ == "__main__": unittest.main()
 class PtrDirect(unittest.TestCase):
     """2.1.4m: the name comes straight from Pi-hole's DNS (port 53, no API), so Local DNS records work without the app-password permission."""
     def _server(self, answer):
-        import socket, struct, threading
+        import socket
+        import struct
+        import threading
         sk = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); sk.bind(("127.0.0.1", 0)); sk.settimeout(5)
         def run():
             try:
@@ -133,7 +137,8 @@ class OfflineNames(unittest.TestCase):
             hosts = {"192.0.2.41": {"online": False, "hostname": ""}, "192.0.2.45": {"online": False, "hostname": ""},
                      "192.0.2.46": {"online": False, "hostname": "keep"}, "192.0.2.47": {"online": True, "hostname": ""},
                      "192.0.2.48": {"online": False, "hostname": "old-name"}}
-            net.pihole_lookup = (lambda f: lambda ip: {"hostname": "new-name"} if ip == "192.0.2.48" else f(ip))(net.pihole_lookup)
+            orig = net.pihole_lookup
+            net.pihole_lookup = lambda ip: {"hostname": "new-name"} if ip == "192.0.2.48" else orig(ip)
             self.assertEqual(net.name_offline_hosts(hosts), 3)
             self.assertEqual([hosts[i]["hostname"] for i in ("192.0.2.41", "192.0.2.45", "192.0.2.46", "192.0.2.47", "192.0.2.48")],
                              ["nodo4pve-amt", "from-dns", "keep", "", "new-name"])   # Pi-hole name beats an old one; DNS only fills empty names; online hosts are left to the scan
@@ -147,7 +152,9 @@ class RegeneratedCertificate(unittest.TestCase):
         subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", f"{d}/{name}.key", "-out", f"{d}/{name}.pem", "-days", "30", "-subj", f"/CN={cn}"], capture_output=True, check=True)
         return f"{d}/{name}.pem", f"{d}/{name}.key"
     def _serve(self, cert):
-        import http.server, ssl, threading
+        import http.server
+        import ssl
+        import threading
         class H(http.server.BaseHTTPRequestHandler):
             def do_GET(h):
                 h.send_response(200); h.send_header("Content-Type", "application/json"); h.end_headers(); h.wfile.write(b"{}")
@@ -158,7 +165,8 @@ class RegeneratedCertificate(unittest.TestCase):
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         return srv
     def test_end_to_end(self):
-        import tempfile, pathlib
+        import pathlib
+        import tempfile
         with tempfile.TemporaryDirectory() as d:
             a, a2, evil = self._cert(d, "a", "pi.hole"), self._cert(d, "a2", "pi.hole"), self._cert(d, "evil", "attacker")
             old = (net.CONF_FILE, net.auth.valid_target, net.auth.record_event)
@@ -190,7 +198,8 @@ class RegeneratedCertificate(unittest.TestCase):
 class SavingWithoutPassword(unittest.TestCase):
     """The page never shows the stored password, so saving the hosts alone sends it empty: that must keep the stored one."""
     def test_empty_password_keeps_the_stored_one(self):
-        import tempfile, pathlib
+        import pathlib
+        import tempfile
         old = (net.CONF_FILE, net.PIHOLE_PASS, net.PIHOLE_HOSTS, net.refresh_pihole_cache)
         with tempfile.TemporaryDirectory() as d:
             net.CONF_FILE = pathlib.Path(d) / "config.json"; net.refresh_pihole_cache = lambda: None

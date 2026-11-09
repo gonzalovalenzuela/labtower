@@ -1,9 +1,15 @@
 """DNS Monitor: Pi-hole v6 y v5 y AdGuard Home contra servidores simulados, validación, secretos, permisos, pausa del bloqueo y alertas."""
-import json, os, stat, threading, time, unittest
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+import json
+import os
+import stat
+import threading
+import time
+import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
+
 from tests import support
-from tests.support import ADMIN, READONLY, NONE
+from tests.support import ADMIN, NONE, READONLY
 
 m = support.load("dns-monitor/server.py")
 
@@ -42,7 +48,7 @@ class Fake:
         if path == "/api/auth":
             if method == "DELETE": self.sessions.discard(h.headers.get("X-FTL-SID")); return h._send(204, {})
             if body.get("password") != self.password: return h._send(401, {"session": {"valid": False}, "error": {"key": "unauthorized"}})
-            sid = "sid%d" % len(self.sessions); self.sessions.add(sid)
+            sid = f"sid{len(self.sessions)}"; self.sessions.add(sid)
             return h._send(200, {"session": {"valid": True, "sid": sid, "validity": 300}})
         if h.headers.get("X-FTL-SID") not in self.sessions: return h._send(401, {"error": {"key": "unauthorized"}})
         if path == "/api/stats/summary":
@@ -184,7 +190,7 @@ class Collect(unittest.TestCase):
             c, st = self.cfg(f), {}; m.collect(c, st); m.set_blocking(c, st, False, 120)
             self.assertEqual(f.timer, 120); self.assertEqual(m.collect(c, st)["timer"], 120)
             c2 = self.cfg(g); m.set_blocking(c2, {}, False, 90)
-            self.assertEqual([x[3] for x in g.log if x[1] == "/control/protection"][0], {"enabled": False, "duration": 90000})
+            self.assertEqual(next(x[3] for x in g.log if x[1] == "/control/protection"), {"enabled": False, "duration": 90000})
         finally: f.close(); g.close()
 
     def test_test_connection_frees_the_pihole_session(self):
@@ -253,17 +259,17 @@ class Http(unittest.TestCase):
     def test_connection_test_uses_stored_password_when_empty(self):
         f = Fake("ph6")
         try:
-            s, j = self.srv.call("POST", "/api/dns", {"name": "T", "url": f.url, "type": "pihole", "password": "secret"}, token=self.admin); sid = j["server"]["id"]
-            s, r = self.srv.call("POST", "/api/test", {"id": sid, "name": "T", "url": f.url, "type": "pihole", "password": ""}, token=self.admin)
+            _, j = self.srv.call("POST", "/api/dns", {"name": "T", "url": f.url, "type": "pihole", "password": "secret"}, token=self.admin); sid = j["server"]["id"]
+            _, r = self.srv.call("POST", "/api/test", {"id": sid, "name": "T", "url": f.url, "type": "pihole", "password": ""}, token=self.admin)
             self.assertTrue(r["ok"], r); self.assertEqual(r["api"], "v6")
-            s, r = self.srv.call("POST", "/api/test", {"name": "T", "url": f.url, "type": "pihole", "password": "wrong"}, token=self.admin)
+            _s, r = self.srv.call("POST", "/api/test", {"name": "T", "url": f.url, "type": "pihole", "password": "wrong"}, token=self.admin)
             self.assertFalse(r["ok"]); self.assertIn("Wrong password", r["error"])
         finally: f.close()
 
     def test_pause_needs_execute_and_validates(self):
         f = Fake("ph6")
         try:
-            s, j = self.srv.call("POST", "/api/dns", {"name": "T", "url": f.url, "type": "pihole", "password": "secret"}, token=self.admin); sid = j["server"]["id"]
+            _s, j = self.srv.call("POST", "/api/dns", {"name": "T", "url": f.url, "type": "pihole", "password": "secret"}, token=self.admin); sid = j["server"]["id"]
             url = f"/api/dns/{sid}/blocking"
             self.assertEqual(self.srv.call("POST", url, {"enabled": False}, token=self.ro)[0], 403)
             self.assertEqual(self.srv.call("POST", url, {"enabled": False})[0], 401)

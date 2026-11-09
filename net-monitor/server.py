@@ -28,17 +28,32 @@ Detection: TTL + pure-Python ports + HTTP banner + mDNS
 #
 #     Structure: configuration · probes (ping, ports, banner) · Pi-hole · SNMP · OUI vendor database ·
 #     identification rules · scanner · health · HTTP handler.
-from __future__ import annotations  # permite «X | None» en Python 3.9 / allows «X | None» on Python 3.9
-import json, os, re, socket, struct, subprocess, sys, time, logging, threading, ipaddress, ssl
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+# permite «X | None» en Python 3.9 / allows «X | None» on Python 3.9
+from __future__ import annotations
+
+import ipaddress
+import json
+import logging
+import os
+import re
+import socket
+import ssl
+import struct
+import subprocess
+import sys
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
 # Cola de conexiones pendientes más grande que la de fábrica (5), para no rechazar ráfagas.
 # EN: Larger pending-connection queue than the default (5), so bursts are not rejected.
 ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
-from urllib.parse import urlparse, parse_qs
-from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
 try:
-    from urllib.request import urlopen, Request
+    from urllib.request import Request, urlopen
 except ImportError:
     pass
 
@@ -46,9 +61,10 @@ except ImportError:
 # EN: Shared authentication module (sibling folder /auth).
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
+
 sys.path.insert(0, str(Path(__file__).parent))
 import hostwatch as hw
-import switches as swmod      # Switch Monitor: drivers, sondeo, historial / drivers, polling, history
+import switches as swmod  # Switch Monitor: drivers, sondeo, historial / drivers, polling, history
 
 # Solo loopback; el acceso desde la red pasa por nginx. hosts.json: equipos descubiertos. config.json: ajustes (SNMP, Pi-hole, intervalo).
 # EN: Loopback only; network access goes through nginx. hosts.json: discovered devices. config.json: settings (SNMP, Pi-hole, interval).
@@ -86,16 +102,16 @@ def _default_network():
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.connect(("192.0.2.1", 9))
             return str(ipaddress.ip_network(s.getsockname()[0] + "/24", strict=False))
-    except Exception:
+    except (OSError, ValueError):
         return "192.0.2.0/24"
 NETWORK       = os.environ.get("SCAN_NETWORK",   _default_network())
 SCAN_PORTS    = os.environ.get("SCAN_PORTS",     "21,22,23,25,53,80,111,135,139,443,445,548,554,873,902,1883,2049,3074,3260,3306,3389,3493,5000,5001,5060,5061,5357,5432,5555,5900,6379,7547,8001,8002,8006,8008,8009,8080,8291,8443,9100,9295,27017,62078")
-SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL", 3600))
-PORT_TIMEOUT  = float(os.environ.get("PORT_TIMEOUT", 0.5))
-MAX_WORKERS   = int(os.environ.get("MAX_WORKERS", 30))
+SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL", "3600"))
+PORT_TIMEOUT  = float(os.environ.get("PORT_TIMEOUT", "0.5"))
+MAX_WORKERS   = int(os.environ.get("MAX_WORKERS", "30"))
 # Vigilancia de equipos críticos: segundos entre sondeos (0 la desactiva) y días de historial de latencia.
 # EN: Watch of critical devices: seconds between probes (0 disables it) and days of latency history.
-WATCH_EVERY   = float(os.environ.get("NET_WATCH_EVERY", 30))
+WATCH_EVERY   = float(os.environ.get("NET_WATCH_EVERY", "30"))
 WATCH_MAX     = 40
 LAT_KEEP      = auth.keep_days("NET_LATENCY_KEEP_DAYS", 30) * 86400
 
@@ -139,7 +155,7 @@ def ping_ttl(ip: str) -> tuple[bool, int, float]:
     try:
         r = subprocess.run(
             ["ping", "-c1", "-W1", str(ip)],
-            capture_output=True, text=True, timeout=3
+            capture_output=True, text=True, timeout=3, check=False
         )
         if r.returncode != 0:
             return False, 0, 0.0
@@ -150,7 +166,7 @@ def ping_ttl(ip: str) -> tuple[bool, int, float]:
         m_t = re.search(r"time[=<]([\d.]+)\s*ms", r.stdout, re.IGNORECASE)
         latency = float(m_t.group(1)) if m_t else 0.0
         return True, ttl, round(latency, 2)
-    except Exception:
+    except (OSError, subprocess.SubprocessError, ValueError):
         return False, 0, 0.0
 
 # ─── Port scan (Python puro) ──────────────────────────────────────────────────
@@ -160,7 +176,7 @@ def check_port(ip: str, port: int) -> bool:
     try:
         with socket.create_connection((ip, port), timeout=PORT_TIMEOUT):
             return True
-    except Exception:
+    except (OSError, ValueError, OverflowError):
         return False
 
 # Sondea la lista de puertos en paralelo y devuelve los abiertos, ordenados.
@@ -185,7 +201,7 @@ def http_banner(ip: str, port: int = 80) -> str:
             banner = s.recv(1024).decode(errors="replace")
         server = re.search(r"Server:\s*(.+)", banner, re.IGNORECASE)
         return server.group(1).strip()[:80] if server else ""
-    except Exception:
+    except (OSError, ValueError, OverflowError):
         return ""
 
 # ─── Pi-hole v6 API ───────────────────────────────────────────────────────────
@@ -201,11 +217,11 @@ def _cert_validity(der: bytes):
     import calendar
     try:
         r = subprocess.run(["openssl", "x509", "-inform", "DER", "-noout", "-startdate", "-enddate"],
-                           input=der, capture_output=True, timeout=5)
+                           input=der, capture_output=True, timeout=5, check=False)
         v = dict(l.split("=", 1) for l in r.stdout.decode().splitlines() if "=" in l)
         f = lambda t: calendar.timegm(time.strptime(" ".join(t.split()), "%b %d %H:%M:%S %Y GMT"))
         return f(v["notBefore"]), f(v["notAfter"])
-    except Exception:
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError):
         return None
 
 # Un certificado fijado que ya VENCIÓ puede reemplazarse solo por uno vigente (renovación normal de Pi-hole); si el fijado sigue vigente, un cambio es sospechoso y se rechaza.
@@ -224,16 +240,17 @@ def _may_repin(old_exp, new_validity, now=None, same_id=False) -> bool:
 def _cert_ident(der: bytes) -> str:
     try:
         r = subprocess.run(["openssl", "x509", "-inform", "DER", "-noout", "-subject", "-issuer"],
-                           input=der, capture_output=True, timeout=5)
+                           input=der, capture_output=True, timeout=5, check=False)
         t = " | ".join(" ".join(l.split()) for l in r.stdout.decode().splitlines() if "=" in l)
         return t[:300]
-    except Exception:
+    except (OSError, subprocess.SubprocessError, ValueError):
         return ""
 
 PIHOLE_HOST_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?$")
 def _pihole_request(host: str, path: str, method: str = "GET",
-                    data: bytes = None, sid: str = None) -> dict:
-    import http.client, hashlib
+                    data: bytes | None = None, sid: str | None = None) -> dict:
+    import hashlib
+    import http.client
     if not PIHOLE_HOST_RE.match(host or ""):
         raise ValueError("invalid Pi-hole host")
     name, _, port = host.partition(":")
@@ -288,7 +305,7 @@ def _pihole_login(host: str, password: str) -> str | None:
         if sid:
             log.info(f"Pi-hole login OK: {host}")
         return sid
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"Pi-hole login error {host}: {e}")
         _pihole_last_err[host] = str(e)[:200]
         return None
@@ -298,7 +315,7 @@ def _pihole_login(host: str, password: str) -> str | None:
 def _pihole_logout(host: str, sid: str):
     try:
         _pihole_request(host, "/api/auth", "DELETE", sid=sid)
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 - limpieza al terminar; un fallo no cambia el resultado / EN: cleanup; a failure does not change the result
         pass
 
 # MAC válida con formato aa:bb:cc:dd:ee:ff.
@@ -394,18 +411,18 @@ def _refresh_pihole_cache():
                     if x["hostname"]: e["hostname"] = x["hostname"]
                     if x["mac"] and not e["mac"]:
                         e["mac"] = x["mac"]; e["vendor"] = e["vendor"] or oui_vendor(x["mac"])
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
                 diag["errors"]["leases"] = str(e)[:80]; log.info(f"Pi-hole dhcp/leases {host}: {e}")
             try:
                 lh = _pihole_request(host, "/api/config/dns/hosts", sid=sid)
                 lhz = pihole_parse_local_hosts(((lh.get("config") or {}).get("dns") or {}).get("hosts")); diag["local"] = len(lhz)
                 for ip, name in lhz.items():
                     new_cache.setdefault(ip, {"hostname": "", "vendor": "", "mac": ""})["hostname"] = name
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
                 diag["errors"]["local"] = str(e)[:80]; log.info(f"Pi-hole config/dns/hosts {host}: {e}")
             log.info(f"Pi-hole cache: {len(new_cache)} entries from {host}")
             break  # Usar solo el primero que responda
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"Pi-hole network/devices error {host}: {e}")
             diag["errors"]["login"] = f"network/devices: {e}"[:200]
         finally:
@@ -438,7 +455,7 @@ def pihole_lookup(ip: str) -> dict:
 def resolve_dns(ip: str) -> str:
     try:
         return socket.gethostbyaddr(str(ip))[0]
-    except Exception:
+    except (OSError, ValueError):
         return ""
 
 # Pregunta el nombre de una IP (registro PTR) directamente al servidor DNS de Pi-hole por el puerto 53, sin contraseña ni API. Los registros de
@@ -446,7 +463,8 @@ def resolve_dns(ip: str) -> str:
 # EN: Ask a DNS server for the name of an IP (PTR record) straight on port 53, no password or API. Pi-hole's "Local DNS" records answer here too, so
 #     it works even when the app password cannot read the configuration.
 def ptr_query(server: str, ip: str, port: int = 53, timeout: float = 1.5) -> str:
-    import struct, os as _os
+    import os as _os
+    import struct
     try:
         parts = str(ipaddress.IPv4Address(ip)).split(".")
         qname = ".".join(reversed(parts)) + ".in-addr.arpa"
@@ -477,7 +495,7 @@ def ptr_query(server: str, ip: str, port: int = 53, timeout: float = 1.5) -> str
             typ, _cls, _ttl, rl = struct.unpack(">HHIH", data[o:o + 10]); o += 10
             if typ == 12: return name(o)[0].rstrip(".")
             o += rl
-    except Exception:
+    except (OSError, ValueError, IndexError, struct.error):  # respuesta DNS inválida: queda sin nombre / EN: invalid DNS reply: no name
         pass
     return ""
 
@@ -492,7 +510,9 @@ def resolve_name(ip: str) -> str:
     return _clean_name(resolve_dns(ip))
 
 # ─── SNMP: ARP table from a switch/router (MAC for hosts the server cannot see) ───
-import shutil, tempfile
+import shutil
+import tempfile
+
 # SNMP: pregunta la tabla ARP de un switch/router para conocer la MAC de equipos que el servidor no ve directamente (otras subredes o VLAN). Los secretos (comunidad, claves) nunca se devuelven al navegador.
 # EN: SNMP: asks a switch/router for its ARP table to learn the MAC of devices the server cannot see directly (other subnets or VLANs). Secrets (community, keys) are never returned to the browser.
 SNMP_DEFAULT = {"enabled": False, "host": "", "port": 161, "version": "2c", "community": "",
@@ -538,10 +558,10 @@ def snmp_validate(body: dict, current: dict) -> dict:
     if cfg["host"] and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,252}", cfg["host"]):
         raise ValueError("Invalid host")
     try:    cfg["port"] = int(cfg["port"])
-    except Exception: raise ValueError("Invalid port")
+    except Exception: raise ValueError("Invalid port")  # noqa: BLE001 - se convierte en un error con mensaje / turned into an error with a message
     if not 1 <= cfg["port"] <= 65535: raise ValueError("Invalid port")
     try:    cfg["timeout"] = int(cfg["timeout"])
-    except Exception: raise ValueError("Invalid timeout")
+    except Exception: raise ValueError("Invalid timeout")  # noqa: BLE001 - se convierte en un error con mensaje / turned into an error with a message
     if not 1 <= cfg["timeout"] <= 30: raise ValueError("Timeout must be 1-30 seconds")
     cfg["version"] = str(cfg["version"])
     if cfg["version"] not in ("1", "2c", "3"): raise ValueError("Invalid SNMP version")
@@ -588,7 +608,7 @@ def _snmp_walk(cfg: dict, oid: str, regex) -> dict:
         cmd = [exe, f"-v{cfg['version']}", "-t", str(cfg["timeout"]), "-r", "1",
                "-On", "-Ox", "-m", "", f"udp:{cfg['host']}:{cfg['port']}", oid]
         r = subprocess.run(cmd, capture_output=True, text=True, env=env,
-                           timeout=cfg["timeout"] * 2 + 30)
+                           timeout=cfg["timeout"] * 2 + 30, check=False)
     finally:
         shutil.rmtree(d, ignore_errors=True)
     if r.returncode != 0 and not r.stdout.strip():
@@ -613,7 +633,7 @@ def snmp_fetch_arp(cfg: dict) -> dict:
     res = _snmp_walk(cfg, OID_ARP_V4, RE_ARP_V4)
     if not res:
         try:    res = _snmp_walk(cfg, OID_ARP_NEW, RE_ARP_NEW)
-        except Exception: pass
+        except Exception: pass  # noqa: BLE001, S110 - la segunda tabla ARP es opcional / EN: the second ARP table is optional
     return res
 
 # Actualiza la caché SNMP al inicio de cada escaneo (si está habilitado). Un fallo se anota pero no detiene el escaneo.
@@ -629,7 +649,7 @@ def refresh_snmp():
             _snmp_macs.clear(); _snmp_macs.update(res)
             _snmp_status.update(ts=int(time.time()), count=len(res), error="")
         log.info(f"SNMP: {len(res)} ARP entries from {cfg['host']}")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         with _snmp_lock:
             _snmp_status.update(ts=int(time.time()), count=0, error=str(e)[:200])
         log.warning(f"SNMP error: {e}")
@@ -703,18 +723,18 @@ def _load_oui() -> dict:
         if OUI_FILE.exists():
             try:
                 if _parse_manuf(str(OUI_FILE), db, ext): src.append("wireshark")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
                 log.warning(f"OUI manuf read error: {e}")
         for p in _OUI_PATHS:
             try:
                 if os.path.exists(p) and _parse_ieee(p, db): src.append("ieee-data"); break
-            except Exception:
+            except (OSError, ValueError):  # archivo OUI ilegible: se prueba el siguiente / EN: unreadable OUI file: try the next one
                 continue
         _oui_db, _oui_ext = db, ext
         _oui_status["source"] = "+".join(src)
         _oui_status["count"] = len(db) + len(ext[28]) + len(ext[36])
         try:    _oui_status["ts"] = int(OUI_FILE.stat().st_mtime)
-        except Exception: pass
+        except OSError: pass  # lectura opcional del sistema; si falta, el dato queda vacío / EN: optional system read; if missing, the value stays empty
         return db
 
 # Fabricante de una MAC; se prueba primero el prefijo más específico (36 bits), luego 28 y al final 24.
@@ -779,15 +799,15 @@ def oui_maybe_update():
     cfg = load_config().get("oui", {})
     if cfg.get("auto", True) is False: return
     try:    age = time.time() - OUI_FILE.stat().st_mtime
-    except Exception: age = 1e12
+    except OSError: age = 1e12
     if age < OUI_MAX_AGE or _oui_status.get("_busy"): return
     def job():
         _oui_status["_busy"] = True
         try:    oui_update(); _oui_status["error"] = ""
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             _oui_status["error"] = str(e)[:200]
             try: OUI_FILE.touch() if OUI_FILE.exists() else None   # retry next week, not every scan
-            except Exception: pass
+            except OSError: pass  # lectura opcional del sistema; si falta, el dato queda vacío / EN: optional system read; if missing, the value stays empty
             log.warning(f"OUI update failed: {e}")
         finally: _oui_status["_busy"] = False
     threading.Thread(target=job, daemon=True).start()
@@ -798,7 +818,7 @@ def mac_is_private(mac: str) -> bool:
     """Locally-administered bit set → randomized / private address (phones)."""
     m = re.sub(r"[^0-9A-Fa-f]", "", mac or "")
     try:    return bool(int(m[:2], 16) & 0x02)
-    except Exception: return False
+    except (ValueError, TypeError): return False
 
 # MAC de una IP leyendo la tabla ARP del kernel (/proc/net/arp), que el ping recién llenó.
 # EN: MAC of an IP read from the kernel ARP table (/proc/net/arp), which the ping just filled.
@@ -809,7 +829,7 @@ def arp_mac(ip: str) -> str:
                 c = line.split()
                 if len(c) >= 4 and c[0] == ip and c[3] != "00:00:00:00:00:00":
                     return c[3].lower()
-    except Exception:
+    except (OSError, ValueError, IndexError):  # lectura opcional del sistema; si falta, el dato queda vacío / EN: optional system read; if missing, the value stays empty
         pass
     return ""
 
@@ -827,7 +847,7 @@ def default_gateway() -> str:
                 if len(c) > 2 and c[1] == "00000000":
                     gw = socket.inet_ntoa(struct.pack("<L", int(c[2], 16)))
                     break
-    except Exception:
+    except (OSError, ValueError, struct.error):  # lectura opcional del sistema; si falta, el dato queda vacío / EN: optional system read; if missing, the value stays empty
         pass
     _gw_cache.update(ts=time.time(), ip=gw)
     return gw
@@ -853,33 +873,33 @@ V_TV      = ("roku", "vizio", "hisense", "tcl ", "tcl,", "lg electronics", "sony
 V_APPL    = ("espressif", "tuya", "shelly", "allterco", "sonoff", "itead", "irobot", "roborock", "ecovacs",
              "dyson", "signify", "philips lighting", "amazon technologies", "ecobee", "nest labs",
              "lifx", "meross", "govee", "bsh", "miele", "whirlpool", "electrolux", "smartthings", "xiaomi communications")
-H_CAMERA  = re.compile(r"cam(era)?([-_.\d]|$)|^ipc|nvr|dvr|doorbell|hikvision|dahua|reolink", re.I)
-H_TV      = re.compile(r"(^|[-_.])tv([-_.\d]|$)|bravia|roku|fire-?tv|apple-?tv|chromecast|webos|tizen|android-?tv|shield|smarttv", re.I)
-H_APPL    = re.compile(r"^esp[-_]?\d|esp32|esp8266|shelly|tasmota|roomba|homekit|plug|bulb|lamp|fridge|washer|dryer|oven|vacuum|robot|aspirad|thermostat", re.I)
+H_CAMERA  = re.compile(r"cam(era)?([-_.\d]|$)|^ipc|nvr|dvr|doorbell|hikvision|dahua|reolink", re.IGNORECASE)
+H_TV      = re.compile(r"(^|[-_.])tv([-_.\d]|$)|bravia|roku|fire-?tv|apple-?tv|chromecast|webos|tizen|android-?tv|shield|smarttv", re.IGNORECASE)
+H_APPL    = re.compile(r"^esp[-_]?\d|esp32|esp8266|shelly|tasmota|roomba|homekit|plug|bulb|lamp|fridge|washer|dryer|oven|vacuum|robot|aspirad|thermostat", re.IGNORECASE)
 V_PRINTER = ("brother industries", "canon", "seiko epson", "epson", "lexmark", "xerox", "ricoh", "kyocera",
              "konica minolta", "oki data", "zebra technologies", "fuji xerox", "toshiba tec", "pantum", "sindoh")
-H_PRINTER = re.compile(r"print|laserjet|officejet|deskjet|photosmart|pixma|(^|[-_])mfc-?\d|(^|[-_])dcp-?\d|^npi[0-9a-f]|^hp[0-9a-f]{6}|epson|brother|xerox|lexmark|ricoh|kyocera|(^|[-_.])mfp([-_.\d]|$)", re.I)
-H_TABLET  = re.compile(r"ipad|tablet|galaxy[-_ ]?tab|^sm-[tx]\d|kindle|(^|[-_])tab([-_.\d]|$)|mi-?pad|matepad|lenovo[-_ ]?tab", re.I)
-H_WIN     = re.compile(r"^(desktop|laptop|win|pc|workstation|surface)[-_]", re.I)
-H_ANDROID = re.compile(r"android|galaxy|pixel|redmi|xiaomi|poco|oneplus|oppo|realme|huawei|honor|moto[-_ ]|^sm-|^sm[a-z]\d", re.I)
-H_STORAGE = re.compile(r"nas|diskstation|synology|qnap|truenas|freenas|openmediavault|\bomv\b|unraid|storage|backup", re.I)
-H_ROUTER  = re.compile(r"router|gateway|gw\d*\b|firewall|opnsense|pfsense|mikrotik|openwrt|fritz|^rt[-_]", re.I)
-H_AP      = re.compile(r"(^|[-_.])(ap|uap|wap|wifi|wlan|unifi)([-_.\d]|$)|access.?point|eap\d", re.I)
-H_SWITCH  = re.compile(r"switch|(^|[-_.])(sw|usw)([-_.\d]|$)|poe", re.I)
+H_PRINTER = re.compile(r"print|laserjet|officejet|deskjet|photosmart|pixma|(^|[-_])mfc-?\d|(^|[-_])dcp-?\d|^npi[0-9a-f]|^hp[0-9a-f]{6}|epson|brother|xerox|lexmark|ricoh|kyocera|(^|[-_.])mfp([-_.\d]|$)", re.IGNORECASE)
+H_TABLET  = re.compile(r"ipad|tablet|galaxy[-_ ]?tab|^sm-[tx]\d|kindle|(^|[-_])tab([-_.\d]|$)|mi-?pad|matepad|lenovo[-_ ]?tab", re.IGNORECASE)
+H_WIN     = re.compile(r"^(desktop|laptop|win|pc|workstation|surface)[-_]", re.IGNORECASE)
+H_ANDROID = re.compile(r"android|galaxy|pixel|redmi|xiaomi|poco|oneplus|oppo|realme|huawei|honor|moto[-_ ]|^sm-|^sm[a-z]\d", re.IGNORECASE)
+H_STORAGE = re.compile(r"nas|diskstation|synology|qnap|truenas|freenas|openmediavault|\bomv\b|unraid|storage|backup", re.IGNORECASE)
+H_ROUTER  = re.compile(r"router|gateway|gw\d*\b|firewall|opnsense|pfsense|mikrotik|openwrt|fritz|^rt[-_]", re.IGNORECASE)
+H_AP      = re.compile(r"(^|[-_.])(ap|uap|wap|wifi|wlan|unifi)([-_.\d]|$)|access.?point|eap\d", re.IGNORECASE)
+H_SWITCH  = re.compile(r"switch|(^|[-_.])(sw|usw)([-_.\d]|$)|poe", re.IGNORECASE)
 
 # Consolas de juegos, servidores, telefonía IP, UPS y altavoces: categorías que antes caían en «other».
 # EN: Game consoles, servers, IP telephony, UPS and speakers: categories that used to end up as "other".
 V_CONSOLE = ("nintendo", "sony interactive entertainment", "sony computer entertainment", "valve corp", "oculus vr",
              "meta platforms technologies")
-H_CONSOLE = re.compile(r"nintendo|(^|[-_.])(ps[2-5]|psp|psvita|vita)([-_.\d]|$)|playstation|xbox|steam-?deck|(^|[-_.])(oculus|quest)([-_.\d]|$)|(^|[-_.])wii(u)?([-_.\d]|$)", re.I)
+H_CONSOLE = re.compile(r"nintendo|(^|[-_.])(ps[2-5]|psp|psvita|vita)([-_.\d]|$)|playstation|xbox|steam-?deck|(^|[-_.])(oculus|quest)([-_.\d]|$)|(^|[-_.])wii(u)?([-_.\d]|$)", re.IGNORECASE)
 V_SERVER  = ("vmware", "super micro", "supermicro", "proxmox")
-H_SERVER  = re.compile(r"(^|[-_.])(pve|proxmox|esxi|vcenter|hyperv|docker|k8s|kube|srv|server|node|vm|sql|plex|jellyfin|emby|grafana|nextcloud|gitea|portainer|homeassistant|hass|pihole|pi-hole)([-_.\d]|$)", re.I)
+H_SERVER  = re.compile(r"(^|[-_.])(pve|proxmox|esxi|vcenter|hyperv|docker|k8s|kube|srv|server|node|vm|sql|plex|jellyfin|emby|grafana|nextcloud|gitea|portainer|homeassistant|hass|pihole|pi-hole)([-_.\d]|$)", re.IGNORECASE)
 V_VOIP    = ("yealink", "polycom", "fanvil", "snom", "avaya", "mitel", "sangoma", "digium", "obihai", "alcatel-lucent enterprise")
-H_VOIP    = re.compile(r"voip|(^|[-_.])sip([-_.\d]|$)|ip-?phone|yealink|polycom|snom|fanvil|asterisk|freepbx|(^|[-_.])(sep|spa)[0-9a-f]{6,}|^gxp\d|^ht\d{3}|^phone[-_]", re.I)
+H_VOIP    = re.compile(r"voip|(^|[-_.])sip([-_.\d]|$)|ip-?phone|yealink|polycom|snom|fanvil|asterisk|freepbx|(^|[-_.])(sep|spa)[0-9a-f]{6,}|^gxp\d|^ht\d{3}|^phone[-_]", re.IGNORECASE)
 V_UPS     = ("american power conversion", "cyber power", "cyberpower", "tripp lite", "eaton", "riello", "apc ")
-H_UPS     = re.compile(r"(^|[-_.])ups([-_.\d]|$)|apc[-_]?\d|^(smt|srt|smx)\d|cyberpower|eaton|powerware|^pdu", re.I)
+H_UPS     = re.compile(r"(^|[-_.])ups([-_.\d]|$)|apc[-_]?\d|^(smt|srt|smx)\d|cyberpower|eaton|powerware|^pdu", re.IGNORECASE)
 V_SPEAKER = ("sonos", "bose", "harman", "denon", "marantz", "libratone", "bang & olufsen")
-H_SPEAKER = re.compile(r"sonos|homepod|(^|[-_.])echo([-_.\d]|$)|echo[-_ ]?(dot|show|studio|pop|flex)|alexa|google[-_ ]?home|nest[-_ ]?(mini|audio|hub)|bose|soundbar|speaker|airplay|chromecast-?audio", re.I)
+H_SPEAKER = re.compile(r"sonos|homepod|(^|[-_.])echo([-_.\d]|$)|echo[-_ ]?(dot|show|studio|pop|flex)|alexa|google[-_ ]?home|nest[-_ ]?(mini|audio|hub)|bose|soundbar|speaker|airplay|chromecast-?audio", re.IGNORECASE)
 
 # Decide (SO, tipo) sumando puntos por cada pista: fabricante, banner, nombre, puertos abiertos y TTL. Gana el tipo con más puntos; sin pistas suficientes queda «other».
 # EN: Decide (OS, type) by adding points for each clue: vendor, banner, name, open ports and TTL. The type with the most points wins; without enough clues it stays "other".
@@ -996,15 +1016,12 @@ def identify(ip: str, open_ports: list, ttl: int, hostname: str, banner: str,
         os_name = "iOS"
     elif "apple" in ven or _has(host, ("macbook", "imac", "mac-mini", "macmini", "mac-pro")):
         os_name = "macOS" if not (62078 in ports) else "iOS"
-    elif win_strong and (not ttl or ttl > 64 or "windows" in ban):
+    elif ((win_strong and (not ttl or ttl > 64 or "windows" in ban))
+          or (64 < ttl <= 128 and (3389 in ports or (135 in ports and smb) or 5357 in ports))
+          or (64 < ttl <= 128 and smb and 22 not in ports)):
         os_name = "Windows"
-    elif ttl > 64 and ttl <= 128 and (3389 in ports or (135 in ports and smb) or 5357 in ports):
-        os_name = "Windows"
-    elif ttl > 64 and ttl <= 128 and smb and 22 not in ports:
-        os_name = "Windows"
-    elif (H_ANDROID.search(host) or _has(ven, V_ANDROID) or 5555 in ports) and 22 not in ports and not smb:
-        os_name = "Android"
-    elif private_mac and not ports and ttl and ttl <= 64 and (not host or H_ANDROID.search(host)):
+    elif (((H_ANDROID.search(host) or _has(ven, V_ANDROID) or 5555 in ports) and 22 not in ports and not smb)
+          or (private_mac and not ports and ttl and ttl <= 64 and (not host or H_ANDROID.search(host)))):
         os_name = "Android"
     elif (554 in ports or 1883 in ports or 9100 in ports or 8009 in ports) and 22 not in ports:
         os_name = "IoT"
@@ -1098,7 +1115,7 @@ def _wol_macs() -> set:
     d = auth.read_published(WOL_DEVICES_FILE, [], list)        # published by WOL Console: untrusted input
     try:
         return {k for k in (_mac_key(x.get("mac")) for x in d[:5000] if isinstance(x, dict)) if k}
-    except Exception:
+    except (TypeError, ValueError):
         return set()
 
 # Lee hosts.json: diccionario ip → registro del equipo.
@@ -1161,7 +1178,7 @@ def init_runtime():
         try:
             with _cfg_lock:
                 _c = load_config(); _c["scan_interval"] = 0; save_config(_c)
-        except Exception as _e:
+        except Exception as _e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"could not save the default manual scan mode: {_e}")
     # Equipos descubiertos antes de que existiera el concepto de «conocido» cuentan como conocidos; solo los nuevos quedan sin revisar.
     # EN: Devices discovered before the "known" concept existed count as known; only new ones are left unreviewed.
@@ -1169,7 +1186,7 @@ def init_runtime():
         try:
             with _cfg_lock:
                 _c = load_config(); _c.setdefault("known_baseline", int(time.time())); save_config(_c); _saved = _c
-        except Exception as _e:
+        except Exception as _e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"could not save the known-devices baseline: {_e}")
     # Cargar credenciales Pi-hole guardadas
     # Credenciales de Pi-hole guardadas desde la página; una variable de entorno tiene prioridad.
@@ -1206,12 +1223,12 @@ def _record_scan_events(changes, first_inventory, online, single_ip=None):
                 extra = h.get("vendor") or "" if kind == "new" else ""
                 auth.record_event("net", lv, f"{txt}: {ip}" + (f" ({name})" if name else "") + (f" {extra}" if extra else ""),
                                   f"net_{kind}", ip=ip, n=name, v=extra)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.debug(f"scan events: {e}")
 
 # Elimina los equipos que llevan más de `days` días sin responder (0 = nunca). Se usa la última vez que se vieron conectados.
 # EN: Remove devices that have not answered for more than `days` days (0 = never). Uses the last time they were seen online.
-def purge_offline(hosts: dict, days: int, now: float = None) -> list:
+def purge_offline(hosts: dict, days: int, now: float | None = None) -> list:
     if not days or days < 1: return []
     now = now or time.time()
     gone = [ip for ip, h in hosts.items()
@@ -1219,7 +1236,7 @@ def purge_offline(hosts: dict, days: int, now: float = None) -> list:
     for ip in gone: del hosts[ip]
     return gone
 
-def purge_after_scan(hosts: dict, days: int, now: float = None) -> list:
+def purge_after_scan(hosts: dict, days: int, now: float | None = None) -> list:
     """ES: si no respondió ningún equipo, probablemente fue la red del servidor: no se purga nada.
     EN: if no device answered, it was probably the server's own network: nothing is purged."""
     if not any(h.get("online") for h in hosts.values() if isinstance(h, dict)): return []
@@ -1243,7 +1260,7 @@ def name_offline_hosts(hosts: dict, limit: int = 60) -> int:
             if ip in hosts and isinstance(hosts[ip], dict) and not hosts[ip].get("online"): hosts[ip]["hostname"] = n
     return len(found)
 
-def run_scan(network: str = None, single_ip: str = None):
+def run_scan(network: str | None = None, single_ip: str | None = None):
     global _live_hosts
     with _scan_lock:                      # reserve the scan atomically: two triggers can't both start
         if _scan_status["running"]:
@@ -1261,9 +1278,9 @@ def run_scan(network: str = None, single_ip: str = None):
         refresh_snmp()
         if PIHOLE_PASS and time.time() - _pihole_ts > 60:        # names changed in Pi-hole show up in this very scan
             try: refresh_pihole_cache()
-            except Exception as e: log.debug(f"Pi-hole refresh: {e}")
+            except Exception as e: log.debug(f"Pi-hole refresh: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         oui_maybe_update()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.error(f"Scan setup failed: {e}")
         with _hosts_lock: _live_hosts = None
         _scan_status.update({"running": False, "error": str(e), "finished": int(time.time())})
@@ -1351,7 +1368,7 @@ def run_scan(network: str = None, single_ip: str = None):
                                     _flaky_check(ip_str, hosts[ip_str])
                                 hosts[ip_str]["online"] = False
                                 hosts[ip_str]["last_seen_offline"] = int(time.time())
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
                     log.error(f"Scan error: {e}")
 
                 # Guardado parcial: si el servicio se corta a mitad de escaneo, no se pierde todo. Además, cada equipo encontrado se guarda enseguida (como máximo una vez cada 2 s) para que la página vaya mostrando la lista mientras el escaneo avanza, sin esperar a que termine toda la red.
@@ -1360,12 +1377,12 @@ def run_scan(network: str = None, single_ip: str = None):
                     save_hosts(hosts); _last_save = time.time()
 
         try: name_offline_hosts(hosts)
-        except Exception as e: log.debug(f"offline names: {e}")
+        except Exception as e: log.debug(f"offline names: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         with _hosts_lock:
             try:
                 gone = purge_after_scan(hosts, int(load_config().get("purge_days", 0) or 0))
                 if gone: log.info(f"Removed {len(gone)} devices offline for too long")
-            except Exception as e: log.debug(f"purge: {e}")
+            except Exception as e: log.debug(f"purge: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             save_hosts(hosts)
             _live_hosts = None
         online = sum(1 for h in hosts.values() if h.get("online"))
@@ -1374,7 +1391,7 @@ def run_scan(network: str = None, single_ip: str = None):
         _scan_status.update({"running": False, "finished": int(time.time())})
         log.info(f"Scan finished: {online} hosts online out of {len(ips)} scanned")
 
-    except BaseException as e:
+    except BaseException as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         with _hosts_lock: _live_hosts = None
         _scan_status.update({"running": False, "error": str(e), "finished": int(time.time())})
         log.error(f"Scan failed: {e}")
@@ -1399,7 +1416,7 @@ def _record_security_events(items):
             risky = any(p in hw.RISKY for p in newp)
             auth.record_event("net", "warn" if risky else "info", f"New open port on {ip}: {_PORT_TXT(newp)}", "net_port_new", ip=ip, n=h.get("alias") or h.get("hostname") or "", p=_PORT_TXT(newp))
         if len(ports) > 8: auth.record_event("net", "info", f"New open ports on {len(ports)} hosts", "net_port_new_n", n=len(ports))
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.debug(f"security events: {e}")
 
 FLAKY_DROPS = 4              # drops in 24 h that make a device "unstable"
@@ -1410,7 +1427,7 @@ def _flaky_check(ip, h):
         ch = auth.state_changed(f"net-flaky:{ip}", "flaky" if n >= FLAKY_DROPS else "ok")
         if ch and ch[1] == "flaky":
             auth.record_event("net", "warn", f"{ip} dropped {n} times in 24 h", "net_flaky", ip=ip, n=h.get("alias") or h.get("hostname") or "", c=n)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.debug(f"flaky check: {e}")
 
 # ─── Equipos vigilados ────────────────────────────────────────────────────────
@@ -1423,7 +1440,7 @@ _watch: dict = {}            # ip -> {"fails", "down", "since", "rtt", "ts"}
 def _watch_round():
     now = int(time.time())
     try: hosts = load_hosts()
-    except Exception: return
+    except (OSError, ValueError): return
     ips = [ip for ip, h in hosts.items() if isinstance(h, dict) and h.get("watch")][:WATCH_MAX]
     for ip in list(_watch):
         if ip not in ips: _watch.pop(ip, None)
@@ -1456,7 +1473,7 @@ def _watch_round():
             c = auth.metrics_conn()
             try: c.executemany("INSERT OR REPLACE INTO net_latency (ip,ts,ms,ok) VALUES (?,?,?,?)", rows); c.commit()
             finally: c.close()
-        except Exception as e: log.warning(f"could not store the watch samples: {e}")
+        except Exception as e: log.warning(f"could not store the watch samples: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
 
 def _watch_loop():
     last_prune = 0
@@ -1469,7 +1486,7 @@ def _watch_loop():
                 c = auth.metrics_conn()
                 try: c.execute("DELETE FROM net_latency WHERE ts < ?", (int(t0) - LAT_KEEP,)); c.commit()
                 finally: c.close()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"watch round: {e}")
         time.sleep(max(5.0, WATCH_EVERY - (time.time() - t0)))
 
@@ -1551,7 +1568,7 @@ def health_report(detailed=False):
             bad = [x["name"] for x in cfgs if not st.get(x["id"], {}).get("online")]
             c["switches"] = (auth.chk(auth.WARN, f"{len(bad)} of {len(cfgs)} switches unreachable: {', '.join(bad)[:120]}") if bad
                              else auth.chk(auth.OK, f"{len(cfgs)} switches reachable"))
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - el error queda guardado y se muestra / the error is kept and shown
         c["switches"] = auth.chk(auth.WARN, f"switch monitor: {str(e)[:100]}")
     return auth.health_reply("net", c, detailed)
 
@@ -1773,7 +1790,7 @@ class H(BaseHTTPRequestHandler):
             try:
                 res = oui_update(); _oui_status["error"] = ""
                 return self._json(200, {"ok": True, **res})
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                 _oui_status["error"] = str(e)[:200]
                 return self._json(502, {"error": str(e)[:200]})
 
@@ -1803,7 +1820,7 @@ class H(BaseHTTPRequestHandler):
                     return self._json(200, {"ok": True})
             except ValueError as e:
                 return self._json(400, {"error": str(e)})
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                 log.warning(f"switches/{act}: {e}")
                 return self._json(502, {"error": f"{type(e).__name__}: {e}"[:200]})
             return self._json(404, {"error": "Not found"})
@@ -1822,7 +1839,7 @@ class H(BaseHTTPRequestHandler):
                     return self._json(400, {"error": "Host required"})
                 try:
                     res = snmp_fetch_arp(cfg)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                     return self._json(502, {"error": str(e)})
                 sample = [{"ip": k, "mac": v} for k, v in list(res.items())[:5]]
                 return self._json(200, {"ok": True, "count": len(res), "sample": sample})
@@ -1831,7 +1848,7 @@ class H(BaseHTTPRequestHandler):
                 allcfg["snmp"] = cfg
                 save_config(allcfg)
             try: os.chmod(CONF_FILE, 0o600)
-            except Exception: pass
+            except OSError as e: log.warning(f"config permissions not set to 600: {e}")
             if cfg["enabled"]:
                 threading.Thread(target=refresh_snmp, daemon=True).start()
             else:
@@ -1981,7 +1998,7 @@ if __name__ == "__main__":
     # Explicit 'net' level for users that predate the module (one-time migration)
     try:
         if auth.ensure_permissions(("net",)): log.info("'net' permissions updated")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"Could not update permissions: {e}")
 
     log.info(f"Net Monitor at http://{HOST}:{PORT}")
@@ -1990,7 +2007,7 @@ if __name__ == "__main__":
     start_auto_scan()
     start_watch()
     try: sw_manager().start()
-    except Exception as e: log.warning(f"Switch Monitor did not start: {e}")
+    except Exception as e: log.warning(f"Switch Monitor did not start: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
     try:
         srv = ThreadingHTTPServer((HOST, PORT), H)
         srv.daemon_threads = True

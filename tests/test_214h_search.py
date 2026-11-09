@@ -1,6 +1,10 @@
 """2.1.4h: búsqueda global del Resumen (la tarjeta «Enlaces» se quitó en 2.1.4r) / Overview global search (the "Links" card was removed in 2.1.4r)."""
-import json, shutil, subprocess, unittest
+import json
+import shutil
+import subprocess
+import unittest
 from pathlib import Path
+
 from tests import support
 from tests.support import ADMIN
 
@@ -29,9 +33,9 @@ class Front(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "node not installed")
     def test_same_keys_in_both_languages(self):
         js = (ROOT / "overview/static/search.js").read_text()
-        code = "const s=%s;const m=s.match(/en: \\{(.*?)\\},\\n\\s+es: \\{(.*?)\\}\\n  \\};/s);" % json.dumps(js) + \
+        code = f"const s={json.dumps(js)};const m=s.match(/en: \\{{(.*?)\\}},\\n\\s+es: \\{{(.*?)\\}}\\n  \\}};/s);" + \
                "const k=t=>[...t.matchAll(/(\\w+): '/g)].map(x=>x[1]).sort();console.log(JSON.stringify([k(m[1]),k(m[2])]))"
-        out = subprocess.run(["node", "-e", code], capture_output=True, text=True, timeout=30)
+        out = subprocess.run(["node", "-e", code], capture_output=True, text=True, timeout=30, check=False)
         self.assertEqual(out.returncode, 0, out.stderr)
         en, es = json.loads(out.stdout); self.assertEqual(en, es); self.assertGreater(len(en), 6)
 

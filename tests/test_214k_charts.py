@@ -1,7 +1,9 @@
 """2.1.4k: gráficos unificados (charts.js) — periodo anterior en el backend, filtro de eventos y copias idénticas del motor.
 EN: unified charts (charts.js) — previous period in the backend, event filter and identical copies of the engine."""
-import time, unittest
+import time
+import unittest
 from pathlib import Path
+
 from tests import support
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -51,7 +53,7 @@ class Events(unittest.TestCase):
         self.assertTrue({"wan", "nut"} <= mods(""))
 
 class Engine(unittest.TestCase):
-    MODS = ["dns-monitor", "nas-monitor", "wan-monitor", "nut-monitor", "net-monitor", "uptime-monitor"]
+    MODS = ("dns-monitor", "nas-monitor", "wan-monitor", "nut-monitor", "net-monitor", "uptime-monitor")
     def test_identical_copies_and_loaded(self):
         ref = (ROOT / "dns-monitor/static/charts.js").read_text()
         for m in self.MODS:

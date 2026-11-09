@@ -1,11 +1,15 @@
 """Ayudas comunes: carga de módulos por ruta, usuarios y sesiones de prueba, y un servidor HTTP en un hilo."""
-import importlib.util, json, sys, threading, http.client
+import http.client
+import importlib.util
+import json
+import sys
+import threading
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "auth"))
-import auth  # noqa: E402  (la ruta se agrega arriba)
+import auth
 
 # Las pruebas levantan servidores falsos en 127.0.0.1; en producción valid_target() los rechaza (anti-SSRF). Aquí se relaja a valid_host y la función real
 # se conserva en real_valid_target para probarla por separado.
@@ -50,6 +54,6 @@ class Server:
         if body is not None: data = json.dumps(body).encode(); h["Content-Type"] = "application/json"
         c.request(method, path, data, h); r = c.getresponse(); raw = r.read(); c.close()
         try: j = json.loads(raw)
-        except Exception: j = raw
+        except (ValueError, TypeError): j = raw
         return r.status, j
     def close(self): self.srv.shutdown(); self.srv.server_close()

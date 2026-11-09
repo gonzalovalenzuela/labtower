@@ -1,6 +1,15 @@
 """Switch Monitor: drivers contra equipos simulados, tasas, eventos, topología, historial y API de Net Monitor."""
-import json, os, sqlite3, stat, tempfile, threading, time, unittest
+import json
+import os
+import sqlite3
+import stat
+import tempfile
+import threading
+import time
+import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import ClassVar
+
 from tests import support
 
 sw = support.load("net-monitor/switches.py")
@@ -36,7 +45,7 @@ def zx_site(state):
 
 
 class ZXHandler(BaseHTTPRequestHandler):
-    state = {"tick": 0, "temp": 74, "new_err": 0, "expire_once": False, "hits": []}
+    state: ClassVar[dict] = {"tick": 0, "temp": 74, "new_err": 0, "expire_once": False, "hits": []}
     def log_message(self, *a): pass
     def do_GET(self):
         path = self.path.lstrip("/").split("?")[0]
@@ -52,7 +61,7 @@ class ZXHandler(BaseHTTPRequestHandler):
 def table(rows): return "<table>" + "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows) + "</table>"
 
 class HCHandler(BaseHTTPRequestHandler):
-    posts = []
+    posts: ClassVar[list] = []
     def log_message(self, *a): pass
     def _send(self, body):
         b = body.encode(); self.send_response(200); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
@@ -134,7 +143,8 @@ class Drivers(unittest.TestCase):
         with self.assertRaises(ValueError): d._open("clear_statistics.json?x=1")
 
     def test_zx_session_survives_a_restart(self):
-        import tempfile, os
+        import os
+        import tempfile
         class H(ZXHandler):
             def do_GET(self):
                 path = self.path.lstrip("/").split("?")[0]; self.state["hits"].append(path)
@@ -373,13 +383,13 @@ class ManagerTests(unittest.TestCase):
         self.feed(sid, mk_snap("tplink", t + 180, [mk_port(1, rx=9, tx=4, rxb=800, txb=150)]))
         self.assertEqual((tot()["rx_bytes"], tot()["tx_bytes"]), (4800, 1050))
         # LabTower se reinicia: el total persiste en la base y sigue sumando
-        m2 = sw.Manager(self.d, hooks={"event": lambda *a, **k: None, "changed": lambda k, st: None, "hosts": lambda: {}})
+        m2 = sw.Manager(self.d, hooks={"event": lambda *a, **k: None, "changed": lambda k, st: None, "hosts": dict})
         m2.reconcile = lambda: None
         self.assertEqual({p["port"]: p for p in m2.totals()["switches"][0]["ports"]}[1]["rx_bytes"], 4800)
         # los equipos sin bytes (ZX / HC) con la estimación apagada llevan solo paquetes
         sid2 = self.m.save_switch({"name": "zx310s", "driver": "zx", "host": "192.0.2.6", "user": "admin", "password": "x", "est_bytes": 0})["id"]
         self.feed(sid2, mk_snap("zx310s", t, [mk_port(1, rx=10, tx=5)]))
-        z = [x for x in self.m.totals()["switches"] if x["id"] == sid2][0]
+        z = next(x for x in self.m.totals()["switches"] if x["id"] == sid2)
         self.assertFalse(z["has_bytes"]); self.assertEqual(z["ports"][0]["rx_pkts"], 10)
         self.m.delete_switch(sid2)
         self.assertEqual(len(self.m.totals()["switches"]), 1)
@@ -457,7 +467,7 @@ class ManagerTests(unittest.TestCase):
         self.assertEqual(p[3]["neighbors"][0]["name"], "Pi-hole"); self.assertEqual(p[3]["neighbors"][0]["ip"], "192.0.2.50")
         self.assertEqual(st["edges"], [{"a": "zx310s", "a_port": 7, "b": "hc218as", "b_port": 1}] if st["edges"][0]["a"] == "zx310s"
                          else [{"a": "hc218as", "a_port": 1, "b": "zx310s", "b_port": 7}])
-        self.assertEqual([e for e in self.events if e[1] == "sw_loop"][0][2]["p"], 8)
+        self.assertEqual(next(e for e in self.events if e[1] == "sw_loop")[2]["p"], 8)
         # marcar el puerto 8 como uplink a mano lo saca de las alertas
         self.m.set_port_meta(a, 8, "→ NAS", True)
         zx = next(s for s in self.m.state()["switches"] if s["name"] == "zx310s")
@@ -468,7 +478,7 @@ class ManagerTests(unittest.TestCase):
     def test_history_rollup_and_range_reduction(self):
         sid = self.add()["id"]
         now = 10_000_000
-        for i in range(0, 60 * 24 * 4):                              # 4 días de muestras de 1 min
+        for i in range(60 * 24 * 4):                              # 4 días de muestras de 1 min
             ts = now - i * 60
             self.m._db_write(sid, ts, mk_snap("zx310s", ts, [mk_port(1, rx=i)], temp=50 + (i % 10)),
                              {1: {"rx_pps": 10.0, "tx_pps": 5.0, "rx_bps": None, "tx_bps": None}})

@@ -7,7 +7,9 @@ EN: Generates the brand kit: one icon per module (SVG + PNG) and the palette (pa
 Todos los iconos usan la construcción de la marca: baldosa pizarra azulada y una plataforma de dos losas isométricas (las de la marca) teñidas con el color del módulo y un símbolo sólido de dos tonos encima.
 EN: Every icon uses the brand's construction: slate-blue tile and a two-slab isometric platform (the brand mark's slabs) tinted with the module colour and a bold two-tone symbol standing on it.
 """
-import json, pathlib
+import json
+import pathlib
+
 here = pathlib.Path(__file__).resolve().parent
 icons = here / "icons"; icons.mkdir(exist_ok=True)
 
@@ -29,7 +31,7 @@ MODULES = [
 
 def mix(hexc, to, t):
     a = [int(hexc[i:i+2], 16) for i in (1, 3, 5)]; b = [int(to[i:i+2], 16) for i in (1, 3, 5)]
-    return "#%02x%02x%02x" % tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
+    return "#{:02x}{:02x}{:02x}".format(*tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3)))
 
 def slab(cy, top, left, right, t=28, hw=104, hh=50):
     """Isometric slab, the brand mark's building block: top rhombus plus two sides."""

@@ -1,7 +1,13 @@
 """WAN Monitor + router: prueba de los adaptadores contra routers simulados (Huawei, OpenWrt, DD-WRT, TP-Link), la clasificación LAN/WAN/internet, la configuración sin filtrar la clave y el endpoint de prueba."""
-import base64, json, tempfile, threading, time, unittest
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+import base64
+import json
+import tempfile
+import threading
+import time
+import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
 from tests import support
 from tests.support import ADMIN, READONLY
 
@@ -73,7 +79,7 @@ class FakeRouter:
     def get_ddwrt(self, h):
         if not h.basic_ok(): return h.send(401, "", headers=[("WWW-Authenticate", 'Basic realm="x"')])
         if h.path == "/Status_Router.live.asp":
-            h.send(200, "{wan_status::%s}{wan_ipaddr::%s}{wan_uptime:: 1 day, 02:03:04}" % ("Connected" if self.wan else "Disconnected", "203.0.113.7" if self.wan else "0.0.0.0"))  # nosec B104 - test data
+            h.send(200, "{{wan_status::{}}}{{wan_ipaddr::{}}}{{wan_uptime:: 1 day, 02:03:04}}".format("Connected" if self.wan else "Disconnected", "203.0.113.7" if self.wan else "0.0.0.0"))  # nosec B104 - test data
         else: h.send(404, "")
     def post_ddwrt(self, h, t): h.send(404, "")
 
@@ -82,7 +88,7 @@ class FakeRouter:
         if not h.basic_ok(): return h.send(401, "")
         if h.path == "/userRpm/StatusRpm.htm":
             ip = "203.0.113.11" if self.wan else "0.0.0.0"  # nosec B104 - test data
-            h.send(200, 'var wanPara = new Array(\n1, "00-11-22-33-44-55", "%s", 1, "255.255.255.0", "203.0.113.1", "8.8.8.8 , 1.1.1.1", 0);\n' % ip)
+            h.send(200, f'var wanPara = new Array(\n1, "00-11-22-33-44-55", "{ip}", 1, "255.255.255.0", "203.0.113.1", "8.8.8.8 , 1.1.1.1", 0);\n')
         else: h.send(404, "")
     def post_tplink(self, h, t): h.send(404, "")
 
@@ -110,7 +116,7 @@ class Adapters(unittest.TestCase):
         r, _ = self.run_check("openwrt"); self.assertEqual(r["uptime"], 77)
 
     def test_huawei_logs_out_and_only_reads(self):
-        r, fr = self.run_check("huawei")
+        _r, fr = self.run_check("huawei")
         self.assertIn(("POST", "/api/system/user_logout"), fr.log); self.assertEqual(fr.sessions, set())
     def test_openwrt_other_interface(self):
         r, _ = self.run_check("openwrt", interface="wan6"); self.assertFalse(r["ok"]); self.assertIn("ubus", r["error"])

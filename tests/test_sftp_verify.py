@@ -1,6 +1,14 @@
 """labtower-sftp-backup verify: comprueba en el storage (simulado con un `sftp` falso) que hay una copia reciente / checks on the (fake) storage."""
-import json, os, shutil, stat, subprocess, tempfile, time, unittest
+import json
+import os
+import shutil
+import stat
+import subprocess
+import tempfile
+import time
+import unittest
 from pathlib import Path
+
 from tests import support
 
 ROOT = support.ROOT
@@ -33,7 +41,7 @@ class Verify(unittest.TestCase):
 
     def run_verify(self):
         env = dict(os.environ, PATH=f"{self.d/'bin'}:{os.environ['PATH']}", LABTOWER_BACKUP_CONF=str(self.conf))
-        r = subprocess.run(["bash", str(SCRIPT), "verify"], env=env, capture_output=True, text=True, timeout=60)
+        r = subprocess.run(["bash", str(SCRIPT), "verify"], env=env, capture_output=True, text=True, timeout=60, check=False)
         res = json.loads(self.out.read_text()) if self.out.exists() else None
         return r.returncode, res, r.stdout + r.stderr
 

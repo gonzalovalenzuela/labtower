@@ -17,7 +17,14 @@ Package fields come from `dpkg-deb -f` when available; otherwise from debian/con
 (the Version must match the file name). / Los campos salen de `dpkg-deb -f` o, si no existe
 (macOS), de debian/control del repo (la versión debe coincidir con el nombre del archivo).
 """
-import argparse, gzip, hashlib, re, shutil, subprocess, sys, time
+import argparse
+import gzip
+import hashlib
+import re
+import shutil
+import subprocess
+import sys
+import time
 from email.utils import formatdate
 from pathlib import Path
 
@@ -31,7 +38,7 @@ def control_of(deb: Path) -> str:
     if shutil.which("dpkg-deb"):
         return subprocess.run(["dpkg-deb", "-f", str(deb)], check=True, capture_output=True, text=True).stdout
     txt = (ROOT / "debian" / "control").read_text(encoding="utf-8")
-    m = re.search(r"^Version:\s*(\S+)", txt, re.M)
+    m = re.search(r"^Version:\s*(\S+)", txt, re.MULTILINE)
     if not m or f"_{m.group(1)}_" not in deb.name:
         sys.exit(f"{deb.name}: dpkg-deb not found and debian/control version ({m and m.group(1)}) "
                  f"does not match the file name")

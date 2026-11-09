@@ -1,13 +1,18 @@
 """2.1.4l: reglas de alerta del Resumen / Overview alert rules."""
-import json, subprocess, textwrap, unittest
+import json
+import subprocess
+import textwrap
+import unittest
 from pathlib import Path
+from typing import ClassVar
+
 from tests import support
 
 ov = support.load("overview/server.py")
 ROOT = Path(__file__).resolve().parent.parent
 
 class Clean(unittest.TestCase):
-    ok = {"m": "pi_temp", "o": ">", "v": 65, "lv": "warn", "on": True}
+    ok: ClassVar[dict] = {"m": "pi_temp", "o": ">", "v": 65, "lv": "warn", "on": True}
     def test_valid(self):
         r, e = ov.clean_rules([self.ok, {**self.ok, "m": "ups_charge", "o": "<", "v": 50.5, "lv": "crit", "on": False}])
         self.assertEqual(len(r), 2); self.assertEqual(e, "")
@@ -26,7 +31,7 @@ class Api(unittest.TestCase):
         adm = support.make_user("rlA", support.ADMIN); ro = support.make_user("rlR", support.READONLY)
         self.assertEqual(s.call("GET", "/api/rules", None, token=ro)[1]["can_edit"], False)
         self.assertEqual(s.call("POST", "/api/rules", {"rules": [Clean.ok]}, token=ro)[0], 403)
-        st, body = s.call("POST", "/api/rules", {"rules": [Clean.ok]}, token=adm); self.assertEqual(st, 200)
+        st, _body = s.call("POST", "/api/rules", {"rules": [Clean.ok]}, token=adm); self.assertEqual(st, 200)
         g = s.call("GET", "/api/rules", None, token=ro)[1]; self.assertEqual(g["rules"], [Clean.ok])
         self.assertEqual(s.call("POST", "/api/rules", {"rules": [{**Clean.ok, "m": "bad"}]}, token=adm)[0], 400)
         s.call("POST", "/api/rules", {"rules": []}, token=adm)
@@ -47,7 +52,7 @@ class Client(unittest.TestCase):
             const ok=(v)=>({status:'fulfilled',value:v});
             const R={sys:ok({temp:70,mem:{pct:10}}),nut:ok({servers:[{status:{ups:{u1:{'battery.charge':'40'},u2:{'battery.charge':'90'}}}}]}),nas:ok({nas:[{name:'n',snap:{data:{cpu:{pct:99}}}}]})};
             const sev=rulesEval(R);console.log(JSON.stringify({sev,n:issues.length,lv:issues.map(i=>i.lv)}));})();""")
-        out = subprocess.run(["node", "-e", js], cwd=ROOT, capture_output=True, text=True, timeout=30)
+        out = subprocess.run(["node", "-e", js], cwd=ROOT, capture_output=True, text=True, timeout=30, check=False)
         self.assertEqual(json.loads(out.stdout.strip().splitlines()[-1]), {"sev": "crit", "n": 2, "lv": ["warn", "crit"]}, out.stderr)
 
 if __name__ == "__main__":

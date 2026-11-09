@@ -1,9 +1,14 @@
 """VPN Monitor: validación, lectores (WireGuard, OpenVPN v1/v2/v3, Tailscale), sesiones y eventos, SSH con el comando fijo, secretos y permisos."""
-import json, tempfile, time, unittest
+import json
+import tempfile
+import time
+import unittest
 from pathlib import Path
+from typing import ClassVar
 from unittest import mock
+
 from tests import support
-from tests.support import ADMIN, READONLY, NONE
+from tests.support import ADMIN, NONE, READONLY
 
 m = support.load("vpn-monitor/server.py")
 K1, K2 = "A" * 43 + "=", "B" * 43 + "="
@@ -14,7 +19,7 @@ class LastReading(unittest.TestCase):
         self.pa = mock.patch.object(m, "LAST_FILE", Path(self.tmp) / "last.json"); self.pa.start()
         m._cache.clear(); m._last.clear()
     def tearDown(self): self.pa.stop(); m._cache.clear(); m._last.clear()
-    SNAP = {"ts": 1, "clients": [{"key": "k", "name": "n", "online": True}], "online": 1, "total": 1}
+    SNAP: ClassVar[dict] = {"ts": 1, "clients": [{"key": "k", "name": "n", "online": True}], "online": 1, "total": 1}
     def test_saved_reading_is_shown_stale_after_restart_then_replaced(self):
         m._cache["a"] = m.Cache("a"); m.save_last("a", self.SNAP)
         self.assertTrue((Path(self.tmp) / "last.json").exists())
@@ -108,8 +113,8 @@ class Ssh(unittest.TestCase):
         cfg = m.validate({"type": "openvpn", "name": "x", "host": "192.0.2.9", "ssh_user": "gonzalo"})
         self.assertFalse(cfg["use_sudo"])
     def test_missing_key_is_explained(self):
-        with mock.patch.object(m, "SSH_KEY", Path(tempfile.mkdtemp(), "nokey")):
-            with self.assertRaises(RuntimeError) as e: m.ssh_run({"port": 22, "ssh_user": "root", "host": "192.0.2.9"}, "x")
+        with mock.patch.object(m, "SSH_KEY", Path(tempfile.mkdtemp(), "nokey")), self.assertRaises(RuntimeError) as e:
+            m.ssh_run({"port": 22, "ssh_user": "root", "host": "192.0.2.9"}, "x")
         self.assertIn("SSH key", str(e.exception))
 
 class Sessions(unittest.TestCase):

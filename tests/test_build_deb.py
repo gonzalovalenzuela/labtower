@@ -1,6 +1,10 @@
 """scripts/build-deb: arma el .deb desde HEAD con dpkg-deb, con el contenido, los permisos y los conffiles esperados, y de forma repetible.
 EN: scripts/build-deb: builds the .deb from HEAD with dpkg-deb, with the expected contents, permissions and conffiles, and repeatably."""
-import hashlib, shutil, subprocess, tempfile, unittest
+import hashlib
+import shutil
+import subprocess
+import tempfile
+import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent

@@ -1,5 +1,8 @@
 """UPS Monitor: autonomía estimada, envejecimiento de la batería y registro de autotests / estimated runtime, ageing and self-test log."""
-import datetime, time, unittest
+import datetime
+import time
+import unittest
+
 from tests import support
 
 b = support.load("nut-monitor/battery.py")
@@ -155,7 +158,7 @@ class Db(unittest.TestCase):
             v = {"battery.date": "2001/09/01"}
             self.assertIsNone(m.battery_info("s", "u", v)["age_years"])
             d = (datetime.date.today() - datetime.timedelta(days=20)).isoformat()
-            m.BAT_FILE.write_text('{"s|u": "%s", "s|bad": "nope"}' % d)
+            m.BAT_FILE.write_text(f'{{"s|u": "{d}", "s|bad": "nope"}}')
             i = m.battery_info("s", "u", v); self.assertEqual((i["age_years"], i["age_manual"]), (0.1, d))
             self.assertIsNone(m.battery_info("s", "bad", v)["age_manual"])
         finally: m.BAT_FILE = old
@@ -163,6 +166,7 @@ class Db(unittest.TestCase):
     def test_battery_date_endpoint(self):
         import tempfile
         from pathlib import Path
+
         from tests import support
         m = self.m; old = (m.BAT_FILE, m.load_servers); m.BAT_FILE = Path(tempfile.mkdtemp(), "bd.json"); m.load_servers = lambda: [{"id": "s1", "name": "n", "host": "h", "port": 1}]
         web = support.Server(m.H); adm, ro = support.make_user("bdadm", support.ADMIN), support.make_user("bdro", support.READONLY)

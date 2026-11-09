@@ -1,6 +1,7 @@
 """2.1.5d: velocidad contratada en WAN Monitor (% entregado) y «Expandir todo» en el diagnóstico del cluster de Proxmox."""
 import unittest
 from pathlib import Path
+
 from tests import support
 
 w = support.load("wan-monitor/server.py")
@@ -23,6 +24,6 @@ class DiagExpandAll(unittest.TestCase):
         a = (ROOT / "proxmox-monitor/static/app.js").read_text()
         self.assertIn("function toggleDiagAll", a); self.assertIn("toggleDiag, toggleDiagAll", a)
         self.assertIn("diagExpand:'Expand all'", a); self.assertIn("diagExpand:'Expandir todo'", a)
-        for k in ("reboots", "backups", "smart"): self.assertIn("sect('%s'" % k, a); self.assertIn("'%s'" % k, a.split("const DIAG_KEYS=")[1].split(";")[0])
+        for k in ("reboots", "backups", "smart"): self.assertIn(f"sect('{k}'", a); self.assertIn(f"'{k}'", a.split("const DIAG_KEYS=")[1].split(";")[0])
 
 if __name__ == "__main__": unittest.main()

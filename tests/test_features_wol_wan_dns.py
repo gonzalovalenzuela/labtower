@@ -1,5 +1,11 @@
 """WOL (estado en vivo), WAN (historial de IP y traceroute por corte) y DNS (sondeo de upstreams y prueba de resolución)."""
-import socket, struct, threading, time, unittest
+import socket
+import struct
+import threading
+import time
+import unittest
+from typing import ClassVar
+
 from tests import support
 from tests.support import ADMIN, READONLY
 
@@ -10,7 +16,7 @@ dnsq = dns.dnsq
 
 
 class WolStatus(unittest.TestCase):
-    DEVS = [{"id": "a" * 8 + "-0000-0000-0000-" + "0" * 12, "name": "pc", "mac": "AA:BB:CC:DD:EE:01", "ip": "192.0.2.10", "port": 9, "tag": "PC"},
+    DEVS: ClassVar[list] = [{"id": "a" * 8 + "-0000-0000-0000-" + "0" * 12, "name": "pc", "mac": "AA:BB:CC:DD:EE:01", "ip": "192.0.2.10", "port": 9, "tag": "PC"},
             {"id": "b" * 8 + "-0000-0000-0000-" + "0" * 12, "name": "noip", "mac": "AA:BB:CC:DD:EE:02", "ip": None, "port": 9, "tag": "PC"},
             {"id": "c" * 8 + "-0000-0000-0000-" + "0" * 12, "name": "net", "mac": "AA:BB:CC:DD:EE:03", "ip": "192.0.2.30", "port": 9, "tag": "PC"}]
 
@@ -25,7 +31,7 @@ class WolStatus(unittest.TestCase):
         self._o = (wol.load_devices, wol.load_net_hosts, wol.ping_host)
         wol.load_devices = lambda: [dict(d) for d in self.DEVS]
         wol.load_net_hosts = lambda: {"aabbccddee03": {"ip": "192.0.2.99", "online": True}}
-        wol.ping_host = lambda ip, timeout=1.0: (self.calls.append(ip), ip.endswith(".10") or ip.endswith(".99"))[1]
+        wol.ping_host = lambda ip, timeout=1.0: (self.calls.append(ip), ip.endswith((".10", ".99")))[1]
         wol._probe_cache.clear()
     def tearDown(self): wol.load_devices, wol.load_net_hosts, wol.ping_host = self._o
 

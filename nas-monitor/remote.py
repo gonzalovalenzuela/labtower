@@ -26,7 +26,17 @@ NAS Monitor — lectores de TrueNAS y OpenMediaVault por API / TrueNAS and OpenM
 #       · NAS errors are reduced to their message (no traces) and never include the key or the password.
 #
 #     Minimal WebSocket client (RFC 6455) on the standard library: the application has no external dependencies.
-import base64, hashlib, http.client, json, os, re, socket, ssl, struct, time
+import base64
+import hashlib
+import http.client
+import json
+import math
+import os
+import re
+import socket
+import ssl
+import struct
+import time
 
 MAX_MSG   = 8 << 20          # largest WebSocket message / HTTP body accepted (bytes)
 MAX_HDR   = 16384            # largest HTTP header block accepted
@@ -39,12 +49,12 @@ class RemoteError(RuntimeError):
 def clean(s, n=200):
     return _CTRL.sub(" ", str(s))[:n]
 
-def _num(x): return isinstance(x, (int, float)) and not isinstance(x, bool) and x == x
+def _num(x): return isinstance(x, (int, float)) and not isinstance(x, bool) and not math.isnan(x)
 
 def _flt(x):
     try:
         v = float(x)
-        return v if v == v and v not in (float("inf"), float("-inf")) else None
+        return v if math.isfinite(v) else None
     except (TypeError, ValueError):
         return None
 
@@ -112,7 +122,7 @@ class WsClient:
             head, _, self.buf = head.partition(b"\r\n\r\n")
         except ssl.SSLError as e:
             self.close(); raise RemoteError(clean(f"TLS error: {getattr(e, 'reason', None) or e}"))
-        except (OSError, socket.timeout) as e:
+        except (TimeoutError, OSError) as e:
             self.close(); raise RemoteError(clean(f"{type(e).__name__}: {e}"))
         except RemoteError:
             self.close(); raise
@@ -142,7 +152,7 @@ class WsClient:
             self.sock.settimeout(self._left())
             try:
                 chunk = self.sock.recv(65536)
-            except socket.timeout:
+            except TimeoutError:
                 raise RemoteError("Timed out")
             except (OSError, ssl.SSLError) as e:
                 raise RemoteError(clean(f"{type(e).__name__}: {e}"))
@@ -314,7 +324,7 @@ def tn_collect(cfg, prev, learn=None):
         if a.get("dismissed"): continue
         lv, text, klass = _tn_lv_alert(a.get("level")), clean(a.get("formatted") or a.get("text") or a.get("klass") or "alert", 200), clean(a.get("klass") or "", 40)
         nas_alerts.append({"lv": lv, "type": "remote", "item": klass or "alert", "value": text})
-        if lv in ("warn", "crit") and re.search(r"smart|disk", klass, re.I):
+        if lv in ("warn", "crit") and re.search(r"smart|disk", klass, re.IGNORECASE):
             for nm in names:
                 if re.search(r"\b" + re.escape(nm) + r"\b", text): bad_disk[nm] = max(bad_disk.get(nm, "warn"), lv, key=("warn", "crit").index)
     disks = []

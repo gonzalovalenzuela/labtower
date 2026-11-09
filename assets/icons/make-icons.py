@@ -10,8 +10,13 @@ icon-maskable-512.png        → ilustración más pequeña dentro de la zona se
 logo.png (256)               → logo de la cabecera de inicio y Resumen / logo of the home and Overview headers
 docs/logo.png (512)          → logo del README
 """
-import base64, io, pathlib, re
+import base64
+import io
+import pathlib
+import re
+
 from PIL import Image, ImageDraw
+
 here = pathlib.Path(__file__).resolve().parent
 root = here.parent.parent
 out = root / "home"

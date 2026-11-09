@@ -1,5 +1,10 @@
 """Disabling unused modules: root helper, auth.disabled_modules(), API contract, installer and UI wiring."""
-import os, re, subprocess, sys, tempfile, unittest
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -9,7 +14,7 @@ IDS = ("wol", "nut", "net", "pve", "nas", "dns", "wan", "vpn", "uptime")
 def helper(f, *args):
     env = {**{k: v for k, v in os.environ.items() if not k.startswith("LABTOWER_")},
            "LABTOWER_DISABLED_FILE": str(f), "LABTOWER_MODULES_DRY": "1"}
-    return subprocess.run(["bash", str(HELPER), *args], capture_output=True, text=True, env=env, timeout=30)
+    return subprocess.run(["bash", str(HELPER), *args], capture_output=True, text=True, env=env, timeout=30, check=False)
 
 class Helper(unittest.TestCase):
     def setUp(self): self.f = Path(tempfile.mkdtemp()) / "modules.disabled"
@@ -38,12 +43,12 @@ class Helper(unittest.TestCase):
 class AuthApi(unittest.TestCase):
     def test_disabled_modules_reads_file_and_ignores_garbage(self):
         f = Path(tempfile.mkdtemp()) / "m"; f.write_text("vpn\nbogus\nadmin\nwol\n")
-        code = ("import sys; sys.path.insert(0, %r); import auth; print(auth.disabled_modules())" % str(ROOT / "auth"))
+        code = ("import sys; sys.path.insert(0, {!r}); import auth; print(auth.disabled_modules())".format(str(ROOT / "auth")))
         env = {**{k: v for k, v in os.environ.items() if not k.startswith("LABTOWER_")}, "LABTOWER_DISABLED_FILE": str(f)}
-        r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env, timeout=60)
+        r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env, timeout=60, check=False)
         self.assertEqual(r.stdout.strip(), "['wol', 'vpn']", r.stderr)
         f.unlink()
-        r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env, timeout=60)
+        r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env, timeout=60, check=False)
         self.assertEqual(r.stdout.strip(), "[]")
 
 class Wiring(unittest.TestCase):

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # snmpd "pass" script: fakes the Synology MIB (.1.3.6.1.4.1.6574) for end-to-end tests.
 import sys
+
 B = ".1.3.6.1.4.1.6574"
 T = {
  "1.1.0": ("integer", 1), "1.2.0": ("integer", 41), "1.3.0": ("integer", 1),

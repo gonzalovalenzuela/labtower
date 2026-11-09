@@ -30,19 +30,32 @@ API REST de Proxmox VE — sin dependencias externas
 #     (the user confirms it) and every connection checks it is still the same BEFORE sending the token.
 #
 #     Structure: API client · cluster configuration · cache and history · poller · health · HTTP.
-import json, os, re, ssl, sys, time, logging, threading, http.client, hashlib, socket
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+import hashlib
+import http.client
+import json
+import logging
+import math
+import os
+import re
+import socket
+import ssl
+import sys
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
 ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
-from urllib.parse import urlparse, parse_qs
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 # Módulo compartido de autenticación (carpeta hermana /auth).
 # EN: Shared authentication module (sibling folder /auth).
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
+
 sys.path.insert(0, str(Path(__file__).parent))
-import diag
 import backups
+import diag
 import extra
 
 # Solo loopback; el acceso desde la red pasa por nginx.
@@ -59,8 +72,8 @@ LEGACY_FILES = ("clusters.json", "history.json")
 DATA_FILE  = DATA_DIR / "clusters.json"
 # Ritmos de consulta: rápido cuando hay alguien mirando, lento cuando no (variables PVE_POLL_*).
 # EN: Polling rates: fast when someone is looking, slow when not (PVE_POLL_* variables).
-POLL_ACTIVE = float(os.environ.get("PVE_POLL_ACTIVE", 5))    # seconds, while someone is watching
-POLL_IDLE   = float(os.environ.get("PVE_POLL_IDLE", 60))     # seconds, when nobody has the page open
+POLL_ACTIVE = float(os.environ.get("PVE_POLL_ACTIVE", "5"))    # seconds, while someone is watching
+POLL_IDLE   = float(os.environ.get("PVE_POLL_IDLE", "60"))     # seconds, when nobody has the page open
 # Una página abierta cuenta como «mirando» durante este tiempo desde su última petición.
 # EN: An open page counts as "looking" for this long after its last request.
 VIEW_GRACE  = 30                                              # a viewer counts as active for this long
@@ -72,16 +85,16 @@ SLOW_EVERY  = 60                                              # version / ceph r
 HIST_EVERY  = 30                                              # node history sampling period
 # Cada cuántos segundos se lee el SMART de los discos de cada nodo (smartctl es pesado: no hace falta más seguido).
 # EN: How often, in seconds, the SMART data of each node's disks is read (smartctl is heavy: no need to do it more often).
-SMART_EVERY = float(os.environ.get("PVE_SMART_EVERY", 900))
+SMART_EVERY = float(os.environ.get("PVE_SMART_EVERY", "900"))
 # Cada cuántos segundos se revisan los respaldos (contenido de los storages de backup y tareas vzdump).
 # EN: How often, in seconds, the backups are checked (content of the backup storages and vzdump tasks).
-BACKUP_EVERY = float(os.environ.get("PVE_BACKUP_EVERY", 600))
+BACKUP_EVERY = float(os.environ.get("PVE_BACKUP_EVERY", "600"))
 # Cada cuántos segundos se leen las MAC e IP de las VM y contenedores (para mapearlos en Net Monitor).
 # EN: How often, in seconds, the MACs and IPs of VMs and containers are read (to map them in Net Monitor).
-GUEST_EVERY = float(os.environ.get("PVE_GUEST_EVERY", 300))
+GUEST_EVERY = float(os.environ.get("PVE_GUEST_EVERY", "300"))
 # Información adicional (HA, replicación, certificados, tareas, tendencias): cada tanto; 0 la desactiva.
 # EN: Extra information (HA, replication, certificates, tasks, trends): this often; 0 turns it off.
-EXTRA_EVERY = float(os.environ.get("PVE_EXTRA_EVERY", 300))
+EXTRA_EVERY = float(os.environ.get("PVE_EXTRA_EVERY", "300"))
 SERIES_EVERY, SERIES_KEEP = 900, 45 * 86400
 # Instante de la última petición de un navegador (decide el ritmo de consulta).
 # EN: Time of the last browser request (decides the polling rate).
@@ -123,9 +136,8 @@ def fetch_fingerprint(host, port, timeout=8) -> str:
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
-    with socket.create_connection((host, int(port)), timeout=timeout) as raw:
-        with ctx.wrap_socket(raw, server_hostname=host) as tls:
-            return hashlib.sha256(tls.getpeercert(binary_form=True)).hexdigest()
+    with socket.create_connection((host, int(port)), timeout=timeout) as raw, ctx.wrap_socket(raw, server_hostname=host) as tls:
+        return hashlib.sha256(tls.getpeercert(binary_form=True)).hexdigest()
 
 # Cliente de la API de Proxmox con una conexión HTTPS persistente (evita repetir el handshake TLS en cada consulta).
 # Autentica con el token de API en la cabecera Authorization.
@@ -153,7 +165,7 @@ class PVEClient:
     def close(self):
         try:
             if self._conn: self._conn.close()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 - limpieza al terminar; un fallo no cambia el resultado / EN: cleanup; a failure does not change the result
             pass
         self._conn = None
 
@@ -210,7 +222,7 @@ class PVEClient:
     def cluster_status(self) -> list:
         try:
             return self.get("/cluster/status").get("data", [])
-        except Exception:
+        except Exception:  # noqa: BLE001 - red o servicio externo: cualquier fallo es «sin respuesta» / network or external service: any failure means «no answer»
             return []
 
     # Versión de Proxmox VE; si falla devuelve cadena vacía.
@@ -218,7 +230,7 @@ class PVEClient:
     def version(self) -> str:
         try:
             return self.get("/version").get("data", {}).get("version", "")
-        except Exception:
+        except Exception:  # noqa: BLE001 - red o servicio externo: cualquier fallo es «sin respuesta» / network or external service: any failure means «no answer»
             return ""
 
 # ─── Clusters config ──────────────────────────────────────────────────────────
@@ -320,7 +332,7 @@ HIST_FILE  = Path(os.environ.get("PVE_HISTORY", str(DATA_FILE.with_name("history
 HIST_KEEP  = auth.keep_days("PVE_KEEP_DAYS", 7) * 86400
 
 def _num(x):
-    return isinstance(x, (int, float)) and not isinstance(x, bool) and x == x
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and not math.isnan(x)
 
 def _store_sample(cid, node, ts, cpu, mem):
     try:
@@ -329,7 +341,7 @@ def _store_sample(cid, node, ts, cpu, mem):
             c.execute("INSERT OR REPLACE INTO pve_samples (cid,node,ts,cpu,mem) VALUES (?,?,?,?,?)", (cid, node, ts, cpu, mem))
             c.commit()
         finally: c.close()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"could not store the history sample: {e}")
 
 def _migrate_history(c):
@@ -345,7 +357,7 @@ def _migrate_history(c):
             c.executemany("INSERT OR IGNORE INTO pve_samples (cid,node,ts,cpu,mem) VALUES (?,?,?,?,?)", rows); c.commit()
             log.info(f"History: imported {len(rows)} samples from {HIST_FILE.name}")
         HIST_FILE.rename(HIST_FILE.with_name(HIST_FILE.name + ".migrated"))
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"could not import the old history: {e}")
 
 # Recarga las últimas ~12 h de los clusters que siguen configurados.
@@ -358,7 +370,7 @@ def load_history():
             _migrate_history(c)
             c.execute("DELETE FROM pve_samples WHERE ts < ?", (int(time.time()) - HIST_KEEP,)); c.commit()
             try: keep = {x.get("id") for x in load_clusters()}
-            except Exception: keep = None
+            except (OSError, ValueError): keep = None
             cut = int(time.time()) - _HIST_MAX * HIST_EVERY
             rows = c.execute("SELECT cid,node,ts,cpu,mem FROM pve_samples WHERE ts >= ? ORDER BY ts", (cut,)).fetchall()
         finally: c.close()
@@ -367,7 +379,7 @@ def load_history():
                 if keep is not None and cid not in keep: continue
                 dq = _NODE_HISTORY.setdefault(f"{cid}:{node}", _deque(maxlen=_HIST_MAX))
                 dq.append({"ts": ts, "cpu": cpu, "mem": mem}); n += 1
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"could not load the history: {e}")
     return n
 
@@ -378,7 +390,7 @@ def _history_pruner():
             c = auth.metrics_conn()
             try: c.execute("DELETE FROM pve_samples WHERE ts < ?", (int(time.time()) - HIST_KEEP,)); c.commit()
             finally: c.close()
-        except Exception as e: log.warning(f"could not prune the history: {e}")
+        except Exception as e: log.warning(f"could not prune the history: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
 
 
 # Última lectura de un cluster (datos, error y hora). El evento «wake» obliga al poller a refrescar de inmediato.
@@ -441,7 +453,7 @@ def _diag_save():
     try:
         auth.write_json(DIAG_FILE, _diag_state, indent=None)
         _diag_dump = txt
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"could not save the diagnostics state: {e}")
 
 # Detecta reinicios de nodos y los anota en la línea de tiempo; si varios nodos se reinician casi a la vez, lo marca aparte.
@@ -495,7 +507,7 @@ def _read_node_smart(client, node):
     for row in rows[:64]:
         if not isinstance(row, dict) or not _DEV_RE.match(str(row.get("devpath", ""))): continue
         try:    sm = client.get(f"/nodes/{quote(node, safe='')}/disks/smart?disk={quote(row['devpath'], safe='/')}").get("data")
-        except Exception: sm = None
+        except Exception: sm = None  # noqa: BLE001 - red o servicio externo: cualquier fallo es «sin respuesta» / network or external service: any failure means «no answer»
         out.append(diag.summarize_disk(row, sm))
     return out
 
@@ -507,7 +519,7 @@ def _smart_round(cluster, client, cache):
         try:
             disks = _read_node_smart(client, node)
             res[node] = {"disks": disks, "error": None}
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - el error queda guardado y se muestra / the error is kept and shown
             res[node] = {"disks": [], "error": str(e)[:160]}
             continue
         for d in disks:
@@ -535,7 +547,7 @@ def _smart_loop(cluster, cache):
             if cur is None: break
             client = _client_for(cur, client)
             _smart_round(cur, client, cache)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"[{cluster['name']}] SMART round: {e}")
             if client: client.close()
         time.sleep(SMART_EVERY)
@@ -576,10 +588,10 @@ def _backup_round(cluster, client, cache):
         try:
             items = client.get(f"/nodes/{quote(node, safe='')}/storage/{quote(sto, safe='')}/content?content=backup").get("data") or []
             contents.append({"storage": sto, "node": node, "items": items}); storages.append({"storage": sto, "node": node, "count": len(items), "error": None})
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - el error queda guardado y se muestra / the error is kept and shown
             storages.append({"storage": sto, "node": node, "count": 0, "error": str(e)[:120]})
     try:    tasks = backups.parse_tasks(client.get("/cluster/tasks").get("data"), time.time())
-    except Exception: tasks = []
+    except Exception: tasks = []  # noqa: BLE001 - red o servicio externo: cualquier fallo es «sin respuesta» / network or external service: any failure means «no answer»
     now = time.time()
     rows = backups.evaluate(guests, backups.newest_by_vmid(contents), cfg["max_age_h"], cfg["ignore"], now)
     # Un storage que no se pudo leer no debe hacer pasar por «sin respaldo» a las VMs: se anota y no se evalúa nada.
@@ -610,7 +622,7 @@ def _backup_loop(cluster, cache):
             if cur is None: break
             client = _client_for(cur, client)
             _backup_round(cur, client, cache)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"[{cluster['name']}] backup round: {e}")
             if client: client.close()
         time.sleep(BACKUP_EVERY)
@@ -651,7 +663,7 @@ def _guest_events(cluster, nodes_data):
         return
     for g in ch:
         what = g["what"]
-        params = dict(c=cname, n=g["name"], v=g["vmid"], nd=g["node"])
+        params = {"c": cname, "n": g["name"], "v": g["vmid"], "nd": g["node"]}
         if what == "moved": params["f"] = g["from"]
         auth.record_event("pve", "info" if what != "stop" else "warn", f"{cname}/{g['name']} ({g['vmid']}): {_PVE_ACT[what]} on {g['node']}", "pve_guest_" + what, **params)
 
@@ -696,7 +708,7 @@ def _series_store(cid, rows):
             c.execute("DELETE FROM pve_series WHERE cid = ? AND ts < ?", (cid, now - SERIES_KEEP)); c.commit()
         finally: c.close()
         _ser_last[cid] = now
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"could not store the slow series: {e}")
 
 def _series_days(cid, rows):
@@ -710,7 +722,7 @@ def _series_days(cid, rows):
                 out[k] = extra.days_to_full(pp, tot - used)
                 if out[k] is None: why[k] = list(extra.days_why(pp))
         finally: c.close()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"could not read the slow series: {e}")
     return out, why
 
@@ -725,7 +737,7 @@ def _extra_round(cluster, client, cache):
         try:    return client.get(path).get("data")
         except PVEHTTPError as e:
             errors.setdefault(feat, "perm" if e.status in (401, 403) else str(e.status)); return None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - el error queda guardado y se muestra / the error is kept and shown
             errors.setdefault(feat, str(e)[:80]); return None
     ninfo, repl_rows = {}, {}
     for nd in nodes:
@@ -761,7 +773,7 @@ def _extra_loop(cluster, cache):
             if cur is None: break
             client = _client_for(cur, client)
             _extra_round(cur, client, cache)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"[{cluster['name']}] extra round: {e}")
             if client: client.close()
         time.sleep(EXTRA_EVERY)
@@ -830,7 +842,7 @@ def node_detail(cid, name):
         try: return client.get(f"/nodes/{q}/{sub}").get("data")
         except PVEHTTPError as e:
             errors[feat] = "perm" if e.status in (401, 403) else str(e.status); return None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - el error queda guardado y se muestra / the error is kept and shown
             errors[feat] = str(e)[:80]; return None
     def go():
         errors.clear()
@@ -868,7 +880,7 @@ def _guest_ips(client, node, kind, vmid, cfg, running):
             elif kind == "lxc":
                 for itf in client.get(f"/nodes/{node}/lxc/{vmid}/interfaces").get("data", []):
                     ips.append(str(itf.get("inet", "")).split("/")[0])
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 - sin agente o sin permiso: se usa la configuración / EN: no agent or no permission: the config is used
             pass                                      # no agent / no permission: keep what the config gave
     return sorted({i for i in ips if _IP4_RE.match(i) and not i.startswith(("127.", "169.254."))})
 
@@ -882,7 +894,7 @@ def _guest_round(cur, client, cache):
                 vmid = g.get("vmid")
                 try:
                     cfg = client.get(f"/nodes/{nd['name']}/{kind}/{vmid}/config").get("data", {})
-                except Exception:
+                except Exception:  # noqa: BLE001 - red o servicio externo: cualquier fallo es «sin respuesta» / network or external service: any failure means «no answer»
                     cfg = {}
                 macs = sorted({m.lower() for k, v in cfg.items() if re.fullmatch(r"net\d+", k) for m in _MAC_RE.findall(str(v))})
                 ips = _guest_ips(client, nd["name"], kind, vmid, cfg, g.get("status") == "running")
@@ -900,7 +912,7 @@ def _guest_loop(cluster, cache):
             if cur is None: break
             client = _client_for(cur, client)
             _guest_round(cur, client, cache)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"[{cluster['name']}] guest network round: {e}")
             if client: client.close()
         time.sleep(GUEST_EVERY)
@@ -925,7 +937,7 @@ def _fetch_legacy(client, name):
         if node.get("status") == "online":
             try:
                 info["vms"], info["cts"], info["storage"] = client.vms(n), client.containers(n), client.storage(n)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
                 log.warning(f"[{name}] {n} detail error: {e}")
         nodes_data.append(info)
     return sorted(nodes_data, key=lambda x: _natural(x["name"]))
@@ -985,8 +997,8 @@ def _cluster_events(cluster, nodes_data, ceph):
             if ch:
                 auth.record_event("pve", "info" if h == "HEALTH_OK" else "crit" if h == "HEALTH_ERR" else "warn",
                                   f"{cname}: Ceph {ch[0]} → {h}", "pve_ceph", c=cname, a=ch[0], b=h)
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
+        log.warning(f"{cname}: Ceph health event not recorded: {e}")
 
 # Bucle del hilo de consulta de un cluster. En cada vuelta: vuelve a leer la configuración (si el cluster se borró, el
 # hilo termina; si se fijó una huella, la adopta), consulta la API, guarda la lectura y duerme según haya o no alguien mirando.
@@ -1024,7 +1036,7 @@ def _poll_cluster(cluster):
             gone = cur is None
             if cur is not None:                  # picks up a pinned certificate or an edit while running
                 client = _client_for(cur, client); cluster = cur
-        except Exception as e:                    # never let the poller thread die on a config hiccup
+        except Exception as e:                    # never let the poller thread die on a config hiccup  # noqa: BLE001
             log.error(f"[{cluster['name']}] config read: {e}"); gone = False
         if gone:
             client.close()
@@ -1048,7 +1060,7 @@ def _poll_cluster(cluster):
                 v = client.version()
                 if v: version = v
                 try:    ceph = client.get("/cluster/ceph/status").get("data")
-                except Exception: ceph = None
+                except Exception: ceph = None  # noqa: BLE001 - red o servicio externo: cualquier fallo es «sin respuesta» / network or external service: any failure means «no answer»
                 cephsum = diag.ceph_summary(ceph)
                 corosync = diag.corosync_summary(client.cluster_status())
                 slow_ts = t0
@@ -1063,10 +1075,10 @@ def _poll_cluster(cluster):
             _observe_reboots(cluster, nodes_data)
             _diag_events(cluster, corosync, cephsum)
             try:    _live_pass(cluster, nodes_data)
-            except Exception as e: log.warning(f"[{cluster['name']}] extra pass: {e}")
+            except Exception as e: log.warning(f"[{cluster['name']}] extra pass: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.debug(f"[{cluster['name']}] {len(nodes_data)} nodes in {time.time()-t0:.2f}s")
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             cache.set_error(str(e), "cert" if isinstance(e, PVECertError) else None)
             client.close()
             log.error(f"[{cluster['name']}] poll error: {e}")
@@ -1204,7 +1216,7 @@ class H(BaseHTTPRequestHandler):
                 rng = parse_qs(urlparse(self.path).query).get("range", ["1d"])[0]
                 if rng not in extra.RRD_FRAME: return self._json(400, {"error": "Invalid range"})
                 return self._json(200, {"range": rng, "history": node_rrd(cid, name, rng)})
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                 log.warning(f"[{cid}] node {what} query failed: {e}")
                 return self._json(502, {"error": "Could not read the node from Proxmox"})
 
@@ -1438,7 +1450,7 @@ class H(BaseHTTPRequestHandler):
             if not auth.valid_target(host) or not 1 <= port <= 65535: return self._json(400, {"error": "Invalid host or port"})
             try:
                 self._json(200, {"ok": True, "fingerprint": _fp_fmt(fetch_fingerprint(host, port))})
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                 self._json(200, {"ok": False, "error": str(e)})
 
         # Fijar el certificado de un cluster ya existente en dos pasos: sin huella devuelve la actual para que el usuario la
@@ -1455,7 +1467,7 @@ class H(BaseHTTPRequestHandler):
             if not c: return self._json(404, {"error": "Not found"})
             try:
                 cur = fetch_fingerprint(c["host"], c.get("port", 8006))
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                 return self._json(200, {"ok": False, "error": str(e)})
             want = _fp_norm(body.get("fingerprint"))
             if not want:                                  # step 1: show what the server presents now
@@ -1491,7 +1503,7 @@ class H(BaseHTTPRequestHandler):
                 nodes  = client.nodes()
                 self._json(200, {"ok": True, "version": ver,
                                  "nodes": len(nodes)})
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                 self._json(200, {"ok": False, "error": str(e)})
 
         else:
@@ -1523,7 +1535,7 @@ if __name__ == "__main__":
     # Explicit 'pve' level for users that predate the module (one-time migration)
     try:
         if auth.ensure_permissions(("pve",)): log.info("'pve' permissions updated")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"Permissions: {e}")
 
     log.info(f"Proxmox Monitor en http://{HOST}:{PORT} — poll {POLL_ACTIVE:g}s active / {POLL_IDLE:g}s idle")
@@ -1533,7 +1545,7 @@ if __name__ == "__main__":
         for _c in load_clusters():
             if not _fp_norm(_c.get("fingerprint")):
                 log.warning(f"Cluster '{_c.get('name', _c.get('id'))}' has no pinned certificate: the server identity is NOT verified. Pin it from the Proxmox page.")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"Could not check pinned certificates: {e}")
     n = load_history()
     if n: log.info(f"History restored: {n} samples")

@@ -1,6 +1,8 @@
 """Switch Monitor: errores CRC/FCS por SNMP, aviso CRC, enlaces que rebotan y vigilancia de enlace por puerto."""
-import tempfile, unittest
-from tests.test_switches import FakeSNMP, snmp_data, mk_snap, mk_port, sw
+import tempfile
+import unittest
+
+from tests.test_switches import FakeSNMP, mk_port, mk_snap, snmp_data, sw
 
 DOT3 = "1.3.6.1.2.1.10.7.2.1"
 
@@ -37,7 +39,7 @@ class Mgr(unittest.TestCase):
         def changed(k, st):
             old = self.seen.get(k); self.seen[k] = st
             return None if old is None or old == st else (old, st)
-        self.m = sw.Manager(self.d, hooks={"event": lambda mod, lv, tx, k=None, **p: self.events.append((lv, k, p)), "changed": changed, "hosts": lambda: {}})
+        self.m = sw.Manager(self.d, hooks={"event": lambda mod, lv, tx, k=None, **p: self.events.append((lv, k, p)), "changed": changed, "hosts": dict})
         self.m.reconcile = lambda: None; self.m._db_init()
         self.sid = self.m.save_switch({"name": "tp", "driver": "snmp", "host": "192.0.2.3", "community": "public"})["id"]
     def feed(self, ts, ports): self.m._ingest(self.sid, self.m._find(self.sid), mk_snap("tp", ts, ports), False)

@@ -1,9 +1,18 @@
 """Correcciones de la revisión de seguridad del 2026-10-29 / Fixes from the 2026-10-29 security review."""
-import re, shutil, ssl, subprocess, tempfile, threading, time, unittest
+import re
+import shutil
+import ssl
+import subprocess
+import tempfile
+import threading
+import time
+import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+
 from tests import support
 from tests.support import ADMIN, READONLY
+
 auth = support.auth
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -17,7 +26,7 @@ class Throttle(unittest.TestCase):
         support.make_user("guest1", READONLY, password="Guest-pass-12345")
         h = FakeHandler("203.0.113.77")
         for _ in range(3): auth.login(h, "guest1", "bad")
-        u, err = auth.login(h, "guest1", "Guest-pass-12345")          # a valid login in between…
+        u, _err = auth.login(h, "guest1", "Guest-pass-12345")          # a valid login in between…
         self.assertIsNotNone(u)
         for _ in range(2): auth.login(h, "nobody-here", "bad")        # …must not give the IP a fresh set of attempts
         self.assertGreater(auth.throttle_wait("ip:203.0.113.77"), 0)
@@ -160,12 +169,12 @@ class NginxSnippet(unittest.TestCase):
         csp = re.search(r'Content-Security-Policy "([^"]*)"', self.CONF).group(1)
         self.assertNotIn("googleapis", csp); self.assertNotIn("gstatic", csp)
     def test_big_bodies_only_on_the_upload_route(self):
-        blocks = re.findall(r"location ([^{]*)\{(.*?)\n\}", self.CONF, re.S)
+        blocks = re.findall(r"location ([^{]*)\{(.*?)\n\}", self.CONF, re.DOTALL)
         big = [loc.strip() for loc, body in blocks if "200m" in body]
         self.assertEqual(big, ["= /admin/api/teleporter/upload"])
     def test_every_module_login_is_rate_limited(self):
         for m in ("wol", "nut", "admin", "net", "pve", "nas", "dns", "wan", "overview"):
-            with self.subTest(module=m): self.assertRegex(self.CONF, r"location = /%s/api/login \{[^}]*zone=labtower_login" % m)
+            with self.subTest(module=m): self.assertRegex(self.CONF, rf"location = /{m}/api/login \{{[^}}]*zone=labtower_login")
 
 
 class DnsPinning(unittest.TestCase):
@@ -219,7 +228,7 @@ class TeleporterScript(unittest.TestCase):
         self.assertNotRegex(self.SRC, r"\n\s*tar -xzf \"\$1\"")
         self.assertNotRegex(self.SRC, r"python3 -I - \"\$1\" <<")
     def test_bash_syntax(self):
-        self.assertEqual(subprocess.run(["bash", "-n", str(ROOT / "scripts/teleporter.sh")]).returncode, 0)
+        self.assertEqual(subprocess.run(["bash", "-n", str(ROOT / "scripts/teleporter.sh")], check=False).returncode, 0)
 
 
 if __name__ == "__main__":

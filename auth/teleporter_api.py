@@ -7,7 +7,12 @@ module only validates names/sizes and talks to that script."""
 # EN: Flow: the panel (unprivileged user "labtower") does NOT touch backups directly. Everything that
 #     needs root (create, restore) is done by /usr/local/bin/teleporter.sh through sudo with a very narrow
 #     sudoers rule; here only names and sizes are validated and the script is called.
-import os, re, shutil, subprocess, tempfile, time
+import os
+import re
+import shutil
+import subprocess
+import tempfile
+import time
 from pathlib import Path
 
 # Rutas y límites; las variables TELEPORTER_* permiten cambiarlos en las pruebas.
@@ -18,7 +23,7 @@ SPOOL      = Path(os.environ.get("TELEPORTER_SPOOL", "/var/lib/labtower/teleport
 # El registro de restauración lo escribe root (el panel solo lo lee): así el panel no puede redirigir un archivo que root abre.
 # EN: The restore log is written by root (the panel only reads it): the panel cannot redirect a file that root opens.
 RESTORE_LOG = Path(os.environ.get("TELEPORTER_LOG", "/var/lib/labtower/state/restore.log"))
-MAX_UPLOAD = int(os.environ.get("TELEPORTER_MAX_UPLOAD", 200 * 1024 * 1024))
+MAX_UPLOAD = int(os.environ.get("TELEPORTER_MAX_UPLOAD", str(200 * 1024 * 1024)))
 # Nombres de respaldo permitidos: «labtower-<texto seguro>.tar.gz» (creados por el sistema) o
 # «upload-AAAAMMDD_HHMMSS.tar.gz» (subidos). Cualquier otro nombre se rechaza: evita rutas con «../».
 # EN: Allowed backup names: "labtower-<safe text>.tar.gz" (created by the system) or
@@ -26,7 +31,7 @@ MAX_UPLOAD = int(os.environ.get("TELEPORTER_MAX_UPLOAD", 200 * 1024 * 1024))
 NAME_RE    = re.compile(r"^((labtower|pi-console)-[A-Za-z0-9._-]{1,80}|upload-\d{8}_\d{6})\.tar\.gz$")
 # El script de restauración termina su registro con «RESULT: ok|errors|failed»; así se sabe cómo terminó.
 # EN: The restore script ends its log with "RESULT: ok|errors|failed"; that is how we know how it ended.
-RESULT_RE  = re.compile(r"^RESULT: (\w+)\s*$", re.M)
+RESULT_RE  = re.compile(r"^RESULT: (\w+)\s*$", re.MULTILINE)
 # Máximo de caracteres de salida que se devuelven al navegador.
 # EN: Maximum number of output characters returned to the browser.
 OUT_LIMIT  = 20000
@@ -78,14 +83,14 @@ def _gpg(args, passphrase):
     try:
         os.write(w, passphrase.encode() + b"\n"); os.close(w)
         cmd = ["gpg", "--homedir", home, "--batch", "--yes", "--quiet", "--no-tty", "--pinentry-mode", "loopback", "--passphrase-fd", str(r)] + args
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=600, pass_fds=(r,))
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=600, pass_fds=(r,), check=False)
         return p.returncode == 0, (p.stderr or "").strip()[:300]
     except (OSError, subprocess.TimeoutExpired) as e:
         return False, str(e)[:300]
     finally:
         try: os.close(r)
         except OSError: pass
-        subprocess.run(["gpgconf", "--homedir", home, "--kill", "gpg-agent"], capture_output=True, timeout=10)
+        subprocess.run(["gpgconf", "--homedir", home, "--kill", "gpg-agent"], capture_output=True, timeout=10, check=False)
         shutil.rmtree(home, ignore_errors=True)
 
 # Cifra un respaldo del spool a un temporal privado y devuelve su ruta (quien llama lo borra). None + error si falla.
@@ -110,12 +115,12 @@ def encrypt_backup(name, passphrase):
 def run(args, sudo=False, timeout=180):
     cmd = (SUDO if sudo else []) + [BIN] + args
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
     except subprocess.TimeoutExpired:
         return False, "The operation timed out"
     except FileNotFoundError:
         return False, "teleporter.sh is not installed"
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         return False, f"Could not run teleporter.sh: {e}"
     out = (p.stdout or "") + (("\n" + p.stderr) if p.stderr else "")
     return p.returncode == 0, _tail(out.strip())
@@ -143,7 +148,7 @@ def list_backups():
 def create_backup():
     ok, out = run(["gui-backup"], sudo=True, timeout=300)
     name = None
-    m = re.search(r"^BACKUP_FILE=(\S+)\s*$", out, re.M)
+    m = re.search(r"^BACKUP_FILE=(\S+)\s*$", out, re.MULTILINE)
     if m and valid_name(m.group(1)):
         name = m.group(1)
     return ok and name is not None, name, out
@@ -186,7 +191,7 @@ def save_upload(rfile, length, passphrase=None):
                 tmp.unlink(missing_ok=True)
                 return None, "This backup is encrypted: enter its passphrase"
             dec = SPOOL / f".upload-{os.getpid()}-{os.urandom(4).hex()}.dec"
-            ok, msg = _gpg(["--decrypt", "-o", str(dec), str(tmp)], passphrase)
+            ok, _msg = _gpg(["--decrypt", "-o", str(dec), str(tmp)], passphrase)
             tmp.unlink(missing_ok=True)
             if not ok or not dec.is_file():
                 dec.unlink(missing_ok=True)

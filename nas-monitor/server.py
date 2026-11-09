@@ -26,20 +26,34 @@ NAS Monitor — estado de uno o varios NAS Synology por SNMP / status of one or 
 #     and are never returned to the browser (only "has_*"). nas.json is private (0600).
 #
 #     Structure: SNMP · configuration · reading one NAS · cache and history · poller · health · HTTP.
-import json, math, os, re, shutil, socket, subprocess, sys, tempfile, time, logging, threading
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+import json
+import logging
+import math
+import os
+import re
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
 ThreadingHTTPServer.request_queue_size = 128
-from urllib.parse import urlparse, parse_qs
 from collections import deque as _deque
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 # Módulo compartido de autenticación (carpeta hermana /auth).
 # EN: Shared authentication module (sibling folder /auth).
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
+import certinfo  # lectura de certificados TLS / TLS certificate reading
+
 import auth
-import certinfo     # lectura de certificados TLS / TLS certificate reading
+
 sys.path.insert(0, str(Path(__file__).parent))
-import remote          # TrueNAS y OpenMediaVault por API / TrueNAS and OpenMediaVault over their APIs
+import remote  # TrueNAS y OpenMediaVault por API / TrueNAS and OpenMediaVault over their APIs
 
 # Solo loopback; el acceso desde la red pasa por nginx.
 # EN: Loopback only; network access goes through nginx.
@@ -49,8 +63,8 @@ STATIC_DIR = Path(__file__).parent / "static"
 DATA_DIR   = auth.module_dir("nas-monitor")          # solo la ruta; la carpeta se crea al arrancar / EN: path only, created at startup
 LEGACY_FILES = ()
 DATA_FILE  = DATA_DIR / "nas.json"
-POLL_ACTIVE = float(os.environ.get("NAS_POLL_ACTIVE", 15))   # seconds, while someone is watching
-POLL_IDLE   = float(os.environ.get("NAS_POLL_IDLE", 60))     # seconds, when nobody has the page open
+POLL_ACTIVE = float(os.environ.get("NAS_POLL_ACTIVE", "15"))   # seconds, while someone is watching
+POLL_IDLE   = float(os.environ.get("NAS_POLL_IDLE", "60"))     # seconds, when nobody has the page open
 VIEW_GRACE  = 30                                              # a viewer counts as active for this long
 HIST_EVERY  = 30                                              # history sampling period (s)
 _HIST_MAX   = 1440                                            # ~12 h at 30 s
@@ -108,7 +122,7 @@ def _run(tool: str, cfg: dict, oids: list, extra=()) -> str:
             f.write("\n".join(lines) + "\n")
         env = dict(os.environ, SNMPCONFPATH=d, SNMP_PERSISTENT_DIR=d, MIBS="")
         cmd = [exe, f"-v{cfg['version']}", "-t", str(cfg["timeout"]), "-r", "1", "-On", "-m", "", *extra, _target(cfg), *oids]
-        r = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=cfg["timeout"] * 4 + 20)
+        r = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=cfg["timeout"] * 4 + 20, check=False)
     except subprocess.TimeoutExpired:
         raise SnmpError("SNMP query timed out")
     finally:
@@ -216,7 +230,7 @@ def _vol_thresholds(cfg: dict, body: dict, current=None) -> None:
     out = {}
     for k, d in (("vol_warn", VOL_WARN), ("vol_crit", VOL_CRIT)):
         v = body[k] if k in body else (current or {}).get(k, d)
-        if isinstance(v, bool): raise ValueError("Invalid volume threshold")
+        if isinstance(v, bool): raise ValueError("Invalid volume threshold")  # noqa: TRY004 - validación de entrada; quien llama espera ValueError / EN: input validation, callers expect ValueError
         try:    v = int(v)
         except (TypeError, ValueError): raise ValueError("Invalid volume threshold")
         if not 1 <= v <= 100: raise ValueError("Volume thresholds must be 1-100")
@@ -289,7 +303,7 @@ def _validate_api(typ: str, body: dict, current=None) -> dict:
     if not cfg["name"] or len(cfg["name"]) > 60 or re.search(r"[\x00-\x1f\x7f]", cfg["name"]): raise ValueError("Invalid name")
     cfg["host"] = str(cfg.get("host") or "").strip()
     if not auth.valid_target(cfg["host"]): raise ValueError("Invalid host (this machine and link-local addresses are not allowed)")
-    if isinstance(cfg["port"], bool): raise ValueError("Invalid port")
+    if isinstance(cfg["port"], bool): raise ValueError("Invalid port")  # noqa: TRY004 - validación de entrada; quien llama espera ValueError / EN: input validation, callers expect ValueError
     try:    cfg["port"] = int(cfg["port"])
     except (TypeError, ValueError): raise ValueError("Invalid port")
     if not 1 <= cfg["port"] <= 65535: raise ValueError("Invalid port")
@@ -355,7 +369,7 @@ UP_LV   = {1: "ok", 2: "ok"}
 IF_OK   = re.compile(r"^(eth|eno|enp|ens|bond|ovs_eth|ovs_bond|lan|wlan|ppp)[\w.]*$")
 T_SYS_WARN, T_DISK_WARN, VOL_WARN, VOL_CRIT, CPU_WARN, MEM_WARN = 70, 55, 90, 95, 85, 90
 
-def _num(x): return isinstance(x, (int, float)) and not isinstance(x, bool) and x == x
+def _num(x): return isinstance(x, (int, float)) and not isinstance(x, bool) and not math.isnan(x)
 
 # Columna de una tabla: {índice: valor}.
 # EN: Column of a table: {index: value}.
@@ -375,7 +389,7 @@ def _idx_key(i): return [int(t) if t.isdigit() else 0 for t in str(i).split(".")
 #     prev: network counters of the previous reading, to compute the rate.
 # Un «Storage Pool» (o «Grupo de almacenamiento») queda lleno por diseño cuando sus volúmenes usan todo el espacio: no genera aviso de espacio.
 # EN: A "Storage Pool" is full by design when its volumes take all the space: it raises no "nearly full" alert.
-_POOL_RE = re.compile(r"storage\s*pool|pool de almacenamiento|grupo de almacenamiento|reserva de almacenamiento", re.I)
+_POOL_RE = re.compile(r"storage\s*pool|pool de almacenamiento|grupo de almacenamiento|reserva de almacenamiento", re.IGNORECASE)
 
 # ES: Series lentas (cada 15 min): uso de cada volumen y temperatura de cada disco. De ahí salen los días hasta llenarse y los máximos de temperatura.
 # EN: Slow series (every 15 min): usage of each volume and temperature of each disk. They give the days until full and the temperature peaks.
@@ -411,7 +425,7 @@ def record_series(nid: str, snap: dict) -> bool:
             c.executemany("INSERT OR REPLACE INTO nas_series (nid,k,ts,v) VALUES (?,?,?,?)", rows)
             c.execute("DELETE FROM nas_series WHERE nid = ? AND ts < ?", (nid, now - SERIES_KEEP)); c.commit()
         finally: c.close()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"could not store the slow series: {e}"); return False
     _SER_LAST[nid] = now
     return True
@@ -430,7 +444,7 @@ def refresh_derived(nid: str, snap: dict):
                 last = [v for ts, v in rows if ts >= now - 86400 and v is not None]
                 if last: out["temp"][d["name"]] = {"max24": round(max(last)), "avg24": round(sum(last) / len(last)), "max7": round(max(v for _, v in rows if v is not None))}
         finally: c.close()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"could not compute the slow series: {e}"); return
     _DERIVED[nid] = out
 
@@ -615,7 +629,7 @@ def push_history(nid: str, snap: dict):
                       (nid, pt["ts"], pt["cpu"], pt["mem"], pt["temp"], pt["rx"], pt["tx"]))
             c.commit()
         finally: c.close()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"could not store the history sample: {e}")
 
 def get_history(nid: str) -> list:
@@ -635,7 +649,7 @@ def load_history() -> int:
             for nid, ts, cpu, mem, temp, rx, tx in rows:
                 if nid not in keep: continue
                 _HISTORY.setdefault(nid, _deque(maxlen=_HIST_MAX)).append({"ts": ts, "cpu": cpu, "mem": mem, "temp": temp, "rx": rx, "tx": tx}); n += 1
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"could not load the history: {e}")
     return n
 
@@ -659,13 +673,13 @@ def history_range(nid: str, range_: str, prev: bool = False) -> list:
     finally: c.close()
     if len(rows) <= RANGE_POINTS: step = 1
     else: step = -(-len(rows) // RANGE_POINTS)
+    def avg(grp, k):
+        v = [r[k] for r in grp if r[k] is not None]
+        return round(sum(v) / len(v), 2) if v else None
     out = []
     for i in range(0, len(rows), step):
         grp = rows[i:i + step]
-        def avg(k):
-            v = [r[k] for r in grp if r[k] is not None]
-            return round(sum(v) / len(v), 2) if v else None
-        out.append({"ts": grp[len(grp) // 2][0], "cpu": avg(1), "mem": avg(2), "temp": avg(3), "rx": avg(4), "tx": avg(5)})
+        out.append({"ts": grp[len(grp) // 2][0], "cpu": avg(grp, 1), "mem": avg(grp, 2), "temp": avg(grp, 3), "rx": avg(grp, 4), "tx": avg(grp, 5)})
     return out
 
 def forget_history(nid: str):
@@ -674,7 +688,7 @@ def forget_history(nid: str):
         c = auth.metrics_conn()
         try: c.execute("DELETE FROM nas_samples WHERE nid = ?", (nid,)); c.commit()
         finally: c.close()
-    except Exception as e: log.warning(f"could not delete the history: {e}")
+    except Exception as e: log.warning(f"could not delete the history: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
 
 def _history_pruner():
     while True:
@@ -683,7 +697,7 @@ def _history_pruner():
             c = auth.metrics_conn()
             try: c.execute("DELETE FROM nas_samples WHERE ts < ?", (int(time.time()) - HIST_KEEP,)); c.commit()
             finally: c.close()
-        except Exception as e: log.warning(f"could not prune the history: {e}")
+        except Exception as e: log.warning(f"could not prune the history: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
 
 # ─── Certificados TLS ─────────────────────────────────────────────────────────
 # Un hilo se conecta una vez al día a los puertos de certificado de cada NAS (a la hora si un puerto falló, y enseguida al arrancar o si
@@ -860,7 +874,7 @@ def _poll(nid: str):
     while True:
         try:
             n = next((x for x in load_nas() if x["id"] == nid), None)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.error(f"[{nid}] config read: {e}"); n = False
         if n is None: return
         if n:
@@ -877,7 +891,7 @@ def _poll(nid: str):
                 if auth.state_changed(f"nas-dn:{nid}", "up"):
                     auth.record_event("nas", "info", f"{n['name']}: reachable again", "nas_up", n=n["name"])
                 log.debug(f"[{n['name']}] read in {time.time() - t0:.2f}s")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
                 cache.set_error(str(e)[:200])
                 keep = {k: prev[k] for k in ("omv", "uptime") if k in prev}; prev.clear(); prev.update(keep)      # uptime survives so a reboot while unreachable is noticed
                 log.error(f"[{n['name']}] poll error: {e}")
@@ -1011,7 +1025,7 @@ class H(BaseHTTPRequestHandler):
             if rng not in RANGE_SECS and rng != "all": return self._json(400, {"error": "Invalid range"})
             prev = parse_qs(urlparse(self.path).query).get("prev", ["0"])[0] == "1"
             try: return self._json(200, {"range": rng, "prev": prev, "history": history_range(mh.group(1), rng, prev)})
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                 log.warning(f"history query failed: {e}"); return self._json(500, {"error": "Could not read the history"})
         self._json(404, {"error": "Not found"})
 
@@ -1079,7 +1093,7 @@ class H(BaseHTTPRequestHandler):
             if not _test_gate.acquire(blocking=False): return self._json(429, {"error": "Too many tests at once"})
             try:
                 return self._json(200, {"ok": True, **test_connection(cfg)})
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                 return self._json(200, {"ok": False, "error": str(e)[:200]})
             finally: _test_gate.release()
 
@@ -1126,7 +1140,7 @@ if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     try:
         if auth.ensure_permissions(("nas",)): log.info("'nas' permissions updated")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"Permissions: {e}")
     log.info(f"NAS Monitor en http://{HOST}:{PORT} — poll {POLL_ACTIVE:g}s active / {POLL_IDLE:g}s idle")
     n = load_history()

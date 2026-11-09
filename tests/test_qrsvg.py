@@ -1,8 +1,11 @@
 """2.1.3i: generador de QR propio (sin librerías) para el 2FA."""
-import sys, unittest
+import sys
+import unittest
+
 from tests.support import ROOT
+
 sys.path.insert(0, str(ROOT / "auth"))
-import qrsvg  # noqa: E402
+import qrsvg
 
 URI = "otpauth://totp/LabTower:admin?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=LabTower"
 
@@ -27,7 +30,9 @@ class Qr(unittest.TestCase):
         self.assertNotIn("script", s.lower()); self.assertNotIn("<style", s.lower())
 
     def test_decodes_with_a_real_reader_when_available(self):
-        try: import cv2, numpy as np
+        try:
+            import cv2
+            import numpy as np
         except ImportError: self.skipTest("opencv not installed")
         m = qrsvg.encode(URI); n, s, b = len(m), 8, 4
         img = np.full(((n + 2 * b) * s,) * 2, 255, np.uint8)

@@ -26,15 +26,30 @@ WAN Monitor — salud de la conexión a Internet: latencia, pérdida, cortes, IP
 #     the measurement so the saturated line does not count as an outage. The measurement uses bandwidth: that is why it is schedulable.
 #
 #     Structure: configuration · probes · speed · state, outages and history · threads · health · HTTP.
-import http.client, ipaddress, json, os, re, shutil, socket, ssl, subprocess, sys, time, logging, threading
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+import http.client
+import ipaddress
+import json
+import logging
+import os
+import re
+import shutil
+import socket
+import sqlite3
+import ssl
+import subprocess
+import sys
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
 ThreadingHTTPServer.request_queue_size = 128
-from urllib.parse import urlparse, parse_qs
 from collections import deque as _deque
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
+
 sys.path.insert(0, str(Path(__file__).parent))
 import router as rtr
 import stats as wst
@@ -140,7 +155,7 @@ def validate(body: dict, current=None, resolve=True) -> dict:
     if not isinstance(tg, list) or not 1 <= len(tg) <= 6: raise ValueError("Between 1 and 6 targets")
     out = []
     for t in tg:
-        if not isinstance(t, dict): raise ValueError("Invalid target")
+        if not isinstance(t, dict): raise ValueError("Invalid target")  # noqa: TRY004 - validación de entrada; quien llama espera ValueError / EN: input validation, callers expect ValueError
         host, kind = str(t.get("host") or "").strip(), str(t.get("kind") or "ping")
         if not auth.valid_host(host): raise ValueError("Invalid target host")
         if kind not in ("ping", "tcp"): raise ValueError("Invalid target type")
@@ -210,7 +225,7 @@ def ping(host, count=3, timeout=2):
     res = {"sent": count, "recv": 0, "loss": 100.0, "rtt": None, "jitter": None}
     if not exe: res["error"] = "ping not installed"; return res
     try:
-        r = subprocess.run([exe, "-n", "-q", "-c", str(count), "-W", str(timeout), host], capture_output=True, text=True, timeout=count * (timeout + 1) + 3)
+        r = subprocess.run([exe, "-n", "-q", "-c", str(count), "-W", str(timeout), host], capture_output=True, text=True, timeout=count * (timeout + 1) + 3, check=False)
     except (subprocess.TimeoutExpired, OSError) as e:
         res["error"] = type(e).__name__; return res
     out = r.stdout or ""
@@ -361,7 +376,7 @@ def speed_up(cfg):
 
 def _run_tool(cmd, timeout):
     env = dict(os.environ, HOME=str(DATA_DIR))                 # Ookla keeps its licence acceptance in $HOME/.config
-    try: r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
+    try: r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env, check=False)
     except subprocess.TimeoutExpired: raise RuntimeError(f"{cmd[0]} timed out")
     if r.returncode != 0: raise RuntimeError((r.stderr or r.stdout or f"{cmd[0]} exited with {r.returncode}").strip().splitlines()[-1][:160])
     try: return json.loads(r.stdout)
@@ -393,7 +408,7 @@ def speed_librespeed(cfg, res):
     cmd = [shutil.which("librespeed-cli") or "librespeed-cli", "--json", "--duration", str(sp["seconds"])] + ([] if sp["upload"] else ["--no-upload"])
     j = _run_tool(cmd, 40 + 3 * sp["seconds"])
     j = j[0] if isinstance(j, list) and j else j
-    if not isinstance(j, dict): raise RuntimeError("librespeed-cli returned no result")
+    if not isinstance(j, dict): raise RuntimeError("librespeed-cli returned no result")  # noqa: TRY004 - fallo de la herramienta, no de tipos / EN: a tool failure, not a type error
     res["down"], res["up"] = _mbps(j.get("download"), 1), (_mbps(j.get("upload"), 1) if sp["upload"] else None)
     res["ping"] = _mbps(j.get("ping"), 1)
     sv = j.get("server") if isinstance(j.get("server"), dict) else {}
@@ -407,7 +422,7 @@ def run_speedtest(cfg) -> dict:
         try:
             if not shutil.which(ENGINES[eng]): raise RuntimeError(f"{ENGINES[eng]} is not installed")
             (speed_ookla if eng == "ookla" else speed_librespeed)(cfg, res)
-        except Exception as e: res["error"] = f"{e}"[:200]
+        except Exception as e: res["error"] = f"{e}"[:200]  # noqa: BLE001 - el error queda guardado y se muestra / the error is kept and shown
         return res
     return _builtin_speedtest(cfg)
 
@@ -420,8 +435,8 @@ def _builtin_speedtest(cfg) -> dict:
         if res["down"] is None: res["error"] = "No data received from the test server"
         elif cfg["speed"]["upload"]:
             try: res["up"] = speed_up(cfg)
-            except Exception as e: log.warning(f"upload test failed: {e}")      # the download result is still worth keeping
-    except Exception as e:
+            except Exception as e: log.warning(f"upload test failed: {e}")      # the download result is still worth keeping  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
+    except Exception as e:  # noqa: BLE001 - el error queda guardado y se muestra / the error is kept and shown
         res["error"] = f"{type(e).__name__}: {e}"[:200]
     return res
 
@@ -465,7 +480,7 @@ def _db(sql, args=(), fetch=False):
 
 def store_sample(r):
     try: _db("INSERT OR REPLACE INTO wan_samples (ts,up,rtt,loss,jitter,gw,dns) VALUES (?,?,?,?,?,?,?)", (r["ts"], 1 if r["up"] else 0, r["rtt"], r["loss"], r["jitter"], r["gw"], r["dns"]))
-    except Exception as e: log.warning(f"could not store the sample: {e}")
+    except Exception as e: log.warning(f"could not store the sample: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
 
 def tkey(t):
     """Label of a target in the history: the host for ping, tcp:host:port for TCP."""
@@ -478,7 +493,7 @@ def store_targets(r):
         c = auth.metrics_conn()
         try: c.executemany("INSERT OR REPLACE INTO wan_targets (host,ts,rtt,loss,ok) VALUES (?,?,?,?,?)", rows); c.commit()
         finally: c.close()
-    except Exception as e: log.warning(f"could not store the target samples: {e}")
+    except Exception as e: log.warning(f"could not store the target samples: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
 
 def history_window(range_: str, prev: bool = False):
     """(since, until) of a range. prev=True gives the period just before it (same length) so charts can compare the two; "all" has none."""
@@ -491,13 +506,13 @@ def history_range(range_: str, prev: bool = False) -> list:
     if win is None: return []
     rows = _db("SELECT ts,up,rtt,loss,jitter,gw,dns FROM wan_samples WHERE ts >= ? AND ts < ? ORDER BY ts", (win[0], win[1]), fetch=True)
     step = 1 if len(rows) <= RANGE_POINTS else -(-len(rows) // RANGE_POINTS)
+    def avg(grp, k):
+        v = [r[k] for r in grp if r[k] is not None]
+        return round(sum(v) / len(v), 2) if v else None
     out = []
     for i in range(0, len(rows), step):
         g = rows[i:i + step]
-        def avg(k):
-            v = [r[k] for r in g if r[k] is not None]
-            return round(sum(v) / len(v), 2) if v else None
-        out.append({"ts": g[len(g) // 2][0], "up": min(r[1] for r in g), "rtt": avg(2), "loss": avg(3), "jitter": avg(4), "gw": avg(5), "dns": avg(6)})
+        out.append({"ts": g[len(g) // 2][0], "up": min(r[1] for r in g), "rtt": avg(g, 2), "loss": avg(g, 3), "jitter": avg(g, 4), "gw": avg(g, 5), "dns": avg(g, 6)})
     return out
 RANGE_SECS = {"1h": 3600, "1d": 86400, "1w": 604800, "1mo": 2592000}
 RANGE_POINTS = 600
@@ -517,7 +532,7 @@ def uptime():
         try:
             n, up = _db("SELECT COUNT(*), COALESCE(SUM(up),0) FROM wan_samples WHERE ts >= ?", (now - secs,), fetch=True)[0]
             out[k] = round(100.0 * up / n, 3) if n else None
-        except Exception: out[k] = None
+        except (sqlite3.Error, OSError): out[k] = None
     return out
 
 # ─── Estadísticas: percentiles, destinos, velocidad contra el plan y disponibilidad ───
@@ -542,7 +557,7 @@ def wan_stats(cfg):
         sp = cfg["speed"]
         rows = _db("SELECT ts,down,up,error FROM wan_speed WHERE ts >= ? ORDER BY ts", (now - 30 * 86400,), fetch=True)
         out["speed"] = wst.speed_stats(rows, sp.get("plan_down"), sp.get("plan_up"), now, lambda t: time.localtime(t).tm_hour)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"could not compute the statistics: {e}")
     _stats_cache[0], _stats_cache[1] = now, out
     return out
@@ -551,13 +566,13 @@ def recent_outages(limit=15):
     try:
         rows = _db("SELECT o.start,o.end,o.scope,t.start IS NOT NULL FROM wan_outages o LEFT JOIN wan_traces t ON t.start = o.start ORDER BY o.start DESC LIMIT ?", (limit,), fetch=True)
         return [{"start": a, "end": b, "scope": s, "trace": bool(tr)} for a, b, s, tr in rows]
-    except Exception: return []
+    except (sqlite3.Error, OSError): return []
 
 def recent_speed(limit=40):
     try:
         rows = _db("SELECT ts,down,up,ping,server,error FROM wan_speed ORDER BY ts DESC LIMIT ?", (limit,), fetch=True)
         return [{"ts": a, "down": b, "up": c, "ping": d, "server": e, "error": f} for a, b, c, d, e, f in reversed(rows)]
-    except Exception: return []
+    except (sqlite3.Error, OSError): return []
 
 # ─── Traceroute al abrirse un corte e historial de IP pública ────────────────
 TRACE_MAX = 3000                  # characters kept per traceroute
@@ -584,19 +599,19 @@ def run_trace(start, cfg):
     dest = trace_dest(cfg) if exe else None
     if not dest: return
     try:
-        p = subprocess.run([exe, "-n", "-w", "1", "-q", "1", "-m", "15", dest], capture_output=True, text=True, timeout=45)
+        p = subprocess.run([exe, "-n", "-w", "1", "-q", "1", "-m", "15", dest], capture_output=True, text=True, timeout=45, check=False)
         text = re.sub(r"[^\x20-\x7e\n]", " ", p.stdout or "")[:TRACE_MAX].strip()
     except (OSError, subprocess.SubprocessError) as e:
         log.warning(f"traceroute failed: {e}"); return
     if text:
         try: _db("INSERT OR REPLACE INTO wan_traces (start,dest,text) VALUES (?,?,?)", (start, dest, text))
-        except Exception as e: log.warning(f"could not store the traceroute: {e}")
+        except Exception as e: log.warning(f"could not store the traceroute: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
 
 def get_trace(start):
     try:
         rows = _db("SELECT dest,text FROM wan_traces WHERE start = ?", (int(start),), fetch=True)
         return {"dest": rows[0][0], "text": rows[0][1]} if rows else None
-    except Exception: return None
+    except (sqlite3.Error, OSError, ValueError, TypeError): return None
 
 # Recupera del registro de eventos los cambios de IP pública anteriores a la tabla de historial (el Resumen los guardaba como «wan_ipc»;
 # el registro conserva solo los últimos 30 días / 300 eventos). No duplica los que ya están (±5 s).
@@ -606,7 +621,7 @@ def backfill_ips():
     try:
         evs = auth.read_events(["wan"], 300)
         have = [r[0] for r in _db("SELECT ts FROM wan_ips", fetch=True)]
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"could not read the events: {e}"); return 0
     added = 0
     for e in evs:
@@ -616,7 +631,7 @@ def backfill_ips():
         except ValueError: continue
         if any(abs(t - e["t"]) <= 5 for t in have): continue
         try: _db("INSERT OR REPLACE INTO wan_ips (ts,ip,prev) VALUES (?,?,?)", (e["t"], ip, prev)); have.append(e["t"]); added += 1
-        except Exception as ex: log.warning(f"could not store the IP change: {ex}")
+        except Exception as ex: log.warning(f"could not store the IP change: {ex}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
     if added: log.info(f"public IP history: {added} earlier change(s) recovered from the events")
     return added
 
@@ -633,7 +648,7 @@ def set_ip_since(ts):
         with S.lock:
             S.ip_changed = ts
             try: auth.write_json(STATE_FILE, {"ip": S.ip, "changed": ts, "prev": S.ip_prev})
-            except Exception as e: log.warning(f"could not store the state: {e}")
+            except Exception as e: log.warning(f"could not store the state: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
 
 # Si state.json trae una fecha para la IP actual distinta de la de su fila (editada a mano), manda state.json.
 # EN: If state.json holds a date for the current IP that differs from its row (edited by hand), state.json wins.
@@ -648,7 +663,7 @@ def recent_ips(limit=20):
     try:
         rows = _db("SELECT ts,ip,prev FROM wan_ips ORDER BY ts DESC LIMIT ?", (limit,), fetch=True)
         return [{"ts": a, "ip": b, "prev": c} for a, b, c in rows]
-    except Exception: return []
+    except (sqlite3.Error, OSError): return []
 
 def load_history() -> int:
     try:
@@ -667,7 +682,7 @@ def load_history() -> int:
         if last: S.speed_last = last[0][0]
         try: S.speed_low = wst.speed_stats(_db("SELECT ts,down,up,error FROM wan_speed WHERE ts >= ? ORDER BY ts", (int(time.time()) - 30 * 86400,), fetch=True),
                                           load_config()["speed"].get("plan_down"), load_config()["speed"].get("plan_up"), int(time.time()), lambda t: time.localtime(t).tm_hour)["low_streak"]
-        except Exception: S.speed_low = 0
+        except Exception: S.speed_low = 0  # noqa: BLE001 - red o servicio externo: cualquier fallo es «sin respuesta» / network or external service: any failure means «no answer»
         st = auth.read_json(STATE_FILE, {}, dict)
         if isinstance(st.get("ip"), str): S.ip, S.ip_changed = st["ip"], st.get("changed")
         if isinstance(st.get("prev"), str): S.ip_prev = st["prev"][:64]
@@ -676,7 +691,7 @@ def load_history() -> int:
         backfill_ips()
         reconcile_ip_since()
         return len(rows)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"could not load the history: {e}"); return 0
 
 _sus = wst.Sustain(3)
@@ -715,7 +730,7 @@ def track_outage(r, first_fail_ts):
                 dur = r["ts"] - S.down_since
                 S.down_since, S.scope = None, None
                 try: _db("UPDATE wan_outages SET end = ? WHERE end IS NULL", (r["ts"],))
-                except Exception as e: log.warning(f"could not close the outage: {e}")
+                except Exception as e: log.warning(f"could not close the outage: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
                 auth.record_event("wan", "info", f"Internet connection restored after {int(dur)} s", "wan_up", d=int(dur))
                 log.info(f"connection restored after {int(dur)} s")
             return
@@ -723,7 +738,7 @@ def track_outage(r, first_fail_ts):
         if S.fails >= DOWN_AFTER and S.down_since is None:
             S.down_since, S.scope = first_fail_ts, rtr.classify_scope(gw_ok, _router_fresh())
             try: _db("INSERT OR REPLACE INTO wan_outages (start,end,scope) VALUES (?,NULL,?)", (S.down_since, S.scope))
-            except Exception as e: log.warning(f"could not store the outage: {e}")
+            except Exception as e: log.warning(f"could not store the outage: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             auth.record_event("wan", "crit", "Internet connection down" + (" (local network too)" if S.scope == "lan" else ""), "wan_down_" + S.scope)
             threading.Thread(target=run_trace, args=(S.down_since, load_config()), daemon=True, name="wan-trace").start()
             log.warning(f"connection down ({S.scope})")
@@ -768,7 +783,7 @@ def router_crosscheck(r):
         since = int(time.time()) - up
         n, wan = _db("SELECT COUNT(*), COALESCE(SUM(scope = 'wan'), 0) FROM wan_outages WHERE COALESCE(end, ?) >= ?", (int(time.time()), since), fetch=True)[0]
         return {"since": since, "uptime": up, "outages": int(n), "wan_outages": int(wan)}
-    except Exception: return None
+    except (sqlite3.Error, OSError, ValueError, TypeError): return None
 
 # ─── Hilos ────────────────────────────────────────────────────────────────────
 _stop = threading.Event()
@@ -782,7 +797,7 @@ def probe_loop():
         S.gw = gw_ip
         t0 = time.time()
         try: r = probe_round(cfg, gw_ip)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.error(f"probe round failed: {e}"); S.wake.wait(5); continue
         if not r["up"] and first_fail is None: first_fail = r["ts"]
         if r["up"]: first_fail = None
@@ -791,7 +806,7 @@ def probe_loop():
         store_targets(r)
         track_outage(r, first_fail or r["ts"])
         try: sustained_events(r)
-        except Exception as e: log.warning(f"sustained events: {e}")
+        except Exception as e: log.warning(f"sustained events: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         if r["up"] and cfg["ip_url"] and time.time() - S.ip_checked >= IP_EVERY: check_ip(cfg)
         S.wake.wait(max(1.0, cfg["interval"] - (time.time() - t0))); S.wake.clear()
 
@@ -815,7 +830,7 @@ def router_round(cfg):
             if new == "wan" and S.scope == "internet":
                 S.scope = "wan"
                 try: _db("UPDATE wan_outages SET scope = ? WHERE end IS NULL", ("wan",))
-                except Exception as e: log.warning(f"could not update the outage: {e}")
+                except Exception as e: log.warning(f"could not update the outage: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
                 auth.record_event("wan", "crit", "Internet down: the router reports its WAN link is down", "wan_down_wan")
     return res
 
@@ -825,7 +840,7 @@ def router_loop():
         if not cfg["router"]["enabled"]:
             S.router = None; S.router_wake.wait(10); S.router_wake.clear(); continue
         try: router_round(cfg)
-        except Exception as e: log.error(f"router check failed: {e}")
+        except Exception as e: log.error(f"router check failed: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         S.router_wake.wait(10 if S.fails > 0 else cfg["router"]["every"]); S.router_wake.clear()
 
 IP_NOTICE_S = 24 * 3600          # the "public IP changed" notice stays visible for a day
@@ -840,9 +855,9 @@ def check_ip(cfg):
             S.ip, S.ip_changed = ip, (int(time.time()) if old else S.ip_changed)
             if old: S.ip_prev = old
             try: auth.write_json(STATE_FILE, {"ip": ip, "changed": S.ip_changed, "prev": S.ip_prev})
-            except Exception as e: log.warning(f"could not store the state: {e}")
+            except Exception as e: log.warning(f"could not store the state: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             try: _db("INSERT OR REPLACE INTO wan_ips (ts,ip,prev) VALUES (?,?,?)", (int(time.time()), ip, old))
-            except Exception as e: log.warning(f"could not store the IP change: {e}")
+            except Exception as e: log.warning(f"could not store the IP change: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             if old: auth.record_event("wan", "warn", f"Public IP changed from {old} to {ip}", "wan_ipc", ip=ip, prev=old)
 
 def start_speedtest():
@@ -856,9 +871,9 @@ def start_speedtest():
             _db("INSERT OR REPLACE INTO wan_speed (ts,down,up,ping,server,error) VALUES (?,?,?,?,?,?)", (res["ts"], res["down"], res["up"], res["ping"], res["server"], res["error"]))
             S.speed_last = res["ts"]
             try: speed_events(cfg)
-            except Exception as e: log.warning(f"speed events: {e}")
+            except Exception as e: log.warning(f"speed events: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.info(f"speed test: ↓ {res['down']} Mb/s ↑ {res['up']} Mb/s ping {res['ping']} ms" + (f" [{res['error']}]" if res["error"] else ""))
-        except Exception as e: log.error(f"speed test failed: {e}")
+        except Exception as e: log.error(f"speed test failed: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         finally:
             with S.lock: S.speed_running = False
             S.wake.set()
@@ -876,7 +891,7 @@ def speed_scheduler():
         try:
             cfg = load_config(); nxt = next_speedtest(cfg)
             if nxt and time.time() >= nxt and S.last and S.last["up"] and not S.speed_running: start_speedtest()
-        except Exception as e: log.error(f"scheduler: {e}")
+        except Exception as e: log.error(f"scheduler: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
 
 def _pruner():
     while True:
@@ -884,7 +899,7 @@ def _pruner():
         try:
             cut = int(time.time()) - HIST_KEEP
             _db("DELETE FROM wan_samples WHERE ts < ?", (cut,)); _db("DELETE FROM wan_speed WHERE ts < ?", (cut,)); _db("DELETE FROM wan_targets WHERE ts < ?", (cut,)); _db("DELETE FROM wan_outages WHERE start < ? AND end IS NOT NULL", (cut,)); _db("DELETE FROM wan_traces WHERE start < ?", (cut,))
-        except Exception as e: log.warning(f"could not prune: {e}")
+        except Exception as e: log.warning(f"could not prune: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
 
 # ─── Health ───────────────────────────────────────────────────────────────────
 def health_report(detailed=False):
@@ -972,7 +987,7 @@ class H(BaseHTTPRequestHandler):
             prev = parse_qs(urlparse(self.path).query).get("prev", ["0"])[0] == "1"
             kind = parse_qs(urlparse(self.path).query).get("kind", [""])[0]
             try: return self._json(200, {"range": rng, "prev": prev, "history": speed_range(rng, prev) if kind == "speed" else history_range(rng, prev)})
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                 log.warning(f"history query failed: {e}"); return self._json(500, {"error": "Could not read the history"})
         self._json(404, {"error": "Not found"})
 
@@ -1042,7 +1057,7 @@ if __name__ == "__main__":
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     try:
         if auth.ensure_permissions(("wan",)): log.info("'wan' permissions updated")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"Permissions: {e}")
     log.info(f"WAN Monitor en http://{HOST}:{PORT}")
     n = load_history()

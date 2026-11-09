@@ -1,6 +1,11 @@
 """Cliente DNS mínimo (UDP, sin dependencias) para sondear resolutores y probar nombres desde DNS Monitor."""
 # EN: Minimal DNS client (UDP, no dependencies) to probe resolvers and test names from DNS Monitor.
-import ipaddress, re, secrets, socket, struct, time
+import ipaddress
+import re
+import secrets
+import socket
+import struct
+import time
 
 TYPES = {"A": 1, "CNAME": 5, "AAAA": 28}
 NAME_RE = re.compile(r"^(?=.{1,253}$)([A-Za-z0-9_]([A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?\.)*[A-Za-z0-9_]([A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?\.?$")
@@ -67,7 +72,7 @@ def query(host, port, name, qtype="A", timeout=2.0):
                 try: r = parse_response(s.recv(4096), qid); break
                 except ValueError:
                     if time.monotonic() - t0 > timeout: return {"ok": False, "error": "no valid answer"}
-    except socket.timeout: return {"ok": False, "error": "timeout"}
+    except TimeoutError: return {"ok": False, "error": "timeout"}
     except OSError as e: return {"ok": False, "error": (e.strerror or "error")[:60]}
     r["ms"] = round((time.monotonic() - t0) * 1000, 1)
     r["ok"] = r["rcode"] in (0, 3)

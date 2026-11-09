@@ -4,6 +4,8 @@ Funciones puras (sin red ni disco) para probarlas con datos de ejemplo; server.p
 EN: Proxmox Monitor — backups: last good backup of each VM/CT and failed vzdump tasks.
     Pure functions (no network, no disk) so they can be tested with sample data; server.py uses them with the real API.
 """
+import math
+
 DEFAULT_MAX_AGE_H = 168         # 7 days; configurable per cluster (was 36 h before 2.1.4d)
 LEGACY_DEFAULT_H = 36           # the old default: it was never selectable, so a saved 36 means "never changed"
 MAX_IGNORE = 200
@@ -109,9 +111,9 @@ def new_failures(seen, tasks):
 # Valida la configuración de respaldos de un cluster (máximo de antigüedad y VMs ignoradas).
 # EN: Validate a cluster's backup settings (maximum age and ignored VMs).
 def clean_config(body):
-    if not isinstance(body, dict): raise ValueError("Invalid settings")
+    if not isinstance(body, dict): raise ValueError("Invalid settings")  # noqa: TRY004 - validación de entrada; quien llama espera ValueError / EN: input validation, callers expect ValueError
     h = body.get("max_age_h", DEFAULT_MAX_AGE_H)
-    if isinstance(h, bool) or not isinstance(h, (int, float)) or h != h or not (1 <= h <= 8760): raise ValueError("Invalid maximum age")
+    if isinstance(h, bool) or not isinstance(h, (int, float)) or math.isnan(h) or not (1 <= h <= 8760): raise ValueError("Invalid maximum age")
     ign = body.get("ignore", [])
     if not isinstance(ign, list) or len(ign) > MAX_IGNORE: raise ValueError("Invalid ignore list")
     ids = []

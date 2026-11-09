@@ -1,5 +1,7 @@
 """Net Monitor: cambio de MAC, puertos nuevos, equipos conocidos, conectividad y vigilancia / MAC change, new ports, known devices, connectivity and watch."""
-import time, unittest
+import time
+import unittest
+
 from tests import support
 
 m = support.load("net-monitor/server.py")

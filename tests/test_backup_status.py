@@ -1,5 +1,9 @@
 """Estado del último respaldo SFTP para la tarjeta «LabTower Server» del Resumen."""
-import os, tempfile, unittest, pathlib
+import os
+import pathlib
+import tempfile
+import unittest
+
 from tests import support
 
 auth = support.load("auth/auth.py")

@@ -20,12 +20,20 @@
 #       · packet sending and wake log (wake_log.json)
 #       · device list (devices.json) and data shared with Net Monitor
 #       · health (/api/health) and HTTP handler (GET, POST, DELETE)
-import json, os, socket, re, sys, time, logging, threading
+import json
+import logging
+import os
+import re
+import socket
+import sys
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
 ThreadingHTTPServer.request_queue_size = 128      # default is 5: a burst of simultaneous connections got reset
-from urllib.parse import urlparse, parse_qs
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 # El módulo compartido de autenticación está en la carpeta hermana /auth.
 # EN: The shared authentication module is in the sibling folder /auth.
@@ -115,9 +123,9 @@ def ping_host(ip: str, timeout: float = 1.0) -> bool:
     try:
         import subprocess
         r = subprocess.run(["ping", "-c1", f"-W{int(timeout)}", "--", ip],
-                           capture_output=True, timeout=timeout+1)
+                           capture_output=True, timeout=timeout+1, check=False)
         return r.returncode == 0
-    except Exception:
+    except (OSError, subprocess.SubprocessError, ValueError):
         return False
 
 # Estado en línea con caché corta: varios navegadores abiertos no multiplican los ping. La clave es la IP.
@@ -525,7 +533,7 @@ class H(BaseHTTPRequestHandler):
                 self._json(200, {"ok": True,
                                  "message": f"Magic packet sent to {dev['name']}",
                                  "already_online": already_online})
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                 log.error(f"WOL error: {e}"); self._json(500, {"error": str(e)})
 
         # Despierta todos los equipos de la lista; devuelve cuántos se enviaron y los errores por equipo.
@@ -553,7 +561,7 @@ class H(BaseHTTPRequestHandler):
                         "bulk": True,
                     })
                     sent += 1
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 - el error queda guardado y se muestra / the error is kept and shown
                     errors.append({"name": dev["name"], "error": str(e)})
             self._json(200, {"ok": True, "sent": sent, "errors": errors})
 

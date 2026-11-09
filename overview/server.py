@@ -16,11 +16,18 @@ Overview — resumen de UPS, Proxmox, red y el servidor / Overview of UPS, Proxm
 #       /api/pidetail → full server detail (per-core CPU, memory, disks, network, users, processes)
 #       /api/events  → timeline (modules record their state changes with auth.record_event)
 #     Structure: health · HTTP (GET/POST) · startup.
-import json, os, sys, logging, threading, time
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+import json
+import logging
+import math
+import os
+import sys
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
 ThreadingHTTPServer.request_queue_size = 128
-from urllib.parse import urlparse, parse_qs
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 # Módulo compartido de autenticación (carpeta hermana /auth).
 # EN: Shared authentication module (sibling folder /auth).
@@ -76,7 +83,7 @@ def pi_migrate(c):
             c.executemany("INSERT OR IGNORE INTO pi_samples (ts,temp,flags) VALUES (?,?,?)", rows); c.commit()
             log.info(f"Pi history: imported {len(rows)} samples from {PI_LEGACY.name}")
         PI_LEGACY.rename(PI_LEGACY.with_name(PI_LEGACY.name + ".migrated"))
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"could not import the old Pi history: {e}")
 
 # Una muestra: [hora, temperatura, banderas].
@@ -113,7 +120,7 @@ def pi_loop():
         try: pi_migrate(c)
         finally: c.close()
         pi_prune()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"Pi history unavailable: {e}")
     while True:
         try:
@@ -121,7 +128,7 @@ def pi_loop():
             pi_store(s)
             n += 1
             if n % 360 == 0: pi_prune()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"Pi sample failed: {e}")
         time.sleep(PI_EVERY)
 
@@ -165,12 +172,12 @@ def clean_rules(d):
         if not isinstance(x, dict): return None, "Invalid rules"
         m, o, v, lv, on = x.get("m"), x.get("o"), x.get("v"), x.get("lv"), x.get("on", True)
         if m not in RULE_METRICS or o not in (">", "<") or lv not in ("warn", "crit") or not isinstance(on, bool): return None, "Invalid rule"
-        if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or abs(v) > 1e9: return None, "Invalid value"
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or math.isnan(v) or abs(v) > 1e9: return None, "Invalid value"
         out.append({"m": m, "o": o, "v": v, "lv": lv, "on": on})
     return out, ""
 
 def load_rules():
-    out, err = clean_rules(auth.read_json(RULES_FILE, [], list))
+    out, _err = clean_rules(auth.read_json(RULES_FILE, [], list))
     return out if out is not None else []
 
 
@@ -259,7 +266,7 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/pidetail":
             full = auth.check_permission(tok, "wol", "admin") or auth.check_permission(tok, "nut", "admin")
             try: return self._json(200, pi_detail_cached(full))
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                 log.warning(f"pidetail: {e}"); return self._json(500, {"error": "unavailable"})
 
         # Historial de temperatura y subtensión: solo existe en una Raspberry Pi.
@@ -269,7 +276,7 @@ class H(BaseHTTPRequestHandler):
             try: hours = int(parse_qs(u.query).get("hours", ["24"])[0])
             except ValueError: hours = 24
             try: return self._json(200, pi_history(hours))
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                 log.warning(f"Pi history unavailable: {e}"); return self._json(200, {"pi": True, "every": PI_EVERY, "samples": []})
 
         if path == "/api/rules":

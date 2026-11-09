@@ -1,12 +1,15 @@
 """Script labtower-ct (crea el CT de Proxmox) y su guía / script that creates the Proxmox CT, and its guide."""
-import re, shutil, subprocess, unittest
+import re
+import shutil
+import subprocess
+import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "labtower-ct"
 
 def run(*args):
-    return subprocess.run(["bash", str(SCRIPT), *args], capture_output=True, text=True)
+    return subprocess.run(["bash", str(SCRIPT), *args], capture_output=True, text=True, check=False)
 
 @unittest.skipUnless(shutil.which("bash"), "bash no está instalado")
 class Ct(unittest.TestCase):
@@ -41,7 +44,7 @@ class Ct(unittest.TestCase):
 
     def test_guide_exists_and_matches_the_options(self):
         g = (ROOT / "docs" / "CT.md").read_text()
-        for opt in re.findall(r"^\s+--([a-z-]+)\)", SCRIPT.read_text(), re.M):
+        for opt in re.findall(r"^\s+--([a-z-]+)\)", SCRIPT.read_text(), re.MULTILINE):
             if opt in ("help",): continue
             self.assertIn("--" + opt, g, f"la guía no documenta --{opt}")
         self.assertIn("labtower-ct", (ROOT / "README.md").read_text())

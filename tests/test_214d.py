@@ -1,7 +1,14 @@
 """2.1.4d: última conexión, nombres de Net Monitor en UPS, aviso de cambio de IP pública, lista de switches en la barra lateral, días de respaldo."""
-import json, os, tempfile, time, unittest
+import json
+import os
+import tempfile
+import time
+import unittest
+from pathlib import Path
+
 from tests import support
-from tests.support import auth, ADMIN, READONLY, NONE
+from tests.support import ADMIN, NONE, READONLY, auth
+
 
 class LastLogin(unittest.TestCase):
     def test_login_records_last_connection(self):
@@ -24,7 +31,7 @@ class LastLoginFromSession(unittest.TestCase):
             tok = support.make_user("oldsess", ADMIN)
             with auth.users_lock():                      # a user created before the column existed
                 us = auth.load_users(); us["oldsess"].pop("last_login", None); auth.save_users(us)
-            st, d = srv.call("GET", "/api/users", None, token=tok)
+            _st, d = srv.call("GET", "/api/users", None, token=tok)
             row = next(u for u in d["users"] if u["username"] == "oldsess")
             self.assertGreater(row["last_login"], time.time() - 90000)
         finally:
@@ -34,8 +41,8 @@ class UpsNames(unittest.TestCase):
     def test_names_from_net_monitor(self):
         m = support.load("nut-monitor/server.py")
         d = tempfile.mkdtemp(); f = os.path.join(d, "hosts.json")
-        json.dump({"192.0.2.10": {"ip": "192.0.2.10", "alias": "pve1", "hostname": "x.lan"}, "192.0.2.11": {"hostname": "nas\x01main"},
-                   "192.0.2.12": {"alias": "", "hostname": ""}, "192.0.2.13": "junk"}, open(f, "w"))
+        Path(f).write_text(json.dumps({"192.0.2.10": {"ip": "192.0.2.10", "alias": "pve1", "hostname": "x.lan"}, "192.0.2.11": {"hostname": "nas\x01main"},
+                                       "192.0.2.12": {"alias": "", "hostname": ""}, "192.0.2.13": "junk"}))
         old = (m.NET_HOSTS_FILE, list(m._names_cache)); m.NET_HOSTS_FILE = m.Path(f); m._names_cache[0] = 0
         try:
             self.assertEqual(m.net_names(), {"192.0.2.10": "pve1", "192.0.2.11": "nasmain"})
@@ -69,7 +76,7 @@ class PublicIp(unittest.TestCase):
             w.fetch_public_ip = lambda u: "203.0.113.9"; w.check_ip({"ip_url": "x"})
             self.assertEqual((w.S.ip, w.S.ip_prev), ("203.0.113.9", "203.0.113.4"))
             self.assertEqual(evs[0][0][1], "warn"); self.assertEqual(evs[0][1]["prev"], "203.0.113.4")
-            self.assertEqual(json.load(open(w.STATE_FILE))["prev"], "203.0.113.4")
+            self.assertEqual(json.loads(Path(w.STATE_FILE).read_text())["prev"], "203.0.113.4")
             snap = {"public_ip": "203.0.113.9", "ip_changed": int(time.time()) - 20 * 3600, "ip_prev": "203.0.113.4"}
             a = [x for x in w.compute_alerts(snap) if x["type"] == "ip_changed"]
             self.assertEqual((a[0]["value"], a[0]["prev"]), ("203.0.113.9", "203.0.113.4"))

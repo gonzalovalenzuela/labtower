@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 LabTower — servicio de autenticación por socket Unix / authentication service over a Unix socket.
 
@@ -20,7 +19,15 @@ The caller is identified with SO_PEERCRED (filled in by the kernel, not by the c
 
 Protocolo / Protocol: una petición JSON y una respuesta JSON, cada una en una línea (UTF-8, terminada en «\\n»); una conexión por petición.
 """
-import json, logging, os, pwd, re, socket, struct, threading, time
+import json
+import logging
+import os
+import pwd
+import re
+import socket
+import struct
+import threading
+import time
 
 log = logging.getLogger("auth.rpc")
 
@@ -141,7 +148,7 @@ class Service:
         fn = getattr(self, "op_" + op, None) if isinstance(op, str) and re.fullmatch(r"[a-z_]{1,20}", op) else None
         if fn is None: return {"error": "unknown operation"}
         try: return fn(caller, r)
-        except Exception as e:                        # never take the service down because of one request
+        except Exception as e:                        # never take the service down because of one request  # noqa: BLE001
             log.warning(f"{op}: {type(e).__name__}: {e}")
             return {"error": "internal error"}
 
@@ -150,7 +157,7 @@ def _read_line(conn, limit, deadline):
     buf = b""
     while b"\n" not in buf:
         left = deadline - time.monotonic()
-        if left <= 0: raise socket.timeout("deadline")
+        if left <= 0: raise TimeoutError("deadline")
         conn.settimeout(left)
         chunk = conn.recv(min(4096, limit + 1 - len(buf)))
         if not chunk: break
@@ -163,7 +170,7 @@ def _serve_conn(svc, conn):
     try:
         deadline = time.monotonic() + TIMEOUT
         conn.settimeout(TIMEOUT)
-        pid, uid, gid = struct.unpack("3i", conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")))
+        _pid, uid, _gid = struct.unpack("3i", conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")))
         caller = svc.identify(uid)
         if caller is None:
             reply = {"error": "forbidden"}
@@ -222,7 +229,7 @@ def call(path, op, retries=6, **fields):
             finally:
                 s.close()
             r = json.loads(line)
-            if not isinstance(r, dict): raise ValueError("bad reply")
+            if not isinstance(r, dict): raise ValueError("bad reply")  # noqa: TRY004 - validación de entrada; quien llama espera ValueError / EN: input validation, callers expect ValueError
             return r
         except (FileNotFoundError, ConnectionRefusedError) as e:      # not up yet / restarting
             last = e; time.sleep(0.5)

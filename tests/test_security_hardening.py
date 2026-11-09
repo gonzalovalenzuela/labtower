@@ -1,7 +1,12 @@
 """Endurecimiento tras la auditoría del 2026-10-26: defensa CSRF de respaldo (esquema y puerto) y escape de datos remotos de Proxmox (Ceph)."""
-import json, subprocess, textwrap, unittest
+import json
+import subprocess
+import textwrap
+import unittest
 from pathlib import Path
+
 from tests import support
+
 auth = support.auth
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -67,7 +72,7 @@ class CephRendering(unittest.TestCase):
             eval(get('fmtBytes') + get('fmtUptime'));
             console.log(JSON.stringify([fmtBytes('<img src=x onerror=1>'), fmtBytes('2048'), fmtUptime('<b>'), fmtUptime(90061)]));
         """)
-        out = subprocess.run(["node", "-e", script, str(ROOT / "proxmox-monitor/static/app.js")], capture_output=True, text=True, timeout=30)
+        out = subprocess.run(["node", "-e", script, str(ROOT / "proxmox-monitor/static/app.js")], capture_output=True, text=True, timeout=30, check=False)
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertEqual(json.loads(out.stdout), ["0B", "2.0 KB", "—", "1d 1h"])
 

@@ -1,6 +1,9 @@
 """UPS Monitor: cortes de energía, racha en línea y disponibilidad (nut-monitor/server.py)."""
-import time, unittest
+import time
+import unittest
+
 from tests import support
+
 
 class UpsOutages(unittest.TestCase):
     @classmethod

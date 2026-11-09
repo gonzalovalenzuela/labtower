@@ -117,7 +117,7 @@ _NVME_FIELDS = (                                   # (clave, texto que busca en 
 )
 
 def _num_after(label, text):
-    m = re.search(r"^\s*" + label + r"\s*:\s*(0x[0-9a-fA-F]+|[\d,\.]+)", text, re.M | re.I)
+    m = re.search(r"^\s*" + label + r"\s*:\s*(0x[0-9a-fA-F]+|[\d,\.]+)", text, re.MULTILINE | re.IGNORECASE)
     if not m: return None
     v = m.group(1).replace(",", "")
     try: return int(v, 16) if v.lower().startswith("0x") else int(float(v))
