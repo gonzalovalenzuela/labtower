@@ -77,6 +77,20 @@ class Texts(unittest.TestCase):
         self.assertIn("${x&&x.online!=null?`${esc(x.online)} ${T('vpnconn')}`:T(sn.error?'vpnoff':'vpnwait')}", js("overview"))
 
 
+class NarrowPhones(unittest.TestCase):
+    """320 px (iPhone más angosto): nada se sale de la pantalla. / EN: 320 px (narrowest iPhone): nothing leaves the screen."""
+    def test_stat_cards_shrink(self):
+        for m in MODULES:
+            c = css(m)
+            if ".stats-row" not in c: continue
+            self.assertNotRegex(c, r"\.stats-row\{grid-template-columns:(repeat\(\d,1fr\)|1fr)", m)
+            self.assertIn(".stat-card>div:last-child{min-width:0}", c, m)
+
+    def test_proxmox_node_grid_and_ups_header(self):
+        self.assertIn(".nd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:14px}", css("proxmox-monitor"))
+        self.assertIn(".card-hd{padding:9px 16px;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;", css("nut-monitor"))
+
+
 class TopBar(unittest.TestCase):
     def test_margin_and_right_group_when_wrapped(self):
         for m in MODULES:

@@ -101,6 +101,8 @@ input.err{border-color:var(--red);box-shadow:0 0 0 3px var(--red-dim)}
 .stat-ico.purple{background:var(--purple-dim);color:var(--purple)}
 .stat-body .stat-val{font-size:22px;font-weight:600;color:var(--text);line-height:1}
 .stat-body .stat-lbl{font-size:11px;color:var(--text-dim);margin-top:2px;font-weight:500}
+/* La tarjeta se encoge en pantallas angostas: el texto salta de línea. / EN: The card shrinks on narrow screens: text wraps. */
+.stat-card>div:last-child{min-width:0}.stat-val,.stat-lbl{overflow-wrap:anywhere}
 /* ── Grid ── */
 .main-grid{display:grid;grid-template-columns:1fr 316px;gap:18px;align-items:start}
 /* Si no hay espacio para la tabla y el panel «Agregar equipo» lado a lado (se mide el área de contenido, no la ventana: la barra lateral
@@ -199,7 +201,7 @@ td{padding:10px 16px;vertical-align:middle}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media(max-width:960px){
   .sidebar{display:none}.main{margin-left:0}
-  .stats-row{grid-template-columns:1fr 1fr}
+  .stats-row{grid-template-columns:repeat(2,minmax(0,1fr))}
   .main-grid{grid-template-columns:1fr}
   .col-lw,.col-ip{display:none}
 }
@@ -207,7 +209,7 @@ td{padding:10px 16px;vertical-align:middle}
   .pills{display:none}
   .content{padding:12px 14px}
   .topbar{padding:0 14px;height:48px}
-  .stats-row{grid-template-columns:1fr 1fr;gap:10px}
+  .stats-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .stat-card{padding:12px 14px;gap:10px}
   .stat-ico{width:34px;height:34px}
   .stat-val{font-size:18px}

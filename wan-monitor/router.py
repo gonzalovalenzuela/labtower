@@ -6,6 +6,7 @@ EN: Each adapter talks to one router type and returns the same thing: {ok, wan_u
 import base64
 import hashlib
 import hmac
+import http.client
 import http.cookiejar
 import json
 import os
@@ -25,14 +26,37 @@ class RouterError(Exception):
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *a, **k): return None
 
+# Huella fijada (TOFU, como NAS, DNS, Net y Proxmox): los routers usan certificados autofirmados, así que no se validan contra las CA;
+# en su lugar la primera conexión fija la huella SHA-256 y, si luego cambia, se corta ANTES de enviar usuario o contraseña.
+# EN: Pinned fingerprint (TOFU, like NAS, DNS, Net and Proxmox): routers use self-signed certificates, so they are not validated against
+#     the CAs; instead the first connection pins the SHA-256 fingerprint and, if it later changes, the connection is dropped BEFORE the
+#     user or password is sent.
+class PinError(Exception):
+    pass
+
+def _pinned_handler(ctx, pin, learn):
+    class Conn(http.client.HTTPSConnection):
+        def connect(self):
+            super().connect()
+            fp = hashlib.sha256(self.sock.getpeercert(True) or b"").hexdigest()
+            if pin and not hmac.compare_digest(pin, fp):
+                self.close()
+                raise PinError("the router's certificate changed (pinned fingerprint mismatch); nothing was sent. "
+                               "Save the router settings to learn it again")
+            if not pin and learn: learn(fp)
+    class Handler(urllib.request.HTTPSHandler):
+        def https_open(self, req): return self.do_open(Conn, req, context=ctx)
+    return Handler(context=ctx)
+
 class Http:
-    """One small HTTP session (cookies kept) against one router. Never follows redirects to other hosts."""
-    def __init__(self, base, verify=False, basic=None):
+    """One small HTTP session (cookies kept) against one router. Never follows redirects to other hosts.
+    Over HTTPS the certificate is pinned: `pin` is the stored fingerprint (None = learn it, `learn(fp)` keeps it)."""
+    def __init__(self, base, basic=None, pin=None, learn=None):
         self.base, self.basic = base.rstrip("/"), basic
         ctx = ssl.create_default_context()
-        if not verify: ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE
+        ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE         # nosec B501 - pinned fingerprint instead / huella fijada en su lugar
         self.jar = http.cookiejar.CookieJar(http.cookiejar.DefaultCookiePolicy(allowed_domains=None))
-        self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar), urllib.request.HTTPSHandler(context=ctx), _NoRedirect())
+        self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar), _pinned_handler(ctx, pin, learn), _NoRedirect())
     def request(self, path, data=None, headers=None, method=None):
         h = dict(headers or {})
         if self.basic: h["Authorization"] = "Basic " + base64.b64encode(f"{self.basic[0]}:{self.basic[1]}".encode()).decode()
@@ -44,8 +68,13 @@ class Http:
             try: txt = e.read(MAX_BODY).decode("utf-8", "replace")
             except Exception: txt = ""  # noqa: BLE001 - red o servicio externo: cualquier fallo es «sin respuesta» / network or external service: any failure means «no answer»
             return e.code, txt
-        except (urllib.error.URLError, OSError, ssl.SSLError) as e:
-            raise RouterError("no connection to the router: " + str(getattr(e, "reason", e))[:100])
+        except PinError as e:
+            raise RouterError(str(e))
+        except urllib.error.URLError as e:
+            if isinstance(e.reason, PinError): raise RouterError(str(e.reason))
+            raise RouterError("no connection to the router: " + str(e.reason)[:100])
+        except (OSError, ssl.SSLError) as e:
+            raise RouterError("no connection to the router: " + str(e)[:100])
 
 def _json(txt, what):
     try: v = json.loads(txt)
@@ -178,15 +207,23 @@ def check_tplink(c, http):
 
 ADAPTERS = {"huawei": check_huawei, "openwrt": check_openwrt, "ddwrt": check_ddwrt, "tplink": check_tplink}
 
-def check(c, host):
-    """Query the router described by config `c` (type, port, https, user, password, interface) at `host`. Never raises: errors go in the result."""
+def pin_for(c, host):
+    """The stored fingerprint for this address (host:port), or None to learn it. / La huella guardada para esta dirección, o None para aprenderla."""
+    p = c.get("tls_pin")
+    return p.get("fp") if isinstance(p, dict) and p.get("addr") == f"{host}:{int(c['port'])}" else None
+
+def check(c, host, learn=None):
+    """Query the router described by config `c` (type, port, https, user, password, interface) at `host`. Never raises: errors go in the result.
+    Over HTTPS the certificate must match c["tls_pin"]; without one, `learn({"addr", "fp"})` is called to keep it."""
     out = {"ok": False, "wan_up": None, "ip": None, "uptime": None, "detail": "", "error": "", "type": c.get("type"), "host": host, "ts": int(time.time())}
     try:
         if c["type"] not in ADAPTERS: raise RouterError("unknown router type")
         if not host: raise RouterError("no router address (and no default gateway)")
         scheme = "https" if c.get("https") else "http"
         basic = (c["user"], c["password"]) if c["type"] in ("ddwrt", "tplink") else None
-        http = Http(f"{scheme}://{host}:{int(c['port'])}", verify=False, basic=basic)
+        addr = f"{host}:{int(c['port'])}"
+        keep = (lambda fp: learn({"addr": addr, "fp": fp})) if learn else None
+        http = Http(f"{scheme}://{addr}", basic=basic, pin=pin_for(c, host), learn=keep)
         out.update(ADAPTERS[c["type"]](c, http)); out["ts"] = int(time.time())
     except RouterError as e: out["error"] = str(e)[:200]
     except Exception as e: out["error"] = f"{type(e).__name__}: {e}"[:200]  # noqa: BLE001 - el error queda guardado y se muestra / the error is kept and shown

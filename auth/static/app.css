@@ -41,6 +41,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 .stat-ico.orange{background:var(--orange-dim);color:var(--orange)}
 .stat-body .stat-val{font-size:22px;font-weight:600;color:var(--text);line-height:1}
 .stat-body .stat-lbl{font-size:11px;color:var(--text-dim);margin-top:2px;font-weight:500}
+/* La tarjeta se encoge en pantallas angostas: el texto salta de línea. / EN: The card shrinks on narrow screens: text wraps. */
+.stat-card>div:last-child{min-width:0}.stat-val,.stat-lbl{overflow-wrap:anywhere}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
 .card-hd{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .card-title{font-size:13px;font-weight:600;color:var(--text)}
@@ -228,7 +230,7 @@ input.err{border-color:var(--red)}
   #tp-tbody td{padding:0;display:block;min-width:0}
   #tp-tbody td:first-child{flex:1 0 100%;word-break:break-all}
   #tp-tbody td.col-actions{margin-left:auto;white-space:nowrap}
-  .stats-row{grid-template-columns:1fr 1fr;gap:10px}
+  .stats-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .stat-card{padding:12px;gap:10px;min-width:0}
   .stat-card:last-child{grid-column:1/-1}
   }

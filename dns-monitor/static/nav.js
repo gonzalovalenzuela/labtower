@@ -403,6 +403,72 @@
     if (!timer) timer = setInterval(function () { try { sessionStorage.removeItem('lt-nav-health'); } catch (e) {} loadHealth(); }, 60000);
   }
 
+  // Mantener la vista cuando el contenido cambia: los módulos rearman su contenido en cada lectura y la página saltaba.
+  // El «scroll anchoring» del navegador no basta: no existe en Safari antiguo y, donde existe, se pierde cuando el elemento
+  // de referencia se elimina y se crea de nuevo, que es justo lo que hace un refresco. Aquí se anota qué elemento está bajo
+  // la barra superior y a qué altura; tras cada cambio del contenido se busca ese mismo elemento (o el que ocupa su lugar:
+  // mismo id o misma posición en el árbol) y se corrige el desplazamiento. Si el navegador tiene anchoring propio y el
+  // elemento sigue en la página, se revisa un cuadro después: si el navegador ya lo dejó en su lugar no se hace nada
+  // (no se corrige dos veces); si no (Safari lo omite en algunos diseños), se corrige aquí.
+  // EN: Keep the view when the content changes: modules rebuild their content on every reading and the page jumped.
+  // Browser scroll anchoring is not enough: older Safari lacks it and, where it exists, it is lost when the reference
+  // element is removed and created again, which is exactly what a refresh does. Here we note which element sits under the
+  // top bar and how high; after every content change we find that element (or the one that took its place: same id or
+  // same position in the tree) and correct the scroll. If the browser has its own anchoring and the element is still on
+  // the page, it is checked one frame later: if the browser already kept it in place nothing is done (no double
+  // correction); otherwise (Safari skips it in some layouts) it is corrected here.
+  function anchorTake(root) {
+    if (window.scrollY < 1) return null;                                       // at the top there is nothing to keep
+    var tb = document.querySelector('.topbar'), y = Math.max(0, tb ? tb.getBoundingClientRect().bottom : 0) + 8;
+    var el = document.elementFromPoint(Math.round(window.innerWidth / 2), Math.round(Math.min(y, window.innerHeight - 1)));
+    if (!el || el === root || !root.contains(el)) return null;
+    var path = [], n = el;
+    while (n && n !== root && !n.id) { path.unshift(Array.prototype.indexOf.call(n.parentNode.children, n)); n = n.parentNode; }
+    return { el: el, id: n && n !== root ? n.id : null, path: path, top: el.getBoundingClientRect().top };
+  }
+  function anchorFind(root, a) {
+    if (a.el.isConnected) return a.el;
+    var n = a.id ? document.getElementById(a.id) : root;
+    for (var i = 0; n && i < a.path.length; i++) n = n.children[a.path[i]];
+    return n && root.contains(n) ? n : null;
+  }
+  function keepView() {
+    if (!window.MutationObserver) return;
+    var native = !!(window.CSS && CSS.supports && CSS.supports('overflow-anchor', 'auto'));
+    var root = document.body, a = null, busy = false, later = false;
+    function take() { a = anchorTake(root); }
+    function fix() {
+      var n = a && anchorFind(root, a);
+      // Oculto (otra vista, sección cerrada): no hay dónde mantenerse. / EN: Hidden (another view, closed section): nothing to keep.
+      if (n && n.getClientRects().length) {
+        var d = n.getBoundingClientRect().top - a.top;
+        if (Math.abs(d) >= 1) { busy = true; window.scrollBy(0, d); busy = false; }
+      }
+      take();
+    }
+    var mo = new MutationObserver(function (recs) {
+      // Solo cambios de elementos (no el texto del reloj ni de un contador). / EN: Element changes only (not clock or counter text).
+      var el = false;
+      for (var i = 0; i < recs.length && !el; i++) {
+        var r = recs[i], k;
+        for (k = 0; k < r.addedNodes.length && !el; k++) el = r.addedNodes[k].nodeType === 1;
+        for (k = 0; k < r.removedNodes.length && !el; k++) el = r.removedNodes[k].nodeType === 1;
+      }
+      if (!el || !a || busy || later) { if (el && !a) take(); return; }
+      if (native && a.el.isConnected) {                                        // let the browser act first, then check
+        later = true;
+        requestAnimationFrame(function () { later = false; fix(); });
+        return;
+      }
+      fix();
+    });
+    mo.observe(root, { childList: true, subtree: true });
+    window.addEventListener('scroll', function () { if (!busy) take(); }, { passive: true });
+    window.addEventListener('resize', take, { passive: true });
+    take();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', keepView); else keepView();
+
   window.labNav = {
     // opts: {self, lang, me, fetchMe}
     render: function (o) {

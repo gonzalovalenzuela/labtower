@@ -202,7 +202,7 @@ class Outages(unittest.TestCase):
     def test_open_outage_is_refined_by_a_later_router_answer(self):
         t = int(time.time()); m.track_outage(self.rnd(t, False), t); m.track_outage(self.rnd(t + 30, False), t)
         self.assertEqual(m.S.scope, "internet"); m.S.last = self.rnd(t + 30, False)
-        orig = m.rtr.check; m.rtr.check = lambda c, h: {"ok": True, "wan_up": False, "ip": None, "uptime": None, "detail": "", "error": "", "type": "huawei", "host": h, "ts": int(time.time())}
+        orig = m.rtr.check; m.rtr.check = lambda c, h, learn=None: {"ok": True, "wan_up": False, "ip": None, "uptime": None, "detail": "", "error": "", "type": "huawei", "host": h, "ts": int(time.time())}
         try: m.router_round(m.validate({"router": {"enabled": True, "password": "p", "host": "192.168.1.1"}}))
         finally: m.rtr.check = orig
         self.assertEqual(m.S.scope, "wan"); self.assertEqual(m.recent_outages()[0]["scope"], "wan")

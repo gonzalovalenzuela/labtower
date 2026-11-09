@@ -204,8 +204,8 @@ td{padding:10px 14px;vertical-align:middle}
 #toast.show{opacity:1;transform:none}
 .spin{display:inline-block;animation:spin .5s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-@media(max-width:960px){.sidebar{display:none}.main{margin-left:0}.stats-row{grid-template-columns:repeat(3,1fr)}.detail-inner{grid-template-columns:1fr 1fr}}
-@media(max-width:600px){.stats-row{grid-template-columns:1fr 1fr}.content{padding:12px 14px}.detail-inner{grid-template-columns:1fr}}
+@media(max-width:960px){.sidebar{display:none}.main{margin-left:0}.stats-row{grid-template-columns:repeat(3,minmax(0,1fr))}.detail-inner{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.stats-row{grid-template-columns:repeat(2,minmax(0,1fr))}.content{padding:12px 14px}.detail-inner{grid-template-columns:1fr}}
 
 /* Mobile navigation drawer */
 .nav-toggle{display:none;align-items:center;justify-content:center;width:36px;height:36px;flex-shrink:0;border-radius:var(--r-sm);border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;padding:0}

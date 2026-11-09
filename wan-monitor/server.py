@@ -129,12 +129,31 @@ def _validate_router(new, cur, resolve=True):
     r["interface"] = itf
     r["every"] = _int(r.get("every", 30), 10, 300, "Router check interval")
     if r["enabled"] and not r["password"]: raise ValueError("The router needs a password to be checked")
+    # La huella del certificado nunca viene del formulario: guardar los ajustes del router la borra y se vuelve a aprender.
+    # EN: The certificate fingerprint never comes from the form: saving the router settings clears it and it is learned again.
+    r.pop("tls_pin", None)
     return r
+
+# Huella guardada válida: {"addr": "host:puerto", "fp": sha256 en hex}. / EN: Valid stored fingerprint: {"addr": "host:port", "fp": hex sha256}.
+def _valid_pin(p):
+    return (isinstance(p, dict) and isinstance(p.get("addr"), str) and 0 < len(p["addr"]) <= 300
+            and isinstance(p.get("fp"), str) and re.fullmatch(r"[0-9a-f]{64}", p["fp"]) is not None)
+
+# Guarda la huella aprendida en la primera conexión HTTPS al router (solo si sigue siendo la misma dirección y no hay otra).
+# EN: Stores the fingerprint learned on the first HTTPS connection to the router (only if the address is the same and none is set).
+def learn_router_pin(pin):
+    if not _valid_pin(pin): return
+    with _cfg_lock:
+        cfg = load_config(); cur = cfg["router"].get("tls_pin")
+        if _valid_pin(cur) and cur["addr"] == pin["addr"]: return
+        cfg["router"]["tls_pin"] = {"addr": pin["addr"], "fp": pin["fp"]}; save_config(cfg)
+    log.info(f"router {pin['addr']}: certificate fingerprint pinned ({pin['fp'][:16]}…)")
 
 # La configuración que ve el navegador: sin la clave del router, con un aviso de si hay una guardada.
 # EN: The configuration the browser sees: without the router password, with a flag telling whether one is stored.
 def public_config(cfg):
-    out = json.loads(json.dumps(cfg)); out["router"].pop("password", None); out["router"]["has_password"] = bool(cfg["router"].get("password"))
+    out = json.loads(json.dumps(cfg)); out["router"].pop("password", None); out["router"].pop("tls_pin", None)
+    out["router"]["has_password"] = bool(cfg["router"].get("password"))
     return out
 
 # Combina lo recibido con lo guardado y valida cada campo.
@@ -196,9 +215,12 @@ def validate(body: dict, current=None, resolve=True) -> dict:
 #     network's DNS, tens of thousands a day). The check with DNS is done when saving and right before connecting (_url_safe).
 def load_config() -> dict:
     cur = auth.read_json(DATA_FILE, {}, dict)
-    try: return validate(cur, resolve=False) if cur else validate({}, resolve=False)
+    try: cfg = validate(cur, resolve=False) if cur else validate({}, resolve=False)
     except ValueError as e:
         log.warning(f"stored configuration invalid ({e}); using defaults"); return validate({}, resolve=False)
+    pin = cur.get("router", {}).get("tls_pin") if isinstance(cur.get("router"), dict) else None
+    if _valid_pin(pin): cfg["router"]["tls_pin"] = pin                  # only from storage, learned by the router thread
+    return cfg
 
 def save_config(cfg: dict):
     with _cfg_lock: auth.write_json(DATA_FILE, cfg)
@@ -815,7 +837,7 @@ def probe_loop():
 def router_round(cfg):
     rc = cfg["router"]
     host = rc["host"] or S.gw or default_gateway() or ""
-    res = rtr.check(rc, host)
+    res = rtr.check(rc, host, learn=learn_router_pin)
     with S.lock:
         S.router = res
         gw = (S.last or {}).get("gateway")
@@ -1045,6 +1067,8 @@ class H(BaseHTTPRequestHandler):
             except ValueError as e: return self._json(400, {"error": str(e)})
             rc = cfg["router"]
             if not rc["password"]: return self._json(400, {"error": "Type the router password first"})
+            pin = load_config()["router"].get("tls_pin")
+            if pin: rc["tls_pin"] = pin                                    # the test is checked against the stored fingerprint, never learns
             host = rc["host"] or S.gw or default_gateway() or ""
             res = rtr.check(rc, host)
             return self._json(200, {"result": {k: res.get(k) for k in ("ok", "wan_up", "ip", "uptime", "detail", "error", "type", "host")}})
