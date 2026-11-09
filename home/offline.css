@@ -1,0 +1,16 @@
+/* Página «Sin conexión» (la muestra el service worker). Sigue el tema elegido en LabTower o, si no hay, el del equipo.
+   EN: "No connection" page (shown by the service worker). Follows the theme chosen in LabTower or, if none, the device one. */
+:root{--bg:#f0f2f5;--surface:#fff;--text:#1a2033;--dim:#5a6a85;--border:#e3e8ef;--blue:#4361ee}
+@media (prefers-color-scheme: dark){:root{--bg:#0f1420;--surface:#1a1d27;--text:#e2e8f0;--dim:#94a3b8;--border:#2a2f45}}
+[data-theme="light"]{--bg:#f0f2f5;--surface:#fff;--text:#1a2033;--dim:#5a6a85;--border:#e3e8ef}
+[data-theme="dark"]{--bg:#0f1420;--surface:#1a1d27;--text:#e2e8f0;--dim:#94a3b8;--border:#2a2f45}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:flex;align-items:center;justify-content:center;padding:24px max(16px,env(safe-area-inset-left)) 24px max(16px,env(safe-area-inset-right))}
+.box{max-width:360px;width:100%;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px 22px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.08)}
+.box img{border-radius:16px;margin-bottom:14px}
+h1{font-size:19px;margin-bottom:8px}
+p{color:var(--dim);font-size:14px}
+.auto{font-size:12.5px;margin-top:8px}
+button{margin-top:18px;font:inherit;font-weight:600;color:#fff;background:var(--blue);border:0;border-radius:10px;padding:10px 22px;cursor:pointer}
+button:disabled{opacity:.6}

@@ -16,7 +16,7 @@ const LANG={
     noHosts:'No hosts found',searchPlaceholder:'IP, hostname, OS, port...',pveVm:'VM',pveCt:'CT',pveTip:(g)=>'Proxmox · '+g.cluster+' / '+g.node+' · '+g.name+' ('+g.status+')',pveLbl:'Proxmox',
     piholeIntegration:'Pi-hole Integration',piholeDesc:'Pi-hole v6 API for name resolution and MAC vendor. Credentials are stored on the server.',
     piholeHosts:'Pi-hole hosts (comma separated)',piholePass:'Pi-hole admin password',
-    piholePassKept:'•••••••• (saved — leave empty to keep)',piholeConnected:'Connected',piholeDiag:'Devices {d} · DHCP leases {l} · Local DNS {n}',piholeErrLocal:'Local DNS not readable ({e}). In Pi-hole use the web password, or enable the app password option “webserver.api.app_sudo”.',piholeErrLeases:'DHCP leases not readable ({e}).',piholeErrLogin:'Could not log in ({e}).',piholeConnecting:'Connecting…',piholeNeedHost:'Enter at least one host',
+    piholePassKept:'•••••••• (saved — leave empty to keep)',piholeConnected:'Connected',piholeDotOk:'Pi-hole: connected',piholeDotFail:'Pi-hole: the last read failed',piholeDotWait:'Pi-hole: connecting…',piholeDotOff:'Pi-hole: not configured',piholeDiag:'Devices {d} · DHCP leases {l} · Local DNS {n}',piholeErrLocal:'Local DNS not readable ({e}). In Pi-hole use the web password, or enable the app password option “webserver.api.app_sudo”.',piholeErrLeases:'DHCP leases not readable ({e}).',piholeErrLogin:'Could not log in ({e}).',piholeConnecting:'Connecting…',piholeNeedHost:'Enter at least one host',
     piholeSuccess:'Saved — syncing names…',piholeToast:'Pi-hole connected — names will appear on next scan',
     purgeLbl:'Remove offline after:',purgeDays:'days',purgeTip:'0 = never remove',purgeSaved:(d,n)=>d?`Offline devices are removed after ${d} days (${n} removed now)`:'Offline devices are kept',
     intervalNegative:'Interval cannot be negative',intervalMin:'Minimum 60 seconds (or 0 for manual)',
@@ -52,7 +52,7 @@ unrev:'Unreviewed',unrevMsg:(n,names,more)=>`${n} device${n>1?'s':''} not review
     noHosts:'Sin hosts encontrados',searchPlaceholder:'IP, hostname, OS, puerto...',pveVm:'VM',pveCt:'CT',pveTip:(g)=>'Proxmox · '+g.cluster+' / '+g.node+' · '+g.name+' ('+g.status+')',pveLbl:'Proxmox',
     piholeIntegration:'Integración Pi-hole',piholeDesc:'Pi-hole v6 API para resolución de nombres y vendor MAC. Las credenciales se guardan en el servidor.',
     piholeHosts:'Hosts Pi-hole (separados por coma)',piholePass:'Password Pi-hole admin',
-    piholePassKept:'•••••••• (guardada — vacío = conservar)',piholeConnected:'Conectado',piholeDiag:'Dispositivos {d} · Concesiones DHCP {l} · DNS local {n}',piholeErrLocal:'No se pudo leer el DNS local ({e}). En Pi-hole usa la contraseña de la web, o activa la opción «webserver.api.app_sudo» para la contraseña de aplicación.',piholeErrLeases:'No se pudieron leer las concesiones DHCP ({e}).',piholeErrLogin:'No se pudo iniciar sesión ({e}).',piholeConnecting:'Conectando…',piholeNeedHost:'Ingresa al menos un host',
+    piholePassKept:'•••••••• (guardada — vacío = conservar)',piholeConnected:'Conectado',piholeDotOk:'Pi-hole: conectado',piholeDotFail:'Pi-hole: la última lectura falló',piholeDotWait:'Pi-hole: conectando…',piholeDotOff:'Pi-hole: sin configurar',piholeDiag:'Dispositivos {d} · Concesiones DHCP {l} · DNS local {n}',piholeErrLocal:'No se pudo leer el DNS local ({e}). En Pi-hole usa la contraseña de la web, o activa la opción «webserver.api.app_sudo» para la contraseña de aplicación.',piholeErrLeases:'No se pudieron leer las concesiones DHCP ({e}).',piholeErrLogin:'No se pudo iniciar sesión ({e}).',piholeConnecting:'Conectando…',piholeNeedHost:'Ingresa al menos un host',
     piholeSuccess:'Guardado — sincronizando nombres…',piholeToast:'Pi-hole conectado — los nombres aparecerán en el próximo escaneo',
     purgeLbl:'Quitar sin conexión tras:',purgeDays:'días',purgeTip:'0 = no quitar nunca',purgeSaved:(d,n)=>d?`Los equipos sin conexión se quitan tras ${d} días (${n} quitados ahora)`:'Los equipos sin conexión se conservan',
     intervalNegative:'El intervalo no puede ser negativo',intervalMin:'Mínimo 60 segundos (o 0 para manual)',
@@ -328,7 +328,7 @@ async function fetchData(){
 
     updateScanBar(d.scan);
     fetchPveGuests();
-    if(d.pihole_enabled !== undefined) updatePiholeStatusDot(d.pihole_enabled);
+    if(d.pihole) updatePiholeStatusDot(d.pihole);
     refreshSnmpDot();
 
     // Durante escaneo activo: poll cada 3s; en reposo: cada 30s
@@ -943,8 +943,7 @@ async function savePiholeConfig(){
     const d=await r.json();if(!r.ok)throw new Error(d.error);
     st.style.background='var(--teal-dim)';st.style.color='var(--teal)';st.style.border='1px solid rgba(20,184,166,.2)';
     st.textContent=`✓ ${t('piholeSuccess')||'Saved — syncing names…'}`;
-    document.getElementById('pihole-status-dot').style.background='var(--teal)';
-    document.getElementById('pihole-status-dot').style.boxShadow='0 0 0 2px var(--teal-dim)';
+    updatePiholeStatusDot({enabled:true,ok:null});
     toast(t('piholeToast')||'Pi-hole connected — names will appear on next scan');
     setTimeout(()=>{_piholeOpen=false;document.getElementById('pihole-panel').style.display='none';},1500);
   }catch(e){
@@ -953,16 +952,17 @@ async function savePiholeConfig(){
   }finally{btn.disabled=false;btn.textContent=t('saveConnect')||'Save & connect';}
 }
 
-function updatePiholeStatusDot(enabled){
+// Punto de estado de Pi-hole: verde = la última lectura funcionó; naranjo = configurado pero falló o aún sin lectura; gris = sin configurar.
+// EN: Pi-hole status dot: green = the last read worked; orange = configured but it failed or no read yet; grey = not configured.
+function updatePiholeStatusDot(p){
   const dot = document.getElementById('pihole-status-dot');
   if(!dot) return;
-  if(enabled){
-    dot.style.background='var(--teal)';
-    dot.style.boxShadow='0 0 0 2px var(--teal-dim)';
-  }else{
-    dot.style.background='var(--border-b)';
-    dot.style.boxShadow='none';
-  }
+  const st = !p||!p.enabled ? 'off' : p.ok===true ? 'ok' : p.ok===false ? 'fail' : 'wait';
+  const c = {ok:['var(--teal)','var(--teal-dim)'], fail:['var(--orange)','var(--orange-dim)'], wait:['var(--orange)','var(--orange-dim)'], off:['var(--border-b)','']}[st];
+  dot.style.background=c[0];
+  dot.style.boxShadow=c[1]?'0 0 0 2px '+c[1]:'none';
+  const tip = t({ok:'piholeDotOk',fail:'piholeDotFail',wait:'piholeDotWait',off:'piholeDotOff'}[st]) + (st==='fail'&&p.error?': '+p.error:'');
+  dot.title = tip; dot.setAttribute('aria-label', tip);
 }
 
 // ── Uptime chart ──────────────────────────────────────────────────────────────

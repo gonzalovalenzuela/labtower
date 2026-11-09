@@ -45,7 +45,8 @@ import auth  # valid_target(): the switch address cannot be this machine or a li
 
 
 class SessionExpired(Exception):
-    def __init__(self, msg="the switch sent its login page again right after logging in"):
+    def __init__(self, msg="the switch sent its login page again right after logging in (these switches keep a single session: "
+                           "another LabTower or a browser logged in to the switch may be holding it)"):
         super().__init__(msg)
 
 
@@ -131,16 +132,23 @@ class BaseDriver:
         time.sleep(self.gap)
         return text
 
+    # Inicio de sesión limpio: se borran las cookies anteriores (también la guardada en disco). Si el switch entrega la sesión nueva con otro
+    # nombre o ruta, la cookie vieja viajaba junto a la nueva y el switch respondía otra vez con su página de login.
+    # EN: Clean login: previous cookies are dropped (also the one stored on disk). If the switch hands out the new session under another name
+    #     or path, the old cookie travelled with the new one and the switch answered with its login page again.
+    def _relogin(self):
+        self.jar.clear(); self.logged_in = False
+        self.login()
+        self._save_session()
+
     def fetch(self, path, data=None):
         with self.lock:
             if not self.logged_in:
-                self.login()
-                self._save_session()
+                self._relogin()
             try:
                 return self._fetch(path, data)
             except SessionExpired:
-                self.login()
-                self._save_session()
+                self._relogin()
                 return self._fetch(path, data)
 
     def snapshot(self, with_macs=True):
@@ -695,6 +703,15 @@ FLAP_WINDOW = 600                  # s: un enlace que cambia FLAP_COUNT veces en
 FLAP_COUNT = 4
 FLAP_EVENT_GAP = 1800              # un aviso de rebote por puerto cada 30 min como máximo / at most one flap notice per port per 30 min
 FAILS_FOR_DOWN = 2                 # fallos seguidos para dar el switch por caído / consecutive failures before "down"
+# Velocidad habitual de cada puerto: la más alta a la que conectó en los últimos 7 días. Si el enlace queda por debajo durante
+# SPEED_SUSTAIN lecturas seguidas (p. ej. 1G → 100M por un cable o un puerto trabado), hay alerta y evento. Tras 7 días a la velocidad
+# nueva, esa pasa a ser la habitual (un equipo más lento conectado a propósito deja de avisar).
+# EN: Usual speed of each port: the highest it linked at in the last 7 days. If the link stays below it for SPEED_SUSTAIN readings in a
+#     row (e.g. 1G → 100M from a cable or a stuck port) there is an alert and an event. After 7 days at the new speed it becomes the
+#     usual one (a slower device plugged in on purpose stops warning).
+SPEED_WINDOW = 7 * 86400
+SPEED_SUSTAIN = 2
+SPEED_SAVE_GAP = 3600              # s: the "last seen" time of a speed is written at most hourly / se escribe a lo más cada hora
 ERR_EVENT_GAP = 600                # un aviso de errores nuevos por puerto cada 10 min como máximo / at most one new-errors notice per port per 10 min
 RAW_KEEP = 48 * 3600               # muestras de 1 min durante 48 h; después se resumen cada 15 min / 1-min samples for 48 h, then 15-min summaries
 AGG_STEP = 900
@@ -811,6 +828,7 @@ class Manager:
     def __init__(self, data_dir, hooks=None, log=None):
         self.dir = Path(data_dir)
         self.conf_file, self.db_file = self.dir / "switches.json", self.dir / "switches.db"
+        self.speed_file = self.dir / "switch_speeds.json"      # {sid: {port: {speed: last_seen_ts}}}
         self.hooks = hooks or {}
         self.log = log
         self.lock = threading.RLock()
@@ -820,6 +838,7 @@ class Manager:
         self._maint = None
         self._stopped = False
         self.load()
+        self.speeds = self._load_speeds()
 
     # ---- configuración / configuration
     def _say(self, level, msg):
@@ -841,6 +860,23 @@ class Manager:
     def _save(self):
         self.dir.mkdir(parents=True, exist_ok=True)
         _atomic_json(self.conf_file, self.cfg)
+
+    def _load_speeds(self):
+        try:
+            d = json.loads(self.speed_file.read_text())
+            return {str(sid): {str(n): {str(v): float(t) for v, t in sp.items()} for n, sp in ports.items() if isinstance(sp, dict)}
+                    for sid, ports in d.items() if isinstance(ports, dict)} if isinstance(d, dict) else {}
+        except FileNotFoundError:
+            return {}
+        except (OSError, ValueError, TypeError, AttributeError) as e:
+            self._say("warning", f"switch_speeds.json unreadable: {e}")
+            return {}
+
+    def _usual_speed(self, sid, n, now):
+        """La velocidad más alta vista en este puerto en los últimos 7 días (None si no hay). / Highest speed seen on this port in the last 7 days."""
+        sp = (self.speeds.get(sid) or {}).get(str(n)) or {}
+        seen = [int(v) for v, t in sp.items() if now - t <= SPEED_WINDOW]
+        return max(seen) if seen else None
 
     def poll_seconds(self):
         return self.cfg.get("poll_seconds", POLL_DEFAULT)
@@ -988,7 +1024,7 @@ class Manager:
 
     def _new_rec(self):
         return {"snap": None, "macs": [], "macs_ts": 0, "ok_ts": 0, "err": None, "try_ts": 0, "fails": 0,
-                "prev": None, "rates": {}, "errq": {}, "err_ev": {}, "crcq": {}, "flaps": {}, "flap_ev": {}, "linkst": {}}
+                "prev": None, "rates": {}, "errq": {}, "err_ev": {}, "crcq": {}, "flaps": {}, "flap_ev": {}, "linkst": {}, "slow": {}}
 
     def _loop(self, sid, cfg, w, delay):
         if delay and w.ev.wait(delay) and w.stop:
@@ -1076,8 +1112,24 @@ class Manager:
             rec["rates"], rec["snap"], rec["ok_ts"], rec["err"], rec["fails"] = rates, snap, now, None, 0
             meta = (self._find(sid) or {}).get("ports") or {}     # copia vigente (se edita sin reiniciar el hilo) / current copy
             links = self._links_locked()
+            speeds_dirty = False
             for p in ports:
                 n = p["port"]
+                # Velocidad negociada contra la habitual. / EN: Negotiated speed against the usual one.
+                spd = int(p.get("speed_mbps") or 0) if p["link_up"] else 0
+                if spd > 0:
+                    seen = self.speeds.setdefault(sid, {}).setdefault(str(n), {})
+                    if now - seen.get(str(spd), 0) >= SPEED_SAVE_GAP:
+                        seen[str(spd)] = now; speeds_dirty = True
+                    usual = self._usual_speed(sid, n, now)
+                    rec["slow"][n] = rec["slow"].get(n, 0) + 1 if usual and spd < usual else 0
+                    lst = "low" if rec["slow"][n] >= SPEED_SUSTAIN else "ok" if not rec["slow"][n] else None
+                    ch = self._changed(f"sw-spd:{sid}:{n}", lst) if lst else None
+                    if ch and ch[1] == "low":
+                        events.append(("warn", f"{cfg['name']}/{n}: link at {spd} Mb/s (usually {usual} Mb/s): check the cable or the port", "sw_speed",
+                                       {"n": cfg["name"], "p": n, "d": spd, "b": usual}))
+                    elif ch and ch[0] == "low":
+                        events.append(("info", f"{cfg['name']}/{n}: link back at {spd} Mb/s", "sw_speed_ok", {"n": cfg["name"], "p": n, "d": spd}))
                 total = (p.get("rx_bad_pkts") or 0) + (p.get("tx_bad_pkts") or 0)
                 dq = rec["errq"].setdefault(n, [])
                 dq.append((now, total))
@@ -1121,9 +1173,23 @@ class Manager:
             ch = self._changed(f"sw-temp:{sid}", lv)
             if ch:
                 events.append(("info" if lv == "ok" else lv, f"{cfg['name']}: temperature {t:g} °C", "sw_temp" if lv != "ok" else "sw_temp_ok", {"n": cfg["name"], "t": round(t)}))
+        if speeds_dirty:
+            with self.lock:
+                self._save_speeds(now)
         for lv, text, key, params in events:
             self._event(lv, text, key, **params)
         self._db_write(sid, now, snap, rates)
+
+    def _save_speeds(self, now):
+        # Sin lo que tenga más de dos ventanas, ni switches borrados. / EN: Without anything older than two windows, nor deleted switches.
+        ids = {c["id"] for c in self.cfg["switches"]}
+        self.speeds = {sid: {n: {v: t for v, t in sp.items() if now - t <= 2 * SPEED_WINDOW} for n, sp in ports.items()}
+                       for sid, ports in self.speeds.items() if sid in ids}
+        try:
+            self.dir.mkdir(parents=True, exist_ok=True)
+            _atomic_json(self.speed_file, self.speeds)
+        except OSError as e:
+            self._say("warning", f"switch_speeds.json not saved: {e}")
 
     # ---- topología / topology
     def _links_locked(self):
@@ -1227,6 +1293,8 @@ class Manager:
                     else:
                         flag = "uplink" if uplink else "up"
                     r = rec["rates"].get(n) or {}
+                    usual = self._usual_speed(sid, n, rec["ok_ts"] or now) if p["link_up"] else None   # against the reading time / contra la hora de la lectura
+                    slow = bool(usual and p.get("speed_mbps") and p["speed_mbps"] < usual and rec["slow"].get(n, 0) >= SPEED_SUSTAIN)
                     ports.append({
                         "port": n, "name": p.get("name"), "alias": p.get("alias"), "label": pm.get("label", ""),
                         "uplink": uplink, "uplink_manual": bool(pm.get("uplink")), "link_to": link_to, "flag": flag,
@@ -1238,17 +1306,20 @@ class Manager:
                         "rx_discards": p.get("rx_discards"), "tx_discards": p.get("tx_discards"),
                         "rx_bytes": p.get("rx_bytes"), "tx_bytes": p.get("tx_bytes"), "bytes_est": p.get("bytes_est") or 0,
                         "rx_pps": r.get("rx_pps"), "tx_pps": r.get("tx_pps"), "rx_bps": r.get("rx_bps"), "tx_bps": r.get("tx_bps"),
-                        "mac_count": len(macs), "neighbors": nb,
+                        "mac_count": len(macs), "neighbors": nb, "slow": slow, "usual_mbps": usual if slow else None,
                     })
                 sy = (snap or {}).get("system") or {}
                 t = sy.get("temperature_c")
                 tlv = None if t is None else "crit" if t >= TEMP_CRIT else "warn" if t >= TEMP_WARN else "ok"
                 alerts = []
-                if not online and rec["fails"] >= FAILS_FOR_DOWN:
+                paused = not cfg.get("enabled", True)        # paused by the administrator: no polling, no alerts / pausado: sin lecturas ni alertas
+                if not paused and not online and rec["fails"] >= FAILS_FOR_DOWN:
                     alerts.append({"lv": "crit", "k": "down"})
-                if tlv in ("warn", "crit"):
+                if tlv in ("warn", "crit") and not paused:
                     alerts.append({"lv": tlv, "k": "temp", "t": t})
-                for p in ports:
+                for p in ([] if paused else ports):
+                    if p["slow"]:
+                        alerts.append({"lv": "warn", "k": "speed", "p": p["port"], "d": p["speed_mbps"], "b": p["usual_mbps"]})
                     if p["flag"] == "loop":
                         alerts.append({"lv": "warn", "k": "loop", "p": p["port"]})
                     elif p["flag"] == "warn":
@@ -1256,7 +1327,7 @@ class Manager:
                     if p.get("flaps_1h", 0) >= FLAP_COUNT:
                         alerts.append({"lv": "warn", "k": "flap", "p": p["port"], "d": p["flaps_1h"]})
                 out.append({
-                    "id": sid, "name": cfg["name"], "driver": cfg["driver"], "host": cfg["host"], "enabled": cfg.get("enabled", True),
+                    "id": sid, "name": cfg["name"], "driver": cfg["driver"], "host": cfg["host"], "enabled": cfg.get("enabled", True), "paused": paused,
                     "online": online, "error": rec["err"], "updated": rec["ok_ts"] or None,
                     "age": int(now - rec["ok_ts"]) if rec["ok_ts"] else None, "scrape": (snap or {}).get("scrape_seconds"),
                     "system": sy, "temp_level": tlv, "ports": ports,
@@ -1292,6 +1363,7 @@ class Manager:
         st = self.state()
         sw = []
         for s in st["switches"]:
+            if s["paused"]: continue                     # a paused switch is not checked, so the Overview does not list it
             lv = "ok"
             for a in s["alerts"]:
                 lv = "crit" if a["lv"] == "crit" or lv == "crit" else "warn"

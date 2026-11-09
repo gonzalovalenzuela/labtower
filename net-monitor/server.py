@@ -304,6 +304,9 @@ def _pihole_login(host: str, password: str) -> str | None:
         sid = d.get("session", {}).get("sid")
         if sid:
             log.info(f"Pi-hole login OK: {host}")
+            _pihole_last_err.pop(host, None)                          # the old error no longer applies
+        else:
+            _pihole_last_err[host] = "login failed: Pi-hole did not return a session"
         return sid
     except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
         log.warning(f"Pi-hole login error {host}: {e}")
@@ -438,6 +441,29 @@ def _refresh_pihole_cache():
         _pihole_cache.clear()
         _pihole_cache.update(new_cache)
         _pihole_ts = time.time() if answered else time.time() - PIHOLE_TTL + 60      # failed with nothing known: retry in 1 minute, not 5
+
+# Ciclo propio de Pi-hole: cada 30 s revisa si los datos vencieron (5 min si la última vez respondió, 1 min si falló) y los refresca.
+# Antes el refresco dependía de los escaneos (cada hora por defecto, o nunca en modo manual) y un fallo quedaba a la vista hasta guardar.
+# EN: Pi-hole's own loop: every 30 s it checks whether the data expired (5 min if the last time answered, 1 min if it failed) and refreshes it.
+#     The refresh used to depend on scans (hourly by default, or never in manual mode) and a failure stayed on screen until saving.
+PIHOLE_TICK = 30
+
+def _pihole_loop():
+    while True:
+        time.sleep(PIHOLE_TICK)
+        try:
+            if PIHOLE_PASS and time.time() - _pihole_ts > PIHOLE_TTL: refresh_pihole_cache()
+        except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
+            log.warning(f"Pi-hole refresh: {e}")
+
+# Estado de Pi-hole para el punto de la barra: configurado y si la última lectura funcionó (None = todavía sin lectura). El error solo para administradores.
+# EN: Pi-hole state for the bar dot: configured and whether the last read worked (None = no read yet). The error only for administrators.
+def pihole_state(admin=False) -> dict:
+    g = dict(_pihole_diag)
+    ok = (bool(g.get("login")) and not (g.get("errors") or {}).get("login")) if g.get("ts") else None
+    out = {"enabled": bool(PIHOLE_PASS), "ok": ok, "ts": g.get("ts")}
+    if admin and ok is False: out["error"] = str((g.get("errors") or {}).get("login") or "")[:200]
+    return out
 
 # Datos de una IP desde la caché; si tiene más de 5 minutos, la refresca en segundo plano sin bloquear.
 # EN: Data of an IP from the cache; if it is older than 5 minutes, it is refreshed in the background without blocking.
@@ -1522,9 +1548,10 @@ def _schedule_next_scan():
 # Al arrancar: carga la caché de Pi-hole y lanza el primer escaneo en segundo plano.
 # EN: On startup: load the Pi-hole cache and launch the first scan in the background.
 def start_auto_scan():
-    # Cargar cache de Pi-hole antes del primer escaneo
+    # Cargar cache de Pi-hole antes del primer escaneo, y después mantenerla al día. / EN: Load the Pi-hole cache before the first scan, then keep it fresh.
     if PIHOLE_PASS:
         threading.Thread(target=refresh_pihole_cache, daemon=True).start()
+    threading.Thread(target=_pihole_loop, daemon=True, name="net-pihole").start()
     # Con intervalo 0 (modo manual) no se escanea al arrancar: solo cuando el usuario lo pide.
     # EN: With interval 0 (manual mode) nothing is scanned at startup: only when the user asks.
     if _current_interval > 0:
@@ -1658,6 +1685,7 @@ class H(BaseHTTPRequestHandler):
                 "hosts":   out,
                 "scan":    _scan_status,
                 "network": NETWORK,
+                "pihole":  pihole_state(auth.check_permission(tok, "net", "admin")),
             })
         # Latencia de un equipo vigilado: puntos (reducidos a ~300) y resumen. Parámetros: ip y range (1d, 7d, 30d).
         # EN: Latency of a watched device: points (reduced to ~300) and a summary. Parameters: ip and range (1d, 7d, 30d).
@@ -1883,7 +1911,8 @@ class H(BaseHTTPRequestHandler):
                     cfg["pihole_hosts"] = body["hosts"]
                 cfg.pop("pihole_pins", None); cfg.pop("pihole_pin_exp", None); cfg.pop("pihole_pin_id", None)          # saving again = the administrator accepts the current certificates
                 save_config(cfg)
-            # Refrescar cache inmediatamente
+            # Refrescar cache inmediatamente; hasta la nueva lectura el punto queda «conectando». / EN: Refresh now; until the new read the dot shows "connecting".
+            _pihole_diag.clear()
             if PIHOLE_PASS:
                 threading.Thread(target=refresh_pihole_cache, daemon=True).start()
             self._json(200, {"ok": True})

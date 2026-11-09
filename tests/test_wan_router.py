@@ -168,7 +168,7 @@ class Config(unittest.TestCase):
         for bad in ({"type": "cisco"}, {"host": "-x"}, {"port": 0}, {"port": 70000}, {"every": 5}, {"every": 999},
                     {"interface": "a b"}, {"user": "a\nb"}, {"enabled": True}, {"password": "x" * 200}):
             with self.subTest(bad=bad), self.assertRaises(ValueError): m.validate({"router": bad}, base)
-        ok = m.validate({"router": {"type": "tplink", "host": "192.168.0.1", "port": 8080, "https": True, "password": "p", "enabled": True, "every": 60}}, base)["router"]
+        ok = m.validate({"router": {"type": "tplink", "host": "192.0.2.1", "port": 8080, "https": True, "password": "p", "enabled": True, "every": 60}}, base)["router"]
         self.assertEqual((ok["type"], ok["port"], ok["https"], ok["every"]), ("tplink", 8080, True, 60))
 
     def test_public_config_hides_the_password(self):

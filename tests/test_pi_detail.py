@@ -27,13 +27,13 @@ class SessionReaders(unittest.TestCase):
         p = Path(self.d, "utmp"); p.write_bytes(b""); self.assertEqual(auth._utmp_users(str(p)), [])
 
     def test_logind_sessions(self):      # Debian 13 / Raspberry Pi OS nuevo ya no llena utmp
-        self.write("42", "UID=1000\nUSER=gonzalo\nSTATE=active\nTYPE=tty\nCLASS=user\nTTY=pts/1\nREMOTE=1\nREMOTE_HOST=192.168.0.69\nREALTIME=1792526000000000\n")
-        self.write("c1", "USER=gonzalo\nCLASS=user\nSTATE=active\nTYPE=tty\nTTY=tty1\nREALTIME=1792520000000000\n")
+        self.write("42", "UID=1000\nUSER=ana\nSTATE=active\nTYPE=tty\nCLASS=user\nTTY=pts/1\nREMOTE=1\nREMOTE_HOST=192.0.2.69\nREALTIME=1792526000000000\n")
+        self.write("c1", "USER=ana\nCLASS=user\nSTATE=active\nTYPE=tty\nTTY=tty1\nREALTIME=1792520000000000\n")
         self.write("c2", "USER=gdm\nCLASS=greeter\nSTATE=active\n")
         self.write("c3", "USER=old\nCLASS=user\nSTATE=closing\n")
         self.write("42.ref", "x")
         r = auth._logind_users(self.d)
-        self.assertEqual(sorted((u["user"], u["tty"], u["host"]) for u in r), [("gonzalo", "pts/1", "192.168.0.69"), ("gonzalo", "tty1", "")])
+        self.assertEqual(sorted((u["user"], u["tty"], u["host"]) for u in r), [("ana", "pts/1", "192.0.2.69"), ("ana", "tty1", "")])
         self.assertEqual([u["since"] for u in r if u["tty"] == "pts/1"], [1792526000])
 
     def test_logind_missing_dir(self):

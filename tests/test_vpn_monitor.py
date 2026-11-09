@@ -105,12 +105,12 @@ class Ssh(unittest.TestCase):
     def test_sudo_option_prefixes_only_the_fixed_command(self):
         for typ, extra, want in (("openvpn", {"status_path": "/run/ovpn-status"}, "sudo -n cat /run/ovpn-status"),
                                  ("wireguard", {}, "sudo -n " + m.CMD_WG)):
-            cfg = m.validate({"type": typ, "name": "x", "host": "192.0.2.9", "ssh_user": "gonzalo", "use_sudo": True, **extra})
+            cfg = m.validate({"type": typ, "name": "x", "host": "192.0.2.9", "ssh_user": "ana", "use_sudo": True, **extra})
             self.assertTrue(cfg["use_sudo"])
             with mock.patch.object(m, "ssh_run", return_value="") as r:
                 m.collect(cfg)
             self.assertEqual(r.call_args[0][1], want)
-        cfg = m.validate({"type": "openvpn", "name": "x", "host": "192.0.2.9", "ssh_user": "gonzalo"})
+        cfg = m.validate({"type": "openvpn", "name": "x", "host": "192.0.2.9", "ssh_user": "ana"})
         self.assertFalse(cfg["use_sudo"])
     def test_missing_key_is_explained(self):
         with mock.patch.object(m, "SSH_KEY", Path(tempfile.mkdtemp(), "nokey")), self.assertRaises(RuntimeError) as e:

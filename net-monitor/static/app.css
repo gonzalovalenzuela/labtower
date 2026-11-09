@@ -279,6 +279,8 @@ body.view-sw #sw-side{display:block}
 .sw-btn.red{color:var(--red);border-color:var(--red)}.sw-btn:disabled{opacity:.5}
 .sw-sel{background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--r-sm);color:var(--text);font:12px var(--mono);padding:3px 6px}
 .sw-card{padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+/* Switch pausado: la tarjeta se atenúa (última lectura conocida). / EN: Paused switch: the card is dimmed (last known reading). */
+.sw-card.paused>*:not(.sw-head){opacity:.55}
 .sw-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .sw-name{font-size:15px}
 .sw-pill{font:600 11px var(--sans);padding:2px 9px;border-radius:99px;background:var(--surface2);border:1px solid var(--border);color:var(--text-mid)}
@@ -343,6 +345,8 @@ label.chk{flex-direction:row!important;align-items:center;gap:6px!important}
 .s10g{--spd:#a855f7}.s25g{--spd:#3b82f6}.s1g{--spd:#22c55e}.s100m{--spd:#f59e0b}.s10m{--spd:#ef4444}
 .sw-port .s.s10g,.sw-port .s.s25g,.sw-port .s.s1g,.sw-port .s.s100m,.sw-port .s.s10m{color:var(--spd);font-weight:800}
 .spd-pill{display:inline-block;padding:1px 8px;border-radius:10px;border:1px solid var(--spd,var(--border-b));color:var(--spd,var(--text-mid));font-size:11px;font-weight:700;white-space:nowrap}
+/* Puerto bajo su velocidad habitual: ámbar con flecha. / EN: Port below its usual speed: amber with an arrow. */
+.spd-pill.slow{--spd:var(--orange);background:var(--orange-dim)}.sw-port .s.slow{color:var(--orange)}
 .sw-leg-spd{margin-top:6px}
 .sw-leg-spd span:before{background:var(--spd);border-color:var(--spd);border-radius:50%}
 /* Charts (same block in every module / mismo bloque en cada módulo) */

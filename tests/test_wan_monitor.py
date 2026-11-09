@@ -70,9 +70,9 @@ class Validate(unittest.TestCase):
     def test_default_gateway_parser(self):
         tmp = Path(tempfile.mkdtemp(), "route")
         tmp.write_text("Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\n"
-                       "eth0\t00000000\t0100A8C0\t0003\t0\t0\t100\t00000000\n" "eth0\t0000A8C0\t00000000\t0001\t0\t0\t100\t00FFFFFF\n")
-        self.assertEqual(m.default_gateway(str(tmp)), "192.168.0.1")
-        tmp.write_text("Iface\tDestination\tGateway\tFlags\n" "eth0\t0000A8C0\t00000000\t0001\n"); self.assertIsNone(m.default_gateway(str(tmp)))
+                       "eth0\t00000000\t010200C0\t0003\t0\t0\t100\t00000000\n" "eth0\t000200C0\t00000000\t0001\t0\t0\t100\t00FFFFFF\n")
+        self.assertEqual(m.default_gateway(str(tmp)), "192.0.2.1")
+        tmp.write_text("Iface\tDestination\tGateway\tFlags\n" "eth0\t000200C0\t00000000\t0001\n"); self.assertIsNone(m.default_gateway(str(tmp)))
         self.assertIsNone(m.default_gateway("/nonexistent/route"))
 
 
@@ -91,12 +91,12 @@ class Probes(WithFakePing):
 
     def test_round_up_down_and_gateway(self):
         cfg = m.validate({"dns_name": "localhost"})
-        r = m.probe_round(cfg, "192.168.0.1")
-        self.assertTrue(r["up"]); self.assertEqual(len(r["targets"]), 3); self.assertEqual(r["gateway"]["host"], "192.168.0.1"); self.assertEqual(r["loss"], 0.0)
+        r = m.probe_round(cfg, "192.0.2.1")
+        self.assertTrue(r["up"]); self.assertEqual(len(r["targets"]), 3); self.assertEqual(r["gateway"]["host"], "192.0.2.1"); self.assertEqual(r["loss"], 0.0)
         self.assertEqual(r["rtt"], round((10 + 20.25 + 10) / 3, 2)); self.assertIsNotNone(r["dns"]); self.assertEqual(r["gw"], 10.0)
         os.environ["FAKE_PING_DOWN"] = "1.1.1.1,8.8.8.8,9.9.9.9"
-        r = m.probe_round(cfg, "192.168.0.1"); self.assertFalse(r["up"]); self.assertEqual((r["rtt"], r["loss"]), (None, 100.0)); self.assertTrue(r["gateway"]["ok"])
-        os.environ["FAKE_PING_DOWN"] = "*"; r = m.probe_round(cfg, "192.168.0.1"); self.assertFalse(r["gateway"]["ok"])
+        r = m.probe_round(cfg, "192.0.2.1"); self.assertFalse(r["up"]); self.assertEqual((r["rtt"], r["loss"]), (None, 100.0)); self.assertTrue(r["gateway"]["ok"])
+        os.environ["FAKE_PING_DOWN"] = "*"; r = m.probe_round(cfg, "192.0.2.1"); self.assertFalse(r["gateway"]["ok"])
         os.environ["FAKE_PING_DOWN"] = "1.1.1.1"; r = m.probe_round(cfg, None); self.assertTrue(r["up"]); self.assertIsNone(r["gateway"]); self.assertEqual(r["loss"], round(100 / 3, 2))
 
 
@@ -279,9 +279,9 @@ class Http(WithFakePing):
         self.assertEqual(c("POST", "/api/wan/speedtest", {}, token=self.ro)[0], 403); self.assertEqual(c("POST", "/api/wan/speedtest", {})[0], 401)
 
     def test_status_payload(self):
-        r = m.probe_round(m.validate({"dns_name": ""}), "192.168.0.1"); m.S.last, m.S.gw = r, "192.168.0.1"
+        r = m.probe_round(m.validate({"dns_name": ""}), "192.0.2.1"); m.S.last, m.S.gw = r, "192.0.2.1"
         s, j = self.srv.call("GET", "/api/wan", token=self.ro)
-        self.assertEqual(s, 200); self.assertTrue(j["snap"]["up"]); self.assertEqual(j["snap"]["gateway_ip"], "192.168.0.1"); self.assertIn("config", j)
+        self.assertEqual(s, 200); self.assertTrue(j["snap"]["up"]); self.assertEqual(j["snap"]["gateway_ip"], "192.0.2.1"); self.assertIn("config", j)
         self.assertIn("uptime", j); self.assertIn("speed", j); self.assertIn("outages", j); self.assertFalse(j["speed_running"])
         s, j = self.srv.call("GET", "/api/wan?hist=0", token=self.ro); self.assertEqual(j["history"], [])
 

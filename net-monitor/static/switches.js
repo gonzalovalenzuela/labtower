@@ -25,7 +25,7 @@ Object.assign(LANG.en, {
   swHistPktOnly: 'This model does not report bytes, only packets.', swPort: 'Port', swState: 'State', swSpeed: 'Speed', swRxPps: 'Rx pkt/s', swTxPps: 'Tx pkt/s', swMbps: 'Mbit/s rx / tx', swErrors: 'Errors', swStp: 'STP', swConn: 'Connected to',
   swSideTitle: 'Switches', swAllSwitches: 'All switches', swNoneSide: 'No switches yet', swStUp: 'Up', swStDown: 'Down', swStOff: 'Disabled', swStLoop: 'Loop', swStUplink: 'Uplink', swStWarn: 'Errors',
   swShowAll: n => 'Show all ' + n + ' ports', swShowActive: 'Show only active ports',
-  swOnline: 'Online', swOffline: 'Unreachable', swWaiting: 'Waiting for the first reading…', swTempHigh: 'High temperature', swTempCrit: 'Critical temperature',
+  swOnline: 'Online', swOffline: 'Unreachable', swSlow: u => 'Below its usual speed (' + u + '): check the cable or the port', swPaused: 'Paused', swActive: 'Monitor this switch (untick to pause it without deleting it)', swWaiting: 'Waiting for the first reading…', swTempHigh: 'High temperature', swTempCrit: 'Critical temperature',
   swNoTemp: 'This model does not report temperature, loop per port or bytes; only packets.', swNoLoop: 'No per-port loop flag on this model.',
   swTopo: 'Topology', swTopoHint: 'Worked out from the MAC tables: a port that has another switch\'s MAC behind it is a link between them.', swTopoNone: 'No links between switches detected yet.',
   swTempChart: 'Temperature', swTraffic: 'Traffic', swPackets: 'Packets/s', swErrChart: 'Errors (counter)', swNoData: 'No data in this range yet.',
@@ -59,7 +59,7 @@ Object.assign(LANG.es, {
   swHistPktOnly: 'Este modelo no informa bytes, solo paquetes.', swPort: 'Puerto', swState: 'Estado', swSpeed: 'Velocidad', swRxPps: 'Rx pkt/s', swTxPps: 'Tx pkt/s', swMbps: 'Mbit/s rx / tx', swErrors: 'Errores', swStp: 'STP', swConn: 'Conectado a',
   swSideTitle: 'Switches', swAllSwitches: 'Todos los switches', swNoneSide: 'Aún no hay switches', swStUp: 'Arriba', swStDown: 'Abajo', swStOff: 'Deshabilitado', swStLoop: 'Loop', swStUplink: 'Uplink', swStWarn: 'Errores',
   swShowAll: n => 'Mostrar los ' + n + ' puertos', swShowActive: 'Mostrar solo puertos activos',
-  swOnline: 'En línea', swOffline: 'Sin conexión', swWaiting: 'Esperando la primera lectura…', swTempHigh: 'Temperatura alta', swTempCrit: 'Temperatura crítica',
+  swOnline: 'En línea', swOffline: 'Sin conexión', swSlow: u => 'Bajo su velocidad habitual (' + u + '): revisa el cable o el puerto', swPaused: 'Pausado', swActive: 'Vigilar este switch (desmarca para pausarlo sin borrarlo)', swWaiting: 'Esperando la primera lectura…', swTempHigh: 'Temperatura alta', swTempCrit: 'Temperatura crítica',
   swNoTemp: 'Este modelo no informa temperatura, loop por puerto ni bytes; solo paquetes.', swNoLoop: 'Este modelo no informa loop por puerto.',
   swTopo: 'Topología', swTopoHint: 'Se deduce de las tablas MAC: un puerto que tiene detrás la MAC de otro switch es un enlace entre ambos.', swTopoNone: 'Aún no se detectan enlaces entre switches.',
   swTempChart: 'Temperatura', swTraffic: 'Tráfico', swPackets: 'Paquetes/s', swErrChart: 'Errores (contador)', swNoData: 'Aún no hay datos en este rango.',
@@ -211,10 +211,10 @@ function tile(s, p) {
   else if (p.neighbors && p.neighbors[0]) sub = p.neighbors[0].name || p.neighbors[0].ip || '';
   else if (p.link_up && (p.rx_bps != null || p.rx_pps != null)) sub = p.rx_bps != null ? mbps((p.rx_bps || 0) + (p.tx_bps || 0)) + ' Mb/s' : pps((p.rx_pps || 0) + (p.tx_pps || 0)) + ' pkt/s';
   const num = s.driver === 'zx' && p.port > 8 ? p.port + ' SFP+' : p.port;
-  const tip = [t('swPortTitle', s.name, p.port), p.link_up ? spdLong(p.speed_mbps) : t('swStDown'), p.label, p.link_to ? '↔ ' + p.link_to : '',
+  const tip = [t('swPortTitle', s.name, p.port), p.link_up ? spdLong(p.speed_mbps) : t('swStDown'), p.slow ? t('swSlow', spdLong(p.usual_mbps)) : '', p.label, p.link_to ? '↔ ' + p.link_to : '',
     p.rx_pps != null ? 'rx ' + pps(p.rx_pps) + ' / tx ' + pps(p.tx_pps) + ' pkt/s' : '', (p.rx_err || p.tx_err) ? t('swErrors') + ': ' + (p.rx_err || 0) + ' / ' + (p.tx_err || 0) : ''].filter(Boolean).join(' · ');
   const on = SW.sel && SW.sel.sid === s.id && SW.sel.port === p.port;
-  return `<button type="button" class="sw-port sw-p-${String(p.flag).replace(/[^a-z0-9_-]/g, '')}${on ? ' sel' : ''}" data-act="port" data-id="${esc(s.id)}" data-port="${p.port}" title="${esc(tip)}"><span class="n">${esc(num)}</span><span class="s ${p.link_up ? SPD_CLS(p.speed_mbps) : ''}">${p.link_up ? esc(spd(p.speed_mbps)) : '—'}</span><span class="x">${esc(sub)}</span></button>`;
+  return `<button type="button" class="sw-port sw-p-${String(p.flag).replace(/[^a-z0-9_-]/g, '')}${on ? ' sel' : ''}" data-act="port" data-id="${esc(s.id)}" data-port="${p.port}" title="${esc(tip)}"><span class="n">${esc(num)}</span><span class="s ${p.link_up ? SPD_CLS(p.speed_mbps) : ''}${p.slow ? ' slow' : ''}">${p.link_up ? esc(spd(p.speed_mbps)) + (p.slow ? ' ↓' : '') : '—'}</span><span class="x">${esc(sub)}</span></button>`;
 }
 
 function stPill(p) {
@@ -241,7 +241,7 @@ function errCell(p) {
 
 function portRow(s, p) {
   const on = SW.sel && SW.sel.sid === s.id && SW.sel.port === p.port;
-  return `<tr class="sw-row${on ? ' sel' : ''}" data-act="port" data-id="${esc(s.id)}" data-port="${p.port}"><td>${esc(p.port)}</td><td>${stPill(p)}</td><td>${p.link_up ? `<span class="spd-pill ${SPD_CLS(p.speed_mbps)}">${esc(spdLong(p.speed_mbps))}</span>` : '<span class="dim">—</span>'}</td>` +
+  return `<tr class="sw-row${on ? ' sel' : ''}" data-act="port" data-id="${esc(s.id)}" data-port="${p.port}"><td>${esc(p.port)}</td><td>${stPill(p)}</td><td>${p.link_up ? `<span class="spd-pill ${SPD_CLS(p.speed_mbps)}${p.slow ? ' slow' : ''}"${p.slow ? ` title="${esc(t('swSlow', spdLong(p.usual_mbps)))}"` : ''}>${esc(spdLong(p.speed_mbps))}${p.slow ? ' ↓' : ''}</span>` : '<span class="dim">—</span>'}</td>` +
     `<td>${pps(p.rx_pps)}</td><td>${pps(p.tx_pps)}</td>` + (s.has_bytes ? `<td>${p.rx_bps != null ? (p.bytes_est ? '≈ ' : '') + mbps(p.rx_bps) + ' / ' + mbps(p.tx_bps) : '—'}</td><td>${p.rx_bytes != null ? esc((p.bytes_est ? '≈ ' : '') + bytesFmt(p.rx_bytes) + ' / ' + bytesFmt(p.tx_bytes)) : '—'}</td>` : '') +
     `<td>${errCell(p)}</td><td>${esc(p.stp_state || '—')}</td><td class="sw-conn">${connCell(p)}</td></tr>`;
 }
@@ -264,7 +264,7 @@ function portDetail(s, p) {
 function card(s) {
   const admin = canAdmin(), sy = s.system || {};
   const tl = s.temp_level, tPill = sy.temperature_c != null ? `<span class="sw-pill ${tl === 'crit' ? 'red' : tl === 'warn' ? 'amber' : 'green'}">${Math.round(sy.temperature_c)} °C${tl === 'warn' ? ' · ' + esc(t('swTempHigh')) : tl === 'crit' ? ' · ' + esc(t('swTempCrit')) : ''}</span>` : '';
-  const state = !s.updated ? `<span class="sw-pill">${esc(t('swWaiting'))}</span>` : s.online ? `<span class="sw-pill green">${esc(t('swOnline'))}</span>` : `<span class="sw-pill red">${esc(t('swOffline'))}</span>`;
+  const state = s.paused ? `<span class="sw-pill">${esc(t('swPaused'))}</span>` : !s.updated ? `<span class="sw-pill">${esc(t('swWaiting'))}</span>` : s.online ? `<span class="sw-pill green">${esc(t('swOnline'))}</span>` : `<span class="sw-pill red">${esc(t('swOffline'))}</span>`;
   const sub = [sy.model, s.host, sy.fw ? 'fw ' + sy.fw : ''].filter(Boolean).join(' · ');
   let grid = '', prev = 0;
   s.ports.forEach(p => { if (s.layout !== 'alt' && s.driver === 'zx' && p.port > 8 && prev <= 8) grid += '<span class="sw-gap"></span>'; prev = p.port; grid += tile(s, p); });
@@ -272,10 +272,10 @@ function card(s) {
   const rows = s.ports.filter(p => all || p.flag !== 'down' || p.label);
   const selP = SW.sel && SW.sel.sid === s.id ? s.ports.find(p => p.port === SW.sel.port) : null;
   const heads = ['swPort', 'swState', 'swSpeed', 'swRxPps', 'swTxPps'].concat(s.has_bytes ? ['swMbps', 'swTotal'] : [], ['swErrors', 'swStp', 'swConn']);
-  const errs = (s.error && !s.online ? `<div class="sw-err">${esc(s.error)}</div>` : '') + (s.bytes_est ? `<div class="sw-note">${esc(t('swEstNote'))}</div>` : '');
+  const errs = (s.error && !s.online && !s.paused ? `<div class="sw-err">${esc(s.error)}</div>` : '') + (s.bytes_est ? `<div class="sw-note">${esc(t('swEstNote'))}</div>` : '');
   const hasT = sy.temperature_c != null;
   const alt = s.layout === 'alt';
-  return `<div class="card sw-card"><div class="sw-head"><b class="sw-name">${esc(s.name)}</b><span class="dim mono">${esc(sub)}</span>${state}${tPill}<span class="grow"></span>` +
+  return `<div class="card sw-card${s.paused ? ' paused' : ''}"><div class="sw-head"><b class="sw-name">${esc(s.name)}</b><span class="dim mono">${esc(sub)}</span>${state}${tPill}<span class="grow"></span>` +
     `<span class="dim mono sw-scr">${esc(s.driver)}${s.scrape != null ? ' · ' + s.scrape + ' s' : ''}</span>${admin ? `<button type="button" class="sw-btn" data-act="edit" data-id="${esc(s.id)}">${esc(t('swEdit'))}</button>` : ''}</div>${errs}` +
     (s.ports.length ? `<div class="sw-grid-ports${alt ? ' alt' : ''}">${grid}</div><div class="sw-leg"><span class="up">${esc(t('swLegUp'))}</span><span class="down">${esc(t('swLegDown'))}</span><span class="warn">${esc(t('swLegWarn'))}</span><span class="uplink">${esc(t('swLegUplink'))}</span><span class="off">${esc(t('swLegOff'))}</span>${s.driver !== 'hc' ? `<span class="loop">${esc(t('swLegLoop'))}</span>` : ''}</div><div class="sw-leg sw-leg-spd"><span class="s10g">10 Gb/s</span><span class="s25g">2.5 Gb/s</span><span class="s1g">1 Gb/s</span><span class="s100m">100 Mb/s</span><span class="s10m">10 Mb/s</span></div>` +
       `<div class="sw-tablewrap"><table class="sw-table"><thead><tr>${heads.map(h => `<th>${esc(t(h))}</th>`).join('')}</tr></thead><tbody>${rows.map(p => portRow(s, p)).join('')}</tbody></table></div>` +
@@ -298,7 +298,7 @@ function topoSvg(d) {
     g += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="var(--teal)" stroke-width="2"/><text x="${(a[0] + b[0]) / 2}" y="${(a[1] + b[1]) / 2 - 5}" text-anchor="middle" class="sw-ax">p${esc(e.a_port)} ↔ ${e.b_port != null ? 'p' + esc(e.b_port) : '?'}</text>`;
   });
   sw.forEach(s => {
-    const p = pos[s.name], c = s.online ? 'var(--green)' : 'var(--red)', tp = s.system && s.system.temperature_c != null ? ' · ' + Math.round(s.system.temperature_c) + '°' : '';
+    const p = pos[s.name], c = s.paused ? 'var(--text-dim)' : s.online ? 'var(--green)' : 'var(--red)', tp = s.system && s.system.temperature_c != null ? ' · ' + Math.round(s.system.temperature_c) + '°' : '';
     g += `<g class="sw-node-g" data-name="${esc(s.name)}"><rect x="${p[0] - 62}" y="${p[1] - 15}" width="124" height="30" rx="7" fill="var(--surface2)" stroke="${c}"/><text x="${p[0]}" y="${p[1] + 4}" text-anchor="middle" class="sw-node">${esc(s.name)}${esc(tp)}</text></g>`;
   });
   return `<svg viewBox="0 0 ${W} ${H}" class="sw-topo" data-w="${W}" data-h="${H}">${g}</svg>`;
@@ -357,19 +357,20 @@ function sbSwitches(S) {
   const box = $('sw-side-list'); if (!box) return;
   const lb = document.querySelector('#sw-side .sb-lbl'); if (lb) lb.textContent = t('swSideTitle');      // switches.js loads after app.js translated the page
   if (SW.only && !S.some(s => s.id === SW.only)) SW.only = '';
-  const dot = s => !s.updated ? 'var(--text-dim)' : s.online ? 'var(--green)' : 'var(--red)';
+  const dot = s => s.paused || !s.updated ? 'var(--text-dim)' : s.online ? 'var(--green)' : 'var(--red)';
   const row = (id, color, name, cnt) => `<div class="os-filter${SW.only === id ? ' active' : ''}" data-sw-only="${esc(id)}" role="button" tabindex="0"><span class="os-dot" style="background:${color}"></span><span class="os-filter-name">${esc(name)}</span><span class="os-filter-count">${esc(cnt)}</span></div>`;
-  box.innerHTML = S.length ? row('', 'var(--teal)', t('swAllSwitches'), S.length) + S.map(s => row(s.id, dot(s), s.name, s.online ? s.ports_up + '/' + s.ports_total : '—')).join('') : '<div class="dim" style="padding:4px 10px;font-size:11.5px">' + esc(t('swNoneSide')) + '</div>';
+  box.innerHTML = S.length ? row('', 'var(--teal)', t('swAllSwitches'), S.length) + S.map(s => row(s.id, dot(s), s.name, s.online && !s.paused ? s.ports_up + '/' + s.ports_total : '—')).join('') : '<div class="dim" style="padding:4px 10px;font-size:11.5px">' + esc(t('swNoneSide')) + '</div>';
 }
 function render() {
   const root = $('view-switches'); if (!root || !SW.data) return;
-  const d = SW.data, admin = canAdmin(), S = d.switches;
+  // Las cifras cuentan solo los switches activos; los pausados no se leen. / EN: The figures count active switches only; paused ones are not read.
+  const d = SW.data, admin = canAdmin(), S = d.switches, A = S.filter(s => !s.paused);
   sbSwitches(S);
-  const upSw = S.filter(s => s.online).length;
-  const pUp = S.reduce((a, s) => a + s.ports_up, 0), pTot = S.reduce((a, s) => a + s.ports_total, 0);
-  const temps = S.filter(s => s.system && s.system.temperature_c != null).sort((a, b) => b.system.temperature_c - a.system.temperature_c);
-  const errPorts = S.reduce((a, s) => a + s.ports.filter(p => p.flag === 'warn').length, 0);
-  const macs = S.reduce((a, s) => a + s.macs_total, 0);
+  const upSw = A.filter(s => s.online).length;
+  const pUp = A.reduce((a, s) => a + s.ports_up, 0), pTot = A.reduce((a, s) => a + s.ports_total, 0);
+  const temps = A.filter(s => s.system && s.system.temperature_c != null).sort((a, b) => b.system.temperature_c - a.system.temperature_c);
+  const errPorts = A.reduce((a, s) => a + s.ports.filter(p => p.flag === 'warn').length, 0);
+  const macs = A.reduce((a, s) => a + s.macs_total, 0);
   const tmax = temps[0], tcol = tmax ? (tmax.temp_level === 'crit' ? 'var(--red)' : tmax.temp_level === 'warn' ? 'var(--amber)' : '') : '';
   const kpi = (ico, val, lbl, col) => `<div class="stat-card"><div class="stat-ico ${ico}"><svg viewBox="0 0 24 24"><rect x="2" y="9" width="20" height="8" rx="2"/><line x1="6" y1="13" x2="6.01" y2="13"/><line x1="10" y1="13" x2="10.01" y2="13"/><line x1="14" y1="13" x2="14.01" y2="13"/></svg></div><div><div class="stat-val"${col ? ` style="color:${col}"` : ''}>${val}</div><div class="stat-lbl">${esc(lbl)}</div></div></div>`;
   const polls = POLLS.map(v => `<option value="${v}"${v === d.poll_seconds ? ' selected' : ''}>${v >= 60 ? v / 60 + ' ' + t('swMin') : v + ' ' + t('swSec')}</option>`).join('') + (POLLS.includes(d.poll_seconds) ? '' : `<option value="${d.poll_seconds}" selected>${d.poll_seconds} ${t('swSec')}</option>`);
@@ -380,7 +381,7 @@ function render() {
   if (SW.sub === 'hist') { root.innerHTML = bar + subbar + histHtml(); updateStamp(); return; }
   if (SW.sub === 'mac') { root.innerHTML = bar + subbar + macHtml(); updateStamp(); return; }
   root.innerHTML = bar + subbar +
-    (S.length ? `<div class="stats-row">${kpi('teal', upSw + '/' + S.length, t('swKpiOnline'))}${kpi('green', pUp + '<span class="dim"> / ' + pTot + '</span>', t('swKpiPorts'))}${kpi('orange', tmax ? Math.round(tmax.system.temperature_c) + ' °C' : '—', t('swKpiTemp') + (tmax ? ' (' + tmax.name + ')' : ''), tcol)}${kpi('red', errPorts, t('swKpiErr'), errPorts ? 'var(--amber)' : '')}${kpi('blue', macs, t('swKpiMacs'))}</div>` : '') +
+    (S.length ? `<div class="stats-row">${kpi('teal', upSw + '/' + A.length, t('swKpiOnline'))}${kpi('green', pUp + '<span class="dim"> / ' + pTot + '</span>', t('swKpiPorts'))}${kpi('orange', tmax ? Math.round(tmax.system.temperature_c) + ' °C' : '—', t('swKpiTemp') + (tmax ? ' (' + tmax.name + ')' : ''), tcol)}${kpi('red', errPorts, t('swKpiErr'), errPorts ? 'var(--amber)' : '')}${kpi('blue', macs, t('swKpiMacs'))}</div>` : '') +
     empty + S.filter(x => !SW.only || x.id === SW.only).map(card).join('') + topology(d) + (S.length ? `<div class="sw-note">${esc(t('swReadOnlyNote'))}</div>` : '');
   updateStamp();
   drawCharts();
@@ -397,13 +398,14 @@ async function openModal(id) {
   m.innerHTML = `<div class="sw-dlg" role="dialog"><h3>${esc(t(cur ? 'swMdlEdit' : 'swMdlAdd'))}</h3>` +
     `<label>${esc(t('swName'))}<input id="m-name" maxlength="32" value="${esc(c.name)}"></label>` +
     `<label>${esc(t('swDriver'))}<select id="m-driver"><option value="zx">${esc(t('swDrvZx'))}</option><option value="hc">${esc(t('swDrvHc'))}</option><option value="snmp">${esc(t('swDrvSnmp'))}</option></select></label>` +
-    `<label>${esc(t('swHost'))}<input id="m-host" value="${esc(c.host)}" placeholder="192.168.0.x"></label>` +
+    `<label>${esc(t('swHost'))}<input id="m-host" value="${esc(c.host)}" placeholder="192.0.2.x"></label>` +
     `<div class="m-web"><label>${esc(t('swUser'))}<input id="m-user" maxlength="64" value="${esc(c.user || 'admin')}" autocomplete="off"></label>` +
     `<label>${esc(t('swPass'))}<input id="m-pass" type="password" autocomplete="new-password" placeholder="${cur && c.has_password ? esc(t('swKeep')) : ''}"></label>` +
     `<label class="chk m-hc"><input type="checkbox" id="m-pag"${c.mac_paginate ? ' checked' : ''}> ${esc(t('swMacPag'))}</label></div>` +
     `<label class="m-web m-est">${esc(t('swEst'))}<input id="m-est" type="number" min="0" max="9000" value="${esc(c.est_bytes != null ? c.est_bytes : 800)}"></label>` +
     `<div class="m-snmp"><label>${esc(t('swCommunity'))}<input id="m-comm" type="password" autocomplete="new-password" placeholder="${cur && c.has_community ? esc(t('swKeep')) : ''}"></label>` +
     `<label>${esc(t('swSnmpPort'))}<input id="m-sport" type="number" min="1" max="65535" value="${esc(c.port || 161)}"></label></div>` +
+    `<label class="chk"><input type="checkbox" id="m-on"${c.enabled === false ? '' : ' checked'}> ${esc(t('swActive'))}</label>` +
     `<label>${esc(t('swLayout'))}<select id="m-layout"><option value="auto">${esc(t('swLayAuto'))}</option><option value="row">${esc(t('swLayRow'))}</option><option value="alt">${esc(t('swLayAlt'))}</option></select></label>` +
     `<div id="m-res" class="m-res"></div><div class="m-btns">${cur ? `<button type="button" class="sw-btn red" data-act="mdel" data-id="${esc(c.id)}">${esc(t('swDelete'))}</button>` : ''}<span class="grow"></span>` +
     `<button type="button" class="sw-btn" data-act="mcancel">${esc(t('swCancel'))}</button><button type="button" class="sw-btn" data-act="mtest" data-id="${esc(c.id || '')}">${esc(t('swTest'))}</button><button type="button" class="sw-btn teal" data-act="msave" data-id="${esc(c.id || '')}">${esc(t('swSave'))}</button></div></div>`;
@@ -415,7 +417,7 @@ async function openModal(id) {
   $('m-name').focus();
 }
 function formBody(id) {
-  const b = { name: $('m-name').value.trim(), driver: $('m-driver').value, host: $('m-host').value.trim(), layout: $('m-layout').value };
+  const b = { name: $('m-name').value.trim(), driver: $('m-driver').value, host: $('m-host').value.trim(), layout: $('m-layout').value, enabled: $('m-on').checked };
   if (id) b.id = id;
   if (b.driver === 'snmp') { b.community = $('m-comm').value; b.port = Number($('m-sport').value) || 161; }
   else { b.user = $('m-user').value.trim() || 'admin'; b.password = $('m-pass').value; if (b.driver === 'hc') b.mac_paginate = $('m-pag').checked; b.est_bytes = Number($('m-est').value); }
