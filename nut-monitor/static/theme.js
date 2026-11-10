@@ -114,18 +114,34 @@
     function inner(t){for(var n=t;n&&n.nodeType===1&&n!==document.body;n=n.parentNode)if(n.scrollTop>0)return true;return false}
     // Arriba del todo (2 px de margen por el rebote) y no desde el borde superior, que abre el Centro de Notificaciones.
     // EN: At the very top (2 px margin for the bounce) and not from the top edge, which opens Notification Center.
-    document.addEventListener('touchstart',function(e){var t=e.touches[0];y0=(window.scrollY<=2&&e.touches.length===1&&t.clientY>30&&!inner(e.target))?t.clientY:null;dy=0},{passive:true});
+    document.addEventListener('touchstart',function(e){var t=e.touches[0];y0=(!busy&&window.scrollY<=2&&e.touches.length===1&&t.clientY>30&&!inner(e.target))?t.clientY:null;dy=0},{passive:true});
     document.addEventListener('touchmove',function(e){
       if(y0===null)return;dy=e.touches[0].clientY-y0;if(dy<=0){hide();return}
       var k=Math.min(dy,MAX),i=ind();i.style.opacity=String(Math.min(1,k/GO));i.style.transform='translate(-50%,'+k+'px)';
       i.firstChild.style.transform='rotate('+(k*4)+'deg)';i.classList.toggle('go',dy>=GO);
     },{passive:true});
+    // Recarga a prueba de iOS: instalada, WebKit a veces ignora location.reload() si llega en el mismo toque o mientras la página
+    // todavía rebota, y el ícono quedaba girando. Se recarga al terminar el rebote; si a los 4 s la página sigue aquí se reintenta con
+    // location.replace y, si tampoco, a los 10 s se esconde el ícono para poder deslizar de nuevo.
+    // EN: iOS-proof reload: when installed, WebKit sometimes ignores location.reload() if it comes in the same touch or while the page is
+    // still bouncing, and the icon kept spinning. It reloads once the bounce ends; if the page is still here after 4 s it retries with
+    // location.replace and, if that fails too, the icon is hidden after 10 s so you can pull again.
+    var busy=false,tries=[];
+    function stop(){busy=false;tries.forEach(clearTimeout);tries=[];if(el)el.classList.remove('spin');hide()}
+    function reload(){
+      busy=true;ind().classList.add('spin');
+      var t0=Date.now();
+      (function go(){if(window.scrollY<0&&Date.now()-t0<800){requestAnimationFrame(go);return}location.reload()})();
+      tries=[setTimeout(function(){location.replace(location.href)},4000),setTimeout(stop,10000)];
+    }
     function end(){
-      if(y0!==null&&dy>=GO){ind().classList.add('spin');location.reload()}else hide();
+      if(y0!==null&&dy>=GO&&!busy)setTimeout(reload,0);else if(!busy)hide();
       y0=null;dy=0;
     }
     // iOS a veces cancela el toque en vez de terminarlo; cuenta igual. / EN: iOS sometimes cancels the touch instead of ending it; it counts the same.
     document.addEventListener('touchend',end,{passive:true});document.addEventListener('touchcancel',end,{passive:true});
+    // Página restaurada desde la caché de iOS con el ícono aún girando. / EN: Page restored from the iOS cache with the icon still spinning.
+    window.addEventListener('pageshow',function(e){if(e.persisted)stop()});
   }
 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){splash();pull()});else{splash();pull()}

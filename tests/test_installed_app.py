@@ -41,6 +41,17 @@ class Shell(unittest.TestCase):
             self.assertIn(k, THEME, k)
         self.assertIn(".lt-ptr{position:fixed;", (ROOT / "assets/theme/theme.css").read_text(encoding="utf-8"))
 
+    def test_pull_to_refresh_never_stays_stuck(self):
+        # Instalada en iPhone, WebKit a veces ignora reload() en el mismo toque y el ícono quedaba girando.
+        # EN: Installed on iPhone, WebKit sometimes ignores reload() in the same touch and the icon kept spinning.
+        for k in ("if(y0!==null&&dy>=GO&&!busy)setTimeout(reload,0);",                       # outside the touch
+                  "if(window.scrollY<0&&Date.now()-t0<800){requestAnimationFrame(go);return}",   # after the bounce
+                  "setTimeout(function(){location.replace(location.href)},4000)",                # second try
+                  "setTimeout(stop,10000)",                                                      # never spins forever
+                  "window.addEventListener('pageshow',function(e){if(e.persisted)stop()});",
+                  "y0=(!busy&&window.scrollY<=2"):
+            self.assertIn(k, THEME, k)
+
     def test_service_worker_only_over_https(self):
         self.assertIn("if('serviceWorker' in navigator&&location.protocol==='https:')", THEME)
         self.assertIn("navigator.serviceWorker.register('/sw.js',{scope:'/'})", THEME)
