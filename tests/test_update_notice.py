@@ -34,7 +34,7 @@ class Update(unittest.TestCase):
         auth.UPDATE_URL = f"http://127.0.0.1:{cls.gh.server_address[1]}/x"
     @classmethod
     def tearDownClass(cls):
-        cls.gh.shutdown(); auth.UPDATE_URL, auth.UPDATE_FILE = cls.saved
+        cls.gh.shutdown(); cls.gh.server_close(); auth.UPDATE_URL, auth.UPDATE_FILE = cls.saved
     def setUp(self):
         d = tempfile.mkdtemp(); auth.UPDATE_FILE = auth.Path(d) / "update.json"
         Gh.status = 200; Gh.hits = 0

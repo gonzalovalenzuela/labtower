@@ -86,7 +86,7 @@ class PublicIp(unittest.TestCase):
             w.auth.record_event = rec; w.fetch_public_ip, w.STATE_FILE, w.S.ip, w.S.ip_changed, w.S.ip_prev = old
 
 class Front(unittest.TestCase):
-    def read(self, p): return open(p, encoding="utf-8").read()
+    def read(self, p): return Path(p).read_text(encoding="utf-8")
     def test_switch_list_in_sidebar(self):
         h, j, c = self.read("net-monitor/static/index.html"), self.read("net-monitor/static/switches.js"), self.read("net-monitor/static/app.css")
         self.assertIn('id="sw-side-list"', h); self.assertEqual(h.count("sb-hosts"), 2)

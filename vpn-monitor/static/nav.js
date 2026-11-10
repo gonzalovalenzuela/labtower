@@ -127,14 +127,43 @@
     return out.join(' · ');
   }
   function loadHealth() {
-    try { var c = JSON.parse(sessionStorage.getItem('lt-nav-health') || 'null'); if (c && Date.now() - c.t < 45000) { health = c.m; paint(); return; } } catch (e) {}
+    try { var c = JSON.parse(sessionStorage.getItem('lt-nav-health') || 'null'); if (c && Date.now() - c.t < 45000) { health = c.m; hAt = c.t; paint(); return; } } catch (e) {}
     if (!window.fetch) return;
+    hAt = Date.now();
     fetch('/admin/api/health', {cache: 'no-store', signal: window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined})
       .then(function (r) { return r.json(); })
       .then(function (d) {
         health = d && d.modules || null; paint();
         try { sessionStorage.setItem('lt-nav-health', JSON.stringify({t: Date.now(), m: health})); } catch (e) {}
       }).catch(function () {});
+  }
+
+  // Aviso al día con la página: cada vez que el módulo rearma su contenido (sus propias lecturas) y al volver a la pestaña, el estado se
+  // vuelve a pedir si tiene más de 15 s. Antes solo se pedía cada 60 s y Safari detiene ese temporizador en segundo plano: el aviso seguía
+  // aunque la página ya mostraba el problema resuelto.
+  // EN: Notice in step with the page: whenever the module rebuilds its content (its own readings) and when the tab comes back, the status
+  // is fetched again if it is older than 15 s. It used to be fetched only every 60 s and Safari stops that timer in the background: the
+  // notice stayed although the page already showed the problem solved.
+  var hAt = 0, hWait = null;
+  function healthSoon() {
+    if (!st || Date.now() - hAt < 15000) return;
+    try { sessionStorage.removeItem('lt-nav-health'); } catch (e) {}
+    loadHealth();
+  }
+  function healthSync() {
+    if (window.MutationObserver) new MutationObserver(function (recs) {
+      for (var i = 0; i < recs.length; i++) {
+        var r = recs[i];
+        if (r.target.closest && r.target.closest('#gwarn, .gbar')) continue;      // own changes / cambios propios
+        if (!r.addedNodes.length && !r.removedNodes.length) continue;
+        // Una sola espera pendiente: si se reiniciara, una página que redibuja cada segundo nunca llegaría a pedirlo.
+        // EN: One pending wait only: if it were restarted, a page that redraws every second would never fetch it.
+        if (!hWait) hWait = setTimeout(function () { hWait = null; healthSoon(); }, 1000);
+        return;
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) healthSoon(); });
+    window.addEventListener('pageshow', function (e) { if (e.persisted) healthSoon(); });
   }
 
   // ── Estructura (se crea una vez) / structure (created once) ──
@@ -400,7 +429,7 @@
     if (m === 'bar') { fill(); } else { toggle(false); classic(); }
     if (m === 'bar') unclassic();
     paint(); loadHealth();
-    if (!timer) timer = setInterval(function () { try { sessionStorage.removeItem('lt-nav-health'); } catch (e) {} loadHealth(); }, 60000);
+    if (!timer) { timer = setInterval(function () { try { sessionStorage.removeItem('lt-nav-health'); } catch (e) {} loadHealth(); }, 60000); healthSync(); }
   }
 
   // Mantener la vista cuando el contenido cambia: los módulos rearman su contenido en cada lectura y la página saltaba.

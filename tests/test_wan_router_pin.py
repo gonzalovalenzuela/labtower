@@ -45,7 +45,7 @@ class Pinning(unittest.TestCase):
         threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
         cls.base = f"https://127.0.0.1:{cls.srv.server_address[1]}"
     @classmethod
-    def tearDownClass(cls): cls.srv.shutdown(); shutil.rmtree(cls.dir, ignore_errors=True)
+    def tearDownClass(cls): cls.srv.shutdown(); cls.srv.server_close(); shutil.rmtree(cls.dir, ignore_errors=True)
     def setUp(self): self.hits.clear()
 
     def test_first_connection_learns(self):

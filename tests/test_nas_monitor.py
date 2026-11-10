@@ -32,7 +32,9 @@ FAKE = textwrap.dedent('''\
                                 "conf_mode": oct(os.stat(os.path.join(d, "snmp.conf")).st_mode & 0o777) if conf else None, "dir": d}) + "\\n")
     if os.environ.get("FAKE_FAIL"):
         sys.stderr.write(os.environ["FAKE_FAIL"] + "\\n"); sys.exit(1)
-    step = int(open(os.environ["FAKE_STEP"]).read()) if os.environ.get("FAKE_STEP") else 0
+    step = 0
+    if os.environ.get("FAKE_STEP"):
+        with open(os.environ["FAKE_STEP"]) as f: step = int(f.read())
     B = ".1.3.6.1.4.1.6574."
     T = {
      ".1.3.6.1.2.1.1.1.0": 'STRING: "Linux DS-FAKE 4.4"', ".1.3.6.1.2.1.1.3.0": "Timeticks: (8640000) 1 day, 0:00:00.00",
