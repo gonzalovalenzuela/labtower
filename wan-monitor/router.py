@@ -1,7 +1,7 @@
 """Router checks for WAN Monitor: ask the router whether ITS internet link (WAN) is up, to tell a line/provider outage from a local one.
-ES: Cada adaptador habla con un tipo de router y devuelve lo mismo: {ok, wan_up, ip, uptime, error}. `wan_up` es True/False según lo que informa el router, o None si no se
+ES: Cada adaptador habla con un tipo de router y devuelve lo mismo: {ok, wan_up, ip, uptime, sys_uptime, error}. `wan_up` es True/False según lo que informa el router, o None si no se
     pudo saber. Solo lee: nunca cambia nada en el router. Solo biblioteca estándar.
-EN: Each adapter talks to one router type and returns the same thing: {ok, wan_up, ip, uptime, error}. `wan_up` is True/False as the router reports it, or None when it
+EN: Each adapter talks to one router type and returns the same thing: {ok, wan_up, ip, uptime, sys_uptime, error}. `wan_up` is True/False as the router reports it, or None when it
     could not be told. Read only: it never changes anything on the router. Standard library only."""
 import base64
 import hashlib
@@ -81,8 +81,16 @@ def _json(txt, what):
     except ValueError: raise RouterError(f"{what}: the router did not answer with JSON")
     return v
 
-def _res(wan_up, ip=None, uptime=None, detail=""):
-    return {"ok": wan_up is not None, "wan_up": wan_up, "ip": ip or None, "uptime": uptime, "detail": detail[:160], "error": ""}
+# uptime = segundos con la WAN conectada; sys_uptime = segundos desde que el router encendió (None si el modelo no lo informa).
+# EN: uptime = seconds the WAN has been connected; sys_uptime = seconds since the router booted (None when the model does not report it).
+def _res(wan_up, ip=None, uptime=None, detail="", sys_uptime=None):
+    return {"ok": wan_up is not None, "wan_up": wan_up, "ip": ip or None, "uptime": uptime, "sys_uptime": sys_uptime, "detail": detail[:160], "error": ""}
+
+def _secs(v):
+    """Segundos enteros no negativos, o None. / EN: Non-negative whole seconds, or None."""
+    if isinstance(v, bool): return None
+    if isinstance(v, (int, float)): return int(v) if v >= 0 else None
+    return int(v) if isinstance(v, str) and v.strip().isdigit() else None
 
 # ─── Huawei (HiLink: WiFi AX3, Mesh 3/7, WS7xxx …) ────────────────────────────────────────────────
 # ES: Entrada tipo SCRAM-SHA256 (nonce → sal e iteraciones → prueba del cliente) y luego GET api/ntwk/wandetect. Protocolo documentado por el proyecto público
@@ -127,10 +135,19 @@ def check_huawei(c, http):
         if s != 200 or not isinstance(d, dict) or "Status" not in d: raise RouterError("the router did not report the WAN status (unexpected answer)")
         ip = d.get("ExternalIPAddress"); ip = None if ip in (None, "", "-", "0.0.0.0") else str(ip)  # nosec B104 - compares the router answer, does not bind
         up = d.get("Uptime"); up = int(up) if isinstance(up, (int, float)) or str(up).isdigit() else None
-        return _res(str(d.get("Status")) == "Connected", ip, up, "Status=" + str(d.get("Status")))
+        return _res(str(d.get("Status")) == "Connected", ip, up, "Status=" + str(d.get("Status")), _huawei_sys_uptime(http))
     finally:
         try: post("api/system/user_logout", {})
         except Exception: pass  # noqa: BLE001, S110 - limpieza al terminar; un fallo no cambia el resultado / EN: cleanup; a failure does not change the result
+
+def _huawei_sys_uptime(http):
+    """Encendido del router (api/system/deviceinfo → UpTime); de esa respuesta no se guarda nada más. Si falla, None sin romper el chequeo.
+    EN: Router uptime (api/system/deviceinfo → UpTime); nothing else from that answer is kept. On failure, None without breaking the check."""
+    try:
+        s, t = http.request("/api/system/deviceinfo")
+        d = _json(t, "deviceinfo") if s == 200 else None
+        return _secs(d.get("UpTime")) if isinstance(d, dict) else None
+    except (RouterError, OSError, ValueError): return None
 
 # ─── OpenWrt (ubus por HTTP / ubus over HTTP, uhttpd-mod-ubus) ───────────────────────────────────
 def check_openwrt(c, http):
@@ -153,7 +170,10 @@ def check_openwrt(c, http):
         addr = (d.get("ipv4-address") or [{}])[0].get("address") if isinstance(d.get("ipv4-address"), list) and d.get("ipv4-address") else None
         if "up" not in d: raise RouterError(f"interface '{c['interface']}' did not report its state")
         up = d.get("uptime")
-        return _res(bool(d.get("up")), addr, int(up) if isinstance(up, (int, float)) else None, f"{c['interface']} proto={d.get('proto', '?')}")
+        # system.info puede no estar en la ACL del usuario: sin él, el chequeo sigue igual. / EN: system.info may be outside the user's ACL: the check goes on.
+        try: sys_up = _secs(call(sid, "system", "info", {}).get("uptime"))
+        except RouterError: sys_up = None
+        return _res(bool(d.get("up")), addr, int(up) if isinstance(up, (int, float)) else None, f"{c['interface']} proto={d.get('proto', '?')}", sys_up)
     finally:
         try: call(sid, "session", "destroy", {})
         except Exception: pass  # noqa: BLE001, S110 - limpieza al terminar; un fallo no cambia el resultado / EN: cleanup; a failure does not change the result
@@ -175,6 +195,14 @@ def parse_ddwrt(text):
     secs = (int(upt.group(1) or 0) * 86400 + int(upt.group(2)) * 3600 + int(upt.group(3)) * 60 + int(upt.group(4))) if upt else None
     return up, (ip if ip not in ("", "0.0.0.0") else None), secs, "wan_status=" + st if st else "wan_ipaddr=" + kv.get("wan_ipaddr", "")  # nosec B104 - compares the router answer, does not bind
 
+# Encendido según `uptime` de DD-WRT: «10:23:45 up 3 days,  4:05,  load average: …», «up 12 min», «up 1 day, 12 min», «up  4:05».
+# EN: Uptime from DD-WRT's `uptime`: "10:23:45 up 3 days,  4:05,  load average: …", "up 12 min", "up 1 day, 12 min", "up  4:05".
+_RE_UP = re.compile(r"\bup\s+(?:(\d+)\s+days?,\s*)?(?:(\d+):(\d{2})|(\d+)\s+min)")
+def parse_ddwrt_sys_uptime(text):
+    m = _RE_UP.search(dict(_RE_KV.findall(text)).get("uptime", "") or "")
+    if not m: return None
+    return int(m.group(1) or 0) * 86400 + (int(m.group(2)) * 3600 + int(m.group(3)) * 60 if m.group(2) else int(m.group(4)) * 60)
+
 def check_ddwrt(c, http):
     last = ""
     for path in ("/Status_Router.live.asp", "/Status_Internet.live.asp"):
@@ -182,7 +210,7 @@ def check_ddwrt(c, http):
         if s == 401: raise RouterError("wrong user or password")
         if s != 200: last = f"HTTP {s} on {path}"; continue
         up, ip, secs, det = parse_ddwrt(t)
-        if up is not None: return _res(up, ip, secs, det)
+        if up is not None: return _res(up, ip, secs, det, parse_ddwrt_sys_uptime(t))
         last = f"{path} has no WAN state"
     raise RouterError("could not read the WAN state from DD-WRT (" + last + ")")
 
@@ -215,7 +243,7 @@ def pin_for(c, host):
 def check(c, host, learn=None):
     """Query the router described by config `c` (type, port, https, user, password, interface) at `host`. Never raises: errors go in the result.
     Over HTTPS the certificate must match c["tls_pin"]; without one, `learn({"addr", "fp"})` is called to keep it."""
-    out = {"ok": False, "wan_up": None, "ip": None, "uptime": None, "detail": "", "error": "", "type": c.get("type"), "host": host, "ts": int(time.time())}
+    out = {"ok": False, "wan_up": None, "ip": None, "uptime": None, "sys_uptime": None, "detail": "", "error": "", "type": c.get("type"), "host": host, "ts": int(time.time())}
     try:
         if c["type"] not in ADAPTERS: raise RouterError("unknown router type")
         if not host: raise RouterError("no router address (and no default gateway)")

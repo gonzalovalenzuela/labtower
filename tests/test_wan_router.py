@@ -18,8 +18,8 @@ PASS = "Router-pass-1"
 
 class FakeRouter:
     """Un router de mentira: `kind` elige el protocolo; `wan` es el estado que informa."""
-    def __init__(self, kind, wan=True, password=PASS):
-        self.kind, self.wan, self.password, self.log = kind, wan, password, []
+    def __init__(self, kind, wan=True, password=PASS, sys=True):
+        self.kind, self.wan, self.password, self.log, self.sys = kind, wan, password, [], sys      # sys: informa su encendido / reports its uptime
         outer = self
         class H(BaseHTTPRequestHandler):
             def log_message(self, *a): pass
@@ -49,6 +49,9 @@ class FakeRouter:
         elif h.path == "/api/ntwk/wandetect":
             if "SessionID_R3=abc" not in h.headers.get("Cookie", "") or "ok" not in self.sessions: return h.send(403, "{}")
             h.send(200, json.dumps({"Status": "Connected" if self.wan else "Disconnected", "ExternalIPAddress": "203.0.113.9" if self.wan else "", "Uptime": 4321}))
+        elif h.path == "/api/system/deviceinfo" and self.sys:
+            if "ok" not in self.sessions: return h.send(403, "{}")
+            h.send(200, json.dumps({"UpTime": 98765, "SerialNumber": "SN-TEST"}))
         else: h.send(404, "")
     def post_huawei(self, h, t):
         d = json.loads(t)["data"]
@@ -72,6 +75,7 @@ class FakeRouter:
         if obj == "session" and meth == "destroy": return res(0, {})
         if obj == "network.interface.wan" and meth == "status":
             return res(0, {"up": self.wan, "proto": "dhcp", "uptime": 77, "ipv4-address": [{"address": "203.0.113.5", "mask": 24}] if self.wan else []})
+        if obj == "system" and meth == "info": return res(0, {"uptime": 5555, "localtime": 1}) if self.sys else res(6)
         res(4)
     def get_openwrt(self, h): h.send(404, "")
 
@@ -79,7 +83,7 @@ class FakeRouter:
     def get_ddwrt(self, h):
         if not h.basic_ok(): return h.send(401, "", headers=[("WWW-Authenticate", 'Basic realm="x"')])
         if h.path == "/Status_Router.live.asp":
-            h.send(200, "{{wan_status::{}}}{{wan_ipaddr::{}}}{{wan_uptime:: 1 day, 02:03:04}}".format("Connected" if self.wan else "Disconnected", "203.0.113.7" if self.wan else "0.0.0.0"))  # nosec B104 - test data
+            h.send(200, "{{wan_status::{}}}{{wan_ipaddr::{}}}{{wan_uptime:: 1 day, 02:03:04}}{{uptime:: 10:23:45 up 3 days,  4:05,  load average: 0.00, 0.01, 0.05}}".format("Connected" if self.wan else "Disconnected", "203.0.113.7" if self.wan else "0.0.0.0"))  # nosec B104 - test data
         else: h.send(404, "")
     def post_ddwrt(self, h, t): h.send(404, "")
 
@@ -94,8 +98,8 @@ class FakeRouter:
 
 
 class Adapters(unittest.TestCase):
-    def run_check(self, kind, wan=True, **kw):
-        fr = FakeRouter(kind, wan=wan)
+    def run_check(self, kind, wan=True, sys=True, **kw):
+        fr = FakeRouter(kind, wan=wan, sys=sys)
         try: return rtr.check({**fr.cfg(), **kw}, "127.0.0.1"), fr
         finally: fr.close()
 
@@ -114,6 +118,35 @@ class Adapters(unittest.TestCase):
         r, _ = self.run_check("huawei"); self.assertEqual(r["uptime"], 4321)
         r, _ = self.run_check("ddwrt"); self.assertEqual(r["uptime"], 86400 + 2 * 3600 + 3 * 60 + 4)
         r, _ = self.run_check("openwrt"); self.assertEqual(r["uptime"], 77)
+
+    def test_router_system_uptime(self):
+        # Encendido del router, aparte del tiempo con la WAN conectada; TP-Link clásico no lo informa.
+        # EN: Router uptime, apart from the WAN connected time; classic TP-Link does not report it.
+        for kind, want in (("huawei", 98765), ("openwrt", 5555), ("ddwrt", 3 * 86400 + 4 * 3600 + 5 * 60), ("tplink", None)):
+            with self.subTest(kind=kind):
+                r, _ = self.run_check(kind); self.assertTrue(r["ok"], r); self.assertEqual(r["sys_uptime"], want)
+        r, fr = self.run_check("huawei")
+        self.assertNotIn("SN-TEST", json.dumps(r))                                          # nothing else from deviceinfo is kept
+        self.assertLess(fr.log.index(("GET", "/api/system/deviceinfo")), fr.log.index(("POST", "/api/system/user_logout")))
+
+    def test_router_system_uptime_is_optional(self):
+        # Sin deviceinfo (Huawei) o sin system.info en la ACL (OpenWrt) el chequeo sigue bien. / EN: Without it the check still works.
+        for kind in ("huawei", "openwrt"):
+            with self.subTest(kind=kind):
+                r, _ = self.run_check(kind, sys=False); self.assertTrue(r["ok"], r); self.assertIs(r["wan_up"], True); self.assertIsNone(r["sys_uptime"]); self.assertEqual(r["error"], "")
+
+    def test_ddwrt_uptime_formats(self):
+        f = lambda u: rtr.parse_ddwrt_sys_uptime("{uptime::" + u + "}")
+        self.assertEqual(f(" 10:23:45 up 3 days,  4:05,  load average: 0.00"), 3 * 86400 + 4 * 3600 + 5 * 60)
+        self.assertEqual(f(" 10:23:45 up 12 min,  load average: 0.00"), 12 * 60)
+        self.assertEqual(f(" 10:23:45 up 1 day, 12 min,  load average: 0.00"), 86400 + 12 * 60)
+        self.assertEqual(f(" 10:23:45 up  4:05,  load average: 0.00"), 4 * 3600 + 5 * 60)
+        self.assertIsNone(f("garbage")); self.assertIsNone(rtr.parse_ddwrt_sys_uptime("{wan_status::Connected}"))
+
+    def test_page_shows_it(self):
+        js = (Path(__file__).resolve().parents[1] / "wan-monitor/static/app.js").read_text(encoding="utf-8")
+        self.assertIn("(r.sys_uptime!=null?kv(t('rtSysUp'),esc(fmtDur(r.sys_uptime))):'')", js)
+        self.assertEqual(js.count('"rtSysUp":'), 2)
 
     def test_huawei_logs_out_and_only_reads(self):
         _r, fr = self.run_check("huawei")

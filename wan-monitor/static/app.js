@@ -44,6 +44,7 @@ const LANG={
  "scopeWan": "WAN (router)",
  "routerRow": "Router",
  "rtConnFor": "Router: WAN connected for",
+ "rtSysUp": "Router: system uptime",
  "rtCross": "Outages meanwhile",
  "rtCrossNone": "none",
  "rtCrossSome": "{0} here · {1} WAN",
@@ -239,6 +240,7 @@ const LANG={
  "scopeWan": "WAN (router)",
  "routerRow": "Router",
  "rtConnFor": "Router: WAN conectada hace",
+ "rtSysUp": "Router: encendido hace",
  "rtCross": "Cortes en el período",
  "rtCrossNone": "ninguno",
  "rtCrossSome": "{0} aquí · {1} WAN",
@@ -648,7 +650,7 @@ function routerRow(s){
   const r=s.router;
   if(!r)return kv(t('routerRow'),esc(t('rtNoRead')));
   if(!r.ok)return kv(t('routerRow'),`<span style="color:var(--orange)">${esc(t('rtNoRead'))}: ${esc(r.error||'')}</span>`);
-  return kv(t('routerRow'),r.wan_up?`<span style="color:var(--green)">${esc(t('rtWanUp'))}</span>`:`<span style="color:var(--red)">${esc(t('rtWanDown'))}</span>`)+(r.ip?kv('IP WAN',esc(r.ip)):'')+(r.uptime?kv(t('rtConnFor'),esc(fmtDur(r.uptime))):'')+crossRow(s.router_check);
+  return kv(t('routerRow'),r.wan_up?`<span style="color:var(--green)">${esc(t('rtWanUp'))}</span>`:`<span style="color:var(--red)">${esc(t('rtWanDown'))}</span>`)+(r.ip?kv('IP WAN',esc(r.ip)):'')+(r.uptime?kv(t('rtConnFor'),esc(fmtDur(r.uptime))):'')+(r.sys_uptime!=null?kv(t('rtSysUp'),esc(fmtDur(r.sys_uptime))):'')+crossRow(s.router_check);
 }
 function crossRow(x){
   if(!x)return '';
