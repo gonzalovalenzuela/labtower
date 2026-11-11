@@ -25,7 +25,7 @@ Object.assign(LANG.en, {
   swHistPktOnly: 'This model does not report bytes, only packets.', swPort: 'Port', swState: 'State', swSpeed: 'Speed', swRxPps: 'Rx pkt/s', swTxPps: 'Tx pkt/s', swMbps: 'Mbit/s rx / tx', swErrors: 'Errors', swStp: 'STP', swConn: 'Connected to',
   swSideTitle: 'Switches', swAllSwitches: 'All switches', swNoneSide: 'No switches yet', swStUp: 'Up', swStDown: 'Down', swStOff: 'Disabled', swStLoop: 'Loop', swStUplink: 'Uplink', swStWarn: 'Errors',
   swShowAll: n => 'Show all ' + n + ' ports', swShowActive: 'Show only active ports',
-  swOnline: 'Online', swOffline: 'Unreachable', swSlow: u => 'Below its usual speed (' + u + '): check the cable or the port', swPaused: 'Paused', swActive: 'Monitor this switch (untick to pause it without deleting it)', swWaiting: 'Waiting for the first reading…', swTempHigh: 'High temperature', swTempCrit: 'Critical temperature',
+  swOnline: 'Online', swOffline: 'Unreachable', swSlow: u => 'Below its usual speed (' + u + '): check the cable or the port', swPaused: 'Paused', swPause: 'Pause', swResume: 'Resume', swPausedOk: n => n + ' paused', swResumedOk: n => n + ' resumed', swActive: 'Monitor this switch (untick to pause it without deleting it)', swWaiting: 'Waiting for the first reading…', swTempHigh: 'High temperature', swTempCrit: 'Critical temperature',
   swNoTemp: 'This model does not report temperature, loop per port or bytes; only packets.', swNoLoop: 'No per-port loop flag on this model.',
   swTopo: 'Topology', swTopoHint: 'Worked out from the MAC tables: a port that has another switch\'s MAC behind it is a link between them.', swTopoNone: 'No links between switches detected yet.',
   swTempChart: 'Temperature', swTraffic: 'Traffic', swPackets: 'Packets/s', swErrChart: 'Errors (counter)', swNoData: 'No data in this range yet.',
@@ -59,7 +59,7 @@ Object.assign(LANG.es, {
   swHistPktOnly: 'Este modelo no informa bytes, solo paquetes.', swPort: 'Puerto', swState: 'Estado', swSpeed: 'Velocidad', swRxPps: 'Rx pkt/s', swTxPps: 'Tx pkt/s', swMbps: 'Mbit/s rx / tx', swErrors: 'Errores', swStp: 'STP', swConn: 'Conectado a',
   swSideTitle: 'Switches', swAllSwitches: 'Todos los switches', swNoneSide: 'Aún no hay switches', swStUp: 'Arriba', swStDown: 'Abajo', swStOff: 'Deshabilitado', swStLoop: 'Loop', swStUplink: 'Uplink', swStWarn: 'Errores',
   swShowAll: n => 'Mostrar los ' + n + ' puertos', swShowActive: 'Mostrar solo puertos activos',
-  swOnline: 'En línea', swOffline: 'Sin conexión', swSlow: u => 'Bajo su velocidad habitual (' + u + '): revisa el cable o el puerto', swPaused: 'Pausado', swActive: 'Vigilar este switch (desmarca para pausarlo sin borrarlo)', swWaiting: 'Esperando la primera lectura…', swTempHigh: 'Temperatura alta', swTempCrit: 'Temperatura crítica',
+  swOnline: 'En línea', swOffline: 'Sin conexión', swSlow: u => 'Bajo su velocidad habitual (' + u + '): revisa el cable o el puerto', swPaused: 'Pausado', swPause: 'Pausar', swResume: 'Reanudar', swPausedOk: n => n + ' pausado', swResumedOk: n => n + ' reanudado', swActive: 'Vigilar este switch (desmarca para pausarlo sin borrarlo)', swWaiting: 'Esperando la primera lectura…', swTempHigh: 'Temperatura alta', swTempCrit: 'Temperatura crítica',
   swNoTemp: 'Este modelo no informa temperatura, loop por puerto ni bytes; solo paquetes.', swNoLoop: 'Este modelo no informa loop por puerto.',
   swTopo: 'Topología', swTopoHint: 'Se deduce de las tablas MAC: un puerto que tiene detrás la MAC de otro switch es un enlace entre ambos.', swTopoNone: 'Aún no se detectan enlaces entre switches.',
   swTempChart: 'Temperatura', swTraffic: 'Tráfico', swPackets: 'Paquetes/s', swErrChart: 'Errores (contador)', swNoData: 'Aún no hay datos en este rango.',
@@ -276,7 +276,7 @@ function card(s) {
   const hasT = sy.temperature_c != null;
   const alt = s.layout === 'alt';
   return `<div class="card sw-card${s.paused ? ' paused' : ''}"><div class="sw-head"><b class="sw-name">${esc(s.name)}</b><span class="dim mono">${esc(sub)}</span>${state}${tPill}<span class="grow"></span>` +
-    `<span class="dim mono sw-scr">${esc(s.driver)}${s.scrape != null ? ' · ' + s.scrape + ' s' : ''}</span>${admin ? `<button type="button" class="sw-btn" data-act="edit" data-id="${esc(s.id)}">${esc(t('swEdit'))}</button>` : ''}</div>${errs}` +
+    `<span class="dim mono sw-scr">${esc(s.driver)}${s.scrape != null ? ' · ' + s.scrape + ' s' : ''}</span>${admin ? `<button type="button" class="sw-btn" data-act="pause" data-id="${esc(s.id)}" data-name="${esc(s.name)}" data-on="${s.paused ? '1' : ''}">${esc(s.paused ? '▶ ' + t('swResume') : '⏸ ' + t('swPause'))}</button><button type="button" class="sw-btn" data-act="edit" data-id="${esc(s.id)}">${esc(t('swEdit'))}</button>` : ''}</div>${errs}` +
     (s.ports.length ? `<div class="sw-grid-ports${alt ? ' alt' : ''}">${grid}</div><div class="sw-leg"><span class="up">${esc(t('swLegUp'))}</span><span class="down">${esc(t('swLegDown'))}</span><span class="warn">${esc(t('swLegWarn'))}</span><span class="uplink">${esc(t('swLegUplink'))}</span><span class="off">${esc(t('swLegOff'))}</span>${s.driver !== 'hc' ? `<span class="loop">${esc(t('swLegLoop'))}</span>` : ''}</div><div class="sw-leg sw-leg-spd"><span class="s10g">10 Gb/s</span><span class="s25g">2.5 Gb/s</span><span class="s1g">1 Gb/s</span><span class="s100m">100 Mb/s</span><span class="s10m">10 Mb/s</span></div>` +
       `<div class="sw-tablewrap"><table class="sw-table"><thead><tr>${heads.map(h => `<th>${esc(t(h))}</th>`).join('')}</tr></thead><tbody>${rows.map(p => portRow(s, p)).join('')}</tbody></table></div>` +
       (hasMore ? `<button type="button" class="sw-link" data-act="showall" data-id="${esc(s.id)}">${esc(all ? t('swShowActive') : t('swShowAll', s.ports.length))}</button>` : '') : '') +
@@ -432,6 +432,12 @@ async function onClick(e) {
     if (act === 'refresh') { toast(t('swRefreshing')); await post('api/switches/refresh', {}); setTimeout(load, 4000); }
     else if (act === 'add') openModal(null);
     else if (act === 'edit') openModal(id);
+    else if (act === 'pause') {
+      // Pausar o reanudar sin abrir «Editar»: solo cambia «Vigilar este switch». / EN: Pause or resume without opening "Edit": only flips "Monitor this switch".
+      const resume = el.dataset.on === '1'; el.disabled = true;
+      try { await post('api/switches/save', { id, enabled: resume }); toast(t(resume ? 'swResumedOk' : 'swPausedOk', el.dataset.name || '')); SW.hash = ''; await load(); }
+      catch (er) { toast(er.message, true); el.disabled = false; }
+    }
     else if (act === 'port') {
       const port = Number(el.dataset.port);
       SW.sel = SW.sel && SW.sel.sid === id && SW.sel.port === port ? null : { sid: id, port };

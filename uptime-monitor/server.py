@@ -484,6 +484,11 @@ def _loop(mid: str):
             if _mons.get(mid) is not mon: return                    # deleted
         m = next((x for x in load_monitors() if x.get("id") == mid), None)
         if m is None: return
+        if auth.paused(m):
+            # Pausado: sin revisiones ni eventos; el estado actual se olvida, el historial queda. / EN: Paused: no checks or events; history stays.
+            with mon.lock: mon.fails, mon.status, mon.last = 0, None, None
+            mon.wake.wait(60); mon.wake.clear()
+            continue
         t0 = time.time()
         r = run_check(m)
         with _glock:
@@ -525,7 +530,8 @@ def start_all():
 
 def public(m: dict, mon: Mon | None, stats: dict, with_beats=True) -> dict:
     sn = mon.snap() if mon else {"status": None, "since": None, "last": None, "fails": 0, "cert_exp": None, "beats": []}
-    out = {**m, "target": target_of(m), **{k: v for k, v in sn.items() if k != "beats"}, "uptime": stats.get(m["id"], {})}
+    if auth.paused(m): sn = {**sn, "status": None, "since": None, "last": None, "fails": 0, "cert_exp": None}   # paused: no current state
+    out = {**m, "paused": auth.paused(m), "target": target_of(m), **{k: v for k, v in sn.items() if k != "beats"}, "uptime": stats.get(m["id"], {})}
     if with_beats: out["beats"] = sn["beats"]
     out["cert"] = cert_state(sn["cert_exp"], m.get("cert_days", 14), time.time()) if m["type"] == "http" and m.get("url", "").startswith("https://") else None
     return out
@@ -533,11 +539,12 @@ def public(m: dict, mon: Mon | None, stats: dict, with_beats=True) -> dict:
 def health_report(detailed=False):
     c = auth.check_common()
     c["uptime_file"] = auth.check_file(DATA_FILE)
-    items = load_monitors(); dead = [m["name"] for m in items if not (_threads.get(m["id"]) and _threads[m["id"]].is_alive())]
-    down = [m["name"] for m in items if _mons.get(m["id"]) and _mons[m["id"]].snap()["status"] == "down"]
+    items = load_monitors(); paused = [m for m in items if auth.paused(m)]
+    dead = [m["name"] for m in items if not auth.paused(m) and not (_threads.get(m["id"]) and _threads[m["id"]].is_alive())]
+    down = [m["name"] for m in items if not auth.paused(m) and _mons.get(m["id"]) and _mons[m["id"]].snap()["status"] == "down"]
     if not items: c["uptime_monitors"] = auth.chk(auth.OK, "no monitors configured")
     elif dead:    c["uptime_monitors"] = auth.chk(auth.FAIL, "monitor stopped: " + ", ".join(dead[:10]))
-    else:         c["uptime_monitors"] = auth.chk(auth.OK, f"{len(items)} running")
+    else:         c["uptime_monitors"] = auth.chk(auth.OK, f"{len(items) - len(paused)} running" + (f", {len(paused)} paused" if paused else ""))
     c["uptime_services"] = auth.chk(auth.WARN, "down: " + ", ".join(down[:10])) if down else auth.chk(auth.OK, "every service is up")
     return auth.health_reply("uptime", c, detailed)
 
@@ -638,11 +645,26 @@ class H(BaseHTTPRequestHandler):
                 return self._json(403 if auth.check_permission(tok, "uptime", "readonly") else 401, {"error": "Execute permission required"})
             mon = _mons.get(mc.group(1))
             if not mon: return self._json(404, {"error": "Not found"})
+            if auth.paused(next((x for x in load_monitors() if x.get("id") == mc.group(1)), None)): return self._json(409, {"error": "The monitor is paused"})
             mon.wake.set(); return self._json(200, {"ok": True})
 
         if not auth.check_permission(tok, "uptime", "admin"):
             return self._json(403 if auth.check_permission(tok, "uptime", "readonly") else 401, {"error": "Admin permission required"})
 
+        # Pausar o reanudar un monitor: {"paused": true|false} (solo admin). / EN: Pause or resume a monitor (admin only).
+        mp = re.fullmatch(r"/api/monitors/" + _ID + r"/pause", path)
+        if mp:
+            if not isinstance(body.get("paused"), bool): return self._json(400, {"error": "paused must be true or false"})
+            with _cfg_lock:
+                items = load_monitors()
+                cur = next((x for x in items if x.get("id") == mp.group(1)), None)
+                if not cur: return self._json(404, {"error": "Not found"})
+                auth.set_paused(cur, body["paused"]); save_monitors(items)
+            log.info(f"[{cur['name']}] " + ("paused" if body["paused"] else "resumed"))
+            ensure_monitor(cur)
+            mon = _mons.get(cur["id"])
+            if mon: mon.wake.set()                   # stops at once, or checks at once when resumed
+            return self._json(200, {"monitor": public(cur, mon, {}, False)})
         if path == "/api/monitors":
             try: cfg = validate(body)
             except ValueError as e: return self._json(400, {"error": str(e)})

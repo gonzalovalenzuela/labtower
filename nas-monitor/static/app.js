@@ -17,7 +17,7 @@ const LANG={
     fieldName:'Name',fieldPort:'Port',fieldVersion:'SNMP version',fieldTimeout:'Timeout (s)',fieldVolWarn:'Volume warning (%)',fieldVolCrit:'Volume critical (%)',fieldCommunity:'Community',fieldUser:'SNMP user',fieldLevel:'Security level',
     fieldAuthProto:'Auth protocol',fieldAuthPass:'Auth password',fieldPrivProto:'Privacy protocol',fieldPrivPass:'Privacy password',
     secretKept:'Saved. Leave empty to keep it.',cancel:'Cancel',test:'Test',save:'Save',delete:'Delete',deleteNas:'Delete NAS',deleteConfirm:n=>`Delete "${n}" and its history?`,
-    edit:'Edit',testFillAll:'Fill in the name, host and credentials.',testOk:(m,d)=>`✓ ${m||'SNMP'}${d?' — '+d:''}`,testNotSyno:'✓ SNMP answers, but this is not a Synology (no Synology MIB).',
+    edit:'Edit',pause:'Pause',resume:'Resume',paused:'Paused',pausedMsg:'Paused: this NAS is not polled and raises no alerts. Resume it to watch it again.',pausedOk:n=>`${n} paused`,resumedOk:n=>`${n} resumed`,testFillAll:'Fill in the name, host and credentials.',testOk:(m,d)=>`✓ ${m||'SNMP'}${d?' — '+d:''}`,testNotSyno:'✓ SNMP answers, but this is not a Synology (no Synology MIB).',
     added:n=>`${n} added`,saved:'Saved',deleted:n=>`${n} deleted`,
     permReadonly:'Read-only',permExecute:'Execute',permAdmin:'Administrator',
     online:'Online',offline:'Unreachable',connError:'Connection error',connErrorHint:'Check host, port, SNMP version and credentials; SNMP must be allowed from this server.',
@@ -50,7 +50,7 @@ const LANG={
     fieldName:'Nombre',fieldPort:'Puerto',fieldVersion:'Versión de SNMP',fieldTimeout:'Tiempo de espera (s)',fieldVolWarn:'Aviso de volumen (%)',fieldVolCrit:'Crítico de volumen (%)',fieldCommunity:'Comunidad',fieldUser:'Usuario SNMP',fieldLevel:'Nivel de seguridad',
     fieldAuthProto:'Protocolo de autenticación',fieldAuthPass:'Clave de autenticación',fieldPrivProto:'Protocolo de privacidad',fieldPrivPass:'Clave de privacidad',
     secretKept:'Guardada. Déjala vacía para conservarla.',cancel:'Cancelar',test:'Probar',save:'Guardar',delete:'Eliminar',deleteNas:'Eliminar NAS',deleteConfirm:n=>`¿Eliminar «${n}» y su historial?`,
-    edit:'Editar',testFillAll:'Completa nombre, host y credenciales.',testOk:(m,d)=>`✓ ${m||'SNMP'}${d?' — '+d:''}`,testNotSyno:'✓ SNMP responde, pero no es un Synology (sin la MIB de Synology).',
+    edit:'Editar',pause:'Pausar',resume:'Reanudar',paused:'Pausado',pausedMsg:'Pausado: este NAS no se consulta ni genera avisos. Reanúdalo para volver a vigilarlo.',pausedOk:n=>`${n} pausado`,resumedOk:n=>`${n} reanudado`,testFillAll:'Completa nombre, host y credenciales.',testOk:(m,d)=>`✓ ${m||'SNMP'}${d?' — '+d:''}`,testNotSyno:'✓ SNMP responde, pero no es un Synology (sin la MIB de Synology).',
     added:n=>`${n} agregado`,saved:'Guardado',deleted:n=>`${n} eliminado`,
     permReadonly:'Solo lectura',permExecute:'Ejecutar',permAdmin:'Administrador',
     online:'En línea',offline:'Sin conexión',connError:'Error de conexión',connErrorHint:'Revisa host, puerto, versión de SNMP y credenciales; SNMP debe permitirse desde este servidor.',
@@ -159,7 +159,7 @@ function selectNas(id){activeId=id;renderAll();ensureRanges();}
 // EN: Clicking the open row closes it; clicking another opens it (only one at a time, like UPS Monitor).
 function toggleNas(id){activeId=activeId===id?'':id;renderAll();ensureRanges();}
 
-function lvOf(n){const s=n.snap;if(!s?.ts)return 'loading';if(s.error)return 'err';return 'ok';}
+function lvOf(n){if(n.paused)return 'paused';const s=n.snap;if(!s?.ts)return 'loading';if(s.error)return 'err';return 'ok';}
 function renderSidebar(){
   const list=document.getElementById('nas-list');list.innerHTML='';
   items.forEach(n=>{
@@ -178,14 +178,16 @@ function renderSidebar(){
 function updateGlobalStats(){
   let on=0,cpuS=0,cpuN=0,memS=0,memN=0,dOk=0,dAll=0,vS=0,vN=0;
   items.forEach(n=>{
-    const d=n.snap?.data;if(!d||n.snap.error)return;on++;
+    const d=n.snap?.data;if(n.paused||!d||n.snap.error)return;on++;
     if(d.cpu&&d.cpu.pct!=null){cpuS+=d.cpu.pct;cpuN++;}
     if(d.mem){memS+=d.mem.pct;memN++;}
     (d.disks||[]).forEach(x=>{dAll++;if(x.lv==='ok')dOk++;});
     (d.raids||[]).forEach(x=>{if(x.pct!=null&&!x.pool){vS+=x.pct;vN++;}});
   });
   const pc=v=>v==null?'—':Math.round(v)+'<span style="font-size:13px;color:var(--text-dim)">%</span>';
-  document.getElementById('st-nas').textContent=items.length?`${on}/${items.length}`:'—';
+  // Los pausados no cuentan: no se leen. / EN: Paused ones do not count: they are not read.
+  const act=items.filter(n=>!n.paused).length;
+  document.getElementById('st-nas').textContent=act?`${on}/${act}`:'—';
   document.getElementById('st-cpu').innerHTML=pc(cpuN?cpuS/cpuN:null);
   document.getElementById('st-mem').innerHTML=pc(memN?memS/memN:null);
   document.getElementById('st-disks').textContent=dAll?`${dOk}/${dAll}`:'—';
@@ -204,7 +206,7 @@ function renderSummary(){
     const vmax=(d?.raids||[]).filter(x=>x.pct!=null&&!x.pool).reduce((m,x)=>Math.max(m,x.pct),-1);
     const dk=d?.disks||[],dOk=dk.filter(x=>x.lv==='ok').length;
     const al=(d?.alerts||[]).filter(a=>a.lv!=='info'),worst=al.some(a=>a.lv==='crit')?'crit':al.length?'warn':'ok';
-    const state=lv==='loading'?pill('off','…'):lv==='err'?pill('crit',t('offline')):pill(worst,worst==='ok'?t('online'):al.length+' ⚠');
+    const state=lv==='paused'?pill('off',t('paused')):lv==='loading'?pill('off','…'):lv==='err'?pill('crit',t('offline')):pill(worst,worst==='ok'?t('online'):al.length+' ⚠');
     const cell=(v,w,c)=>v==null?'—':`<span style="color:${barColor(v,w,c)};font-weight:600">${esc(pc(v))}</span>`;
     return `<tr class="nas-row${open?' expanded':''}" data-on-click="toggleNas" data-on-click-args="${jsargs([n.id])}">
       <td><span class="cluster-dot ${lv}"></span></td>
@@ -247,7 +249,8 @@ function renderDashboard(){
 
 function buildDetail(n){
   const snap=n.snap||{};
-  const tools=canAdmin()?`<div class="nas-tools"><button class="btn-secondary" data-on-click="openNasForm" data-on-click-args="${jsargs([n.id])}">${esc(t('edit'))}</button><button class="btn-secondary" data-on-click="confirmDelete" data-on-click-args="${jsargs([n.id,n.name])}" style="color:var(--red)">${esc(t('delete'))}</button></div>`:'';
+  const tools=canAdmin()?`<div class="nas-tools"><button class="btn-secondary" data-on-click="pauseNas" data-on-click-args="${jsargs([{'@':'this'},n.id,!n.paused])}">${esc(n.paused?'▶ '+t('resume'):'⏸ '+t('pause'))}</button><button class="btn-secondary" data-on-click="openNasForm" data-on-click-args="${jsargs([n.id])}">${esc(t('edit'))}</button><button class="btn-secondary" data-on-click="confirmDelete" data-on-click-args="${jsargs([n.id,n.name])}" style="color:var(--red)">${esc(t('delete'))}</button></div>`:'';
+  if(n.paused)return `<div class="nas-head"><div><h2>${esc(n.name)} ${pill('off',t('paused'))}</h2></div>${tools}</div><div class="state-msg">${esc(t('pausedMsg'))}</div>`;
   if(!snap.ts){return '<div class="state-msg"><strong>'+esc(t('connecting'))+'</strong>'+esc(t('connectingMsg'))+'</div>';}
   if(snap.error&&!snap.data?.system){
     return `<div class="nas-head"><div><h2>${esc(n.name)}</h2></div>${tools}</div><div class="state-msg err"><strong>${esc(t('connError'))}</strong>${esc(snap.error)}<br><br><span style="font-size:12px;font-family:var(--mono)">${esc(t(n.type==='truenas'?'connErrorHintTn':n.type==='omv'?'connErrorHintOmv':'connErrorHint'))}</span></div>`;
@@ -521,6 +524,16 @@ async function saveNas(){
   }catch(e){toast(e.message,true);}
   finally{btn.disabled=false;btn.textContent=t('save');}
 }
+// Pausar o reanudar un NAS (solo admin): no toca su configuración ni la huella del certificado.
+// EN: Pause or resume a NAS (admin only): its settings and the certificate fingerprint are left alone.
+async function pauseNas(btn,id,paused){
+  if(btn)btn.disabled=true;
+  try{
+    const r=await fetch('api/nas/'+encodeURIComponent(id)+'/pause',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paused})});
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Error');
+    toast(t(paused?'pausedOk':'resumedOk',d.nas?.name||''));await fetchAll();
+  }catch(e){toast(e.message,true);if(btn)btn.disabled=false;}
+}
 function confirmDelete(id,name){
   $('del-msg').textContent=t('deleteConfirm',name);
   $('del-btn').onclick=async()=>{
@@ -572,4 +585,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ checkCerts, closeModals, confirmDelete, doLogin, httpsChanged, levelChanged, logout, openNasForm, saveNas, setLang, setRange, toggleCmp, setTheme, testNas, toggleNas, toggleNav, typeChanged, versionChanged });
+if (window.cspRegister) cspRegister({ checkCerts, closeModals, confirmDelete, doLogin, httpsChanged, levelChanged, logout, openNasForm, pauseNas, saveNas, setLang, setRange, toggleCmp, setTheme, testNas, toggleNas, toggleNav, typeChanged, versionChanged });

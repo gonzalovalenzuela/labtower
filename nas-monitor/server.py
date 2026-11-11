@@ -179,7 +179,14 @@ def validate(body: dict, current=None) -> dict:
     cfg = _validate_base(body, current)
     _vol_thresholds(cfg, body, current)
     _cert_opts(cfg, body, current)
+    # La pausa solo cambia por su propia ruta (/pause): editar el NAS la conserva y el formulario no la puede fijar.
+    # EN: The pause only changes through its own route (/pause): editing the NAS keeps it and the form cannot set it.
+    if current is not None and current.get("enabled") is False: cfg["enabled"] = False
     return cfg
+
+def is_paused(n: dict) -> bool:
+    """Pausado por un administrador: no se consulta, no avisa ni genera eventos. / EN: Paused by an administrator: not polled, no alerts or events."""
+    return auth.paused(n)
 
 # Certificados: puertos TLS que se revisan en el host del NAS y días antes del vencimiento para el aviso y el crítico (por defecto 14 / 3;
 # 1–90 y crítico < aviso). Sin lista guardada: Synology revisa 5001 (DSM) y TrueNAS / OpenMediaVault su propio puerto si usan HTTPS.
@@ -785,7 +792,8 @@ def _cert_loop():
     while True:
         try:
             items = load_nas()
-            for n in items: check_certs_due(n)
+            for n in items:
+                if not is_paused(n): check_certs_due(n)
             keep = {n["id"] for n in items}
             with _cert_lock:
                 for nid in [k for k in _CERTS if k not in keep]: _CERTS.pop(nid, None)
@@ -806,6 +814,8 @@ class NasCache:
         with self._lock: self._err = e
     def snap(self):
         with self._lock: return {"id": self.id, "data": dict(self._data), "error": self._err, "ts": self._ts}
+    def clear(self):
+        with self._lock: self._data, self._err, self._ts = {}, None, None
 
 # La lectura de un NAS sin su número de serie (la copia en caché no se toca).
 # EN: A NAS reading without its serial number (the cached copy is not touched).
@@ -877,7 +887,9 @@ def _poll(nid: str):
         except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.error(f"[{nid}] config read: {e}"); n = False
         if n is None: return
-        if n:
+        if n and is_paused(n):
+            cache.clear()                 # sin datos viejos al reanudar / no stale data when resumed
+        elif n:
             t0 = time.time()
             try:
                 snap = collect(n, prev)
@@ -927,7 +939,9 @@ def health_report(detailed=False):
     snmp_ok = bool(shutil.which("snmpget") and (shutil.which("snmpbulkwalk") or shutil.which("snmpwalk")))
     c["snmp_tools"] = auth.chk(auth.OK, "snmpget / snmpbulkwalk found") if snmp_ok \
         else auth.chk(auth.FAIL if any((x.get("type") or "synology") == "synology" for x in items) else auth.WARN, "net-snmp tools not installed (apt install snmp)")
+    paused = [n for n in items if is_paused(n)]
     for n in items:
+        if is_paused(n): continue                    # a paused NAS is not checked, so it raises no warning
         t = _pollers.get(n["id"])
         if t is None or not t.is_alive(): dead.append(n["name"]); continue
         cc = _cache.get(n["id"])
@@ -937,7 +951,7 @@ def health_report(detailed=False):
         elif sn["ts"] and now - sn["ts"] > max(3 * POLL_IDLE, 180): bad.append(f'{n["name"]}: data {int(now - sn["ts"])} s old')
     if not items: c["pollers"] = auth.chk(auth.OK, "no NAS configured")
     elif dead:    c["pollers"] = auth.chk(auth.FAIL, "poller stopped: " + ", ".join(dead))
-    else:         c["pollers"] = auth.chk(auth.OK, f"{len(items)} running")
+    else:         c["pollers"] = auth.chk(auth.OK, f"{len(items) - len(paused)} running" + (f", {len(paused)} paused" if paused else ""))
     c["nas_snmp"] = auth.chk(auth.WARN, "; ".join(bad)) if bad else auth.chk(auth.OK, "all NAS answering")
     return auth.health_reply("nas", c, detailed)
 
@@ -1012,9 +1026,9 @@ class H(BaseHTTPRequestHandler):
             out = []
             for n in load_nas():
                 if n["id"] not in _pollers or not _pollers[n["id"]].is_alive(): ensure_poller(n)
-                snap = _cache.get(n["id"], NasCache(n["id"])).snap()
+                snap = NasCache(n["id"]).snap() if is_paused(n) else _cache.get(n["id"], NasCache(n["id"])).snap()
                 if not ser: snap = _snap_no_serial(snap)          # serial numbers need the "serials" permission
-                out.append({**public(n), "snap": snap, "history": get_history(n["id"]) if with_hist else []})
+                out.append({**public(n), "paused": is_paused(n), "snap": snap, "history": get_history(n["id"]) if with_hist else []})
             return self._json(200, {"nas": out})
         # GET /api/nas/<id>/history?range=1h|1d|1w|1mo|all: historial reducido de un NAS para los gráficos de detalle.
         # EN: GET /api/nas/<id>/history?range=...: reduced history of one NAS for the detail charts.
@@ -1056,6 +1070,7 @@ class H(BaseHTTPRequestHandler):
                 return self._json(403 if auth.check_permission(tok, "nas", "readonly") else 401, {"error": "Execute permission required"})
             n = next((x for x in load_nas() if x["id"] == mc.group(1)), None)
             if not n: return self._json(404, {"error": "NAS not found"})
+            if is_paused(n): return self._json(409, {"error": "The NAS is paused"})
             if not _cert_gate.acquire(blocking=False): return self._json(429, {"error": "Too many checks at once"})
             try:     check_certs_due(n, force=True)
             finally: _cert_gate.release()
@@ -1096,6 +1111,22 @@ class H(BaseHTTPRequestHandler):
             except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                 return self._json(200, {"ok": False, "error": str(e)[:200]})
             finally: _test_gate.release()
+
+        # Pausar o reanudar: {"paused": true|false}. Solo cambia «enabled»; no toca secretos ni la huella fijada del certificado.
+        # EN: Pause or resume: {"paused": true|false}. Only changes "enabled"; secrets and the pinned certificate are left alone.
+        mp = re.fullmatch(r"/api/nas/([A-Za-z0-9_-]{1,40})/pause", path)
+        if mp:
+            if not isinstance(body.get("paused"), bool): return self._json(400, {"error": "paused must be true or false"})
+            with _nas_lock:
+                items = load_nas()
+                cur = next((x for x in items if x["id"] == mp.group(1)), None)
+                if not cur: return self._json(404, {"error": "Not found"})
+                auth.set_paused(cur, body["paused"]); save_nas(items)
+            log.info(f"[{cur['name']}] " + ("paused" if body["paused"] else "resumed"))
+            ensure_poller(cur)
+            c = _cache.get(cur["id"])
+            if c: c.wake.set()                       # stops at once, or reads at once when resumed
+            return self._json(200, {"nas": {**public(cur), "paused": is_paused(cur)}})
 
         # Edición: PUT lógico por POST /api/nas/<id>; los secretos vacíos conservan los guardados.
         # EN: Edit: POST /api/nas/<id>; empty secrets keep the stored ones.

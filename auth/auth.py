@@ -964,6 +964,15 @@ def safe_filename(name, maxlen: int = 120) -> str:
 
 # ¿Es un nombre de host o una IP razonable? Nunca empieza con «-» ni lleva espacios, «/», «@» ni otros caracteres especiales (se usa en conexiones y comandos).
 # EN: Is it a reasonable host name or IP? It never starts with "-" and has no spaces, "/", "@" or other special characters (used in connections and commands).
+# Pausa de un equipo vigilado (NAS, servidor NUT, cluster, DNS, VPN, monitor, switch): «enabled» en False. Pausado no se consulta ni avisa.
+# EN: Pause of a watched device (NAS, NUT server, cluster, DNS, VPN, monitor, switch): "enabled" set to False. Paused, it is not polled and raises nothing.
+def paused(item) -> bool:
+    return isinstance(item, dict) and item.get("enabled", True) is False
+
+def set_paused(item: dict, on: bool) -> None:
+    if on: item["enabled"] = False
+    else: item.pop("enabled", None)
+
 _HOSTNAME_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,251}[A-Za-z0-9])?$")
 def valid_host(h) -> bool:
     if not isinstance(h, str) or not h or len(h) > 253: return False

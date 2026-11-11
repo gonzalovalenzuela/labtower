@@ -368,6 +368,8 @@ class Cache:
         with self._lock: return {"id": self.id, "data": dict(self._data), "error": self._err, "ts": self._ts, "stale": self._stale}
     def history(self):
         with self._lock: return list(self.hist)
+    def clear(self):
+        with self._lock: self._data, self._err, self._ts, self._stale = {}, None, None, False; self.hist.clear()
 
 _cache: dict = {}
 _last: dict = {}
@@ -395,7 +397,9 @@ def _poll(nid: str):
         except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.error(f"[{nid}] config read: {e}"); n = False
         if n is None: return
-        if n:
+        if n and auth.paused(n):
+            cache.clear()                 # paused: no SSH/API reads or events / pausado: sin lecturas ni eventos
+        elif n:
             try:
                 t0 = time.time()
                 snap = collect(n)
@@ -444,7 +448,9 @@ def health_report(detailed=False):
     now = time.time(); items = load_vpn(); dead, bad = [], []
     need_ssh = any(x["type"] != "tailscale" for x in items)
     c["ssh_tools"] = auth.chk(auth.OK, "ssh found") if shutil.which("ssh") else auth.chk(auth.FAIL if need_ssh else auth.WARN, "ssh not installed (apt install openssh-client)")
+    paused = [n for n in items if auth.paused(n)]
     for n in items:
+        if auth.paused(n): continue                  # not checked, so it raises no warning
         t = _pollers.get(n["id"])
         if t is None or not t.is_alive(): dead.append(n["name"]); continue
         cc = _cache.get(n["id"])
@@ -454,7 +460,7 @@ def health_report(detailed=False):
         elif sn["ts"] and now - sn["ts"] > max(3 * POLL_IDLE, 180): bad.append(f'{n["name"]}: data {int(now - sn["ts"])} s old')
     if not items: c["pollers"] = auth.chk(auth.OK, "no VPN configured")
     elif dead:    c["pollers"] = auth.chk(auth.FAIL, "poller stopped: " + ", ".join(dead))
-    else:         c["pollers"] = auth.chk(auth.OK, f"{len(items)} running")
+    else:         c["pollers"] = auth.chk(auth.OK, f"{len(items) - len(paused)} running" + (f", {len(paused)} paused" if paused else ""))
     c["vpn_sources"] = auth.chk(auth.WARN, "; ".join(bad)) if bad else auth.chk(auth.OK, "all VPN sources answering")
     return auth.health_reply("vpn", c, detailed)
 
@@ -522,8 +528,8 @@ class H(BaseHTTPRequestHandler):
             out = []
             for n in load_vpn():
                 if n["id"] not in _pollers or not _pollers[n["id"]].is_alive(): ensure_poller(n)
-                cc = _cache.get(n["id"]) or Cache(n["id"])
-                out.append({**public(n), "snap": cc.snap(), "history": cc.history() if with_hist else []})
+                cc = Cache(n["id"]) if auth.paused(n) else (_cache.get(n["id"]) or Cache(n["id"]))
+                out.append({**public(n), "paused": auth.paused(n), "snap": cc.snap(), "history": cc.history() if with_hist else []})
             return self._json(200, {"vpn": out})
         if path == "/api/ssh-key":
             if not auth.check_permission(tok, "vpn", "admin"): return self._json(403, {"error": "Admin permission required"})
@@ -552,6 +558,20 @@ class H(BaseHTTPRequestHandler):
 
         # Crea la llave SSH del módulo (si no existe) y devuelve la pública para instalarla en el servidor VPN.
         # EN: Create the module's SSH key (if missing) and return the public key to install on the VPN server.
+        # Pausar o reanudar una VPN: {"paused": true|false} (solo admin). / EN: Pause or resume a VPN (admin only).
+        mp = re.fullmatch(r"/api/vpn/([a-zA-Z0-9\-]+)/pause", path)
+        if mp:
+            if not isinstance(body.get("paused"), bool): return self._json(400, {"error": "paused must be true or false"})
+            with _vpn_lock:
+                items = load_vpn()
+                cur = next((x for x in items if x["id"] == mp.group(1)), None)
+                if not cur: return self._json(404, {"error": "Not found"})
+                auth.set_paused(cur, body["paused"]); save_vpn(items)
+            log.info(f"[{cur['name']}] " + ("paused" if body["paused"] else "resumed"))
+            ensure_poller(cur)
+            cc = _cache.get(cur["id"])
+            if cc: cc.wake.set()
+            return self._json(200, {"vpn": {**public(cur), "paused": auth.paused(cur)}})
         if path == "/api/ssh-key":
             try: return self._json(200, {"public_key": ssh_keygen()})
             except (RuntimeError, OSError, subprocess.SubprocessError) as e: return self._json(500, {"error": str(e)[:160]})

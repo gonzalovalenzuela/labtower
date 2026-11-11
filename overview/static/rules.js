@@ -28,18 +28,18 @@
   function readings(R) {
     const out = [], ok = k => R[k] && R[k].status === 'fulfilled' ? R[k].value : null, add = (k, who, v) => { v = num(v); if (v != null) out.push({k, who, v}); };
     const s = ok('sys'); if (s) { add('pi_temp', '', s.temp); add('pi_cpu', '', s.cpu); add('pi_mem', '', s.mem && s.mem.pct); add('pi_disk', '', s.disk && s.disk.pct); }
-    ((ok('nut') || {}).servers || []).forEach(sv => Object.entries((sv.status || {}).ups || {}).forEach(([n, v]) => {
+    ((ok('nut') || {}).servers || []).filter(sv => !sv.paused).forEach(sv => Object.entries((sv.status || {}).ups || {}).forEach(([n, v]) => {
       add('ups_charge', n, v['battery.charge']); add('ups_load', n, v['ups.load']); add('ups_temp', n, v['ups.temperature'] != null ? v['ups.temperature'] : v['battery.temperature']);
       const r = num(v['battery.runtime']); if (r != null) add('ups_runtime', n, r / 60);
     }));
-    ((ok('nas') || {}).nas || []).forEach(n => {
+    ((ok('nas') || {}).nas || []).filter(n => !n.paused).forEach(n => {
       const d = ((n.snap || {}).data || {}); add('nas_cpu', n.name, d.cpu && d.cpu.pct); add('nas_mem', n.name, d.mem && d.mem.pct); add('nas_temp', n.name, (d.system || {}).temp);
       const vols = (d.raids || []).filter(x => x.pct != null && !x.pool); if (vols.length) add('nas_vol', n.name, Math.max(...vols.map(x => x.pct)));
     });
-    ((ok('pve') || {}).clusters || []).forEach(c => (((c.snap || {}).data || {}).nodes || []).filter(x => x.status === 'online').forEach(x => {
+    ((ok('pve') || {}).clusters || []).filter(c => !c.paused).forEach(c => (((c.snap || {}).data || {}).nodes || []).filter(x => x.status === 'online').forEach(x => {
       const w = c.name + '/' + (x.node || x.name); if (x.cpu != null) add('pve_cpu', w, x.cpu * 100); if (x.maxmem) add('pve_ram', w, (x.mem || 0) / x.maxmem * 100);
     }));
-    ((ok('dns') || {}).servers || []).forEach(n => { const d = (n.snap || {}).data; if (d) add('dns_pct', n.name, d.pct); });
+    ((ok('dns') || {}).servers || []).filter(n => !n.paused).forEach(n => { const d = (n.snap || {}).data; if (d) add('dns_pct', n.name, d.pct); });
     const w = (ok('wan') || {}).snap; if (w) { add('wan_rtt', '', w.rtt); add('wan_loss', '', w.loss); }
     return out;
   }

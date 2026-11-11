@@ -884,6 +884,13 @@ def _poll(server):
             log.error(f"poll config: {e}"); cur = None
         if cur is None and not any(s["id"] == sid for s in _safe_servers()):
             return
+        if auth.paused(cur):
+            # Pausado: sin lecturas, eventos ni historial; sin datos viejos al reanudar. / EN: Paused: no readings, events or history.
+            cache.reset()
+            ev = _wake.get(sid)
+            if ev: ev.wait(POLL_SEC); ev.clear()
+            else: time.sleep(POLL_SEC)
+            continue
         try:
             ver   = nut.get_version()
             ups_l = nut.list_ups()
@@ -957,7 +964,9 @@ def health_report(detailed=False):
     # Pollers and data freshness, per server
     srvs = _safe_servers(); dead = []; stale = []; stuck = []
     stale_after = max(6 * POLL_SEC, 60)
+    paused = [s for s in srvs if auth.paused(s)]
     for s in srvs:
+        if auth.paused(s): continue                  # not checked, so it raises no warning
         sid = s["id"]; t = _pollers.get(sid)
         if t is None or not t.is_alive(): dead.append(s["name"]); continue
         cache = _caches.get(sid)
@@ -975,7 +984,7 @@ def health_report(detailed=False):
     elif dead:
         c["pollers"] = auth.chk(auth.FAIL, "poller stopped: " + ", ".join(dead))
     else:
-        c["pollers"] = auth.chk(auth.OK, f"{len(srvs)} running")
+        c["pollers"] = auth.chk(auth.OK, f"{len(srvs) - len(paused)} running" + (f", {len(paused)} paused" if paused else ""))
     c["upsd"] = auth.chk(auth.WARN, "; ".join(stale)) if stale else auth.chk(auth.OK, "all servers answering")
     if stuck: c["history_fresh"] = auth.chk(auth.FAIL, "history not being saved — " + "; ".join(stuck))
     else:     c["history_fresh"] = auth.chk(auth.OK)
@@ -1085,13 +1094,14 @@ class H(BaseHTTPRequestHandler):
                 if t_ is None or not t_.is_alive():
                     ensure_poller(s_)
             ser    = auth.can_see_serials(tok)
-            out    = [{**s, "status": _no_serials(_caches.get(s["id"], SCache(s["id"])).snap(range_), ser)} for s in srvs]
+            out    = [{**s, "paused": auth.paused(s), "status": _no_serials((SCache(s["id"]) if auth.paused(s) else _caches.get(s["id"], SCache(s["id"]))).snap(range_), ser)} for s in srvs]
             names = net_names() if auth.check_permission(tok, "net", "readonly") else {}      # only for users who may see Net Monitor
             self._json(200, {"servers": out, "names": names})
         elif path == "/api/ups":
             range_ = self._range_param()
             ser    = auth.can_see_serials(tok)
-            self._json(200, {sid: _no_serials(c.snap(range_), ser) for sid, c in _caches.items()})
+            off    = {s["id"] for s in _safe_servers() if auth.paused(s)}
+            self._json(200, {sid: _no_serials(c.snap(range_), ser) for sid, c in list(_caches.items()) if sid not in off})
         # Historial de un solo UPS para un rango (el gráfico lo pide al cambiar de rango).
         # EN: History of a single UPS for a range (the chart requests it when the range changes).
         elif path == "/api/history":
@@ -1203,6 +1213,19 @@ class H(BaseHTTPRequestHandler):
                 srvs.append(server); save_servers(srvs)
             ensure_poller(server)
             self._json(201, {"server": server})
+        # Pausar o reanudar un servidor NUT: {"paused": true|false} (solo admin). / EN: Pause or resume a NUT server (admin only).
+        elif (mp := re.fullmatch(r"/api/servers/([a-zA-Z0-9\-]+)/pause", path)):
+            if not auth.check_permission(tok, "nut", "admin"):
+                return self._json(403, {"error": "Admin permission required"})
+            if not isinstance(body.get("paused"), bool): return self._json(400, {"error": "paused must be true or false"})
+            with _srv_lock:
+                srvs = load_servers()
+                srv = next((x for x in srvs if x["id"] == mp.group(1)), None)
+                if srv is None: return self._json(404, {"error": "Not found"})
+                auth.set_paused(srv, body["paused"]); save_servers(srvs)
+            log.info(f"[{srv['name']}] " + ("paused" if body["paused"] else "resumed"))
+            ensure_poller(srv)                       # wakes it: stops at once, or reads at once when resumed
+            self._json(200, {"server": {**srv, "paused": auth.paused(srv)}})
         # Fecha de cambio de la batería de un UPS (vacía = volver a usar la del UPS).
         # EN: Battery replacement date of a UPS (empty = go back to the UPS one).
         elif path == "/api/battery-date":

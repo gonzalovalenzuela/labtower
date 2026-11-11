@@ -28,6 +28,12 @@ const LANG={
   "save":"Save",
   "delete":"Delete",
   "edit":"Edit",
+  "pause":"Pause",
+  "resume":"Resume",
+  "paused":"Paused",
+  "pausedMsg":"Paused: this VPN is not read and raises no alerts. Resume it to watch it again.",
+  "pausedOk":n=>`${n} paused`,
+  "resumedOk":n=>`${n} resumed`,
   "testFillAll":"Fill in the name, host and credentials.",
   "saved":"Saved",
   "permReadonly":"Read-only",
@@ -118,6 +124,12 @@ const LANG={
   "save":"Guardar",
   "delete":"Eliminar",
   "edit":"Editar",
+  "pause":"Pausar",
+  "resume":"Reanudar",
+  "paused":"Pausado",
+  "pausedMsg":"Pausado: esta VPN no se lee ni genera avisos. Reanúdala para volver a vigilarla.",
+  "pausedOk":n=>`${n} pausada`,
+  "resumedOk":n=>`${n} reanudada`,
   "testFillAll":"Completa nombre, host y credenciales.",
   "saved":"Guardado",
   "permReadonly":"Solo lectura",
@@ -270,7 +282,7 @@ function renderAll(){renderSidebar();renderSummary();renderDashboard();updateGlo
 function selectVpn(id){activeId=id;renderAll();}
 function toggleVpn(id){activeId=activeId===id?'':id;renderAll();}
 
-function lvOf(n){const s=n.snap;if(!s?.ts)return s?.error?'err':'loading';if(s.error)return 'err';return 'ok';}
+function lvOf(n){if(n.paused)return 'paused';const s=n.snap;if(!s?.ts)return s?.error?'err':'loading';if(s.error)return 'err';return 'ok';}
 function typeName(ty){return {tailscale:'Tailscale',openvpn:'OpenVPN',wireguard:'WireGuard'}[ty]||ty;}
 function renderSidebar(){
   const list=document.getElementById('vpn-list');list.innerHTML='';
@@ -279,7 +291,7 @@ function renderSidebar(){
     const div=document.createElement('div');
     div.className='cluster-nav'+(isActive?' active':'');
     div.onclick=()=>selectVpn(n.id);
-    const sub=typeName(n.type)+(d&&d.total!=null?' · '+d.online+'/'+d.total:'');
+    const sub=typeName(n.type)+(n.paused?' · '+t('paused'):d&&d.total!=null?' · '+d.online+'/'+d.total:'');
     div.innerHTML=`<span class="cluster-dot ${lvOf(n)}"></span>
       <div style="flex:1;min-width:0"><div class="cluster-nav-name ${isActive?'act':''}">${esc(n.name)}</div>
       <div class="cluster-nav-host">${esc(sub)}</div></div>`;
@@ -289,8 +301,9 @@ function renderSidebar(){
 function updateGlobalStats(){
   let on=0,cl=0,rx=0,tx=0,has=false;
   items.forEach(n=>{const d=n.snap?.data;if(!d||n.snap.error||!d.clients)return;on++;cl+=d.online||0;if(d.rx!=null){rx+=d.rx;has=true;}if(d.tx!=null)tx+=d.tx;});
-  document.getElementById('st-srv').textContent=items.length?`${on}/${items.length}`:'—';
-  document.getElementById('st-on').textContent=items.length?cl:'—';
+  const act=items.filter(n=>!n.paused).length;          // las pausadas no cuentan / paused ones do not count
+  document.getElementById('st-srv').textContent=act?`${on}/${act}`:'—';
+  document.getElementById('st-on').textContent=act?cl:'—';
   document.getElementById('st-rx').textContent=has?fmtBytes(rx):'—';
   document.getElementById('st-tx').textContent=has?fmtBytes(tx):'—';
 }
@@ -308,7 +321,7 @@ function renderSummary(){
   if(!items.length){box.innerHTML='';return;}
   const rows=items.map(n=>{
     const sn=n.snap||{},d=sn.data&&sn.data.clients?sn.data:null,lv=lvOf(n),open=n.id===activeId;
-    const state=lv==='loading'?pill('off','…'):lv==='err'?pill('crit',t('unreachable')):pill('ok',t('online'));
+    const state=lv==='paused'?pill('off',t('paused')):lv==='loading'?pill('off','…'):lv==='err'?pill('crit',t('unreachable')):pill('ok',t('online'));
     const sub=n.type==='tailscale'?(n.tailnet==='-'?'tailnet':n.tailnet):n.host+':'+n.port;
     return `<tr class="nas-row${open?' expanded':''}" data-on-click="toggleVpn" data-on-click-args="${jsargs([n.id])}">
       <td><span class="cluster-dot ${lv}"></span></td>
@@ -341,9 +354,13 @@ function fmtDur(s){s=Math.max(0,Math.round(Number(s)||0));const d=Math.floor(s/8
 function ago(ts){return ts?t('agoFmt',fmtDur(Date.now()/1000-ts)):'—';}
 function buildDetail(n){
   const sn=n.snap||{},d=sn.data;let h='';
+  // Botones de administración siempre visibles: también sin datos (una VPN que nunca respondió se puede editar o borrar).
+  // EN: Admin buttons always shown: also without data (a VPN that never answered can be edited or deleted).
+  const tools=canAdmin()?`<div class="nas-tools" style="margin-top:12px"><button class="btn-secondary" data-on-click="pauseVpn" data-on-click-args="${jsargs([{'@':'this'},n.id,!n.paused])}">${esc(n.paused?'▶ '+t('resume'):'⏸ '+t('pause'))}</button> <button class="btn-secondary" data-on-click="openVpnForm" data-on-click-args="${jsargs([n.id])}">${esc(t('edit'))}</button> <button class="btn-mok" data-on-click="confirmDelete" data-on-click-args="${jsargs([n.id,n.name])}">${esc(t('delete'))}</button></div>`:'';
+  if(n.paused)return `<div class="nas-empty">${esc(t('pausedMsg'))}</div>`+tools;
   if(sn.error)h+=`<div class="conn-err">${esc(sn.error)}</div>`;
   if(sn.stale&&!sn.error)h+=`<div class="nas-empty">${esc(t('stale'))}</div>`;
-  if(!d||!d.clients){return h||`<div class="nas-empty">${esc(t('connecting'))}</div>`;}
+  if(!d||!d.clients){return (h||`<div class="nas-empty">${esc(t('connecting'))}</div>`)+tools;}
   const now=Date.now()/1000,cl=[...d.clients].sort((a,b)=>(b.online-a.online)||String(a.name).localeCompare(String(b.name)));
   const ts=n.type==='tailscale',wg=n.type==='wireguard';
   const th=[t('colClient'),ts?t('colUser'):wg?t('colIface'):'',t('colIp'),ts?'':t('colVirtual'),t('colSince'),ts?'':t('colTraffic'),t('colLast')].map(x=>`<th>${esc(x)}</th>`).join('');
@@ -358,8 +375,7 @@ function buildDetail(n){
   const lg=(d.log||[]).slice(0,15);
   h+=`<div class="card" style="margin-top:12px"><div class="card-hd"><span class="card-title">${esc(t('sessions'))}</span></div><div style="padding:6px 14px">${
     lg.length?lg.map(x=>`<div class="vpn-log"><b>${esc(x.name)}</b><span>${esc(PCT.time(new Date(x.start*1000),false))} → ${esc(PCT.time(new Date(x.end*1000),false))}</span><span>${esc(fmtDur(x.end-x.start))}</span></div>`).join(''):`<div class="nas-empty">${esc(t('noSessions'))}</div>`}</div></div>`;
-  if(canAdmin())h+=`<div class="nas-tools" style="margin-top:12px"><button class="btn-secondary" data-on-click="openVpnForm" data-on-click-args="${jsargs([n.id])}">${esc(t('edit'))}</button> <button class="btn-mok" data-on-click="confirmDelete" data-on-click-args="${jsargs([n.id,n.name])}">${esc(t('delete'))}</button></div>`;
-  return h;
+  return h+tools;
 }
 
 // ── Alta, edición, prueba y borrado (solo administradores) ────────────────────
@@ -427,6 +443,15 @@ async function saveVpn(){
   }catch(e){toast(e.message,true);}
   finally{btn.disabled=false;btn.textContent=t('save');}
 }
+// Pausar o reanudar una VPN (solo admin). / EN: Pause or resume a VPN (admin only).
+async function pauseVpn(btn,id,paused){
+  if(btn)btn.disabled=true;
+  try{
+    const r=await fetch('api/vpn/'+encodeURIComponent(id)+'/pause',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paused})});
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Error');
+    toast(t(paused?'pausedOk':'resumedOk',d.vpn?.name||''));await fetchAll();
+  }catch(e){toast(e.message,true);if(btn)btn.disabled=false;}
+}
 function confirmDelete(id,name){
   $('del-msg').textContent=t('deleteConfirm',name);
   $('del-btn').onclick=async()=>{
@@ -476,4 +501,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ closeModals, confirmDelete, doLogin, logout, makeSshKey, openVpnForm, saveVpn, setLang, setTheme, testVpn, toggleNav, toggleVpn, typeChanged });
+if (window.cspRegister) cspRegister({ closeModals, confirmDelete, doLogin, logout, makeSshKey, openVpnForm, pauseVpn, saveVpn, setLang, setTheme, testVpn, toggleNav, toggleVpn, typeChanged });

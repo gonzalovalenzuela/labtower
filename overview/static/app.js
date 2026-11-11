@@ -93,7 +93,7 @@ const lvl=(m)=>(me.disabled||[]).includes(m)?0:({readonly:1,execute:2,admin:3})[
 const UPS_FLAGS=['RB','OVER','BYPASS','OFF','FSD','ALARM'];
 function renderUPS(d){
   const el=$('c-nut');let sev='ok',body='',n=0;
-  for(const srv0 of (d.servers||[])){
+  for(const srv0 of (d.servers||[]).filter(x=>!x.paused)){
     const srv=srv0.status||{},sid=srv0.id,sname=srv0.name||sid,where=`${sname} (${srv0.host}:${srv0.port})`;
     if(srv.error&&!Object.keys(srv.ups||{}).length){sev='crit';issues.push({lv:'crit',m:'ups',t:`${lang==='es'?'Servidor UPS':'UPS server'} ${where} ${T('issue_srv')}: ${srv.error}`,href:'/nut/'});body+=`<div class="unit"><div class="uh">${esc(where)} ${pill('crit',T('unreach'))}</div><div class="sub">${esc(srv.error)}</div></div>`;n++;continue}
     for(const [name,v] of Object.entries(srv.ups||{})){
@@ -129,7 +129,7 @@ function pveChart(id){
 // Texto del error que acompaña a un aviso («: error», recortado) / error text that goes with an issue (': error', trimmed)
 function why(e){e=e==null?'':String(e).trim();return e?': '+(e.length>160?e.slice(0,159)+'…':e):''}
 function renderPVE(d){
-  const el=$('c-pve');let sev='ok',body='';const cl=d.clusters||[];
+  const el=$('c-pve');let sev='ok',body='';const cl=(d.clusters||[]).filter(c=>!c.paused);   // pausados: no se leen / paused: not read
   cl.forEach(c=>{
     const sn=c.snap||{},data=sn.data||{},nodes=data.nodes||[];let s='ok';
     const on=nodes.filter(x=>x.status==='online'),off=nodes.filter(x=>x.status!=='online');
@@ -175,7 +175,7 @@ function nasChart(id){
     `<div class="hc"><i style="background:var(--blue)"></i>${T('cpu')}<i style="background:#8b5cf6"></i>${T('mem')}${a.some(p=>p.temp!=null)?`<i style="background:var(--red)"></i>${T('temp')}`:''} · ${dur(a.length*300)}</div></div>`;
 }
 function renderNAS(d){
-  const el=$('c-nas');let sev='ok',body='';const L=d.nas||[];
+  const el=$('c-nas');let sev='ok',body='';const L=(d.nas||[]).filter(n=>!n.paused);   // pausados: no se leen / paused: not read
   L.forEach(n=>{
     const sn=n.snap||{},data=sn.data||{},sy=data.system||{};let s='ok';
     if(sn.error){s='crit';issues.push({lv:'crit',m:'nas',t:`${n.name}: ${T('issue_nasdown')}${why(sn.error)}`,href:'/nas/'})}
@@ -232,7 +232,7 @@ async function dnsAct(e){
   }catch(err){b.disabled=false;b.textContent=String(err.message||err).slice(0,60)}
 }
 function renderDNS(d){
-  const el=$('c-dns');let sev='ok',body='';const L=d.servers||[];
+  const el=$('c-dns');let sev='ok',body='';const L=(d.servers||[]).filter(n=>!n.paused);   // pausados: no se leen / paused: not read
   L.forEach(n=>{
     const sn=n.snap||{},data=sn.data,off=!!sn.error;let s='ok';
     if(off){s='crit';issues.push({lv:'crit',m:'dns',t:`${n.name}: ${T('issue_dnsdown')}${why(sn.error)}`,href:'/dns/'})}
@@ -265,7 +265,7 @@ function wanChart(){
   return `<div class="kp"><svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${down}${pl}</svg><div class="hc"><i style="background:var(--blue)"></i>${T('wanrtt')} ${f(lo)}–${f(hi)} ms · ${dur(a[n-1].ts-a[0].ts)}</div></div>`;
 }
 function renderVPN(d){
-  const el=$('c-vpn'),list=d.vpn||[];let sev='ok',body='';
+  const el=$('c-vpn'),list=(d.vpn||[]).filter(n=>!n.paused);let sev='ok',body='';   // pausadas: no se leen / paused: not read
   if(!list.length)body=`<div class="empty">${T('vpnnone')}</div>`;
   list.forEach(n=>{
     const sn=n.snap||{},x=sn.data;
@@ -277,7 +277,7 @@ function renderVPN(d){
   return sev;
 }
 function renderUptime(d){
-  const el=$('c-upt'),list=d.monitors||[];let sev='ok',body='';
+  const el=$('c-upt'),list=(d.monitors||[]).filter(n=>!n.paused);let sev='ok',body='';   // pausados: no se revisan / paused: not checked
   if(!list.length)body=`<div class="empty">${T('uptnone')}</div>`;
   else{
     const up=list.filter(n=>n.status==='up'||n.status==='pending').length;
@@ -446,7 +446,7 @@ async function refresh(){
   // Historial de UPS (carga y vatios): cada 60 s basta / UPS history (load and watts): every 60 s is enough
   if(R.nut&&R.nut.status==='fulfilled'&&Date.now()-histTs>60000){
     histTs=Date.now();
-    const q=[];for(const sv of (R.nut.value.servers||[])){const sid=sv.id;for(const name of Object.keys((sv.status||{}).ups||{}))q.push(jget(`/nut/api/history?srv=${encodeURIComponent(sid)}&ups=${encodeURIComponent(name)}&range=1d`).then(h=>{hist[sid+'|'+name]=h.history||[]}).catch(()=>{}))}
+    const q=[];for(const sv of (R.nut.value.servers||[]).filter(x=>!x.paused)){const sid=sv.id;for(const name of Object.keys((sv.status||{}).ups||{}))q.push(jget(`/nut/api/history?srv=${encodeURIComponent(sid)}&ups=${encodeURIComponent(name)}&range=1d`).then(h=>{hist[sid+'|'+name]=h.history||[]}).catch(()=>{}))}
     await Promise.all(q);
   }
   if(wantPH&&R.pve&&R.pve.status==='fulfilled'){pveHTs=Date.now();pveH={};(R.pve.value.clusters||[]).forEach(c=>{pveH[c.id]=aggHist(c)})}

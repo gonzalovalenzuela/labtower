@@ -138,6 +138,8 @@ def validate(body: dict, current=None) -> dict:
         cfg[k] = str(cfg.get(k) or "")
         if re.search(r"[\x00-\x1f\x7f]", cfg[k]) or len(cfg[k]) > 256: raise ValueError(f"Invalid {k}")
     if cfg["type"] == "adguard" and not cfg["username"]: raise ValueError("AdGuard Home needs a username")
+    # La pausa del monitoreo solo cambia por /pause: editar la conserva. / EN: The monitoring pause only changes through /pause: editing keeps it.
+    if auth.paused(current): cfg["enabled"] = False
     return cfg
 
 # Vista para el navegador: sin la clave, solo «has_password».
@@ -764,6 +766,8 @@ class DnsCache:
         with self._lock: self._err = e
     def snap(self):
         with self._lock: return {"id": self.id, "data": dict(self._data), "error": self._err, "ts": self._ts}
+    def clear(self):
+        with self._lock: self._data, self._err, self._ts = {}, None, None
 
 _cache: dict = {}
 _pollers: dict = {}
@@ -795,7 +799,9 @@ def _poll(sid: str):
         except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.error(f"[{sid}] config read: {e}"); n = False
         if n is None: return
-        if n:
+        if n and auth.paused(n):
+            cache.clear()                 # paused: no queries or events, nothing stale when resumed / pausado: sin consultas
+        elif n:
             t0 = time.time()
             try:
                 snap = collect(n, cache.state)
@@ -839,7 +845,9 @@ def health_report(detailed=False):
     c = auth.check_common()
     c["dns_file"] = auth.check_file(DATA_FILE)
     now = time.time(); items = load_servers(); dead, bad = [], []
+    paused = [n for n in items if auth.paused(n)]
     for n in items:
+        if auth.paused(n): continue                  # not checked, so it raises no warning
         t = _pollers.get(n["id"])
         if t is None or not t.is_alive(): dead.append(n["name"]); continue
         cc = _cache.get(n["id"])
@@ -849,7 +857,7 @@ def health_report(detailed=False):
         elif sn["ts"] and now - sn["ts"] > max(3 * POLL_IDLE, 180): bad.append(f'{n["name"]}: data {int(now - sn["ts"])} s old')
     if not items: c["pollers"] = auth.chk(auth.OK, "no DNS server configured")
     elif dead:    c["pollers"] = auth.chk(auth.FAIL, "poller stopped: " + ", ".join(dead))
-    else:         c["pollers"] = auth.chk(auth.OK, f"{len(items)} running")
+    else:         c["pollers"] = auth.chk(auth.OK, f"{len(items) - len(paused)} running" + (f", {len(paused)} paused" if paused else ""))
     c["dns_servers"] = auth.chk(auth.WARN, "; ".join(bad)) if bad else auth.chk(auth.OK, "all DNS servers answering")
     return auth.health_reply("dns", c, detailed)
 
@@ -918,8 +926,8 @@ class H(BaseHTTPRequestHandler):
             out = []
             for n in load_servers():
                 if n["id"] not in _pollers or not _pollers[n["id"]].is_alive(): ensure_poller(n)
-                snap = _cache.get(n["id"], DnsCache(n["id"])).snap()
-                out.append({**public(n), "snap": snap, "history": get_history(n["id"]) if with_hist else []})
+                snap = (DnsCache(n["id"]) if auth.paused(n) else _cache.get(n["id"], DnsCache(n["id"]))).snap()
+                out.append({**public(n), "paused": auth.paused(n), "snap": snap, "history": get_history(n["id"]) if with_hist else []})
             return self._json(200, {"servers": out})
         mh = re.fullmatch(r"/api/dns/([A-Za-z0-9_-]{1,40})/history", path)
         if mh:
@@ -934,6 +942,7 @@ class H(BaseHTTPRequestHandler):
         if mc:
             cfg = next((n for n in load_servers() if n.get("id") == mc.group(1)), None)
             if cfg is None: return self._json(404, {"error": "Server not found"})
+            if auth.paused(cfg): return self._json(409, {"error": "Monitoring of this server is paused"})
             rng = parse_qs(urlparse(self.path).query).get("range", ["1d"])[0]
             if rng not in CRANGES: return self._json(400, {"error": "Invalid range"})
             cache = _cache.get(cfg["id"])
@@ -942,6 +951,7 @@ class H(BaseHTTPRequestHandler):
         if mq:
             cfg = next((n for n in load_servers() if n.get("id") == mq.group(1)), None)
             if cfg is None: return self._json(404, {"error": "Server not found"})
+            if auth.paused(cfg): return self._json(409, {"error": "Monitoring of this server is paused"})
             rng = parse_qs(urlparse(self.path).query).get("range", ["1w"])[0]
             if rng not in QRANGES: return self._json(400, {"error": "Invalid range"})
             cache = _cache.get(cfg["id"])
@@ -978,6 +988,7 @@ class H(BaseHTTPRequestHandler):
                 return self._json(403 if auth.check_permission(tok, "dns", "readonly") else 401, {"error": "Execute permission required"})
             n = next((x for x in load_servers() if x["id"] == mb.group(1)), None)
             if not n: return self._json(404, {"error": "Not found"})
+            if auth.paused(n): return self._json(409, {"error": "Monitoring of this server is paused"})
             if not isinstance(body.get("enabled"), bool): return self._json(400, {"error": "enabled must be true or false"})
             secs = body.get("seconds")
             if secs is not None and (not isinstance(secs, int) or isinstance(secs, bool) or not 1 <= secs <= 86400): return self._json(400, {"error": "seconds must be 1-86400"})
@@ -998,6 +1009,7 @@ class H(BaseHTTPRequestHandler):
             if not auth.check_permission(tok, "dns", "execute"):
                 return self._json(403 if auth.check_permission(tok, "dns", "readonly") else 401, {"error": "Execute permission required"})
             n = next((x for x in load_servers() if x["id"] == mr.group(1)), None)
+            if auth.paused(n): return self._json(409, {"error": "Monitoring of this server is paused"})
             if not n: return self._json(404, {"error": "Not found"})
             name, qt = str(body.get("name") or "").strip(), str(body.get("type") or "A").upper()
             if not dnsq.valid_name(name) or qt not in ("A", "AAAA"): return self._json(400, {"error": "Invalid name or type"})
@@ -1008,6 +1020,22 @@ class H(BaseHTTPRequestHandler):
 
         if not auth.check_permission(tok, "dns", "admin"):
             return self._json(403 if auth.check_permission(tok, "dns", "readonly") else 401, {"error": "Admin permission required"})
+
+        # Pausar o reanudar el monitoreo de un servidor: {"paused": true|false}. No es el bloqueo de anuncios (eso es /blocking).
+        # EN: Pause or resume monitoring a server. Not the ad blocking (that is /blocking).
+        mp = re.fullmatch(r"/api/dns/([a-zA-Z0-9\-]+)/pause", path)
+        if mp:
+            if not isinstance(body.get("paused"), bool): return self._json(400, {"error": "paused must be true or false"})
+            with _dns_lock:
+                items = load_servers()
+                cur = next((x for x in items if x["id"] == mp.group(1)), None)
+                if not cur: return self._json(404, {"error": "Not found"})
+                auth.set_paused(cur, body["paused"]); save_servers(items)
+            log.info(f"[{cur['name']}] monitoring " + ("paused" if body["paused"] else "resumed"))
+            ensure_poller(cur)
+            cc = _cache.get(cur["id"])
+            if cc: cc.wake.set()
+            return self._json(200, {"dns": {**public(cur), "paused": auth.paused(cur)}})
 
         if path == "/api/dns":
             try: cfg = validate(body)

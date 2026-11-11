@@ -42,7 +42,7 @@ const LANG={
     accumulating:'Accumulating data…',
     testConnected:(n,v)=>`✓ Connected — ${n} UPS${v?' · '+v:''}`,
     calcVA:'V×A calculated',calcLoad:'VA×load',
-    upsCountUnit:(n)=>`${n} UPS`,nodeCountUnit:(n)=>`${n} node${n!==1?'s':''}`,
+    upsCountUnit:(n)=>`${n} UPS`,nodeCountUnit:(n)=>`${n} node${n!==1?'s':''}`,pause:'Pause',resume:'Resume',paused:'Paused',pausedOk:n=>`${n} paused`,resumedOk:n=>`${n} resumed`,
     addServerTitle:'Add NUT server',editServerTitle:'Edit NUT server',saveBtn:'Save',serverEdited:(name)=>`${name} updated`,serverEditedLog:(name)=>`Server updated: ${name}`,addServerName:'Name',addServerHost:'Host / IP',
     addServerPort:'Port',addServerTest:'Test',addServerBtn:'Add',
     deleteServerTitle:'Delete server',deleteServerConfirm:(name)=>`Delete server "${name}"? Monitoring will stop.`,
@@ -95,7 +95,7 @@ const LANG={
     accumulating:'Acumulando datos…',
     testConnected:(n,v)=>`✓ Conectado — ${n} UPS${v?' · '+v:''}`,
     calcVA:'V×A calculado',calcLoad:'VA×carga',
-    upsCountUnit:(n)=>`${n} UPS`,nodeCountUnit:(n)=>`${n} nodo${n!==1?'s':''}`,
+    upsCountUnit:(n)=>`${n} UPS`,nodeCountUnit:(n)=>`${n} nodo${n!==1?'s':''}`,pause:'Pausar',resume:'Reanudar',paused:'Pausado',pausedOk:n=>`${n} pausado`,resumedOk:n=>`${n} reanudado`,
     addServerTitle:'Agregar servidor NUT',editServerTitle:'Editar servidor NUT',saveBtn:'Guardar',serverEdited:(name)=>`${name} actualizado`,serverEditedLog:(name)=>`Servidor actualizado: ${name}`,addServerName:'Nombre',addServerHost:'Host / IP',
     addServerPort:'Puerto',addServerTest:'Probar',addServerBtn:'Agregar',
     deleteServerTitle:'Eliminar servidor',deleteServerConfirm:(name)=>`¿Eliminar el servidor "${name}"? Se detendrá el monitoreo.`,
@@ -284,14 +284,14 @@ function renderSidebar(){
   const list=document.getElementById('srv-list');list.innerHTML='';
   servers.forEach(s=>{
     const snap=allData[s.id];
-    const dotCls=!snap?'loading':snap.error?'err':snap.last_ok?'ok':'loading';
+    const dotCls=s.paused?'paused':!snap?'loading':snap.error?'err':snap.last_ok?'ok':'loading';
     const upsCount=snap?Object.keys(snap.ups||{}).length:0;
     const div=document.createElement('div');div.className='srv-nav';
     div.innerHTML=`<span class="srv-dot-sm ${dotCls}"></span>
       <div class="srv-nav-info">
-        <div class="srv-nav-top"><div class="srv-nav-name">${esc(s.name)}</div>${canAdmin()?`<span class="srv-acts"><button class="btn-ghost-sm edit" data-on-click="openEditServer" data-on-click-args="${jsargs([s.id])}" title="${t('editServerTitle')}"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button><button class="btn-ghost-sm" data-on-click="confirmDeleteServer" data-on-click-args="${jsargs([s.id,s.name])}" title="${t('deleteServerTitle')}"><svg viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6"/></svg></button></span>`:''}</div>
+        <div class="srv-nav-top"><div class="srv-nav-name">${esc(s.name)}</div>${canAdmin()?`<span class="srv-acts"><button class="btn-ghost-sm edit" data-on-click="pauseServer" data-on-click-args="${jsargs([{'@':'this'},s.id,!s.paused])}" title="${esc(t(s.paused?'resume':'pause'))}" aria-label="${esc(t(s.paused?'resume':'pause'))}">${s.paused?'<svg viewBox="0 0 24 24"><polygon points="7,4 20,12 7,20"/></svg>':'<svg viewBox="0 0 24 24"><line x1="8" y1="5" x2="8" y2="19"/><line x1="16" y1="5" x2="16" y2="19"/></svg>'}</button><button class="btn-ghost-sm edit" data-on-click="openEditServer" data-on-click-args="${jsargs([s.id])}" title="${t('editServerTitle')}"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button><button class="btn-ghost-sm" data-on-click="confirmDeleteServer" data-on-click-args="${jsargs([s.id,s.name])}" title="${t('deleteServerTitle')}"><svg viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6"/></svg></button></span>`:''}</div>
         <div class="srv-nav-host" title="${esc(s.host)}:${s.port}"><span data-nethost="${esc(s.host)}">${esc(s.host)}</span>:${s.port}</div>
-        ${upsCount?`<div class="srv-nav-host">${t('upsCountUnit',upsCount)}</div>`:''}
+        ${s.paused?`<div class="srv-nav-host">${esc(t('paused'))}</div>`:upsCount?`<div class="srv-nav-host">${t('upsCountUnit',upsCount)}</div>`:''}
       </div>
       `;
     list.appendChild(div);
@@ -397,7 +397,7 @@ function renderDashboard(){
 
   if(!rows.length){
     // A server was just added and upsd has not answered yet: say so instead of "No UPS found".
-    const connecting=servers.some(sv=>{const sn=allData[sv.id];return !sn||(!sn.last_ok&&!sn.error);});
+    const connecting=servers.some(sv=>{if(sv.paused)return false;const sn=allData[sv.id];return !sn||(!sn.last_ok&&!sn.error);});
     tbody.innerHTML=`<tr><td colspan="7" style="padding:40px;text-align:center;color:var(--text-dim);font-size:13px">
       <strong style="display:block;color:var(--text-mid);margin-bottom:6px" data-i18n="noUPS">${connecting?t('connectingSrv'):t('noUPS')}</strong>
       ${connecting?'':t('noUPSDetail')}</td></tr>`;
@@ -804,6 +804,16 @@ function fastRefresh(n=13){
 
 // Pide confirmación y borra un servidor (admin).
 // EN: Ask for confirmation and delete a server (admin).
+// Pausar o reanudar un servidor NUT (solo admin): sin lecturas, eventos ni historial mientras esté pausado.
+// EN: Pause or resume a NUT server (admin only): no readings, events or history while paused.
+async function pauseServer(btn,sid,paused){
+  if(btn)btn.disabled=true;
+  try{
+    const r=await fetch('api/servers/'+encodeURIComponent(sid)+'/pause',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paused})});
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Error');
+    toast(t(paused?'pausedOk':'resumedOk',d.server?.name||''),false);await fetchAll();
+  }catch(e){toast(e.message,true);if(btn)btn.disabled=false;}
+}
 function confirmDeleteServer(sid,name){
   document.getElementById('del-msg').textContent=t('deleteServerConfirm',name);
   document.getElementById('del-btn').onclick=async()=>{
@@ -973,4 +983,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ clearLog, closeAddServer, closeModals, confirmDeleteServer, doLogin, exportCSV, logout, openAddServer, openEditServer, saveServer, setBatteryDate, setLang, setTheme, setVChartRange, testServer, toggleNav, toggleVCmp });
+if (window.cspRegister) cspRegister({ clearLog, closeAddServer, closeModals, confirmDeleteServer, doLogin, exportCSV, logout, openAddServer, openEditServer, pauseServer, saveServer, setBatteryDate, setLang, setTheme, setVChartRange, testServer, toggleNav, toggleVCmp });

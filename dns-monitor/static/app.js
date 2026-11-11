@@ -23,6 +23,12 @@ const LANG={
  "save": "Save",
  "delete": "Delete",
  "edit": "Edit",
+ "monPause": "Pause monitoring",
+ "monResume": "Resume monitoring",
+ "monPaused": "Monitoring paused",
+ "monPausedMsg": "Monitoring paused: this server is not polled and raises no alerts. Ad blocking on the server keeps working as usual.",
+ "monPausedOk": "{0}: monitoring paused",
+ "monResumedOk": "{0}: monitoring resumed",
  "saved": "Saved",
  "status": "Status",
  "filterAll": "All",
@@ -152,6 +158,12 @@ const LANG={
  "save": "Guardar",
  "delete": "Eliminar",
  "edit": "Editar",
+ "monPause": "Pausar monitoreo",
+ "monResume": "Reanudar monitoreo",
+ "monPaused": "Monitoreo pausado",
+ "monPausedMsg": "Monitoreo pausado: este servidor no se consulta ni genera avisos. El bloqueo de anuncios en el servidor sigue funcionando igual.",
+ "monPausedOk": "{0}: monitoreo pausado",
+ "monResumedOk": "{0}: monitoreo reanudado",
  "saved": "Guardado",
  "status": "Estado",
  "filterAll": "Todo",
@@ -351,7 +363,7 @@ async function fetchAll(){
 function renderAll(){keepRes(()=>{renderSidebar();renderSummary();renderMain();updateGlobalStats();});}
 function selectServer(id){activeId=id;renderAll();ensureRanges();}
 function toggleServer(id){activeId=activeId===id?'':id;renderAll();ensureRanges();}
-function lvOf(n){const s=n.snap;if(!s?.ts)return 'loading';if(s.error)return 'err';return 'ok';}
+function lvOf(n){if(n.paused)return 'paused';const s=n.snap;if(!s?.ts)return 'loading';if(s.error)return 'err';return 'ok';}
 function typeName(n){const d=n.snap?.data||{};return n.type==='adguard'?'AdGuard Home':'Pi-hole'+(d.api?' '+d.api:'');}
 function renderSidebar(){
   const list=$('srv-list');list.innerHTML='';
@@ -360,7 +372,7 @@ function renderSidebar(){
     div.className='cluster-nav'+(isActive?' active':'');
     div.onclick=()=>selectServer(n.id);
     div.innerHTML=`<span class="cluster-dot ${lvOf(n)}"></span><div style="flex:1;min-width:0"><div class="cluster-nav-name ${isActive?'act':''}">${esc(n.name)}</div>
-      <div class="cluster-nav-host">${esc(typeName(n))}</div></div>`;
+      <div class="cluster-nav-host">${esc(typeName(n))}${n.paused?' · '+esc(t('monPaused')):''}</div></div>`;
     list.appendChild(div);
   });
 }
@@ -371,10 +383,11 @@ function protPill(d){const b=d?.blocking;return pill(b==='enabled'?'ok':b==='dis
 function updateGlobalStats(){
   let on=0,q=0,b=0,msS=0,msN=0,prot=0,protAll=0;
   items.forEach(n=>{
-    const d=n.snap?.data;if(!d||n.snap.error)return;on++;q+=d.queries||0;b+=d.blocked||0;
+    const d=n.snap?.data;if(n.paused||!d||n.snap.error)return;on++;q+=d.queries||0;b+=d.blocked||0;
     if(d.ms!=null){msS+=d.ms;msN++;}protAll++;if(d.blocking==='enabled')prot++;
   });
-  $('st-srv').textContent=items.length?`${on}/${items.length}`:'—';
+  const act=items.filter(n=>!n.paused).length;          // los pausados no cuentan / paused ones do not count
+  $('st-srv').textContent=act?`${on}/${act}`:'—';
   $('st-q').textContent=on?fmtNum(q):'—';
   $('st-blk').innerHTML=q?Math.round(b/q*1000)/10+'<span style="font-size:13px;color:var(--text-dim)">%</span>':'—';
   $('st-ms').innerHTML=msN?Math.round(msS/msN)+'<span style="font-size:13px;color:var(--text-dim)"> ms</span>':'—';
@@ -400,9 +413,10 @@ function renderSummary(){
   const box=$('dns-summary');if(!box)return;
   if(!items.length){box.innerHTML='';return;}
   const rows=items.map(n=>{
-    const sn=n.snap||{},d=sn.data,lv=lvOf(n),open=n.id===activeId;
+    // Sin lectura (pausado, o caído desde el inicio) las celdas muestran «—», no «undefined». / EN: Without a reading the cells show «—».
+    const sn=n.snap||{},d=!n.paused&&sn.data&&sn.data.queries!=null?sn.data:null,lv=lvOf(n),open=n.id===activeId;
     const al=(d?.alerts||[]).filter(a=>a.lv!=='info'),worst=al.some(a=>a.lv==='crit')?'crit':al.length?'warn':'ok';
-    const state=lv==='loading'?pill('off','…'):lv==='err'?pill('crit',t('offline')):pill(worst,worst==='ok'?t('online'):al.length+' ⚠');
+    const state=lv==='paused'?pill('off',t('monPaused')):lv==='loading'?pill('off','…'):lv==='err'?pill('crit',t('offline')):pill(worst,worst==='ok'?t('online'):al.length+' ⚠');
     return `<tr class="dns-row${open?' expanded':''}" data-on-click="toggleServer" data-on-click-args="${jsargs([n.id])}">
       <td><span class="cluster-dot ${lv}"></span></td>
       <td><div class="sum-name">${esc(n.name)}</div><div class="sum-sub">${esc(n.url)}</div></td>
@@ -526,8 +540,9 @@ function buildDetail(n){
     tools+=d.blocking==='disabled'?`<button class="btn-secondary" data-on-click="resumeBlocking" data-on-click-args="${jsargs([n.id])}">${esc(t('resume'))}</button>`
       :`<button class="btn-secondary" data-on-click="openPause" data-on-click-args="${jsargs([n.id,n.name])}">${esc(t('pause'))}</button>`;
   }
-  if(canAdmin())tools+=`<button class="btn-secondary" data-on-click="openForm" data-on-click-args="${jsargs([n.id])}">${esc(t('edit'))}</button><button class="btn-secondary" data-on-click="confirmDelete" data-on-click-args="${jsargs([n.id,n.name])}">${esc(t('delete'))}</button>`;
+  if(canAdmin())tools+=`<button class="btn-secondary" data-on-click="pauseMonitor" data-on-click-args="${jsargs([{'@':'this'},n.id,!n.paused])}">${esc(n.paused?'▶ '+t('monResume'):'⏸ '+t('monPause'))}</button><button class="btn-secondary" data-on-click="openForm" data-on-click-args="${jsargs([n.id])}">${esc(t('edit'))}</button><button class="btn-secondary" data-on-click="confirmDelete" data-on-click-args="${jsargs([n.id,n.name])}">${esc(t('delete'))}</button>`;
   tools=`<div class="dns-tools">${tools}</div>`;
+  if(n.paused)return `<div class="dns-head"><div><h2>${esc(n.name)} ${pill('off',t('monPaused'))}</h2></div>${tools}</div><div class="state-msg">${esc(t('monPausedMsg'))}</div>`;
   if(!snap.ts)return '<div class="state-msg"><strong>'+esc(t('connecting'))+'</strong>'+esc(t('connectingMsg'))+'</div>';
   if(snap.error&&!hasData){
     return `<div class="dns-head"><div><h2>${esc(n.name)}</h2></div>${tools}</div><div class="state-msg err"><strong>${esc(t('connError'))}</strong>${esc(snap.error)}<br><br><span style="font-size:12px;font-family:var(--mono)">${esc(t('connErrorHint'))}</span></div>`;
@@ -577,6 +592,16 @@ function openPause(id,name){
     catch(e){toast(e.message,true);}
   };
   $('pause-overlay').classList.add('show');
+}
+// Pausar o reanudar el monitoreo de un servidor (solo admin). No toca el bloqueo de anuncios del servidor.
+// EN: Pause or resume monitoring a server (admin only). The server's ad blocking is left alone.
+async function pauseMonitor(btn,id,paused){
+  if(btn)btn.disabled=true;
+  try{
+    const r=await fetch('api/dns/'+encodeURIComponent(id)+'/pause',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paused})});
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Error');
+    toast(t(paused?'monPausedOk':'monResumedOk',d.dns?.name||''));await fetchAll();
+  }catch(e){toast(e.message,true);if(btn)btn.disabled=false;}
 }
 async function resumeBlocking(id){
   try{const r=await post('api/dns/'+id+'/blocking',{enabled:true});if(!r.ok)throw new Error(r.d.error||'Error');toast(t('resumed'));setTimeout(fetchAll,1200);}
@@ -769,4 +794,4 @@ _i18nReady=true;
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ runResolve, saveRes, closeModals, confirmDelete, doLogin, logout, openForm, openPause, resumeBlocking, saveServer, setLang, setRange, setQRange, setCRange, toggleCmp, setTheme, testServer, toggleNav, toggleServer, typeChanged });
+if (window.cspRegister) cspRegister({ runResolve, saveRes, closeModals, confirmDelete, doLogin, logout, openForm, openPause, pauseMonitor, resumeBlocking, saveServer, setLang, setRange, setQRange, setCRange, toggleCmp, setTheme, testServer, toggleNav, toggleServer, typeChanged });

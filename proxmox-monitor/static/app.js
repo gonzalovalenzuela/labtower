@@ -6,7 +6,7 @@ const LANG={
     statNodesOnline:'Nodes online',statVMsRunning:'VMs running',
     statCTsRunning:'CTs running',statAvgCPU:'Avg CPU',statAvgRAM:'Avg RAM',
     noClusters:'No clusters configured',noClustersHint:'Add a Proxmox cluster to get started.',
-    addClusterTitle:'Add Proxmox cluster',editClusterTitle:'Edit Proxmox cluster',editCluster:'Edit cluster',save:'Save',tokenKeep:'Empty = keep current',clusterSaved:(name)=>`${name} saved`,
+    addClusterTitle:'Add Proxmox cluster',editClusterTitle:'Edit Proxmox cluster',editCluster:'Edit cluster',pause:'Pause',resume:'Resume',paused:'Paused',pausedMsg:'Paused: this cluster is not polled and raises no alerts. Resume it to watch it again.',pausedOk:n=>`${n} paused`,resumedOk:n=>`${n} resumed`,clusterDeleted:n=>`${n} deleted`,save:'Save',tokenKeep:'Empty = keep current',clusterSaved:(name)=>`${name} saved`,
     addClusterHint:'You need an API Token in Proxmox: Datacenter → API Tokens → Add',
     fieldName:'Name',fieldPort:'Port',fieldPVEUser:'PVE User',
     formatLabel:'Format',cancel:'Cancel',test:'Test',delete:'Delete',
@@ -51,7 +51,7 @@ const LANG={
     statNodesOnline:'Nodos en línea',statVMsRunning:'VMs en ejecución',
     statCTsRunning:'CTs corriendo',statAvgCPU:'CPU promedio',statAvgRAM:'RAM promedio',
     noClusters:'Sin clusters configurados',noClustersHint:'Agrega un cluster Proxmox para comenzar.',
-    addClusterTitle:'Agregar cluster Proxmox',editClusterTitle:'Editar cluster Proxmox',editCluster:'Editar cluster',save:'Guardar',tokenKeep:'Vacío = conservar el actual',clusterSaved:(name)=>`${name} guardado`,
+    addClusterTitle:'Agregar cluster Proxmox',editClusterTitle:'Editar cluster Proxmox',editCluster:'Editar cluster',pause:'Pausar',resume:'Reanudar',paused:'Pausado',pausedMsg:'Pausado: este cluster no se consulta ni genera avisos. Reanúdalo para volver a vigilarlo.',pausedOk:n=>`${n} pausado`,resumedOk:n=>`${n} reanudado`,clusterDeleted:n=>`${n} eliminado`,save:'Guardar',tokenKeep:'Vacío = conservar el actual',clusterSaved:(name)=>`${name} guardado`,
     addClusterHint:'Necesitas un API Token en Proxmox: Datacenter → API Tokens → Add',
     fieldName:'Nombre',fieldPort:'Puerto',fieldPVEUser:'Usuario PVE',
     formatLabel:'Formato',cancel:'Cancelar',test:'Probar',delete:'Eliminar',
@@ -239,7 +239,7 @@ function renderSidebar(){
   clusters.forEach(c=>{
     const snap=c.snap;
     const isActive=c.id===activeId;
-    const dotCls=!snap?.ts&&!snap?.error?'loading':snap?.error?'err':'ok';
+    const dotCls=c.paused?'paused':!snap?.ts&&!snap?.error?'loading':snap?.error?'err':'ok';
     const nodeCount=(snap?.data?.nodes||[]).length;
     const div=document.createElement('div');
     div.className='cluster-nav'+(isActive?' active':'');
@@ -247,9 +247,9 @@ function renderSidebar(){
     div.innerHTML=`<span class="cluster-dot ${dotCls}"></span>
       <div style="flex:1;min-width:0">
         <div class="cluster-nav-name ${isActive?'act':''}">${esc(c.name)}</div>
-        <div class="cluster-nav-host"><span data-nethost="${esc(c.host)}">${esc(c.host)}</span>:${c.port}${nodeCount?' · '+t('nodeCountNav',nodeCount):''}</div>
+        <div class="cluster-nav-host"><span data-nethost="${esc(c.host)}">${esc(c.host)}</span>:${c.port}${c.paused?' · '+esc(t('paused')):nodeCount?' · '+t('nodeCountNav',nodeCount):''}</div>
       </div>
-      ${c.id!=='local'&&ME?.permissions?.pve==='admin'?`<button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;padding:2px 4px" title="${esc(t('editCluster'))}" aria-label="${esc(t('editCluster'))}" data-on-click="openEditCluster" data-on-click-args="${jsargs([c.id])}" data-on-click-stop="1">✎</button><button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;padding:2px 4px" title="${esc(t('deleteCluster'))}" aria-label="${esc(t('deleteCluster'))}" data-on-click="confirmDelete" data-on-click-args="${jsargs([c.id,c.name])}" data-on-click-stop="1">✕</button>`:''}`;
+      ${c.id!=='local'&&ME?.permissions?.pve==='admin'?`<button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;padding:2px 4px" title="${esc(t(c.paused?'resume':'pause'))}" aria-label="${esc(t(c.paused?'resume':'pause'))}" data-on-click="pauseCluster" data-on-click-args="${jsargs([{'@':'this'},c.id,!c.paused])}" data-on-click-stop="1">${c.paused?'▶':'⏸'}</button><button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;padding:2px 4px" title="${esc(t('editCluster'))}" aria-label="${esc(t('editCluster'))}" data-on-click="openEditCluster" data-on-click-args="${jsargs([c.id])}" data-on-click-stop="1">✎</button><button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;padding:2px 4px" title="${esc(t('deleteCluster'))}" aria-label="${esc(t('deleteCluster'))}" data-on-click="confirmDelete" data-on-click-args="${jsargs([c.id,c.name])}" data-on-click-stop="1">✕</button>`:''}`;
     list.appendChild(div);
   });
 }
@@ -299,6 +299,11 @@ function renderDashboard(){
   if(pb){pb.style.display=cluster.pinned?'none':'';pb.textContent='⚠ '+t('unpinned')+' — '+t('pinCert');}
   const main=document.getElementById('main-content');
 
+  if(cluster.paused){
+    main.innerHTML=`<div class="state-msg"><strong>${esc(t('paused'))}</strong>${esc(t('pausedMsg'))}`+
+      (isPveAdmin()?`<br><br><button class="btn-primary" style="width:auto;padding:8px 14px;background:var(--pve)" data-on-click="pauseCluster" data-on-click-args="${jsargs([{'@':'this'},cluster.id,false])}">▶ ${esc(t('resume'))}</button>`:'')+'</div>';
+    return;
+  }
   if(!snap?.ts&&!snap?.error){
     main.innerHTML='<div class="state-msg"><strong>'+esc(t('connecting'))+'</strong>'+esc(t('connectingMsg'))+'</div>';return;
   }
@@ -1055,11 +1060,21 @@ async function pinCluster(){
 
 // Pide confirmación y borra un cluster (admin).
 // EN: Ask for confirmation and delete a cluster (admin).
+// Pausar o reanudar un cluster (solo admin): no toca el token ni la huella del certificado.
+// EN: Pause or resume a cluster (admin only): the token and the certificate fingerprint are left alone.
+async function pauseCluster(btn,id,paused){
+  if(btn)btn.disabled=true;
+  try{
+    const r=await fetch('api/clusters/'+encodeURIComponent(id)+'/pause',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paused})});
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Error');
+    toast(t(paused?'pausedOk':'resumedOk',d.cluster?.name||''));await fetchAll();
+  }catch(e){toast(e.message,true);if(btn)btn.disabled=false;}
+}
 function confirmDelete(id,name){
   document.getElementById('del-msg').textContent=t('deleteClusterConfirm',name);
   document.getElementById('del-btn').onclick=async()=>{
     closeModals();
-    try{await fetch('api/clusters/'+id,{method:'DELETE'});toast(name+' eliminado');await fetchAll();}
+    try{const r=await fetch('api/clusters/'+id,{method:'DELETE'});if(!r.ok)throw new Error((await r.json().catch(()=>({}))).error||'Error');toast(t('clusterDeleted',name));await fetchAll();}
     catch(e){toast(e.message,true);}
   };
   document.getElementById('del-overlay').classList.add('show');
@@ -1140,4 +1155,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ bkSetDays, closeModals, confirmDelete, openEditCluster, doLogin, logout, moveNode, openAddCluster, pinCluster, toggleStopped, resetLayout, saveCluster, toggleBkIgnore, bkSelToggle, bkSelMode, bkBulk, toggleDiag, toggleDiagAll, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection, toggleNode, setNRange });
+if (window.cspRegister) cspRegister({ bkSetDays, closeModals, confirmDelete, openEditCluster, doLogin, logout, moveNode, openAddCluster, pauseCluster, pinCluster, toggleStopped, resetLayout, saveCluster, toggleBkIgnore, bkSelToggle, bkSelMode, bkBulk, toggleDiag, toggleDiagAll, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection, toggleNode, setNRange });

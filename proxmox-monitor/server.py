@@ -422,6 +422,9 @@ class ClusterCache:
             return {"id": self.id, "data": dict(self._data),
                     "error": self._err, "error_kind": self._kind if self._err else None, "ts": self._ts}
 
+    def clear(self):
+        with self._lock: self._data, self._err, self._kind, self._ts = {}, None, None, None
+
 # ─── Diagnóstico: reinicios, SMART ────────────────────────────────────────────
 # diag.json guarda la hora de arranque conocida de cada nodo, el registro de reinicios y los «unsafe shutdowns» vistos,
 # para detectar reinicios ocurridos mientras este módulo estaba parado.
@@ -545,8 +548,10 @@ def _smart_loop(cluster, cache):
         try:
             cur = next((c for c in load_clusters() if c["id"] == cid), None)
             if cur is None: break
-            client = _client_for(cur, client)
-            _smart_round(cur, client, cache)
+            if auth.paused(cur): _drop_side(cid)          # paused: no queries, nothing stale shown / pausado: sin consultas
+            else:
+                client = _client_for(cur, client)
+                _smart_round(cur, client, cache)
         except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"[{cluster['name']}] SMART round: {e}")
             if client: client.close()
@@ -620,8 +625,10 @@ def _backup_loop(cluster, cache):
         try:
             cur = next((c for c in load_clusters() if c["id"] == cid), None)
             if cur is None: break
-            client = _client_for(cur, client)
-            _backup_round(cur, client, cache)
+            if auth.paused(cur): _drop_side(cid)          # paused: no queries, nothing stale shown / pausado: sin consultas
+            else:
+                client = _client_for(cur, client)
+                _backup_round(cur, client, cache)
         except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"[{cluster['name']}] backup round: {e}")
             if client: client.close()
@@ -771,8 +778,10 @@ def _extra_loop(cluster, cache):
         try:
             cur = next((c for c in load_clusters() if c["id"] == cid), None)
             if cur is None: break
-            client = _client_for(cur, client)
-            _extra_round(cur, client, cache)
+            if auth.paused(cur): _drop_side(cid)          # paused: no queries, nothing stale shown / pausado: sin consultas
+            else:
+                client = _client_for(cur, client)
+                _extra_round(cur, client, cache)
         except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"[{cluster['name']}] extra round: {e}")
             if client: client.close()
@@ -910,8 +919,10 @@ def _guest_loop(cluster, cache):
         try:
             cur = next((c for c in load_clusters() if c["id"] == cid), None)
             if cur is None: break
-            client = _client_for(cur, client)
-            _guest_round(cur, client, cache)
+            if auth.paused(cur): _drop_side(cid)          # paused: no queries, nothing stale shown / pausado: sin consultas
+            else:
+                client = _client_for(cur, client)
+                _guest_round(cur, client, cache)
         except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"[{cluster['name']}] guest network round: {e}")
             if client: client.close()
@@ -1041,6 +1052,11 @@ def _poll_cluster(cluster):
         if gone:
             client.close()
             return
+        if auth.paused(cluster):
+            # Pausado: sin consultas, eventos ni historial. / EN: Paused: no queries, events or history.
+            cache.clear(); _drop_side(cid); client.close()
+            cache.wake.wait(POLL_IDLE); cache.wake.clear()
+            continue
         t0 = time.time()
         try:
             nodes_data = None
@@ -1090,6 +1106,12 @@ def _poll_cluster(cluster):
         cache.wake.wait(POLL_ACTIVE if active else POLL_IDLE)
         cache.wake.clear()
 
+# Datos de los hilos secundarios de un cluster pausado: se borran para no mostrar ni avisar con lecturas viejas.
+# EN: Side-thread data of a paused cluster: dropped so stale readings are neither shown nor alerted on.
+def _drop_side(cid):
+    with _xlock:
+        for d in (_smart, _backups, _extra, _live, _gnets): d.pop(cid, None)
+
 # Garantiza que haya un hilo de consulta vivo para el cluster.
 # EN: Guarantee a live polling thread for the cluster.
 def ensure_poller(cluster):
@@ -1122,7 +1144,9 @@ def health_report(detailed=False):
     c = auth.check_common()
     c["clusters_file"] = auth.check_file(DATA_FILE)
     now = time.time(); cls = load_clusters(); dead = []; bad = []
+    paused = [cl for cl in cls if auth.paused(cl)]
     for cl in cls:
+        if auth.paused(cl): continue                 # not checked, so it raises no warning
         t = _pollers.get(cl["id"])
         if t is None or not t.is_alive(): dead.append(cl["name"]); continue
         cc = _cache.get(cl["id"])
@@ -1134,7 +1158,7 @@ def health_report(detailed=False):
             bad.append(f'{cl["name"]}: data {int(now - sn["ts"])} s old')
     if not cls:   c["pollers"] = auth.chk(auth.OK, "no clusters configured")
     elif dead:    c["pollers"] = auth.chk(auth.FAIL, "poller stopped: " + ", ".join(dead))
-    else:         c["pollers"] = auth.chk(auth.OK, f"{len(cls)} running")
+    else:         c["pollers"] = auth.chk(auth.OK, f"{len(cls) - len(paused)} running" + (f", {len(paused)} paused" if paused else ""))
     c["clusters"] = auth.chk(auth.WARN, "; ".join(bad)) if bad else auth.chk(auth.OK, "all clusters answering")
     return auth.health_reply("pve", c, detailed)
 
@@ -1233,7 +1257,8 @@ class H(BaseHTTPRequestHandler):
             for c in clusters:
                 if c["id"] not in _pollers or not _pollers[c["id"]].is_alive():
                     ensure_poller(c)                 # revive a poller thread that died
-                snap = _cache.get(c["id"], ClusterCache(c["id"])).snap()
+                off = auth.paused(c)
+                snap = (ClusterCache(c["id"]) if off else _cache.get(c["id"], ClusterCache(c["id"]))).snap()
                 # Inyectar historial por nodo
                 nodes_with_hist = []
                 for nd in snap.get("data", {}).get("nodes", []):
@@ -1256,11 +1281,11 @@ class H(BaseHTTPRequestHandler):
                             alerts.append({"node": nd["name"], "type": "cpu", "value": round(cpu_pct, 1)})
                         if mem_pct > 90:
                             alerts.append({"node": nd["name"], "type": "mem", "value": round(mem_pct, 1)})
-                alerts += all_alerts(c["id"])
+                alerts = [] if off else alerts + all_alerts(c["id"])
                 pub = {k: v for k, v in c.items() if k != "token_value"}     # never send the API token to the browser
                 pub["pinned"] = bool(_fp_norm(c.get("fingerprint")))
                 pub.setdefault("layout", {"order": [], "pinned": []})
-                out.append({**pub, "snap": snap, "alerts": alerts})
+                out.append({**pub, "paused": off, "snap": snap, "alerts": alerts})
             self._json(200, {"clusters": out})
 
         # Diagnóstico de un cluster: reinicios (con «oleadas») y SMART de los discos. Parámetro: ?id=<cluster>.
@@ -1363,6 +1388,24 @@ class H(BaseHTTPRequestHandler):
                         save_clusters(clusters)
                         return self._json(200, {"ok": True})
             return self._json(404, {"error": "Not found"})
+
+        # Pausar o reanudar un cluster: {"paused": true|false} (solo admin). No toca el token ni la huella fijada.
+        # EN: Pause or resume a cluster (admin only). The token and the pinned fingerprint are left alone.
+        m = re.fullmatch(r"/api/clusters/([a-zA-Z0-9\-]+)/pause", path)
+        if m:
+            if not auth.check_permission(tok, "pve", "admin"):
+                return self._json(403 if auth.check_permission(tok, "pve", "readonly") else 401, {"error": "Admin permission required"})
+            if not isinstance(body.get("paused"), bool): return self._json(400, {"error": "paused must be true or false"})
+            with _cl_lock:
+                clusters = load_clusters()
+                c = next((x for x in clusters if x["id"] == m.group(1)), None)
+                if not c: return self._json(404, {"error": "Not found"})
+                auth.set_paused(c, body["paused"]); save_clusters(clusters)
+            log.info(f"[{c['name']}] " + ("paused" if body["paused"] else "resumed"))
+            ensure_poller(c)
+            cc = _cache.get(c["id"])
+            if cc: cc.wake.set()                     # stops at once, or reads at once when resumed
+            return self._json(200, {"cluster": {**{k: v for k, v in c.items() if k != "token_value"}, "paused": auth.paused(c)}})
 
         # Ajustes de respaldos de un cluster: antigüedad máxima (horas) y VMs/CTs que se ignoran.
         # EN: A cluster's backup settings: maximum age (hours) and the VMs/CTs that are ignored.

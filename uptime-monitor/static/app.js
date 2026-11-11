@@ -75,6 +75,12 @@ const LANG={
   "st_down":"Down",
   "st_pending":"Pending",
   "st_none":"Waiting…",
+  "st_paused":"Paused",
+  "pause":"Pause",
+  "resume":"Resume",
+  "pausedMsg":"Paused: this monitor is not checked and raises no alerts. Its history stays. Resume it to watch it again.",
+  "pausedOk":n=>`${n} paused`,
+  "resumedOk":n=>`${n} resumed`,
   "certOk":d=>`${d} d`,
   "certWarn":d=>`expires in ${d} d`,
   "certExpired":"expired",
@@ -173,6 +179,12 @@ const LANG={
   "st_down":"Caído",
   "st_pending":"Pendiente",
   "st_none":"Esperando…",
+  "st_paused":"Pausado",
+  "pause":"Pausar",
+  "resume":"Reanudar",
+  "pausedMsg":"Pausado: este monitor no se revisa ni genera avisos. Su historial se conserva. Reanúdalo para volver a vigilarlo.",
+  "pausedOk":n=>`${n} pausado`,
+  "resumedOk":n=>`${n} reanudado`,
   "certOk":d=>`${d} d`,
   "certWarn":d=>`vence en ${d} d`,
   "certExpired":"vencido",
@@ -320,8 +332,8 @@ window.addEventListener('resize',()=>{if(activeId)drawChart(activeId,-1);});
 function renderAll(){renderSidebar();renderSummary();renderDashboard();updateGlobalStats();}
 function toggleMon(id){activeId=activeId===id?null:id;renderAll();if(activeId)loadRange(activeId,chartRange);}
 
-function stOf(n){return n.status||'none';}
-function dotOf(n){return {up:'ok',down:'err'}[n.status]||'loading';}
+function stOf(n){return n.paused?'paused':n.status||'none';}
+function dotOf(n){return n.paused?'paused':{up:'ok',down:'err'}[n.status]||'loading';}
 function typeName(ty){return {http:'HTTP',tcp:'TCP',dns:'DNS'}[ty]||ty;}
 function typeLabel(n){return n.type==='http'&&String(n.url||'').startsWith('https://')?'HTTPS':typeName(n.type);}
 function renderSidebar(){
@@ -338,11 +350,12 @@ function renderSidebar(){
 }
 function certDays(n){return n.cert_exp?Math.floor((n.cert_exp-Date.now()/1000)/86400):null;}
 function updateGlobalStats(){
-  const up=items.filter(n=>n.status==='up'||n.status==='pending').length,dn=items.filter(n=>n.status==='down').length;
+  const act=items.filter(n=>!n.paused);          // los pausados no cuentan / paused ones do not count
+  const up=act.filter(n=>n.status==='up'||n.status==='pending').length,dn=act.filter(n=>n.status==='down').length;
   const pcts=items.map(n=>n.uptime&&n.uptime['24h']).filter(x=>typeof x==='number');
   const cw=items.filter(n=>n.cert==='warn'||n.cert==='expired').length;
-  document.getElementById('st-up').textContent=items.length?`${up}/${items.length}`:'—';
-  document.getElementById('st-down').textContent=items.length?dn:'—';
+  document.getElementById('st-up').textContent=act.length?`${up}/${act.length}`:'—';
+  document.getElementById('st-down').textContent=act.length?dn:'—';
   document.getElementById('st-pct').textContent=pcts.length?fmtPct(pcts.reduce((a,b)=>a+b,0)/pcts.length):'—';
   document.getElementById('st-cert').textContent=items.some(n=>n.cert)?cw:'—';
 }
@@ -409,6 +422,8 @@ function fmtDur(s){s=Math.max(0,Math.round(Number(s)||0));const d=Math.floor(s/8
 function ago(ts){return ts?t('agoFmt',fmtDur(Date.now()/1000-ts)):'—';}
 function buildDetail(n){
   const u=n.uptime||{},l=n.last;let h='';
+  const pz=canAdmin()?`<button class="btn-secondary" data-on-click="pauseMon" data-on-click-args="${jsargs([{'@':'this'},n.id,!n.paused])}">${esc(n.paused?'▶ '+t('resume'):'⏸ '+t('pause'))}</button>`:'';
+  if(n.paused)return `<div class="nas-empty">${esc(t('pausedMsg'))}</div>`+(canAdmin()?`<div class="nas-tools">${pz} <button class="btn-secondary" data-on-click="openForm" data-on-click-args="${jsargs([n.id])}">${esc(t('edit'))}</button> <button class="btn-mok" data-on-click="confirmDelete" data-on-click-args="${jsargs([n.id,n.name])}">${esc(t('delete'))}</button></div>`:'');
   if(l&&!l.ok&&l.error)h+=`<div class="up-err">${esc(l.error)}</div>`;
   h+=`<div class="up-grid"><div class="card"><div class="card-hd"><span class="card-title">${esc(t('uptime'))}</span></div>
     ${kv(t('u24'),pctCell(u['24h']))}${kv(t('u7'),pctCell(u['7d']))}${kv(t('u30'),pctCell(u['30d']))}${kv(t('avgMs'),esc(fmtMs(u.avg)))}</div>
@@ -420,7 +435,7 @@ function buildDetail(n){
   const tools=[];
   if(canExec())tools.push(`<button class="btn-secondary" data-on-click="checkNow" data-on-click-args="${jsargs([n.id])}">${esc(t('checkNow'))}</button>`);
   if(canAdmin()){const i=items.indexOf(n);tools.push(`<button class="btn-secondary" ${i<=0?'disabled':''} title="${esc(t('moveEarlier'))}" aria-label="${esc(t('moveEarlier'))}" data-on-click="moveMon" data-on-click-args="${jsargs([n.id,-1])}">↑</button>`,`<button class="btn-secondary" ${i>=items.length-1?'disabled':''} title="${esc(t('moveLater'))}" aria-label="${esc(t('moveLater'))}" data-on-click="moveMon" data-on-click-args="${jsargs([n.id,1])}">↓</button>`);}
-  if(canAdmin())tools.push(`<button class="btn-secondary" data-on-click="openForm" data-on-click-args="${jsargs([n.id])}">${esc(t('edit'))}</button>`,`<button class="btn-mok" data-on-click="confirmDelete" data-on-click-args="${jsargs([n.id,n.name])}">${esc(t('delete'))}</button>`);
+  if(canAdmin())tools.push(pz,`<button class="btn-secondary" data-on-click="openForm" data-on-click-args="${jsargs([n.id])}">${esc(t('edit'))}</button>`,`<button class="btn-mok" data-on-click="confirmDelete" data-on-click-args="${jsargs([n.id,n.name])}">${esc(t('delete'))}</button>`);
   if(tools.length)h+=`<div class="nas-tools">${tools.join(' ')}</div>`;
   return h;
 }
@@ -462,6 +477,15 @@ function bindDrag(box){
       if(drag&&drag!==id)moveTo(drag,id);
     });
   });
+}
+// Pausar o reanudar un monitor (solo admin): su historial se conserva. / EN: Pause or resume a monitor (admin only): its history stays.
+async function pauseMon(btn,id,paused){
+  if(btn)btn.disabled=true;
+  try{
+    const r=await fetch('api/monitors/'+encodeURIComponent(id)+'/pause',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paused})});
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Error');
+    toast(t(paused?'pausedOk':'resumedOk',d.monitor?.name||''));await fetchAll();
+  }catch(e){toast(e.message,true);if(btn)btn.disabled=false;}
 }
 async function checkNow(id){
   try{const {ok,d}=await post('api/monitors/'+encodeURIComponent(id)+'/check',{});if(!ok)throw new Error(d.error||'Error');toast(t('checking'));setTimeout(fetchAll,2500);}
@@ -575,4 +599,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ checkNow, closeModals, confirmDelete, doLogin, logout, moveMon, openForm, saveMon, setLang, setRange, setTheme, testMon, toggleCmp, toggleMon, toggleNav, typeChanged });
+if (window.cspRegister) cspRegister({ checkNow, closeModals, confirmDelete, doLogin, logout, moveMon, openForm, pauseMon, saveMon, setLang, setRange, setTheme, testMon, toggleCmp, toggleMon, toggleNav, typeChanged });
