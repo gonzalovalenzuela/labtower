@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.1.9a — 2026-11-11
+
+### Todos los módulos
+- **Arreglo:** el aviso «Atención» seguía visible después de resolverse el problema, hasta un minuto o más en Safari. Ahora se actualiza cuando la página muestra datos nuevos y al volver a la pestaña.
+
+### App instalada (iPhone, iPad, Android)
+- **Arreglo:** al deslizar hacia abajo para recargar, el ícono a veces quedaba girando y la página no se recargaba. Ahora se recarga cuando termina el rebote y, si no lo logra, reintenta a los 4 s. A los 10 s el ícono se esconde para poder deslizar de nuevo.
+
+### WAN Monitor
+- **Nuevo:** la tarjeta Conexión muestra cuánto lleva encendido el router, en Huawei, OpenWrt y DD-WRT. En OpenWrt el usuario necesita acceso a `system info`.
+- **Arreglo:** si el router enviaba un tiempo inválido, se perdía toda su lectura. Ahora ese dato queda vacío y el resto del chequeo sigue.
+
 ## 2.1.9 — 2026-11-09
 
 ### Nuevo módulo: Uptime Monitor
