@@ -86,11 +86,13 @@ def _json(txt, what):
 def _res(wan_up, ip=None, uptime=None, detail="", sys_uptime=None):
     return {"ok": wan_up is not None, "wan_up": wan_up, "ip": ip or None, "uptime": uptime, "sys_uptime": sys_uptime, "detail": detail[:160], "error": ""}
 
+_MAX_SECS = 20 * 365 * 86400                                                      # más que esto es un dato roto / more than this is broken data
 def _secs(v):
-    """Segundos enteros no negativos, o None. / EN: Non-negative whole seconds, or None."""
+    """Segundos enteros entre 0 y 20 años, o None; nunca lanza (Infinity, NaN, texto). / EN: Whole seconds between 0 and 20 years, or None; never raises."""
     if isinstance(v, bool): return None
-    if isinstance(v, (int, float)): return int(v) if v >= 0 else None
-    return int(v) if isinstance(v, str) and v.strip().isdigit() else None
+    if isinstance(v, str): v = int(v.strip()) if v.strip().isascii() and v.strip().isdigit() else None
+    if not isinstance(v, (int, float)) or not 0 <= v <= _MAX_SECS: return None              # NaN también queda fuera / NaN is out too
+    return int(v)
 
 # ─── Huawei (HiLink: WiFi AX3, Mesh 3/7, WS7xxx …) ────────────────────────────────────────────────
 # ES: Entrada tipo SCRAM-SHA256 (nonce → sal e iteraciones → prueba del cliente) y luego GET api/ntwk/wandetect. Protocolo documentado por el proyecto público
@@ -134,8 +136,7 @@ def check_huawei(c, http):
         d = _json(t, "wandetect")
         if s != 200 or not isinstance(d, dict) or "Status" not in d: raise RouterError("the router did not report the WAN status (unexpected answer)")
         ip = d.get("ExternalIPAddress"); ip = None if ip in (None, "", "-", "0.0.0.0") else str(ip)  # nosec B104 - compares the router answer, does not bind
-        up = d.get("Uptime"); up = int(up) if isinstance(up, (int, float)) or str(up).isdigit() else None
-        return _res(str(d.get("Status")) == "Connected", ip, up, "Status=" + str(d.get("Status")), _huawei_sys_uptime(http))
+        return _res(str(d.get("Status")) == "Connected", ip, _secs(d.get("Uptime")), "Status=" + str(d.get("Status")), _huawei_sys_uptime(http))
     finally:
         try: post("api/system/user_logout", {})
         except Exception: pass  # noqa: BLE001, S110 - limpieza al terminar; un fallo no cambia el resultado / EN: cleanup; a failure does not change the result
@@ -169,11 +170,10 @@ def check_openwrt(c, http):
         d = call(sid, "network.interface." + c["interface"], "status", {})
         addr = (d.get("ipv4-address") or [{}])[0].get("address") if isinstance(d.get("ipv4-address"), list) and d.get("ipv4-address") else None
         if "up" not in d: raise RouterError(f"interface '{c['interface']}' did not report its state")
-        up = d.get("uptime")
         # system.info puede no estar en la ACL del usuario: sin él, el chequeo sigue igual. / EN: system.info may be outside the user's ACL: the check goes on.
         try: sys_up = _secs(call(sid, "system", "info", {}).get("uptime"))
         except RouterError: sys_up = None
-        return _res(bool(d.get("up")), addr, int(up) if isinstance(up, (int, float)) else None, f"{c['interface']} proto={d.get('proto', '?')}", sys_up)
+        return _res(bool(d.get("up")), addr, _secs(d.get("uptime")), f"{c['interface']} proto={d.get('proto', '?')}", sys_up)
     finally:
         try: call(sid, "session", "destroy", {})
         except Exception: pass  # noqa: BLE001, S110 - limpieza al terminar; un fallo no cambia el resultado / EN: cleanup; a failure does not change the result

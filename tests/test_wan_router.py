@@ -74,8 +74,11 @@ class FakeRouter:
         if sid != "S" * 32: return res(6)
         if obj == "session" and meth == "destroy": return res(0, {})
         if obj == "network.interface.wan" and meth == "status":
+            if getattr(self, "bad", False): return h.send(200, '{"jsonrpc":"2.0","id":1,"result":[0,{"up":true,"proto":"dhcp","uptime":Infinity}]}', "application/json")
             return res(0, {"up": self.wan, "proto": "dhcp", "uptime": 77, "ipv4-address": [{"address": "203.0.113.5", "mask": 24}] if self.wan else []})
-        if obj == "system" and meth == "info": return res(0, {"uptime": 5555, "localtime": 1}) if self.sys else res(6)
+        if obj == "system" and meth == "info":
+            if getattr(self, "bad", False): return h.send(200, '{"jsonrpc":"2.0","id":1,"result":[0,{"uptime":Infinity}]}', "application/json")
+            return res(0, {"uptime": 5555, "localtime": 1}) if self.sys else res(6)
         res(4)
     def get_openwrt(self, h): h.send(404, "")
 
@@ -134,6 +137,16 @@ class Adapters(unittest.TestCase):
         for kind in ("huawei", "openwrt"):
             with self.subTest(kind=kind):
                 r, _ = self.run_check(kind, sys=False); self.assertTrue(r["ok"], r); self.assertIs(r["wan_up"], True); self.assertIsNone(r["sys_uptime"]); self.assertEqual(r["error"], "")
+
+    def test_broken_numbers_never_break_the_check(self):
+        # JSON admite Infinity/NaN: antes int(inf) lanzaba OverflowError y el chequeo entero fallaba. / EN: int(inf) used to raise and fail the whole check.
+        for v in (float("inf"), float("nan"), -1, 1e30, "x", "١٢", True, None, [1]):
+            self.assertIsNone(rtr._secs(v), v)
+        self.assertEqual((rtr._secs(3.9), rtr._secs(" 12 "), rtr._secs(0)), (3, 12, 0))
+        fr = FakeRouter("openwrt"); fr.bad = True
+        try: r = rtr.check(fr.cfg(), "127.0.0.1")
+        finally: fr.close()
+        self.assertTrue(r["ok"], r); self.assertIsNone(r["uptime"]); self.assertIsNone(r["sys_uptime"])
 
     def test_ddwrt_uptime_formats(self):
         f = lambda u: rtr.parse_ddwrt_sys_uptime("{uptime::" + u + "}")
