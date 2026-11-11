@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.1.9b — 2026-11-11
+
+### Pausar equipos
+- **Nuevo:** botón ⏸ / ▶ para pausar sin borrar un NAS, un servidor UPS (NUT), un cluster de Proxmox, un servidor DNS, una VPN, un monitor de Uptime o un switch. Solo administradores.
+- **Nuevo:** pausado no se consulta ni avisa, no cuenta en las cifras ni en el Resumen, y aparece como «Pausado». Al reanudar se lee de inmediato.
+- **Nuevo:** pausar no cambia la configuración, las claves ni el certificado fijado. Editar un equipo pausado lo deja pausado.
+- **Nuevo:** en DNS el botón dice «Pausar monitoreo»; el bloqueo de anuncios del servidor sigue igual. En Uptime se conserva el historial.
+- **Nuevo:** los switches tienen el botón en su tarjeta, además de la casilla en «Editar».
+
+### Arreglos
+- **Arreglo:** VPN: el detalle de un servidor que nunca respondió ahora muestra Editar y Eliminar.
+- **Arreglo:** DNS: un servidor sin lectura muestra «—» en la tabla en vez de «undefined%».
+- **Arreglo:** Proxmox: el aviso al eliminar un cluster sigue el idioma elegido y avisa si falla.
+
 ## 2.1.9a — 2026-11-11
 
 ### Todos los módulos
