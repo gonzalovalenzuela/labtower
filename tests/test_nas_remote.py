@@ -182,6 +182,8 @@ class OmvMock:
                     return self._reply(500, {"response": None, "error": {"code": 1, "message": "Method not found.", "trace": "T"}})
                 self._reply(200, {"response": OMV[(svc, meth)], "error": None})
         self.srv = ThreadingHTTPServer(("127.0.0.1", 0), Hd)
+        # El cliente corta a propósito (huella distinta); sin traza en la salida. / EN: The client hangs up on purpose (other fingerprint); no trace in the output.
+        self.srv.handle_error = lambda *a: None
         if cert: self.srv.socket = tls_ctx(cert).wrap_socket(self.srv.socket, server_side=True)
         self.port = self.srv.server_address[1]
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()

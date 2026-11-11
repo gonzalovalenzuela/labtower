@@ -46,7 +46,7 @@ class Shell(unittest.TestCase):
         # EN: Installed on iPhone, WebKit sometimes ignores reload() in the same touch and the icon kept spinning.
         for k in ("if(y0!==null&&dy>=GO&&!busy)setTimeout(reload,0);",                       # outside the touch
                   "if(window.scrollY<0&&Date.now()-t0<800){requestAnimationFrame(go);return}",   # after the bounce
-                  "setTimeout(function(){location.replace(location.href)},4000)",                # second try
+                  "setTimeout(function(){if(location.hash)location.reload();else location.replace(location.href)},4000)",   # second try, also with #switches
                   "setTimeout(stop,10000)",                                                      # never spins forever
                   "window.addEventListener('pageshow',function(e){if(e.persisted)stop()});",
                   "y0=(!busy&&window.scrollY<=2"):

@@ -150,12 +150,14 @@
     try { sessionStorage.removeItem('lt-nav-health'); } catch (e) {}
     loadHealth();
   }
+  function own(ns) { for (var j = 0; j < ns.length; j++) if (ns[j].id !== 'gwarn') return false; return true; }
   function healthSync() {
     if (window.MutationObserver) new MutationObserver(function (recs) {
       for (var i = 0; i < recs.length; i++) {
         var r = recs[i];
         if (r.target.closest && r.target.closest('#gwarn, .gbar')) continue;      // own changes / cambios propios
         if (!r.addedNodes.length && !r.removedNodes.length) continue;
+        if (own(r.addedNodes) && own(r.removedNodes)) continue;                      // solo el aviso entra o sale / only the notice comes or goes
         // Una sola espera pendiente: si se reiniciara, una página que redibuja cada segundo nunca llegaría a pedirlo.
         // EN: One pending wait only: if it were restarted, a page that redraws every second would never fetch it.
         if (!hWait) hWait = setTimeout(function () { hWait = null; healthSoon(); }, 1000);

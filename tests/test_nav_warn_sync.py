@@ -16,6 +16,7 @@ class WarnSync(unittest.TestCase):
         self.assertIn("}).observe(document.body, { childList: true, subtree: true });", NAV)
         self.assertIn("if (!hWait) hWait = setTimeout(function () { hWait = null; healthSoon(); }, 1000);", NAV)   # not restarted by a ticking clock
         self.assertIn("if (r.target.closest && r.target.closest('#gwarn, .gbar')) continue;", NAV)      # its own drawing does not loop
+        self.assertIn("if (own(r.addedNodes) && own(r.removedNodes)) continue;", NAV)                   # nor the notice coming or going
 
     def test_at_most_every_15_seconds(self):
         self.assertIn("if (!st || Date.now() - hAt < 15000) return;", NAV)

@@ -195,7 +195,7 @@ class DnsPinning(unittest.TestCase):
             def do_GET(s):
                 b = b'{"ok":1}'; s.send_response(200); s.send_header("Content-Length", str(len(b))); s.end_headers(); s.wfile.write(b)
             def log_message(s, *a): pass
-        srv = HTTPServer(("127.0.0.1", 0), H)
+        srv = HTTPServer(("127.0.0.1", 0), H); srv.handle_error = lambda *a: None      # cortes esperados por la huella / EN: expected hang-ups from the pin
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.load_cert_chain(crt, key)
         srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
         threading.Thread(target=srv.serve_forever, daemon=True).start(); self.srvs.append(srv)

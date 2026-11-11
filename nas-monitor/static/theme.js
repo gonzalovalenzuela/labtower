@@ -126,13 +126,15 @@
     // EN: iOS-proof reload: when installed, WebKit sometimes ignores location.reload() if it comes in the same touch or while the page is
     // still bouncing, and the icon kept spinning. It reloads once the bounce ends; if the page is still here after 4 s it retries with
     // location.replace and, if that fails too, the icon is hidden after 10 s so you can pull again.
+    // Con #ancla (p. ej. #switches) replace a la misma dirección no recarga, así que se usa reload.
+    // EN: With a #fragment (e.g. #switches) replacing with the same address does not reload, so reload is used.
     var busy=false,tries=[];
     function stop(){busy=false;tries.forEach(clearTimeout);tries=[];if(el)el.classList.remove('spin');hide()}
     function reload(){
       busy=true;ind().classList.add('spin');
       var t0=Date.now();
       (function go(){if(window.scrollY<0&&Date.now()-t0<800){requestAnimationFrame(go);return}location.reload()})();
-      tries=[setTimeout(function(){location.replace(location.href)},4000),setTimeout(stop,10000)];
+      tries=[setTimeout(function(){if(location.hash)location.reload();else location.replace(location.href)},4000),setTimeout(stop,10000)];
     }
     function end(){
       if(y0!==null&&dy>=GO&&!busy)setTimeout(reload,0);else if(!busy)hide();
