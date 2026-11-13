@@ -106,11 +106,14 @@
   }
 
   // (3) Deslizar para recargar, solo instalado. / EN: Pull to refresh, installed only.
+  // Clases propias (lt-go, lt-spin): «spin» ya existe en el app.css de cada módulo y su animación pisaba el translate del ícono,
+  // que giraba en órbita y parecía aparecer varias veces. / EN: Own classes (lt-go, lt-spin): "spin" already exists in each module's
+  // app.css and its animation overrode the icon's translate, so it orbited and seemed to appear several times.
   function pull(){
     if(!installed||!document.body)return;
     var y0=null,dy=0,el=null,GO=70,MAX=96;
     function ind(){if(!el){el=document.createElement('div');el.className='lt-ptr';el.setAttribute('aria-hidden','true');el.innerHTML='<span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg></span>';document.body.appendChild(el)}return el}
-    function hide(){if(el){el.style.opacity='0';el.style.transform='';el.classList.remove('go')}}
+    function hide(){if(el){el.style.opacity='0';el.style.transform='';el.classList.remove('lt-go')}}
     function inner(t){for(var n=t;n&&n.nodeType===1&&n!==document.body;n=n.parentNode)if(n.scrollTop>0)return true;return false}
     // Arriba del todo (2 px de margen por el rebote) y no desde el borde superior, que abre el Centro de Notificaciones.
     // EN: At the very top (2 px margin for the bounce) and not from the top edge, which opens Notification Center.
@@ -118,7 +121,7 @@
     document.addEventListener('touchmove',function(e){
       if(y0===null)return;dy=e.touches[0].clientY-y0;if(dy<=0){hide();return}
       var k=Math.min(dy,MAX),i=ind();i.style.opacity=String(Math.min(1,k/GO));i.style.transform='translate(-50%,'+k+'px)';
-      i.firstChild.style.transform='rotate('+(k*4)+'deg)';i.classList.toggle('go',dy>=GO);
+      i.firstChild.style.transform='rotate('+(k*4)+'deg)';i.classList.toggle('lt-go',dy>=GO);
     },{passive:true});
     // Recarga a prueba de iOS: instalada, WebKit a veces ignora location.reload() si llega en el mismo toque o mientras la página
     // todavía rebota, y el ícono quedaba girando. Se recarga al terminar el rebote; si a los 4 s la página sigue aquí se reintenta con
@@ -129,9 +132,9 @@
     // Con #ancla (p. ej. #switches) replace a la misma dirección no recarga, así que se usa reload.
     // EN: With a #fragment (e.g. #switches) replacing with the same address does not reload, so reload is used.
     var busy=false,tries=[];
-    function stop(){busy=false;tries.forEach(clearTimeout);tries=[];if(el)el.classList.remove('spin');hide()}
+    function stop(){busy=false;tries.forEach(clearTimeout);tries=[];if(el)el.classList.remove('lt-spin');hide()}
     function reload(){
-      busy=true;ind().classList.add('spin');
+      busy=true;ind().classList.add('lt-spin');
       var t0=Date.now();
       (function go(){if(window.scrollY<0&&Date.now()-t0<800){requestAnimationFrame(go);return}location.reload()})();
       tries=[setTimeout(function(){if(location.hash)location.reload();else location.replace(location.href)},4000),setTimeout(stop,10000)];

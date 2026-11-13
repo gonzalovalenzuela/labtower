@@ -52,6 +52,20 @@ class Shell(unittest.TestCase):
                   "y0=(!busy&&window.scrollY<=2"):
             self.assertIn(k, THEME, k)
 
+    def test_pull_icon_classes_never_clash_with_module_css(self):
+        # «spin» de app.css animaba el ícono entero (pisaba su translate) y giraba en órbita.
+        # EN: app.css "spin" animated the whole icon (overriding its translate) and it orbited.
+        css = (ROOT / "assets/theme/theme.css").read_text(encoding="utf-8")
+        for k in ("classList.add('lt-spin')", "classList.remove('lt-spin')", "classList.toggle('lt-go',dy>=GO)", "classList.remove('lt-go')"):
+            self.assertIn(k, THEME, k)
+        self.assertIn(".lt-ptr.lt-spin>span{animation:lt-ptr-spin", css)
+        self.assertIn(".lt-ptr.lt-go{", css)
+        self.assertNotRegex(THEME, r"classList\.\w+\('(spin|go)'")
+        # Ninguna hoja de los módulos define reglas con las clases del ícono. / EN: No module stylesheet styles the icon's classes.
+        for f in ROOT.glob("*/static/*.css"):
+            if f.name == "theme.css": continue
+            self.assertNotRegex(f.read_text(encoding="utf-8"), r"\.lt-(go|spin|ptr)\b", str(f))
+
     def test_service_worker_only_over_https(self):
         self.assertIn("if('serviceWorker' in navigator&&location.protocol==='https:')", THEME)
         self.assertIn("navigator.serviceWorker.register('/sw.js',{scope:'/'})", THEME)
