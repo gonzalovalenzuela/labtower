@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.1.9c — 2026-11-13
+
+### Pausa
+- **Arreglo:** Resumen: si todos los equipos de un módulo están en pausa, la tarjeta dice «Todos en pausa (N)» en vez de «Sin … configurados».
+- **Arreglo:** Proxmox: al reanudar un cluster, SMART, respaldos y red de invitados se leen en segundos, no hasta 15 minutos después.
+- **Arreglo:** UPS Monitor: pausar un servidor NUT con un UPS en batería cierra el corte en ese momento. Antes el corte se alargaba hasta reanudar.
+
+### Net Monitor
+- **Cambio:** la MAC de cada equipo sale primero de la tabla ARP del servidor; Pi-hole y SNMP quedan de respaldo.
+- **Arreglo:** «MAC cambió» ya no avisa por una MAC que esa IP ya tuvo (equipos con dos tarjetas en la misma red).
+- **Nuevo:** al tocar la etiqueta «MAC cambió» se ven la MAC anterior y la actual (también en iPhone). Un administrador puede marcarlo como revisado para quitar el aviso.
+
+### Switch Monitor
+- **Nuevo:** en un puerto con velocidad baja, «Revisado: solo este aviso» lo quita hasta que el puerto vuelva a su velocidad habitual. Útil para equipos apagados que quedan a 10 Mb/s esperando WOL.
+- **Nuevo:** «Silenciar todos los avisos del puerto» y la casilla «Sin avisos en este puerto (pruebas)»: sin avisos de velocidad, enlace, rebotes, errores ni loop hasta desmarcarla.
+- **Arreglo:** si el switch rechaza la sesión, la siguiente lectura empieza con una conexión nueva. Antes podía quedar «Sin conexión» hasta reiniciar el servicio.
+
+### App instalada (iPhone, iPad)
+- **Arreglo:** al deslizar para recargar, el ícono giraba en órbita y parecía aparecer varias veces. Ahora solo gira la flecha.
+
 ## 2.1.9b — 2026-11-11
 
 ### Pausar equipos
