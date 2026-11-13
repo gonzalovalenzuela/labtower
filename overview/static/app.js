@@ -1,7 +1,7 @@
 // ───────── Textos / texts ─────────
 const TXT={
  en:{title:'Overview',onlyProb:'Only with problems',sortBtn:'Reorder',sortDone:'Done',sortReset:'Reset order',mvEarlier:'Move earlier',mvLater:'Move later',mvDrag:'Drag to move',home:'Home',kiosk:'Kiosk',logout:'Sign out',login:'Sign in',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',exitk:'Exit kiosk',rint:'Refresh every',rman:'Manual',rnow:'Refresh now',ascroll:'Auto-scroll',updated:'Updated',allok:'All good',attn:'Attention',fail:'Failure',
-  ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',dns:'DNS Monitor',wan:'WAN Monitor',vpn:'VPN Monitor',vpnwait:'Waiting for the first reading…',vpnconn:'connected',vpnnone:'Nobody connected',vpnoff:'Cannot read the VPN status',upt:'Uptime Monitor',uptnone:'No monitors configured',uptup:'Services up',uptdown:'Down',uptcert:'certificate expires in {d} d',uptcertx:'certificate expired',net:'Net Monitor',pi:'LabTower Server',ev:'Timeline',open:'Open →',noups:'No UPS servers configured',nopve:'No clusters configured',nonas:'No NAS configured',nodns:'No DNS servers configured',dnspct:'% blocked',issue_dnsdown:'DNS server unreachable',dnsq:'Queries',dnsblk:'Blocked',dnsms:'Response',dnsPause:'Pause blocking',dnsResume:'Resume blocking',dnsP5:'5 min',dnsP30:'30 min',dnsP60:'1 hour',dnsPU:'until resumed',dnsPaused:'Blocking paused',dnsResumed:'Blocking resumed',dnsprot:'Blocking',protoff:'Paused',proton:'Active',protfail:'Failed',wanrtt:'Latency',wanloss:'Loss',wanup:'Uptime 24 h',wandown:'Download',wanip:'Public IP',wanstate:'Internet',wanon:'Online',wannet:'Down',wanlan:'No LAN',wanwait:'Measuring…',issue_wandown:'No internet access',issue_wanlan:'Local network unreachable',nasdisks:'Disks OK',nasvol:'Volume',issue_nasdown:'NAS unreachable',nonet:'No scan yet',noev:'No events yet',
+  ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',dns:'DNS Monitor',wan:'WAN Monitor',vpn:'VPN Monitor',vpnwait:'Waiting for the first reading…',vpnconn:'connected',vpnnone:'Nobody connected',vpnoff:'Cannot read the VPN status',upt:'Uptime Monitor',uptnone:'No monitors configured',uptup:'Services up',uptdown:'Down',uptcert:'certificate expires in {d} d',uptcertx:'certificate expired',net:'Net Monitor',pi:'LabTower Server',ev:'Timeline',open:'Open →',noups:'No UPS servers configured',allpaused:'All paused ({n})',nopve:'No clusters configured',nonas:'No NAS configured',nodns:'No DNS servers configured',dnspct:'% blocked',issue_dnsdown:'DNS server unreachable',dnsq:'Queries',dnsblk:'Blocked',dnsms:'Response',dnsPause:'Pause blocking',dnsResume:'Resume blocking',dnsP5:'5 min',dnsP30:'30 min',dnsP60:'1 hour',dnsPU:'until resumed',dnsPaused:'Blocking paused',dnsResumed:'Blocking resumed',dnsprot:'Blocking',protoff:'Paused',proton:'Active',protfail:'Failed',wanrtt:'Latency',wanloss:'Loss',wanup:'Uptime 24 h',wandown:'Download',wanip:'Public IP',wanstate:'Internet',wanon:'Online',wannet:'Down',wanlan:'No LAN',wanwait:'Measuring…',issue_wandown:'No internet access',issue_wanlan:'Local network unreachable',nasdisks:'Disks OK',nasvol:'Volume',issue_nasdown:'NAS unreachable',nonet:'No scan yet',noev:'No events yet',
   uptimeOnl:'Online',avail:'Availability',lastOut:'Last outage',noOut:'no outages recorded',onbattNow:'on battery now',
   mains:'On mains',batt:'On battery',lowb:'Low battery',unreach:'Unreachable',battery:'Battery',load:'Load',runtime:'Runtime',power:'Power',nodes:'Nodes',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memory',disk:'Disk',temp:'Temp',uptime:'Uptime',
   online:'Online',known:'Known',offline:'Offline',newdev:'Unreviewed devices',watchdown:'Watched device not responding',macchg:'MAC changed on',lastscan:'Last scan',scanning:'Scanning…',ceph:'Ceph',types:'By device type',nonew:'No unreviewed devices',
@@ -9,7 +9,7 @@ const TXT={
   issue_batt:'is running on battery',issue_lowb:'has low battery',issue_srv:'unreachable',issue_node:'node offline',issue_cl:'cluster unreachable',issue_stale:'last reading failed, showing older data',issue_cert:'certificate changed, pin it again in Proxmox Monitor',pa_sto_days:'{name} fills in {value} d',pa_ceph_days:'Ceph fills in {value} d',pa_lock:'{name} locked ({lock}) for {mins} min',pa_n1:'not enough RAM if {node} goes down',pa_overcommit:'RAM overcommitted ({value}%)',pa_ha:'HA {sid}: {state}',pa_ha_lrm:'HA manager not responding',pa_repl:'replication {id} failing',pa_pg:'{value} of {total} PGs not clean',pa_cert:'certificate expires in {value} d',pa_iowait:'high iowait ({value}%)',pa_swap:'swap in use ({value}%)',uf_RB:'battery needs replacing',uf_OVER:'overloaded',uf_BYPASS:'in bypass',uf_OFF:'output off',uf_FSD:'forced shutdown',uf_ALARM:'alarm',uf_alarm:'UPS alarm',uf_margin:'not enough runtime to shut down the machines',issue_cpu:'high CPU',issue_ram:'high memory',issue_ceph:'Ceph',
   issue_temp:'Pi temperature high',issue_temp_srv:'Server temperature high',issue_disk_srv:'Server disk almost full',issue_mem_srv:'Server memory high',swtitle:'Switches',swup:'Switch unreachable',swtemp:'Switch temperature',swtempc:'Switch temperature critical',swloop:'loop',swerr:'new errors',swcrc:'CRC errors (cable or network card)',swflap:'link flapping',swspeed:'below its usual speed',swusual:'usual',swports:'ports',issue_disk:'Pi disk almost full',issue_mem:'Pi memory high',issue_pwr:'Pi power supply problem',issue_scan:'scan error',h_temp:'Temp',h_min:'min',h_max:'max',h_uv:'Under-voltage',h_nouv:'no under-voltage',h_utemp:'UPS temperature 24 h'},
  es:{title:'Resumen',onlyProb:'Solo con problemas',sortBtn:'Ordenar',sortDone:'Listo',sortReset:'Restablecer orden',mvEarlier:'Mover antes',mvLater:'Mover después',mvDrag:'Arrastra para mover',home:'Inicio',kiosk:'Kiosko',logout:'Cerrar sesión',login:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',exitk:'Salir de kiosko',rint:'Actualizar cada',rman:'Manual',rnow:'Actualizar ahora',ascroll:'Auto-desplazar',updated:'Actualizado',allok:'Todo en orden',attn:'Atención',fail:'Falla',
-  ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',dns:'DNS Monitor',wan:'WAN Monitor',vpn:'VPN Monitor',vpnwait:'Esperando la primera lectura…',vpnconn:'conectados',vpnnone:'Nadie conectado',vpnoff:'No se puede leer el estado de la VPN',upt:'Uptime Monitor',uptnone:'Sin monitores configurados',uptup:'Servicios arriba',uptdown:'Caído',uptcert:'el certificado vence en {d} d',uptcertx:'certificado vencido',net:'Net Monitor',pi:'LabTower Server',ev:'Línea de tiempo',open:'Abrir →',noups:'Sin servidores UPS configurados',nopve:'Sin clusters configurados',nonas:'Sin NAS configurados',nodns:'Sin servidores DNS configurados',dnspct:'% bloqueado',issue_dnsdown:'Servidor DNS sin conexión',dnsq:'Consultas',dnsblk:'Bloqueadas',dnsms:'Respuesta',dnsPause:'Pausar bloqueo',dnsResume:'Reanudar bloqueo',dnsP5:'5 min',dnsP30:'30 min',dnsP60:'1 hora',dnsPU:'hasta reanudar',dnsPaused:'Bloqueo pausado',dnsResumed:'Bloqueo reanudado',dnsprot:'Bloqueo',protoff:'Pausado',proton:'Activo',protfail:'Con falla',wanrtt:'Latencia',wanloss:'Pérdida',wanup:'Disponibilidad 24 h',wandown:'Bajada',wanip:'IP pública',wanstate:'Internet',wanon:'En línea',wannet:'Caído',wanlan:'Sin LAN',wanwait:'Midiendo…',issue_wandown:'Sin acceso a internet',issue_wanlan:'Red local sin respuesta',nasdisks:'Discos OK',nasvol:'Volumen',issue_nasdown:'NAS sin conexión',nonet:'Aún sin escaneo',noev:'Sin eventos todavía',
+  ups:'UPS Monitor',pve:'Proxmox',nas:'NAS Monitor',dns:'DNS Monitor',wan:'WAN Monitor',vpn:'VPN Monitor',vpnwait:'Esperando la primera lectura…',vpnconn:'conectados',vpnnone:'Nadie conectado',vpnoff:'No se puede leer el estado de la VPN',upt:'Uptime Monitor',uptnone:'Sin monitores configurados',uptup:'Servicios arriba',uptdown:'Caído',uptcert:'el certificado vence en {d} d',uptcertx:'certificado vencido',net:'Net Monitor',pi:'LabTower Server',ev:'Línea de tiempo',open:'Abrir →',noups:'Sin servidores UPS configurados',allpaused:'Todos en pausa ({n})',nopve:'Sin clusters configurados',nonas:'Sin NAS configurados',nodns:'Sin servidores DNS configurados',dnspct:'% bloqueado',issue_dnsdown:'Servidor DNS sin conexión',dnsq:'Consultas',dnsblk:'Bloqueadas',dnsms:'Respuesta',dnsPause:'Pausar bloqueo',dnsResume:'Reanudar bloqueo',dnsP5:'5 min',dnsP30:'30 min',dnsP60:'1 hora',dnsPU:'hasta reanudar',dnsPaused:'Bloqueo pausado',dnsResumed:'Bloqueo reanudado',dnsprot:'Bloqueo',protoff:'Pausado',proton:'Activo',protfail:'Con falla',wanrtt:'Latencia',wanloss:'Pérdida',wanup:'Disponibilidad 24 h',wandown:'Bajada',wanip:'IP pública',wanstate:'Internet',wanon:'En línea',wannet:'Caído',wanlan:'Sin LAN',wanwait:'Midiendo…',issue_wandown:'Sin acceso a internet',issue_wanlan:'Red local sin respuesta',nasdisks:'Discos OK',nasvol:'Volumen',issue_nasdown:'NAS sin conexión',nonet:'Aún sin escaneo',noev:'Sin eventos todavía',
   uptimeOnl:'En línea',avail:'Disponibilidad',lastOut:'Último corte',noOut:'sin cortes registrados',onbattNow:'en batería ahora',
   mains:'En red eléctrica',batt:'Con batería',lowb:'Batería baja',unreach:'Sin conexión',battery:'Batería',load:'Carga',runtime:'Autonomía',power:'Consumo',nodes:'Nodos',vms:'VMs',cts:'CTs',cpu:'CPU',mem:'Memoria',disk:'Disco',temp:'Temp',uptime:'Encendida',
   online:'En línea',known:'Conocidos',offline:'Apagados',newdev:'Equipos sin revisar',watchdown:'Equipo vigilado sin respuesta',macchg:'Cambió la MAC de',lastscan:'Último escaneo',scanning:'Escaneando…',ceph:'Ceph',types:'Por tipo de equipo',nonew:'Sin equipos por revisar',
@@ -91,6 +91,8 @@ const lvl=(m)=>(me.disabled||[]).includes(m)?0:({readonly:1,execute:2,admin:3})[
 
 // ───────── UPS ─────────
 const UPS_FLAGS=['RB','OVER','BYPASS','OFF','FSD','ALARM'];
+// Texto de una tarjeta vacía: si todos están en pausa lo dice, en vez de «sin configurar». / EN: Empty-card text: says when all are paused instead of "none configured".
+function idle(all,k){all=all||[];return all.length&&all.every(x=>x.paused)?T('allpaused').replace('{n}',all.length):T(k)}
 function renderUPS(d){
   const el=$('c-nut');let sev='ok',body='',n=0;
   for(const srv0 of (d.servers||[]).filter(x=>!x.paused)){
@@ -115,7 +117,7 @@ function renderUPS(d){
        <div class="kpis"><div class="kpi"><b>${run?dur(run):'—'}</b><span>${T('runtime')}</span></div><div class="kpi"><b>${last&&last.watts?Math.round(last.watts)+' W':'—'}</b><span>${T('power')}</span></div>${us&&us.streak!=null?`<div class="kpi"><b>${us.on_battery?'—':dur(us.streak)}</b><span>${T('uptimeOnl')}</span></div>`:''}</div>${avTxt}${spark(h.map(r=>r.load))}${upsTemp(h)}</div>`;
     }
   }
-  el.innerHTML=`<div class="ch"><h2>${T('ups')}</h2>${n?pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail')):''}<a class="go" href="/nut/">${T('open')}</a></div>`+(n?body:`<div class="empty">${T('noups')}</div>`);
+  el.innerHTML=`<div class="ch"><h2>${T('ups')}</h2>${n?pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail')):''}<a class="go" href="/nut/">${T('open')}</a></div>`+(n?body:`<div class="empty">${esc(idle(d.servers,'noups'))}</div>`);
   return sev;
 }
 
@@ -148,7 +150,7 @@ function renderPVE(d){
      <div class="row"><span class="l">${T('cpu')}</span>${bar(cpu,70,90)}<span class="v">${cpu.toFixed(0)}%</span></div>
      <div class="row"><span class="l">${T('mem')}</span>${bar(mp,80,92)}<span class="v">${mp.toFixed(0)}%</span></div>${pveChart(c.id)}</div>`;
   });
-  el.innerHTML=`<div class="ch"><h2>${T('pve')}</h2>${cl.length?pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail')):''}<a class="go" href="/pve/">${T('open')}</a></div>`+(cl.length?body:`<div class="empty">${T('nopve')}</div>`);
+  el.innerHTML=`<div class="ch"><h2>${T('pve')}</h2>${cl.length?pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail')):''}<a class="go" href="/pve/">${T('open')}</a></div>`+(cl.length?body:`<div class="empty">${esc(idle(d.clusters,'nopve'))}</div>`);
   return sev;
 }
 // ───────── NAS ─────────
@@ -189,7 +191,7 @@ function renderNAS(d){
      ${mem!=null?`<div class="row"><span class="l">${T('mem')}</span>${bar(mem,80,92)}<span class="v">${mem.toFixed(0)}%</span></div>`:''}
      ${vmax.pct>=0?`<div class="row"><span class="l">${T('nasvol')}</span>${bar(vmax.pct,data.thr?.vol_warn||90,data.thr?.vol_crit||95)}<span class="v">${vmax.pct.toFixed(0)}%</span></div>`:''}${nasChart(n.id)}</div>`;
   });
-  el.innerHTML=`<div class="ch"><h2>${T('nas')}</h2>${L.length?pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail')):''}<a class="go" href="/nas/">${T('open')}</a></div>`+(L.length?body:`<div class="empty">${T('nonas')}</div>`);
+  el.innerHTML=`<div class="ch"><h2>${T('nas')}</h2>${L.length?pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail')):''}<a class="go" href="/nas/">${T('open')}</a></div>`+(L.length?body:`<div class="empty">${esc(idle(d.nas,'nonas'))}</div>`);
   return sev;
 }
 // ───────── DNS (Pi-hole / AdGuard) ─────────
@@ -243,7 +245,7 @@ function renderDNS(d){
      <div class="kpis"><div class="kpi"><b>${data?esc(Number(data.queries||0).toLocaleString(lang==='es'?'es-CL':'en-GB')):'—'}</b><span>${T('dnsq')}</span></div><div class="kpi"><b>${data&&data.pct!=null?esc(data.pct)+'%':'—'}</b><span>${T('dnsblk')}</span></div><div class="kpi"><b>${data&&data.ms!=null?esc(data.ms)+' ms':'—'}</b><span>${T('dnsms')}</span></div></div>
      <div class="row"><span class="l">${T('dnsprot')}</span><span class="v">${esc(pr)}</span></div>${dnsCtl(n,data)}${dnsChart(n.id)}</div>`;
   });
-  el.innerHTML=`<div class="ch"><h2>${T('dns')}</h2>${L.length?pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail')):''}<a class="go" href="/dns/">${T('open')}</a></div>`+(L.length?body:`<div class="empty">${T('nodns')}</div>`);
+  el.innerHTML=`<div class="ch"><h2>${T('dns')}</h2>${L.length?pill(sev,sev==='ok'?'OK':sev==='warn'?T('attn'):T('fail')):''}<a class="go" href="/dns/">${T('open')}</a></div>`+(L.length?body:`<div class="empty">${esc(idle(d.servers,'nodns'))}</div>`);
   return sev;
 }
 // ───────── WAN (internet) ─────────
@@ -266,7 +268,7 @@ function wanChart(){
 }
 function renderVPN(d){
   const el=$('c-vpn'),list=(d.vpn||[]).filter(n=>!n.paused);let sev='ok',body='';   // pausadas: no se leen / paused: not read
-  if(!list.length)body=`<div class="empty">${T('vpnnone')}</div>`;
+  if(!list.length)body=`<div class="empty">${esc(idle(d.vpn,'vpnnone'))}</div>`;
   list.forEach(n=>{
     const sn=n.snap||{},x=sn.data;
     if(sn.error){sev=worst(sev,'warn');issues.push({lv:'warn',m:'vpn',t:`${n.name}: ${T('vpnoff')}${why(sn.error)}`,href:'/vpn/'})}
@@ -278,7 +280,7 @@ function renderVPN(d){
 }
 function renderUptime(d){
   const el=$('c-upt'),list=(d.monitors||[]).filter(n=>!n.paused);let sev='ok',body='';   // pausados: no se revisan / paused: not checked
-  if(!list.length)body=`<div class="empty">${T('uptnone')}</div>`;
+  if(!list.length)body=`<div class="empty">${esc(idle(d.monitors,'uptnone'))}</div>`;
   else{
     const up=list.filter(n=>n.status==='up'||n.status==='pending').length;
     body+=`<div class="unit"><div class="row"><span class="l">${T('uptup')}</span><span class="v">${esc(up)} / ${esc(list.length)}</span></div></div>`;

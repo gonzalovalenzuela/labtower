@@ -1058,8 +1058,6 @@ async function pinCluster(){
   }catch(e){toast(e.message,true);}
 }
 
-// Pide confirmación y borra un cluster (admin).
-// EN: Ask for confirmation and delete a cluster (admin).
 // Pausar o reanudar un cluster (solo admin): no toca el token ni la huella del certificado.
 // EN: Pause or resume a cluster (admin only): the token and the certificate fingerprint are left alone.
 async function pauseCluster(btn,id,paused){
@@ -1070,6 +1068,8 @@ async function pauseCluster(btn,id,paused){
     toast(t(paused?'pausedOk':'resumedOk',d.cluster?.name||''));await fetchAll();
   }catch(e){toast(e.message,true);if(btn)btn.disabled=false;}
 }
+// Pide confirmación y borra un cluster (admin).
+// EN: Ask for confirmation and delete a cluster (admin).
 function confirmDelete(id,name){
   document.getElementById('del-msg').textContent=t('deleteClusterConfirm',name);
   document.getElementById('del-btn').onclick=async()=>{

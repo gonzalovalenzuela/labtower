@@ -26,7 +26,7 @@ CASES = {
             {"id": "d-p1", "name": "dns1", "type": "pihole", "url": "http://192.0.2.32", "username": "", "password": "dns-secret-1", "timeout": 5,
              "verify_tls": True}, ("dns-secret-1",)),
     "vpn": ("vpn-monitor/server.py", "save_vpn", "load_vpn", "/api/vpn?hist=0", "vpn", "/api/vpn/{}/pause", "vpn",
-            {"id": "v-p1", "name": "vpn1", "type": "wireguard", "host": "192.0.2.33", "port": 22, "user": "ro", "aliases": {}}, ()),
+            {"id": "v-p1", "name": "vpn1", "type": "wireguard", "host": "192.0.2.33", "port": 22, "ssh_user": "ro", "aliases": {}}, ()),
     "uptime": ("uptime-monitor/server.py", "save_monitors", "load_monitors", "/api/monitors?beats=0", "monitors", "/api/monitors/{}/pause", "monitor",
                {"id": UID, "name": "web", "type": "tcp", "host": "192.0.2.34", "port": 443, "interval": 60, "timeout": 10, "down_after": 3}, ()),
 }
@@ -88,6 +88,28 @@ class Http(unittest.TestCase):
             checks = m.health_report(True)[1]["checks"]
             self.assertTrue(any("1 paused" in str(c.get("detail")) for c in checks.values()), (key, checks))
             self.assertFalse(any(c.get("level") != auth.OK and entry_name(key) in str(c.get("detail")) for c in checks.values()), (key, checks))
+
+
+    def test_editing_keeps_the_pause_and_the_form_cannot_set_it(self):
+        # Editar (solo el nombre) un equipo pausado lo deja pausado; «enabled» en el formulario no pausa. / EN: Editing a paused device keeps it paused.
+        edits = {"nut": ("PUT", {"name": "nuevo", "host": "192.0.2.30", "port": 3493}),
+                 "pve": ("POST", {"name": "nuevo", "host": "192.0.2.31", "port": 8006, "user": "ro@pve", "token_name": "t"}),
+                 "dns": ("POST", {"name": "nuevo"}), "vpn": ("POST", {"name": "nuevo"}), "uptime": ("POST", {"name": "nuevo"})}
+        for key, _m, srv, load, _l, _k, route, _r, _e, _s in self.each():
+            meth, body = edits[key]; url = route.rsplit("/", 1)[0]
+            st, d = srv.call(meth, url, {**body, "enabled": False}, token=self.adm)
+            self.assertEqual(st, 200, (key, d)); self.assertNotIn("enabled", load()[0], key)
+            srv.call("POST", route, {"paused": True}, token=self.adm)
+            st, d = srv.call(meth, url, {**body, "name": "otro"}, token=self.adm)
+            self.assertEqual(st, 200, (key, d)); self.assertIs(load()[0].get("enabled"), False, key); self.assertEqual(load()[0]["name"], "otro", key)
+
+    def test_dns_tools_answer_404_before_409(self):
+        # Un id que no existe es 404 aunque traiga cuerpo; uno pausado es 409. / EN: An unknown id is 404; a paused one is 409.
+        for key, _m, srv, _load, _l, _k, route, _r, _e, _s in self.each():
+            if key != "dns": continue
+            self.assertEqual(srv.call("POST", "/api/dns/nope/resolve", {"name": "example.com"}, token=self.adm)[0], 404)
+            srv.call("POST", route, {"paused": True}, token=self.adm)
+            self.assertEqual(srv.call("POST", route.replace("/pause", "/resolve"), {"name": "example.com"}, token=self.adm)[0], 409)
 
 
 def entry_name(key): return CASES[key][7]["name"]
@@ -156,7 +178,11 @@ class Pollers(unittest.TestCase):
     def test_proxmox_side_threads_and_data(self):
         m = support.load("proxmox-monitor/server.py")
         src = (ROOT / "proxmox-monitor/server.py").read_text(encoding="utf-8")
-        self.assertEqual(src.count("if auth.paused(cur): _drop_side(cid)"), 4)               # SMART, backups, extra, guests
+        self.assertEqual(src.count("if off: _drop_side(cid)"), 4)                            # SMART, backups, extra, guests
+        for every in ("SMART_EVERY", "BACKUP_EVERY", "EXTRA_EVERY", "GUEST_EVERY"):
+            self.assertIn(f"time.sleep(_side_wait(off, {every}))", src)                     # resumed: they read within PAUSED_EVERY s
+        self.assertEqual(m._side_wait(True, 900), m.PAUSED_EVERY); self.assertEqual(m._side_wait(False, 900), 900)
+        self.assertEqual(m._side_wait(True, 5), 5)
         self.assertIn("cache.clear(); _drop_side(cid); client.close()", src)
         for d in (m._smart, m._backups, m._extra, m._live, m._gnets): d["c-x"] = {"x": 1}
         m._drop_side("c-x")
@@ -199,6 +225,11 @@ class Pages(unittest.TestCase):
         for k in ("(d.servers||[]).filter(x=>!x.paused)", "(d.clusters||[]).filter(c=>!c.paused)", "(d.servers||[]).filter(n=>!n.paused)",
                   "(d.vpn||[]).filter(n=>!n.paused)", "(d.monitors||[]).filter(n=>!n.paused)", "(R.nut.value.servers||[]).filter(x=>!x.paused)"):
             self.assertIn(k, ov)
+        # Todo pausado: la tarjeta lo dice en vez de «sin configurar». / EN: All paused: the card says so instead of "none configured".
+        self.assertIn("function idle(all,k){all=all||[];return all.length&&all.every(x=>x.paused)?T('allpaused').replace('{n}',all.length):T(k)}", ov)
+        for a, k in (("d.servers", "noups"), ("d.clusters", "nopve"), ("d.nas", "nonas"), ("d.servers", "nodns"), ("d.vpn", "vpnnone"), ("d.monitors", "uptnone")):
+            self.assertIn(f"esc(idle({a},'{k}'))", ov)
+        self.assertEqual(ov.count("allpaused:"), 2)
         for k in ("((ok('nut') || {}).servers || []).filter(sv => !sv.paused)", "((ok('pve') || {}).clusters || []).filter(c => !c.paused)",
                   "((ok('dns') || {}).servers || []).filter(n => !n.paused)"):
             self.assertIn(k, rules)

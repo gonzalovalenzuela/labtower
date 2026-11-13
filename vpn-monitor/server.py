@@ -556,8 +556,6 @@ class H(BaseHTTPRequestHandler):
         if not auth.check_permission(tok, "vpn", "admin"):
             return self._json(403 if auth.check_permission(tok, "vpn", "readonly") else 401, {"error": "Admin permission required"})
 
-        # Crea la llave SSH del módulo (si no existe) y devuelve la pública para instalarla en el servidor VPN.
-        # EN: Create the module's SSH key (if missing) and return the public key to install on the VPN server.
         # Pausar o reanudar una VPN: {"paused": true|false} (solo admin). / EN: Pause or resume a VPN (admin only).
         mp = re.fullmatch(r"/api/vpn/([a-zA-Z0-9\-]+)/pause", path)
         if mp:
@@ -572,6 +570,8 @@ class H(BaseHTTPRequestHandler):
             cc = _cache.get(cur["id"])
             if cc: cc.wake.set()
             return self._json(200, {"vpn": {**public(cur), "paused": auth.paused(cur)}})
+        # Crea la llave SSH del módulo (si no existe) y devuelve la pública para instalarla en el servidor VPN.
+        # EN: Create the module's SSH key (if missing) and return the public key to install on the VPN server.
         if path == "/api/ssh-key":
             try: return self._json(200, {"public_key": ssh_keygen()})
             except (RuntimeError, OSError, subprocess.SubprocessError) as e: return self._json(500, {"error": str(e)[:160]})

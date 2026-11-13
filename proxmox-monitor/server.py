@@ -544,18 +544,20 @@ def _smart_loop(cluster, cache):
     cid = cluster["id"]
     client = None
     time.sleep(min(30, SMART_EVERY))
+    off = False
     while _cache.get(cid) is cache:
         try:
             cur = next((c for c in load_clusters() if c["id"] == cid), None)
             if cur is None: break
-            if auth.paused(cur): _drop_side(cid)          # paused: no queries, nothing stale shown / pausado: sin consultas
+            off = auth.paused(cur)
+            if off: _drop_side(cid)                        # paused: no queries, nothing stale shown / pausado: sin consultas
             else:
                 client = _client_for(cur, client)
                 _smart_round(cur, client, cache)
         except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"[{cluster['name']}] SMART round: {e}")
             if client: client.close()
-        time.sleep(SMART_EVERY)
+        time.sleep(_side_wait(off, SMART_EVERY))
     if client: client.close()
     _smart.pop(cid, None)
 
@@ -621,18 +623,20 @@ def _backup_loop(cluster, cache):
     cid = cluster["id"]
     client = None
     time.sleep(min(20, BACKUP_EVERY))
+    off = False
     while _cache.get(cid) is cache:
         try:
             cur = next((c for c in load_clusters() if c["id"] == cid), None)
             if cur is None: break
-            if auth.paused(cur): _drop_side(cid)          # paused: no queries, nothing stale shown / pausado: sin consultas
+            off = auth.paused(cur)
+            if off: _drop_side(cid)                        # paused: no queries, nothing stale shown / pausado: sin consultas
             else:
                 client = _client_for(cur, client)
                 _backup_round(cur, client, cache)
         except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"[{cluster['name']}] backup round: {e}")
             if client: client.close()
-        time.sleep(BACKUP_EVERY)
+        time.sleep(_side_wait(off, BACKUP_EVERY))
     if client: client.close()
     _backups.pop(cid, None); _bk_seen.pop(cid, None)
 
@@ -774,18 +778,20 @@ def _extra_loop(cluster, cache):
     cid = cluster["id"]
     client = None
     time.sleep(min(25, EXTRA_EVERY))
+    off = False
     while _cache.get(cid) is cache:
         try:
             cur = next((c for c in load_clusters() if c["id"] == cid), None)
             if cur is None: break
-            if auth.paused(cur): _drop_side(cid)          # paused: no queries, nothing stale shown / pausado: sin consultas
+            off = auth.paused(cur)
+            if off: _drop_side(cid)                        # paused: no queries, nothing stale shown / pausado: sin consultas
             else:
                 client = _client_for(cur, client)
                 _extra_round(cur, client, cache)
         except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"[{cluster['name']}] extra round: {e}")
             if client: client.close()
-        time.sleep(EXTRA_EVERY)
+        time.sleep(_side_wait(off, EXTRA_EVERY))
     if client: client.close()
     for d in (_extra, _live, _guest_prev, _lock_state, _task_seen, _al_on, _ser_last): d.pop(cid, None)
 
@@ -915,18 +921,20 @@ def _guest_loop(cluster, cache):
     cid = cluster["id"]
     client = None
     time.sleep(min(15, GUEST_EVERY))
+    off = False
     while _cache.get(cid) is cache:
         try:
             cur = next((c for c in load_clusters() if c["id"] == cid), None)
             if cur is None: break
-            if auth.paused(cur): _drop_side(cid)          # paused: no queries, nothing stale shown / pausado: sin consultas
+            off = auth.paused(cur)
+            if off: _drop_side(cid)                        # paused: no queries, nothing stale shown / pausado: sin consultas
             else:
                 client = _client_for(cur, client)
                 _guest_round(cur, client, cache)
         except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.warning(f"[{cluster['name']}] guest network round: {e}")
             if client: client.close()
-        time.sleep(GUEST_EVERY)
+        time.sleep(_side_wait(off, GUEST_EVERY))
     if client: client.close()
     _gnets.pop(cid, None)
 
@@ -1105,6 +1113,12 @@ def _poll_cluster(cluster):
         active = (time.time() - _last_view) < VIEW_GRACE
         cache.wake.wait(POLL_ACTIVE if active else POLL_IDLE)
         cache.wake.clear()
+
+# Espera de un hilo secundario: pausado revisa cada PAUSED_EVERY s, para leer pronto al reanudar en vez de esperar su ciclo completo.
+# EN: Wait of a side thread: while paused it checks every PAUSED_EVERY s, so it reads soon after resuming instead of waiting a full cycle.
+PAUSED_EVERY = 15
+def _side_wait(off: bool, every: float) -> float:
+    return min(every, PAUSED_EVERY) if off else every
 
 # Datos de los hilos secundarios de un cluster pausado: se borran para no mostrar ni avisar con lecturas viejas.
 # EN: Side-thread data of a paused cluster: dropped so stale readings are neither shown nor alerted on.

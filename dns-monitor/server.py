@@ -1009,8 +1009,8 @@ class H(BaseHTTPRequestHandler):
             if not auth.check_permission(tok, "dns", "execute"):
                 return self._json(403 if auth.check_permission(tok, "dns", "readonly") else 401, {"error": "Execute permission required"})
             n = next((x for x in load_servers() if x["id"] == mr.group(1)), None)
-            if auth.paused(n): return self._json(409, {"error": "Monitoring of this server is paused"})
             if not n: return self._json(404, {"error": "Not found"})
+            if auth.paused(n): return self._json(409, {"error": "Monitoring of this server is paused"})
             name, qt = str(body.get("name") or "").strip(), str(body.get("type") or "A").upper()
             if not dnsq.valid_name(name) or qt not in ("A", "AAAA"): return self._json(400, {"error": "Invalid name or type"})
             if not _test_gate.acquire(blocking=False): return self._json(429, {"error": "Too many tests at once"})

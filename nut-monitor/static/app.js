@@ -802,8 +802,6 @@ function fastRefresh(n=13){
   },1500);
 }
 
-// Pide confirmación y borra un servidor (admin).
-// EN: Ask for confirmation and delete a server (admin).
 // Pausar o reanudar un servidor NUT (solo admin): sin lecturas, eventos ni historial mientras esté pausado.
 // EN: Pause or resume a NUT server (admin only): no readings, events or history while paused.
 async function pauseServer(btn,sid,paused){
@@ -814,6 +812,8 @@ async function pauseServer(btn,sid,paused){
     toast(t(paused?'pausedOk':'resumedOk',d.server?.name||''),false);await fetchAll();
   }catch(e){toast(e.message,true);if(btn)btn.disabled=false;}
 }
+// Pide confirmación y borra un servidor (admin).
+// EN: Ask for confirmation and delete a server (admin).
 function confirmDeleteServer(sid,name){
   document.getElementById('del-msg').textContent=t('deleteServerConfirm',name);
   document.getElementById('del-btn').onclick=async()=>{
