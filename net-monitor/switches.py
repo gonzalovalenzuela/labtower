@@ -956,7 +956,7 @@ class Manager:
             finally:
                 conn.close()
 
-    def set_port_meta(self, sid, port, label, uplink, watch=False):
+    def set_port_meta(self, sid, port, label, uplink, watch=False, mute=False):
         with self.lock:
             cur = self._find(sid)
             if not cur:
@@ -967,10 +967,27 @@ class Manager:
                 raise ValueError("Invalid port")
             label = _clean_text(label, 32)
             meta = cur.setdefault("ports", {})
-            if label or uplink or watch:
-                meta[port] = {"label": label, "uplink": bool(uplink), "watch": bool(watch)}
+            ack = bool((meta.get(port) or {}).get("speed_ack"))       # editing the label keeps a reviewed speed alert / editar la etiqueta conserva el aviso revisado
+            if label or uplink or watch or mute or ack:
+                meta[port] = {"label": label, "uplink": bool(uplink), "watch": bool(watch), "mute": bool(mute), **({"speed_ack": True} if ack else {})}
             else:
                 meta.pop(port, None)
+            self._save()
+
+    # Revisado: quita el aviso de velocidad baja de un puerto hasta que vuelva a su velocidad habitual (la próxima baja avisa de nuevo).
+    # EN: Reviewed: removes a port's low-speed alert until it is back at its usual speed (the next drop warns again).
+    def ack_speed(self, sid, port):
+        with self.lock:
+            cur = self._find(sid)
+            if not cur:
+                raise ValueError("Switch not found")
+            try:
+                n = int(port)
+            except (TypeError, ValueError):
+                raise ValueError("Invalid port")
+            if self.rec.get(sid, {}).get("slow", {}).get(n, 0) < SPEED_SUSTAIN:
+                raise ValueError("That port is not below its usual speed")
+            cur.setdefault("ports", {}).setdefault(str(n), {"label": "", "uplink": False, "watch": False})["speed_ack"] = True
             self._save()
 
     def test(self, body):
@@ -1130,7 +1147,7 @@ class Manager:
             rec["rates"], rec["snap"], rec["ok_ts"], rec["err"], rec["fails"] = rates, snap, now, None, 0
             meta = (self._find(sid) or {}).get("ports") or {}     # copia vigente (se edita sin reiniciar el hilo) / current copy
             links = self._links_locked()
-            speeds_dirty = False
+            speeds_dirty = cfg_dirty = False
             for p in ports:
                 n = p["port"]
                 # Velocidad negociada contra la habitual. / EN: Negotiated speed against the usual one.
@@ -1142,6 +1159,11 @@ class Manager:
                     usual = self._usual_speed(sid, n, now)
                     rec["slow"][n] = rec["slow"].get(n, 0) + 1 if usual and spd < usual else 0
                     lst = "low" if rec["slow"][n] >= SPEED_SUSTAIN else "ok" if not rec["slow"][n] else None
+                    am = meta.get(str(n)) or {}
+                    if lst == "ok" and am.get("speed_ack"):
+                        # De vuelta a su velocidad: el aviso revisado se olvida. / EN: Back at its speed: the reviewed alert is forgotten.
+                        am.pop("speed_ack", None); cfg_dirty = True
+                        if not (am.get("label") or am.get("uplink") or am.get("watch") or am.get("mute")): meta.pop(str(n), None)
                     ch = self._changed(f"sw-spd:{sid}:{n}", lst) if lst else None
                     if ch and ch[1] == "low":
                         events.append(("warn", f"{cfg['name']}/{n}: link at {spd} Mb/s (usually {usual} Mb/s): check the cable or the port", "sw_speed",
@@ -1191,10 +1213,15 @@ class Manager:
             ch = self._changed(f"sw-temp:{sid}", lv)
             if ch:
                 events.append(("info" if lv == "ok" else lv, f"{cfg['name']}: temperature {t:g} °C", "sw_temp" if lv != "ok" else "sw_temp_ok", {"n": cfg["name"], "t": round(t)}))
-        if speeds_dirty:
+        if speeds_dirty or cfg_dirty:
             with self.lock:
-                self._save_speeds(now)
+                if speeds_dirty: self._save_speeds(now)
+                if cfg_dirty: self._save()
+        # Puertos sin avisos (p. ej. de pruebas): sus eventos no se registran. / EN: Ports without alerts (e.g. for testing): their events are not recorded.
+        muted = {k for k, v in ((self._find(sid) or {}).get("ports") or {}).items() if isinstance(v, dict) and v.get("mute")}
         for lv, text, key, params in events:
+            if "p" in params and str(params["p"]) in muted:
+                continue
             self._event(lv, text, key, **params)
         self._db_write(sid, now, snap, rates)
 
@@ -1312,7 +1339,9 @@ class Manager:
                         flag = "uplink" if uplink else "up"
                     r = rec["rates"].get(n) or {}
                     usual = self._usual_speed(sid, n, rec["ok_ts"] or now) if p["link_up"] else None   # against the reading time / contra la hora de la lectura
-                    slow = bool(usual and p.get("speed_mbps") and p["speed_mbps"] < usual and rec["slow"].get(n, 0) >= SPEED_SUSTAIN)
+                    low = bool(usual and p.get("speed_mbps") and p["speed_mbps"] < usual and rec["slow"].get(n, 0) >= SPEED_SUSTAIN)
+                    mute = bool(pm.get("mute"))
+                    slow = low and not pm.get("speed_ack") and not mute    # reviewed or muted by an admin: no alert / revisado o silenciado: sin aviso
                     ports.append({
                         "port": n, "name": p.get("name"), "alias": p.get("alias"), "label": pm.get("label", ""),
                         "uplink": uplink, "uplink_manual": bool(pm.get("uplink")), "link_to": link_to, "flag": flag,
@@ -1324,7 +1353,7 @@ class Manager:
                         "rx_discards": p.get("rx_discards"), "tx_discards": p.get("tx_discards"),
                         "rx_bytes": p.get("rx_bytes"), "tx_bytes": p.get("tx_bytes"), "bytes_est": p.get("bytes_est") or 0,
                         "rx_pps": r.get("rx_pps"), "tx_pps": r.get("tx_pps"), "rx_bps": r.get("rx_bps"), "tx_bps": r.get("tx_bps"),
-                        "mac_count": len(macs), "neighbors": nb, "slow": slow, "usual_mbps": usual if slow else None,
+                        "mac_count": len(macs), "neighbors": nb, "slow": slow, "usual_mbps": usual if low else None, "speed_ack": low and not slow and not mute, "mute": mute,
                     })
                 sy = (snap or {}).get("system") or {}
                 t = sy.get("temperature_c")
@@ -1336,6 +1365,8 @@ class Manager:
                 if tlv in ("warn", "crit") and not paused:
                     alerts.append({"lv": tlv, "k": "temp", "t": t})
                 for p in ([] if paused else ports):
+                    if p["mute"]:
+                        continue                              # port without alerts / puerto sin avisos
                     if p["slow"]:
                         alerts.append({"lv": "warn", "k": "speed", "p": p["port"], "d": p["speed_mbps"], "b": p["usual_mbps"]})
                     if p["flag"] == "loop":

@@ -1827,10 +1827,10 @@ class H(BaseHTTPRequestHandler):
                 _oui_status["error"] = str(e)[:200]
                 return self._json(502, {"error": str(e)[:200]})
 
-        # Switch Monitor: «actualizar ahora» (cualquiera con acceso a Net) y, solo admin, guardar, borrar, probar, etiquetar puertos
-        # y cambiar el intervalo. Las contraseñas nunca se devuelven.
-        # EN: Switch Monitor: "refresh now" (anyone with Net access) and, admin only, save, delete, test, label ports and change
-        #     the interval. Passwords are never returned.
+        # Switch Monitor: «actualizar ahora» (cualquiera con acceso a Net) y, solo admin, guardar, borrar, probar, etiquetar puertos,
+        # dar por revisada una velocidad baja y cambiar el intervalo. Las contraseñas nunca se devuelven.
+        # EN: Switch Monitor: "refresh now" (anyone with Net access) and, admin only, save, delete, test, label ports, acknowledge a
+        #     low speed and change the interval. Passwords are never returned.
         elif path == "/api/switches/refresh":
             return self._json(200, {"ok": True, "n": sw_manager().refresh(body.get("id") or None)})
         elif path.startswith("/api/switches/"):
@@ -1846,7 +1846,11 @@ class H(BaseHTTPRequestHandler):
                 if act == "test":
                     return self._json(200, m.test(body))
                 if act == "port":
-                    m.set_port_meta(str(body.get("id") or ""), body.get("port"), body.get("label", ""), bool(body.get("uplink")), bool(body.get("watch")))
+                    m.set_port_meta(str(body.get("id") or ""), body.get("port"), body.get("label", ""), bool(body.get("uplink")), bool(body.get("watch")),
+                                    body.get("mute") is True)
+                    return self._json(200, {"ok": True})
+                if act == "speedack":
+                    m.ack_speed(str(body.get("id") or ""), body.get("port"))
                     return self._json(200, {"ok": True})
                 if act == "poll":
                     m.set_poll(body.get("seconds"))

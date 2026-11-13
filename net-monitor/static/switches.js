@@ -30,7 +30,7 @@ Object.assign(LANG.en, {
   swTopo: 'Topology', swTopoHint: 'Worked out from the MAC tables: a port that has another switch\'s MAC behind it is a link between them.', swTopoNone: 'No links between switches detected yet.',
   swTempChart: 'Temperature', swTraffic: 'Traffic', swPackets: 'Packets/s', swErrChart: 'Errors (counter)', swNoData: 'No data in this range yet.',
   swPortTitle: (n, p) => n + ' · Port ' + p, swLabel: 'Label', swLabelPh: 'e.g. NAS, uplink to the office', swUplinkChk: 'Link to another switch (do not alert on loop)', swSavePort: 'Save', swClose: 'Close',
-  swInfoLink: 'Link', swInfoCfg: 'Configured', swInfoFlow: 'Flow control', swInfoDisc: 'Discards rx / tx', swInfoMacs: 'MACs seen', swInfoErr1h: 'New errors (1 h)', swInfoCrc: 'CRC / FCS errors', swInfoAlign: 'Alignment errors', swInfoFlaps: 'Link changes (1 h)', swWatchChk: 'Alert when this port goes down or up',
+  swInfoLink: 'Link', swInfoCfg: 'Configured', swInfoFlow: 'Flow control', swInfoDisc: 'Discards rx / tx', swInfoMacs: 'MACs seen', swInfoErr1h: 'New errors (1 h)', swInfoCrc: 'CRC / FCS errors', swInfoAlign: 'Alignment errors', swInfoFlaps: 'Link changes (1 h)', swWatchChk: 'Alert when this port goes down or up', swMuteChk: 'No alerts on this port (testing): speed, link, flapping, errors and loop', swMuted: 'No alerts (testing port)', swAckOne: 'Reviewed: only this alert', swAckAll: 'Silence all alerts of this port', swAckOneOk: 'Alert removed until the port is back at its usual speed', swAckAllQ: 'Silence every alert of this port (speed, link, flapping, errors and loop) until you untick it?', swAckAllOk: 'Port without alerts', swSpeedAcked: u => 'Low speed reviewed: it warns again after the port is back at ' + u,
   swMdlAdd: 'Add switch', swMdlEdit: 'Edit switch', swName: 'Name', swDriver: 'Type', swHost: 'IP or name', swUser: 'User', swPass: 'Password', swKeep: 'leave empty to keep the stored one',
   swCommunity: 'SNMP community (read-only)', swSnmpPort: 'SNMP port', swMacPag: 'Read the whole MAC table (HC; not tried on the real unit)', swEst: 'Estimated bytes per packet (0 = off)', swEstNote: 'Estimated: this model only reports packets, so bytes = packets × the average size set for this switch. Not exact.', swEstTip: 'estimated',
   swDrvZx: 'ZX310S (web interface)', swDrvHc: 'HC-SWTGW218AS (web interface)', swDrvSnmp: 'SNMP v2c (TP-Link and others)',
@@ -64,7 +64,7 @@ Object.assign(LANG.es, {
   swTopo: 'Topología', swTopoHint: 'Se deduce de las tablas MAC: un puerto que tiene detrás la MAC de otro switch es un enlace entre ambos.', swTopoNone: 'Aún no se detectan enlaces entre switches.',
   swTempChart: 'Temperatura', swTraffic: 'Tráfico', swPackets: 'Paquetes/s', swErrChart: 'Errores (contador)', swNoData: 'Aún no hay datos en este rango.',
   swPortTitle: (n, p) => n + ' · Puerto ' + p, swLabel: 'Etiqueta', swLabelPh: 'p. ej. NAS, enlace a la oficina', swUplinkChk: 'Enlace a otro switch (no alertar por loop)', swSavePort: 'Guardar', swClose: 'Cerrar',
-  swInfoLink: 'Enlace', swInfoCfg: 'Configurado', swInfoFlow: 'Control de flujo', swInfoDisc: 'Descartes rx / tx', swInfoMacs: 'MACs vistas', swInfoErr1h: 'Errores nuevos (1 h)', swInfoCrc: 'Errores CRC / FCS', swInfoAlign: 'Errores de alineación', swInfoFlaps: 'Cambios de enlace (1 h)', swWatchChk: 'Avisar si este puerto se cae o vuelve',
+  swInfoLink: 'Enlace', swInfoCfg: 'Configurado', swInfoFlow: 'Control de flujo', swInfoDisc: 'Descartes rx / tx', swInfoMacs: 'MACs vistas', swInfoErr1h: 'Errores nuevos (1 h)', swInfoCrc: 'Errores CRC / FCS', swInfoAlign: 'Errores de alineación', swInfoFlaps: 'Cambios de enlace (1 h)', swWatchChk: 'Avisar si este puerto se cae o vuelve', swMuteChk: 'Sin avisos en este puerto (pruebas): velocidad, enlace, rebotes, errores y loop', swMuted: 'Sin avisos (puerto de pruebas)', swAckOne: 'Revisado: solo este aviso', swAckAll: 'Silenciar todos los avisos del puerto', swAckOneOk: 'Aviso quitado hasta que el puerto vuelva a su velocidad habitual', swAckAllQ: '¿Silenciar todos los avisos de este puerto (velocidad, enlace, rebotes, errores y loop) hasta que lo desmarques?', swAckAllOk: 'Puerto sin avisos', swSpeedAcked: u => 'Velocidad baja revisada: vuelve a avisar después de que el puerto regrese a ' + u,
   swMdlAdd: 'Agregar switch', swMdlEdit: 'Editar switch', swName: 'Nombre', swDriver: 'Tipo', swHost: 'IP o nombre', swUser: 'Usuario', swPass: 'Contraseña', swKeep: 'vacío = conservar la guardada',
   swCommunity: 'Community SNMP (solo lectura)', swSnmpPort: 'Puerto SNMP', swMacPag: 'Leer toda la tabla MAC (HC; no probado en el equipo real)', swEst: 'Bytes estimados por paquete (0 = desactivado)', swEstNote: 'Estimado: este modelo solo informa paquetes, así que los bytes = paquetes × el tamaño medio configurado en este switch. No es exacto.', swEstTip: 'estimado',
   swDrvZx: 'ZX310S (interfaz web)', swDrvHc: 'HC-SWTGW218AS (interfaz web)', swDrvSnmp: 'SNMP v2c (TP-Link y otros)',
@@ -211,7 +211,7 @@ function tile(s, p) {
   else if (p.neighbors && p.neighbors[0]) sub = p.neighbors[0].name || p.neighbors[0].ip || '';
   else if (p.link_up && (p.rx_bps != null || p.rx_pps != null)) sub = p.rx_bps != null ? mbps((p.rx_bps || 0) + (p.tx_bps || 0)) + ' Mb/s' : pps((p.rx_pps || 0) + (p.tx_pps || 0)) + ' pkt/s';
   const num = s.driver === 'zx' && p.port > 8 ? p.port + ' SFP+' : p.port;
-  const tip = [t('swPortTitle', s.name, p.port), p.link_up ? spdLong(p.speed_mbps) : t('swStDown'), p.slow ? t('swSlow', spdLong(p.usual_mbps)) : '', p.label, p.link_to ? '↔ ' + p.link_to : '',
+  const tip = [t('swPortTitle', s.name, p.port), p.link_up ? spdLong(p.speed_mbps) : t('swStDown'), p.slow ? t('swSlow', spdLong(p.usual_mbps)) : '', p.mute ? '🔕 ' + t('swMuted') : '', p.label, p.link_to ? '↔ ' + p.link_to : '',
     p.rx_pps != null ? 'rx ' + pps(p.rx_pps) + ' / tx ' + pps(p.tx_pps) + ' pkt/s' : '', (p.rx_err || p.tx_err) ? t('swErrors') + ': ' + (p.rx_err || 0) + ' / ' + (p.tx_err || 0) : ''].filter(Boolean).join(' · ');
   const on = SW.sel && SW.sel.sid === s.id && SW.sel.port === p.port;
   return `<button type="button" class="sw-port sw-p-${String(p.flag).replace(/[^a-z0-9_-]/g, '')}${on ? ' sel' : ''}" data-act="port" data-id="${esc(s.id)}" data-port="${p.port}" title="${esc(tip)}"><span class="n">${esc(num)}</span><span class="s ${p.link_up ? SPD_CLS(p.speed_mbps) : ''}${p.slow ? ' slow' : ''}">${p.link_up ? esc(spd(p.speed_mbps)) + (p.slow ? ' ↓' : '') : '—'}</span><span class="x">${esc(sub)}</span></button>`;
@@ -252,11 +252,16 @@ function portDetail(s, p) {
     [t('swErrors'), (p.rx_err || 0) + ' rx / ' + (p.tx_err || 0) + ' tx'], [t('swInfoErr1h'), p.err_1h], ...(p.crc != null ? [[t('swInfoCrc'), p.crc + (p.crc_1h ? ' (+' + p.crc_1h + ' / 1 h)' : '')], [t('swInfoAlign'), p.align != null ? p.align : '—']] : []), [t('swInfoFlaps'), p.flaps_1h || 0], ...(p.rx_bytes != null ? [[t('swInfoTotal'), (p.bytes_est ? '≈ ' : '') + bytesFmt(p.rx_bytes) + ' / ' + bytesFmt(p.tx_bytes)]] : []), [t('swInfoDisc'), p.rx_discards != null ? p.rx_discards + ' / ' + p.tx_discards : '—'], [t('swInfoMacs'), p.mac_count]];
   const macs = (p.neighbors || []).map(n => `<code>${esc(n.mac)}</code> ${n.name || n.ip ? esc(nameOf(n)) + (n.ip ? ' <span class="dim">' + esc(n.ip) + '</span>' : '') : '<span class="dim">—</span>'}${n.vlan != null ? ' <span class="dim">VLAN ' + esc(n.vlan) + '</span>' : ''}`).join('<br>');
   const ctl = admin ? `<div class="sw-portform"><label>${esc(t('swLabel'))}<input id="sw-lbl" maxlength="32" value="${esc(p.label || '')}" placeholder="${esc(t('swLabelPh'))}"></label>` +
-    `<label class="chk"><input type="checkbox" id="sw-upl"${p.uplink_manual ? ' checked' : ''}> ${esc(t('swUplinkChk'))}</label><label class="chk"><input type="checkbox" id="sw-watch"${p.watch ? ' checked' : ''}> ${esc(t('swWatchChk'))}</label><button type="button" class="sw-btn teal" data-act="saveport" data-id="${esc(s.id)}" data-port="${p.port}">${esc(t('swSavePort'))}</button></div>` : '';
+    `<label class="chk"><input type="checkbox" id="sw-upl"${p.uplink_manual ? ' checked' : ''}> ${esc(t('swUplinkChk'))}</label><label class="chk"><input type="checkbox" id="sw-watch"${p.watch ? ' checked' : ''}> ${esc(t('swWatchChk'))}</label><label class="chk"><input type="checkbox" id="sw-mute"${p.mute ? ' checked' : ''}> ${esc(t('swMuteChk'))}</label><button type="button" class="sw-btn teal" data-act="saveport" data-id="${esc(s.id)}" data-port="${p.port}">${esc(t('swSavePort'))}</button></div>` : '';
+  // Velocidad baja: el admin la da por revisada (solo este aviso) o silencia el puerto (todos sus avisos, p. ej. de pruebas).
+  // EN: Low speed: an admin marks it reviewed (only this alert) or silences the port (all its alerts, e.g. for testing).
+  const note = p.slow ? `<div class="sw-note warn">${esc(t('swSlow', spdLong(p.usual_mbps)))}${admin ? `<span class="sw-acts"><button type="button" class="sw-btn" data-act="ackone" data-id="${esc(s.id)}" data-port="${p.port}">${esc(t('swAckOne'))}</button><button type="button" class="sw-btn" data-act="ackall" data-id="${esc(s.id)}" data-port="${p.port}">${esc(t('swAckAll'))}</button></span>` : ''}</div>`
+    : p.speed_ack ? `<div class="sw-note">${esc(t('swSpeedAcked', spdLong(p.usual_mbps)))}</div>`
+    : p.mute ? `<div class="sw-note">🔕 ${esc(t('swMuted'))}</div>` : '';
   const ranges = rangeChips();
   const k = histKey(s.id, p.port);
   return `<div class="sw-detail"><div class="sw-dhead"><b>${esc(t('swPortTitle', s.name, p.port))}</b>${p.label ? ' <span class="dim">' + esc(p.label) + '</span>' : ''}<span class="grow"></span>${ranges}<button type="button" class="sw-btn" data-act="closeport">${esc(t('swClose'))}</button></div>` +
-    `<div class="sw-info">${info.map(([a, b]) => `<div><span>${esc(a)}</span><b>${esc(b)}</b></div>`).join('')}</div>${macs ? '<div class="sw-macs">' + macs + '</div>' : ''}${ctl}` +
+    note + `<div class="sw-info">${info.map(([a, b]) => `<div><span>${esc(a)}</span><b>${esc(b)}</b></div>`).join('')}</div>${macs ? '<div class="sw-macs">' + macs + '</div>' : ''}${ctl}` +
     `<div class="sw-charttitle">${esc(s.has_bytes ? t('swTraffic') + (s.bytes_est ? ' (≈ ' + t('swEstTip') + ')' : '') : t('swPackets'))}</div><div class="sw-chart" data-key="${esc(k)}" data-kind="traffic"></div>` +
     `<div class="sw-charttitle">${esc(t('swErrChart'))}</div><div class="sw-chart" data-key="${esc(k)}" data-kind="errs"></div></div>`;
 }
@@ -454,8 +459,18 @@ async function onClick(e) {
     else if (act === 'range') { SW.range = el.dataset.range; render(); loadHistory(true); }
     else if (act === 'showall') { SW.showAll[id] = !SW.showAll[id]; render(); }
     else if (act === 'saveport') {
-      await post('api/switches/port', { id, port: Number(el.dataset.port), label: $('sw-lbl').value, uplink: $('sw-upl').checked, watch: $('sw-watch').checked });
+      await post('api/switches/port', { id, port: Number(el.dataset.port), label: $('sw-lbl').value, uplink: $('sw-upl').checked, watch: $('sw-watch').checked, mute: $('sw-mute').checked });
       toast(t('swSaved')); SW.hash = ''; await load();
+    }
+    else if (act === 'ackone') {
+      await post('api/switches/speedack', { id, port: Number(el.dataset.port) });
+      toast(t('swAckOneOk')); SW.hash = ''; await load();
+    }
+    else if (act === 'ackall') {
+      if (!confirm(t('swAckAllQ'))) return;
+      const sw = ((SW.data && SW.data.switches) || []).find(x => x.id === id), p = sw && sw.ports.find(x => x.port === Number(el.dataset.port));
+      await post('api/switches/port', { id, port: Number(el.dataset.port), label: p ? p.label || '' : '', uplink: !!(p && p.uplink_manual), watch: !!(p && p.watch), mute: true });
+      toast(t('swAckAllOk')); SW.hash = ''; await load();
     }
     else if (act === 'mcancel') closeModal();
     else if (act === 'mtest') {

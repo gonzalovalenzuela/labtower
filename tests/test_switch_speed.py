@@ -80,6 +80,53 @@ class Speed(unittest.TestCase):
         self.m.save_switch({"id": sid, "enabled": False})
         self.assertEqual(self.m.state()["switches"][0]["alerts"], [])
 
+    def test_ack_only_this_alert_until_it_recovers(self):
+        sid = self.add()["id"]
+        with self.assertRaises(ValueError): self.m.ack_speed(sid, 1)                                  # nothing to acknowledge yet
+        self.readings(sid, [1000, 10, 10])                                                             # node off: WOL at 10 Mb/s
+        self.m.ack_speed(sid, 1)
+        p = self.port1()
+        self.assertEqual((p["slow"], p["speed_ack"], p["usual_mbps"]), (False, True, 1000))
+        self.assertEqual(self.m.state()["switches"][0]["alerts"], [])
+        self.m.set_port_meta(sid, 1, "amt", False)                                                     # editing the label keeps the ack
+        self.assertTrue(self.port1()["speed_ack"])
+        self.readings(sid, [1000], start=T0 + 300)                                                     # back at its speed: ack forgotten
+        self.assertNotIn("speed_ack", self.m._find(sid)["ports"]["1"])
+        self.assertEqual(self.m._find(sid)["ports"]["1"]["label"], "amt")
+        self.readings(sid, [10, 10], start=T0 + 360)                                                   # the next drop warns again
+        self.assertTrue(self.port1()["slow"]); self.assertEqual(self.kinds().count("sw_speed"), 2)
+        with self.assertRaises(ValueError): self.m.ack_speed("nope", 1)
+        with self.assertRaises(ValueError): self.m.ack_speed(sid, "x")
+
+    def test_ack_without_other_settings_leaves_no_leftovers(self):
+        sid = self.add()["id"]
+        self.readings(sid, [1000, 10, 10]); self.m.ack_speed(sid, 1)
+        self.readings(sid, [1000], start=T0 + 300)
+        self.assertNotIn("1", self.m._find(sid).get("ports") or {})
+
+    def test_muted_port_has_no_alerts_or_events(self):
+        sid = self.add()["id"]
+        self.m.set_port_meta(sid, 1, "pruebas", False, watch=True, mute=True)
+        self.readings(sid, [1000, 10, 10, 1000, 10, 10])
+        for i in range(5):                                                                              # flapping link
+            self.feed(sid, ts.mk_snap("zx310s", T0 + 600 + i * 60, [port(1, 1000, up=i % 2 == 0), port(2, 1000)]))
+        p = self.port1()
+        self.assertEqual((p["mute"], p["slow"], p["speed_ack"]), (True, False, False))
+        self.assertEqual(self.m.state()["switches"][0]["alerts"], [])
+        self.assertFalse([e for e in self.events if e[2].get("p") == 1])
+        self.m.set_port_meta(sid, 1, "pruebas", False, watch=True, mute=False)                         # untick: alerts again
+        self.readings(sid, [10, 10], start=T0 + 1000)
+        self.assertTrue(self.port1()["slow"])
+
+    def test_page_offers_both_acks(self):
+        js = (ROOT / "net-monitor/static/switches.js").read_text(encoding="utf-8")
+        for k in ("data-act=\"ackone\"", "data-act=\"ackall\"", "post('api/switches/speedack'", "mute: $('sw-mute').checked", "mute: true }", "id=\"sw-mute\""):
+            self.assertIn(k, js, k)
+        for k in ("swMuteChk:", "swAckOne:", "swAckAll:", "swAckOneOk:", "swAckAllQ:", "swAckAllOk:", "swSpeedAcked:", "swMuted:"):
+            self.assertEqual(js.count(k), 2, k)
+        srv = (ROOT / "net-monitor/server.py").read_text(encoding="utf-8")
+        self.assertIn('if act == "speedack":', srv); self.assertIn('body.get("mute") is True)', srv)
+
     def test_pages_show_it(self):
         js = (ROOT / "net-monitor/static/switches.js").read_text(encoding="utf-8")
         self.assertIn("${p.slow ? ' slow' : ''}", js); self.assertEqual(js.count("swSlow:"), 2)
