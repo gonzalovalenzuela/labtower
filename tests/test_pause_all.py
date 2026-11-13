@@ -158,9 +158,18 @@ class Pollers(unittest.TestCase):
             def __init__(s, *a, **k): pass
             def __getattr__(s, name): calls.append(name); raise OSError("no")
         m.NUTClient = NoNut
+        sid = entry["id"]; m.db_init()
+        m.outage_track(sid, "u", "OB", 80, 1000)                                             # UPS on battery when it is paused
+        m.outage_track("otro", "u", "OB", 80, 1000)                                          # another server's outage stays open
         try: m._poll(entry)
         finally: m.load_servers, m._safe_servers, m.POLL_SEC, m.NUTClient = old; m._caches.pop("s-p1", None)
         self.assertEqual(calls, []); self.assertEqual(cc.snap("none")["ups"], {})
+        c = m.db_connect()
+        try: rows = dict(c.execute("SELECT srv_id, t_end FROM outages WHERE t_start = 1000 AND srv_id IN (?, 'otro')", (sid,)).fetchall())
+        finally: c.execute("DELETE FROM outages WHERE t_start = 1000"); c.commit(); c.close()
+        self.assertIsNotNone(rows[sid]); self.assertGreater(rows[sid], 1000)                 # closed at the pause
+        self.assertIsNone(rows["otro"])
+        self.assertIsNone(m._open_out[(sid, "u")])                                           # the next battery reading opens a new one
 
     def test_uptime(self):
         m = support.load("uptime-monitor/server.py")

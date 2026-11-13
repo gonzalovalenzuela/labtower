@@ -141,6 +141,17 @@ class BaseDriver:
         self.login()
         self._save_session()
 
+    # Olvida la sesión del todo: cookies en memoria y en disco. El siguiente uso parte como un cliente nuevo.
+    # EN: Forget the session entirely: cookies in memory and on disk. The next use starts as a brand-new client.
+    def forget(self):
+        with self.lock:
+            self.jar.clear(); self.logged_in = False
+            if self.session_file:
+                try:
+                    os.unlink(self.session_file)
+                except OSError:
+                    pass
+
     def fetch(self, path, data=None):
         with self.lock:
             if not self.logged_in:
@@ -1042,7 +1053,14 @@ class Manager:
                 snap = drv.snapshot(with_macs=want_macs)
                 self._ingest(sid, cfg, snap, want_macs)
             except Exception as e:  # noqa: BLE001
-                if drv is not None:
+                if isinstance(e, SessionExpired) and drv is not None:
+                    # Rechazo que el reinicio de sesión del mismo driver no arregló: se descarta todo (cookies, archivo y conexión) y la
+                    # próxima lectura usa un driver nuevo, como «Probar» o un reinicio del servicio, que sí recuperan el switch.
+                    # EN: A rejection the driver's own relogin did not fix: everything is dropped (cookies, file and connection) and the
+                    #     next read uses a new driver, like "Test" or a service restart, which do recover the switch.
+                    drv.forget()
+                    drv = None
+                elif drv is not None:
                     drv.logged_in = False
                 self._fail(sid, cfg, e)
             with self.lock:

@@ -356,6 +356,21 @@ def outage_track(sid, ups, status, charge, now=None):
                 _open_out[k] = None; _out_min[k] = None; _stats_cache.pop(k, None)
         finally: conn.close()
 
+# Cierra los cortes abiertos de un servidor (al pausarlo): sin lecturas no se sabe cuándo vuelve la energía,
+# así que el corte termina en el momento de la pausa en vez de alargarse hasta que se reanude.
+# EN: Close the open outages of a server (when it is paused): with no readings the power return is unknown,
+#     so the outage ends at the pause instead of stretching until it is resumed.
+def outage_close_server(sid, now=None):
+    now = int(now or time.time())
+    with _db_lock:
+        conn = db_connect()
+        try:
+            n = conn.execute("UPDATE outages SET t_end=? WHERE srv_id=? AND t_end IS NULL", (now, sid)).rowcount; conn.commit()
+        finally: conn.close()
+        for k in [k for k in _open_out if k[0] == sid]:
+            _open_out[k] = None; _out_min[k] = None; _stats_cache.pop(k, None)
+    return n
+
 # Estadísticas de un UPS: racha en línea, disponibilidad en 24 h / 7 d / 30 d y último corte (se recalculan cada 30 s como mucho).
 # La disponibilidad se mide sobre el tiempo con datos: si hay menos historial que el período, se usa solo ese tiempo.
 # EN: Stats of one UPS: online streak, availability over 24 h / 7 d / 30 d and last outage (recomputed at most every 30 s).
@@ -869,7 +884,7 @@ def _poll(server):
     sid = server["id"]; nut = NUTClient(server["host"], server["port"])
     cache = _caches.get(sid)
     if not cache: return
-    poll_n = 0
+    poll_n = 0; was_off = False
     target = (server["host"], int(server["port"]))
     while True:
         try:
@@ -887,10 +902,16 @@ def _poll(server):
         if auth.paused(cur):
             # Pausado: sin lecturas, eventos ni historial; sin datos viejos al reanudar. / EN: Paused: no readings, events or history.
             cache.reset()
+            if not was_off:
+                # Al pausar se cierra el corte en curso. / EN: Pausing closes the ongoing outage.
+                try: outage_close_server(sid)
+                except Exception as e: log.error(f"outage close: {e}")  # noqa: BLE001
+                was_off = True
             ev = _wake.get(sid)
             if ev: ev.wait(POLL_SEC); ev.clear()
             else: time.sleep(POLL_SEC)
             continue
+        was_off = False
         try:
             ver   = nut.get_version()
             ups_l = nut.list_ups()
