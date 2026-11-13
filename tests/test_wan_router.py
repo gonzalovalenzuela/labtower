@@ -178,6 +178,21 @@ class Adapters(unittest.TestCase):
         self.assertIn("no router address", rtr.check({"type": "huawei", "port": 80, "user": "a", "password": "b"}, "")["error"])
         self.assertIn("unknown", rtr.check({"type": "zzz"}, "x")["error"])
 
+    def test_garbled_answer_is_a_router_error(self):
+        # El router contesta algo que no es HTTP (BadStatusLine no es OSError y urllib lo deja pasar). / EN: Not HTTP: urllib lets BadStatusLine through.
+        import socketserver
+        class Bad(socketserver.BaseRequestHandler):
+            def handle(self):
+                self.request.recv(4096); self.request.sendall(b"GARBAGE 200\r\n\r\n")
+        srv = socketserver.ThreadingTCPServer(("127.0.0.1", 0), Bad); srv.daemon_threads = True
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            with self.assertRaises(rtr.RouterError) as cm: rtr.Http(f"http://127.0.0.1:{srv.server_address[1]}").request("/x")
+            self.assertIn("no connection", str(cm.exception))
+            r = rtr.check({"type": "ddwrt", "port": srv.server_address[1], "https": False, "user": "a", "password": "b"}, "127.0.0.1")
+            self.assertTrue(r["error"].startswith("no connection"))                              # a router error, not a generic crash text
+        finally: srv.shutdown(); srv.server_close()
+
     def test_not_a_huawei(self):
         fr = FakeRouter("ddwrt")
         try: r = rtr.check({**fr.cfg(), "type": "huawei"}, "127.0.0.1")

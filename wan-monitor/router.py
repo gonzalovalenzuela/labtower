@@ -73,8 +73,9 @@ class Http:
         except urllib.error.URLError as e:
             if isinstance(e.reason, PinError): raise RouterError(str(e.reason))
             raise RouterError("no connection to the router: " + str(e.reason)[:100])
-        except (OSError, ssl.SSLError) as e:
-            raise RouterError("no connection to the router: " + str(e)[:100])
+        except (OSError, ssl.SSLError, http.client.HTTPException) as e:
+            # HTTPException: respuesta cortada o mal formada (IncompleteRead, BadStatusLine). / EN: truncated or malformed answer.
+            raise RouterError("no connection to the router: " + (str(e) or type(e).__name__)[:100])
 
 def _json(txt, what):
     try: v = json.loads(txt)

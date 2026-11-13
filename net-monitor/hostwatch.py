@@ -40,8 +40,12 @@ def _known_macs(existing):
 # EN: The MAC of an IP that was online changed by the next scan: duplicate IP, replaced device or spoofing.
 #     Nothing is reported if the device was offline in between: DHCP handing the IP to another device is normal. Nor if that MAC
 #     was already seen on the IP: a device with two cards on the same network may answer through either one (ARP flux).
+#     Un registro anterior a macs_seen (actualización desde 2.1.9b o antes) solo aprende en su primer escaneo: la MAC pasó a leerse
+#     primero de ARP y no de Pi-hole, y avisar ahí serían falsas alarmas. / EN: A record older than macs_seen (upgrade from 2.1.9b or
+#     earlier) only learns on its first scan: the MAC is now read from ARP first instead of Pi-hole, and warning there would be false alarms.
 def mac_change(existing, result):
     if not isinstance(existing, dict) or not isinstance(result, dict) or not existing.get("online"): return None
+    if "macs_seen" not in existing: return None
     a, b = _mac(existing.get("mac")), _mac(result.get("mac"))
     if a and b and a != b and b not in {_mac(x) for x in _known_macs(existing)}:
         return {"old": existing.get("mac"), "new": result.get("mac")}

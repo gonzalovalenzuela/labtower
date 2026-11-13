@@ -11,7 +11,7 @@ NOW = 2_000_000_000
 
 class Pure(unittest.TestCase):
     def test_mac_change_only_when_it_was_online(self):
-        ex = {"online": True, "mac": "AA:BB:CC:00:00:01"}
+        ex = {"online": True, "mac": "AA:BB:CC:00:00:01", "macs_seen": []}
         self.assertEqual(hw.mac_change(ex, {"mac": "aa:bb:cc:00:00:02"})["new"], "aa:bb:cc:00:00:02")
         self.assertIsNone(hw.mac_change(ex, {"mac": "aa-bb-cc-00-00-01"}))                 # same MAC, other format
         self.assertIsNone(hw.mac_change(dict(ex, online=False), {"mac": "aa:bb:cc:00:00:02"}))   # DHCP gave the IP to another device
@@ -20,12 +20,19 @@ class Pure(unittest.TestCase):
     def test_mac_already_seen_on_the_ip_is_not_a_change(self):
         # Equipo con dos tarjetas en la misma red (ARP flux): alterna entre nic0 y nic1. / EN: Two cards on one network: alternates nic0/nic1.
         nic0, nic1, other = "00:e0:4c:00:00:01", "90:8d:6e:00:00:02", "aa:bb:cc:00:00:03"
-        ex = {"online": True, "mac": nic1, "mac_prev": nic0}
+        ex = {"online": True, "mac": nic1, "mac_prev": nic0, "macs_seen": [nic1]}
         self.assertIsNone(hw.mac_change(ex, {"mac": nic0.upper()}))                    # back to nic0: known (mac_prev)
         ex = {"online": True, "mac": nic0, "macs_seen": [nic0, nic1]}
         self.assertIsNone(hw.mac_change(ex, {"mac": nic1}))
         self.assertEqual(hw.mac_change(ex, {"mac": other})["new"], other)              # a MAC never seen here still warns
         self.assertTrue(hw.same_mac("AA-BB-CC-00-00-03", other)); self.assertFalse(hw.same_mac("", ""))
+
+    def test_a_record_from_before_macs_seen_only_learns(self):
+        # Actualización desde 2.1.9b: la MAC pasa de Pi-hole a ARP sin que nada cambie. / EN: Upgrade from 2.1.9b: the MAC moves from Pi-hole to ARP.
+        old = {"online": True, "mac": "00:e0:4c:00:00:01"}
+        self.assertIsNone(hw.mac_change(old, {"mac": "90:8d:6e:00:00:02"}))
+        learned = dict(old, mac="90:8d:6e:00:00:02", macs_seen=hw.macs_seen(old, {"mac": "90:8d:6e:00:00:02"}))
+        self.assertEqual(hw.mac_change(learned, {"mac": "aa:bb:cc:00:00:03"})["new"], "aa:bb:cc:00:00:03")   # from then on it warns
 
     def test_macs_seen_keeps_recent_unique_macs(self):
         self.assertEqual(hw.macs_seen({"mac": "AA:BB:CC:00:00:01"}, {"mac": "aa-bb-cc-00-00-02"}), ["aa:bb:cc:00:00:01", "aa:bb:cc:00:00:02"])

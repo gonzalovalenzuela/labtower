@@ -374,7 +374,7 @@ function render() {
   const upSw = A.filter(s => s.online).length;
   const pUp = A.reduce((a, s) => a + s.ports_up, 0), pTot = A.reduce((a, s) => a + s.ports_total, 0);
   const temps = A.filter(s => s.system && s.system.temperature_c != null).sort((a, b) => b.system.temperature_c - a.system.temperature_c);
-  const errPorts = A.reduce((a, s) => a + s.ports.filter(p => p.flag === 'warn').length, 0);
+  const errPorts = A.reduce((a, s) => a + s.ports.filter(p => p.flag === 'warn' && !p.mute).length, 0);   // muted (testing) ports do not count / los silenciados no cuentan
   const macs = A.reduce((a, s) => a + s.macs_total, 0);
   const tmax = temps[0], tcol = tmax ? (tmax.temp_level === 'crit' ? 'var(--red)' : tmax.temp_level === 'warn' ? 'var(--amber)' : '') : '';
   const kpi = (ico, val, lbl, col) => `<div class="stat-card"><div class="stat-ico ${ico}"><svg viewBox="0 0 24 24"><rect x="2" y="9" width="20" height="8" rx="2"/><line x1="6" y1="13" x2="6.01" y2="13"/><line x1="10" y1="13" x2="10.01" y2="13"/><line x1="14" y1="13" x2="14.01" y2="13"/></svg></div><div><div class="stat-val"${col ? ` style="color:${col}"` : ''}>${val}</div><div class="stat-lbl">${esc(lbl)}</div></div></div>`;

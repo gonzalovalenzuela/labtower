@@ -124,6 +124,7 @@ class Speed(unittest.TestCase):
             self.assertIn(k, js, k)
         for k in ("swMuteChk:", "swAckOne:", "swAckAll:", "swAckOneOk:", "swAckAllQ:", "swAckAllOk:", "swSpeedAcked:", "swMuted:"):
             self.assertEqual(js.count(k), 2, k)
+        self.assertIn("p.flag === 'warn' && !p.mute", js)                                                 # muted ports leave the error count
         srv = (ROOT / "net-monitor/server.py").read_text(encoding="utf-8")
         self.assertIn('if act == "speedack":', srv); self.assertIn('body.get("mute") is True)', srv)
 
