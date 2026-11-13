@@ -27,7 +27,7 @@ const LANG={
     initialScanNet:(n)=>`Nothing has been scanned yet. Network detected: ${n}`,initialScanBtn:'Run initial scan',
 unrev:'Unreviewed',unrevMsg:(n,names,more)=>`${n} device${n>1?'s':''} not reviewed yet: ${names}${more?' and more':''}`,markAllKnown:'Mark all as known',markKnown:'Mark as known',markUnknown:'Mark as unreviewed',knownDone:'Marked as known',
     watchBtn:'Watch this device',unwatchBtn:'Stop watching',watching:'Watched',watchDown:'Watched device not responding',watchHint:'Probed every 30 s; an alert is raised after 2 failures',watchMax:'Watch limit reached',
-    unstableB:'Unstable',unstableTip:'It has dropped many times this week',macChg:'MAC changed',macChgTip:(a)=>`The MAC of this IP changed (before: ${a}). Could be a duplicate IP, a replaced device or spoofing.`,
+    unstableB:'Unstable',unstableTip:'It has dropped many times this week',macChg:'MAC changed',macChgTip:(a)=>`The MAC of this IP changed (before: ${a}). Could be a duplicate IP, a replaced device or spoofing.`,macInfo:(ip,a,b)=>`The MAC of ${ip} changed:\n${a} → ${b}\n\nCould be a duplicate IP, a replaced device or spoofing.`,macAckQ:'Mark it as reviewed? The alert is removed and both MACs count as known on this IP.',macAckDone:'Alert removed',
     connTitle:'Connectivity',conn7:'Online 7 d',conn30:'Online 30 d',drops7:'Drops 7 d',weekBar:'Last 7 days',latTitle:'Latency (watched)',latNone:'Collecting latency…',latSum:(a,p,m,l)=>`avg ${a} ms · p95 ${p} ms · max ${m} ms · loss ${l}%`,
     uptimeEmpty:'No events recorded yet',uptimeStats:(h,d)=>`${h} monitored · ${d} outage${d!==1?'s':''}`,
     availHistory:'Availability history',
@@ -63,7 +63,7 @@ unrev:'Unreviewed',unrevMsg:(n,names,more)=>`${n} device${n>1?'s':''} not review
     initialScanNet:(n)=>`Aún no se ha escaneado nada. Red detectada: ${n}`,initialScanBtn:'Hacer escaneo inicial',
 unrev:'Sin revisar',unrevMsg:(n,names,more)=>`${n} equipo${n>1?'s':''} sin revisar: ${names}${more?' y más':''}`,markAllKnown:'Marcar todos como conocidos',markKnown:'Marcar como conocido',markUnknown:'Marcar como sin revisar',knownDone:'Marcado como conocido',
     watchBtn:'Vigilar este equipo',unwatchBtn:'Dejar de vigilar',watching:'Vigilado',watchDown:'Equipo vigilado sin respuesta',watchHint:'Se sondea cada 30 s; avisa tras 2 fallos',watchMax:'Se alcanzó el límite de equipos vigilados',
-    unstableB:'Inestable',unstableTip:'Se ha caído muchas veces esta semana',macChg:'MAC cambió',macChgTip:(a)=>`La MAC de esta IP cambió (antes: ${a}). Puede ser una IP duplicada, un equipo reemplazado o una suplantación.`,
+    unstableB:'Inestable',unstableTip:'Se ha caído muchas veces esta semana',macChg:'MAC cambió',macChgTip:(a)=>`La MAC de esta IP cambió (antes: ${a}). Puede ser una IP duplicada, un equipo reemplazado o una suplantación.`,macInfo:(ip,a,b)=>`La MAC de ${ip} cambió:\n${a} → ${b}\n\nPuede ser una IP duplicada, un equipo reemplazado o una suplantación.`,macAckQ:'¿Marcarlo como revisado? Se quita el aviso y las dos MAC quedan como conocidas en esta IP.',macAckDone:'Aviso quitado',
     connTitle:'Conectividad',conn7:'Conectado 7 d',conn30:'Conectado 30 d',drops7:'Caídas 7 d',weekBar:'Últimos 7 días',latTitle:'Latencia (vigilado)',latNone:'Recopilando latencia…',latSum:(a,p,m,l)=>`prom ${a} ms · p95 ${p} ms · máx ${m} ms · pérdida ${l}%`,
     uptimeEmpty:'Sin eventos registrados aún',uptimeStats:(h,d)=>`${h} monitoreado · ${d} caída${d!==1?'s':''}`,
     availHistory:'Historial de disponibilidad',
@@ -386,6 +386,23 @@ async function startScan(){
 
 // Elimina un equipo de la lista (solo admin de Net Monitor). Si sigue conectado, el próximo escaneo lo vuelve a descubrir.
 // EN: Remove a host from the list (Net Monitor admins only). If it is still connected, the next scan discovers it again.
+// Etiqueta «MAC cambió»: muestra la MAC anterior y la actual (también en iPhone, sin tooltip) y el admin puede darla por revisada.
+// EN: "MAC changed" badge: shows the previous and current MAC (also on iPhone, with no tooltip) and an admin can mark it as reviewed.
+async function ackMac(ip){
+  const h=(typeof hosts!=='undefined'?hosts:[]).find(x=>x.ip===ip);
+  if(!h)return;
+  const info=t('macInfo',ip,h.mac_prev||'?',h.mac||'?');
+  if(!canAdmin()){alert(info);return;}
+  if(!confirm(info+'\n\n'+t('macAckQ')))return;
+  try{
+    const r=await fetch('api/hosts/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip,mac_ack:true})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
+    toast(t('macAckDone'));
+    await fetchData();
+  }catch(e){toast(e.message,true);}
+}
+
 async function deleteHost(ip){
   if(!canAdmin())return;
   const h=(typeof hosts!=='undefined'?hosts:[]).find(x=>x.ip===ip);
@@ -643,7 +660,7 @@ function renderTable(){
         ${!h.known?`<span title="${esc(t('unrev'))}" style="margin-left:5px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:rgba(67,97,238,.15);color:var(--blue);vertical-align:middle">${esc(t('unrev'))}</span>`:''}
         ${h.watch?`<span title="${esc(h.watch_state&&h.watch_state.down?t('watchDown'):t('watchHint'))}" style="margin-left:5px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:${h.watch_state&&h.watch_state.down?'rgba(239,68,68,.18)':'rgba(34,197,94,.15)'};color:${h.watch_state&&h.watch_state.down?'var(--red)':'var(--green)'};vertical-align:middle">👁 ${esc(h.watch_state&&h.watch_state.down?t('watchDown'):t('watching'))}</span>`:''}
         ${h.unstable?`<span title="${esc(t('unstableTip'))}" style="margin-left:5px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:rgba(249,115,22,.15);color:var(--orange);vertical-align:middle">${esc(t('unstableB'))}</span>`:''}
-        ${h.mac_changed&&Date.now()/1000-h.mac_changed<7*86400?`<span title="${esc(t('macChgTip',h.mac_prev||'?'))}" style="margin-left:5px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:rgba(239,68,68,.15);color:var(--red);vertical-align:middle">${esc(t('macChg'))}</span>`:''}
+        ${h.mac_changed&&Date.now()/1000-h.mac_changed<7*86400?`<span title="${esc(t('macChgTip',h.mac_prev||'?'))}" role="button" tabindex="0" data-on-click="ackMac" data-on-click-args="${jsargs([h.ip])}" data-on-click-stop="1" style="cursor:pointer;margin-left:5px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:rgba(239,68,68,.15);color:var(--red);vertical-align:middle">${esc(t('macChg'))}</span>`:''}
       </td>
       <td data-on-click="@stop">
         <span class="os-badge" style="cursor:pointer" data-on-click="editOs" data-on-click-args="${jsargs([h.ip])}" title="${esc(t('editDevice'))}">
@@ -1231,4 +1248,4 @@ function closeNetSettings(ev){
   document.getElementById('net-set-overlay').classList.remove('show');
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeNetSettings();});
-if (window.cspRegister) cspRegister({ openNetSettings, closeNetSettings, loadLatency, markAllKnown, setHostFlag, applyInterval, applyPurge, deleteHost, doLogin, editAlias, editOs, logout, rescanHost, saveOuiAuto, savePiholeConfig, saveSnmp, setLang, setOsFilter, setSort, setStatusFilter, setTheme, setTypeFilter, sortKey, startScan, testSnmp, toggleNav, togglePiholePanel, toggleSnmpPanel, updateOui });
+if (window.cspRegister) cspRegister({ ackMac, openNetSettings, closeNetSettings, loadLatency, markAllKnown, setHostFlag, applyInterval, applyPurge, deleteHost, doLogin, editAlias, editOs, logout, rescanHost, saveOuiAuto, savePiholeConfig, saveSnmp, setLang, setOsFilter, setSort, setStatusFilter, setTheme, setTypeFilter, sortKey, startScan, testSnmp, toggleNav, togglePiholePanel, toggleSnmpPanel, updateOui });

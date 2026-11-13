@@ -23,15 +23,39 @@ def _mac(m):
     s = "".join(c for c in str(m or "").lower() if c in "0123456789abcdef")
     return s if len(s) == 12 else ""
 
+def same_mac(a, b):
+    """Misma MAC aunque cambie el formato. / EN: Same MAC whatever the format."""
+    a = _mac(a)
+    return bool(a) and a == _mac(b)
+
+# MAC que ya tuvo una IP: la guardada, la anterior y las de macs_seen. / EN: MACs an IP already had: the stored one, the previous one and macs_seen.
+def _known_macs(existing):
+    ex = existing if isinstance(existing, dict) else {}
+    out = list(ex.get("macs_seen") or []) if isinstance(ex.get("macs_seen"), list) else []
+    return out + [ex.get("mac_prev"), ex.get("mac")]
+
 # La MAC de una IP que estaba conectada cambió en el siguiente escaneo: IP duplicada, equipo reemplazado o suplantación.
-# Si el equipo estuvo desconectado entre medio no se avisa: el DHCP reparte la IP a otro equipo y es normal.
+# Si el equipo estuvo desconectado entre medio no se avisa: el DHCP reparte la IP a otro equipo y es normal. Tampoco si esa MAC
+# ya se vio antes en la IP: un equipo con dos tarjetas en la misma red puede contestar por cualquiera (ARP flux).
 # EN: The MAC of an IP that was online changed by the next scan: duplicate IP, replaced device or spoofing.
-#     Nothing is reported if the device was offline in between: DHCP handing the IP to another device is normal.
+#     Nothing is reported if the device was offline in between: DHCP handing the IP to another device is normal. Nor if that MAC
+#     was already seen on the IP: a device with two cards on the same network may answer through either one (ARP flux).
 def mac_change(existing, result):
     if not isinstance(existing, dict) or not isinstance(result, dict) or not existing.get("online"): return None
     a, b = _mac(existing.get("mac")), _mac(result.get("mac"))
-    if a and b and a != b: return {"old": existing.get("mac"), "new": result.get("mac")}
+    if a and b and a != b and b not in {_mac(x) for x in _known_macs(existing)}:
+        return {"old": existing.get("mac"), "new": result.get("mac")}
     return None
+
+# MAC vistas en una IP (las MACS_MAX más recientes, sin repetir y en minúsculas). / EN: MACs seen on an IP (the MACS_MAX latest, unique, lower case).
+MACS_MAX = 8
+def macs_seen(existing, result):
+    out = {}
+    for m in _known_macs(existing) + [(result or {}).get("mac") if isinstance(result, dict) else None]:
+        k = _mac(m)
+        if k:
+            out.pop(k, None); out[k] = str(m).lower().replace("-", ":")
+    return list(out.values())[-MACS_MAX:]
 
 # Puertos que este equipo nunca había mostrado. `ports_seen` acumula todos los vistos (un puerto que se cierra y se abre por un
 # tiempo de espera no cuenta como nuevo). Un equipo sin lectura previa solo memoriza.

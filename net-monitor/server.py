@@ -1080,8 +1080,17 @@ def scan_host(ip: str) -> dict | None:
     # Pi-hole lookup primero (más confiable que DNS inverso)
     ph        = pihole_lookup(ip_str)
     hostname  = ph.get("hostname") or resolve_name(ip_str)
-    vendor    = ph.get("vendor", "")
-    mac       = ph.get("mac", "")
+    # MAC: primero la tabla ARP de esta máquina (lo que se ve hoy en la red; el ping recién la llenó), después Pi-hole y SNMP.
+    # Pi-hole puede guardar otra interfaz del mismo equipo o un dato viejo, y al reiniciar el servicio su caché parte vacía:
+    # usarlo primero hacía que la MAC cambiara de fuente y avisara «MAC changed» sin que nada cambiara.
+    # EN: MAC: first this machine's ARP table (what is on the network today; the ping just filled it), then Pi-hole and SNMP.
+    #     Pi-hole may keep another interface of the same device or a stale value, and its cache starts empty after a restart:
+    #     using it first made the MAC switch source and raise "MAC changed" with nothing changed.
+    mac       = arp_mac(ip_str) or ph.get("mac", "")
+    if not mac:
+        with _snmp_lock:
+            mac = _snmp_macs.get(ip_str, "")
+    vendor    = ph.get("vendor", "") if mac and hw.same_mac(mac, ph.get("mac")) else ""
 
     port_list  = [int(p) for p in SCAN_PORTS.split(",") if p.strip()]
     open_ports = scan_ports(ip_str, port_list)
@@ -1093,12 +1102,7 @@ def scan_host(ip: str) -> dict | None:
             banner = http_banner(ip_str, p)
             if banner: break
 
-    # MAC from the ARP table (the ping just populated it) and vendor from OUI
-    if not mac:
-        mac = arp_mac(ip_str)
-    if not mac:
-        with _snmp_lock:
-            mac = _snmp_macs.get(ip_str, "")
+    # Fabricante por OUI si Pi-hole no lo dio para esta MAC. / EN: Vendor from OUI when Pi-hole did not give it for this MAC.
     if not vendor and mac:
         vendor = oui_vendor(mac)
 
@@ -1361,7 +1365,7 @@ def run_scan(network: str | None = None, single_ip: str | None = None):
                                 result["os"]        = existing["os"]
                                 result["os_manual"] = True
                             # Lo editado a mano y las marcas de este módulo sobreviven al escaneo
-                            for k in ("group", "known", "watch", "mac_prev", "mac_changed"):
+                            for k in ("group", "known", "watch", "mac_prev", "mac_changed", "macs_seen"):
                                 if k in existing and k not in result: result[k] = existing[k]
                             result["ports_seen"], newp = hw.port_news(existing, result)
                             if existing and not first_inventory:
@@ -1370,6 +1374,7 @@ def run_scan(network: str | None = None, single_ip: str | None = None):
                                     result["mac_prev"], result["mac_changed"] = mc["old"], int(time.time())
                                     _sec_events.append(("mac", ip_str, result, mc))
                                 if newp: _sec_events.append(("port", ip_str, result, newp))
+                            result["macs_seen"] = hw.macs_seen(existing, result)
                             # Historial de disponibilidad: registrar evento si cambió estado
                             history = existing.get("uptime_history", [])
                             was_online = existing.get("online", False)
@@ -1955,6 +1960,11 @@ class H(BaseHTTPRequestHandler):
                         h["device_type"] = dt
                         h["type_manual"] = True
                 if "known" in body: h["known"] = bool(body["known"])
+                # Revisado: quita el aviso «MAC cambió»; las dos MAC quedan como conocidas y no vuelven a avisar en esta IP.
+                # EN: Reviewed: removes the "MAC changed" alert; both MACs stay known and do not warn again on this IP.
+                if body.get("mac_ack") is True:
+                    h.pop("mac_changed", None)
+                    h["macs_seen"] = hw.macs_seen(h, h)
                 if "watch" in body:
                     on = bool(body["watch"])
                     if on and sum(1 for x in hosts.values() if isinstance(x, dict) and x.get("watch") and x is not h) >= WATCH_MAX:
