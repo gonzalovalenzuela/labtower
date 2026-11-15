@@ -46,8 +46,17 @@ import auth  # valid_target(): the switch address cannot be this machine or a li
 
 class SessionExpired(Exception):
     def __init__(self, msg="the switch sent its login page again right after logging in (these switches keep a single session: "
-                           "another LabTower or a browser logged in to the switch may be holding it)"):
+                           "another LabTower or a browser logged in to the switch may be holding it)", diag=None):
         super().__init__(msg)
+        self.diag = diag or {}       # datos para el log, sin secretos / data for the log, no secrets
+
+
+# ES: Último inicio de sesión de cada switch en este proceso (de cualquier driver: monitoreo o «Probar»). Sirve para el diagnóstico de una
+#     sesión rechazada: si otro driver del mismo proceso entró justo antes, ese le quitó la sesión (estos switches admiten una sola).
+# EN: Last login to each switch in this process (from any driver: polling or "Test"). Used by the rejected-session diagnostics: if another
+#     driver of the same process logged in just before, it took the session (these switches allow only one).
+_LOGINS = {}
+_LOGINS_LOCK = threading.Lock()
 
 
 def md5(s):
@@ -139,7 +148,25 @@ class BaseDriver:
     def _relogin(self):
         self.jar.clear(); self.logged_in = False
         self.login()
+        self.login_ts = time.time()
+        with _LOGINS_LOCK:
+            _LOGINS[self.host] = (self.login_ts, id(self), threading.current_thread().name)
         self._save_session()
+
+    # Sesión rechazada con datos para el log: qué petición, cuánto después de entrar, nombres de las cookies (nunca sus valores) y si otro
+    # driver de este proceso entró al mismo switch después de este. / EN: Rejected session with data for the log: which request, how long
+    # after logging in, cookie names (never their values) and whether another driver of this process logged in to the same switch after this one.
+    def _expired(self, path, text):
+        since = getattr(self, "login_ts", None)
+        with _LOGINS_LOCK:
+            last = _LOGINS.get(self.host)
+        other = None
+        if last and last[1] != id(self) and (since is None or last[0] >= since):
+            other = f"{round(time.time() - last[0], 1)} s ago by thread {last[2]}"
+        return SessionExpired(diag={
+            "path": "/" + path.split("?")[0], "since_login_s": round(time.time() - since, 1) if since else None,
+            "loaded_session": since is None, "cookies": sorted({c.name for c in self.jar}), "answer_bytes": len(text),
+            "thread": threading.current_thread().name, "other_login": other})
 
     # Olvida la sesión del todo: cookies en memoria y en disco. El siguiente uso parte como un cliente nuevo.
     # EN: Forget the session entirely: cookies in memory and on disk. The next use starts as a brand-new client.
@@ -158,9 +185,14 @@ class BaseDriver:
                 self._relogin()
             try:
                 return self._fetch(path, data)
-            except SessionExpired:
+            except SessionExpired as first:
                 self._relogin()
-                return self._fetch(path, data)
+                try:
+                    return self._fetch(path, data)
+                except SessionExpired as e:
+                    e.diag["after_relogin"] = True
+                    e.diag["first"] = {k: first.diag.get(k) for k in ("path", "since_login_s", "loaded_session", "other_login")}
+                    raise
 
     def snapshot(self, with_macs=True):
         ts = time.time()
@@ -189,7 +221,7 @@ class ZXDriver(BaseDriver):
     def _fetch(self, path, data=None):
         text = self._open(path, data)
         if "login.html" in text and not text.lstrip().startswith("{"):
-            raise SessionExpired()
+            raise self._expired(path, text)
         return json.loads(text)
 
     def _macs(self, max_pages=40):
@@ -324,7 +356,7 @@ class HCDriver(BaseDriver):
             raise ValueError("el driver HC solo hace POST para paginar la tabla MAC")
         text = self._open(path, data)
         if self._is_login(text):
-            raise SessionExpired()
+            raise self._expired(path, text)
         return text
 
     def _macs(self, paginate):
@@ -1070,6 +1102,9 @@ class Manager:
                 snap = drv.snapshot(with_macs=want_macs)
                 self._ingest(sid, cfg, snap, want_macs)
             except Exception as e:  # noqa: BLE001
+                if isinstance(e, SessionExpired) and e.diag:
+                    # Diagnóstico de la sesión rechazada (sin secretos). / EN: Rejected-session diagnostics (no secrets).
+                    self._say("warning", f"[{cfg['name']}] session rejected: {json.dumps(e.diag, sort_keys=True)}")
                 if isinstance(e, SessionExpired) and drv is not None:
                     # Rechazo que el reinicio de sesión del mismo driver no arregló: se descarta todo (cookies, archivo y conexión) y la
                     # próxima lectura usa un driver nuevo, como «Probar» o un reinicio del servicio, que sí recuperan el switch.

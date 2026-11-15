@@ -64,6 +64,55 @@ class Relogin(unittest.TestCase):
         self.assertIn("another LabTower or a browser", str(sw.SessionExpired()))
 
 
+class Rejects(BaseHTTPRequestHandler):
+    """Acepta el login pero responde siempre con su página de login. / EN: Accepts the login but always answers with its login page."""
+    def log_message(self, *a): pass
+    def do_GET(self):
+        path = self.path.lstrip("/").split("?")[0]
+        body, ck = ("ok", "session=abc; Path=/") if path == "authorize" else ("<script>location='login.html'</script>", None)
+        b = body.encode(); self.send_response(200); self.send_header("Content-Length", str(len(b)))
+        if ck: self.send_header("Set-Cookie", ck)
+        self.end_headers(); self.wfile.write(b)
+
+
+class Diagnostics(unittest.TestCase):
+    """El rechazo trae datos para el log, sin secretos. / EN: The rejection carries data for the log, with no secrets."""
+    def setUp(self): self.srv, self.host = serve(Rejects)
+    def tearDown(self): self.srv.shutdown(); self.srv.server_close()
+
+    def test_rejection_says_what_failed_without_secrets(self):
+        d = sw.ZXDriver("zx", self.host, "admin", "Secret-pw", gap=0)
+        with self.assertRaises(sw.SessionExpired) as cm: d.fetch("status.json")
+        g = cm.exception.diag
+        self.assertEqual((g["path"], g["after_relogin"], g["cookies"], g["loaded_session"], g["other_login"]), ("/status.json", True, ["session"], False, None))
+        self.assertIsNotNone(g["since_login_s"]); self.assertEqual(g["first"]["path"], "/status.json")
+        txt = json.dumps(g)
+        for secret in ("Secret-pw", sw.md5("Secret-pw"), "abc"): self.assertNotIn(secret, txt)
+
+    def test_another_driver_logging_in_is_named(self):
+        a = sw.ZXDriver("zx", self.host, "admin", "pw", gap=0)
+        a._relogin()
+        sw.ZXDriver("zx", self.host, "admin", "pw", gap=0)._relogin()                        # e.g. "Test" in the same process
+        with self.assertRaises(sw.SessionExpired) as cm: a._fetch("status.json")
+        self.assertIn("s ago by thread", cm.exception.diag["other_login"])
+
+    def test_the_loop_logs_it(self):
+        logs = []
+        class Log:
+            def warning(self, m): logs.append(m)
+            def __getattr__(self, n): return lambda *a: None
+        m = sw.Manager(tempfile.mkdtemp(), hooks={}, log=Log())
+        m.poll_seconds = lambda: 0
+        w = sw._Worker()
+        class Stuck:
+            def snapshot(self, with_macs): w.stop = True; raise sw.SessionExpired(diag={"path": "/status.json"})
+            def forget(self): pass
+        old = sw.build_driver; sw.build_driver = lambda cfg, d: Stuck()
+        try: m._loop("s1", {"name": "zx", "driver": "zx"}, w, 0)
+        finally: sw.build_driver = old
+        self.assertTrue(any('session rejected: {"path": "/status.json"}' in x for x in logs), logs)
+
+
 class LoopStartsOver(unittest.TestCase):
     """El monitoreo, ante un SessionExpired que su propio reinicio de sesión no arregló, vuelve a leer con un driver nuevo (como «Probar»).
     EN: On a SessionExpired its own relogin did not fix, polling reads again with a new driver (like "Test")."""
