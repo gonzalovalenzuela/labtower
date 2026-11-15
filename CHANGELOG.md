@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.1.9d — 2026-11-15
+
+### Net Monitor
+- **Arreglo:** al actualizar desde 2.1.9b o antes, el primer escaneo ya no avisa «MAC cambió» por pasar a leer la MAC desde ARP.
+
+### Switch Monitor
+- **Arreglo:** los puertos sin avisos (pruebas) no cuentan en «Puertos con errores nuevos».
+- **Nuevo:** cuando un switch rechaza la sesión, el log del servicio anota qué petición falló, cuánto después de entrar y si otro inicio de sesión de LabTower le quitó la sesión. Sin contraseñas ni valores de cookies.
+
+### WAN Monitor
+- **Arreglo:** si el router responde algo que no es HTTP, se informa como falta de conexión con el router y no rompe el chequeo.
+
 ## 2.1.9c — 2026-11-13
 
 ### Pausa
