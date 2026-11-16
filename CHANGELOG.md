@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.9e — 2026-11-16
+
+### Net Monitor
+- **Arreglo:** la tabla de hosts y las de Switch Monitor ya no pestañean con cada refresco.
+
+### UPS Monitor
+- **Arreglo:** la tabla de UPS ya no pestañea con cada refresco.
+
+### WoL Console
+- **Arreglo:** la tabla de equipos ya no pestañea con el refresco cada 5 segundos.
+
 ## 2.1.9d — 2026-11-15
 
 ### Net Monitor
