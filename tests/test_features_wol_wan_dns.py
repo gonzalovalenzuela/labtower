@@ -60,6 +60,25 @@ class WolStatus(unittest.TestCase):
         self.assertEqual(self.srv.call("GET", "/api/status?id=nope", token=self.ro)[0], 404)
 
 
+
+class WolTable(unittest.TestCase):
+    """El refresco cada 5 s no recrea filas iguales ni repite la animación de entrada (pestañeo).
+    EN: The 5 s refresh does not recreate identical rows nor replay the entry animation (flicker)."""
+    JS = (support.ROOT / "wol-console/static/app.js").read_text(encoding="utf-8")
+    CSS = (support.ROOT / "wol-console/static/app.css").read_text(encoding="utf-8")
+
+    def test_table_is_rewritten_only_when_it_changes(self):
+        for k in ("if(html===_tableHtml)return;", "_tableHtml=html;tbody.innerHTML=html;", "let _tableHtml='',_tableShown=false;",
+                  "if(!_tableShown){_tableShown=true;tbody.classList.add('rows-in');", "else tbody.classList.remove('rows-in');"):
+            self.assertIn(k, self.JS, k)
+        self.assertNotIn("tbody.appendChild(tr)", self.JS)
+        # Quien escribe la tabla o una fila a mano invalida la copia. / EN: Whoever writes the table or a row by hand invalidates the copy.
+        self.assertEqual(self.JS.count("_tableHtml='';"), 3)
+
+    def test_entry_animation_only_on_first_load(self):
+        self.assertIn("#dev-tbody.rows-in tr,#wl-tbody tr{animation:row-in", self.CSS)
+        self.assertNotRegex(self.CSS, r"(?m)^tbody tr\{[^}]*animation")
+
 class WanTraceAndIps(unittest.TestCase):
     def test_trace_destination_is_always_an_ip(self):
         self.assertEqual(wan.trace_dest({"targets": [{"host": "one.example"}, {"host": "1.1.1.1"}]}), "1.1.1.1")

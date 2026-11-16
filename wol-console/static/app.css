@@ -123,7 +123,8 @@ thead th:hover{color:var(--text-mid)}
 thead th.sorted{color:var(--blue)}
 .sa{margin-left:3px;opacity:.5;font-size:10px}
 thead th.sorted .sa{opacity:1}
-tbody tr{border-bottom:1px solid var(--border);transition:background .1s;animation:row-in .22s ease both}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+#dev-tbody.rows-in tr,#wl-tbody tr{animation:row-in .22s ease both}
 @keyframes row-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
 tbody tr:last-child{border-bottom:none}
 tbody tr:hover{background:var(--bg)}

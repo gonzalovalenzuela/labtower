@@ -286,11 +286,13 @@ function renderTable(){
   const list=sorted(filtered());
   document.getElementById('dev-count').textContent=list.length===devices.length?devices.length+(devices.length!==1?' devices':' device'):list.length+' / '+devices.length+' devices';
   if(!list.length){
-    tbody.innerHTML='<tr><td colspan="6"><div class="empty"><strong>'+(devices.length?t('noResults'):t('noDevices'))+'</strong>'+(devices.length?t('tryFilter'):t('addFirst'))+'</div></td></tr>';
+    _tableHtml='';tbody.innerHTML='<tr><td colspan="6"><div class="empty"><strong>'+(devices.length?t('noResults'):t('noDevices'))+'</strong>'+(devices.length?t('tryFilter'):t('addFirst'))+'</div></td></tr>';
     return;
   }
-  tbody.innerHTML='';
-  list.forEach((d,i)=>{
+  // Se arma el HTML completo y solo se reescribe si cambió: el refresco cada 5 s ya no recrea filas iguales (pestañeo).
+  // EN: Build the whole HTML and rewrite only if it changed: the 5 s refresh no longer recreates identical rows (flicker).
+  const canWake=canExecute(),canEdit=canAdmin();
+  const html=list.map(d=>{
     // Priorizar last_wake del servidor (más preciso) sobre meta local
     const serverTs = d.last_wake ? d.last_wake*1000 : 0;
     const localTs  = meta[d.id]?.lastWoke || 0;
@@ -298,11 +300,7 @@ function renderTable(){
     const lwUser   = d.last_wake_user ? ' · <span style="color:var(--blue);font-size:10px">'+esc(d.last_wake_user)+'</span>' : '';
     const lwText   = lw ? relTime(lw)+lwUser : '<span style="opacity:.3">—</span>';
     const notes    = meta[d.id]?.notes||d.notes||'';
-    const tr=document.createElement('tr');
-    tr.style.animationDelay=i*18+'ms';
-    const canWake=canExecute();
-    const canEdit=canAdmin();
-    tr.innerHTML=`
+    return `<tr>
       <td class="col-st"><span class="${indClass(d.id)}" id="ind-${d.id}" title="${esc(indTitle(d.id))}"></span></td>
       <td><span class="dev-name">${esc(d.name)}</span><span class="dev-mac">${esc(d.mac)}${notes?' · <span style="color:var(--text-dim)">'+esc(notes)+'</span>':''}</span></td>
       <td><span class="tag tag-${String(d.tag).toLowerCase().replace(/[^a-z0-9_-]/g,'')}">${esc(d.tag)}</span></td>
@@ -311,10 +309,15 @@ function renderTable(){
       <td class="col-act">
         <button class="btn-wake" id="wake-${d.id}" data-on-click="wakeDevice" data-on-click-args="${jsargs([d.id])}" ${canWake?'':'disabled title="'+esc(t('noPerm'))+'"'}>Wake</button>
         ${canEdit?`<button class="btn-ri e" data-on-click="editDevice" data-on-click-args="${jsargs([d.id])}" title="${esc(t('titEdit'))}">✎</button><button class="btn-ri d" data-on-click="confirmDelete" data-on-click-args="${jsargs([d.id])}" title="${esc(t('titDelete'))}">✕</button>`:''}
-      </td>`;
-    tbody.appendChild(tr);
-  });
+      </td></tr>`;
+  }).join('');
+  if(html===_tableHtml)return;
+  _tableHtml=html;tbody.innerHTML=html;
+  // La entrada animada de las filas solo en la primera carga. / EN: Animated row entry only on the first load.
+  if(!_tableShown){_tableShown=true;tbody.classList.add('rows-in');[...tbody.rows].forEach((tr,i)=>{tr.style.animationDelay=i*18+'ms';});}
+  else tbody.classList.remove('rows-in');
 }
+let _tableHtml='',_tableShown=false;
 function ipCell(d){
   const n=d.net;
   if(n&&n.ip&&n.ip!==d.ip)return '<span title="'+esc(t('netIp'))+'" data-nethost="'+esc(n.ip)+'" data-nethost-click="1">'+esc(n.ip)+'</span>'+(d.ip?'<span style="color:var(--text-dim);font-size:10px;display:block;text-decoration:line-through">'+esc(d.ip)+'</span>':'');
@@ -350,7 +353,7 @@ function updateStats(){
   document.getElementById('st-last').textContent=lastWakeName||'—';
 }
 function showConnError(){
-  document.getElementById('dev-tbody').innerHTML='<tr><td colspan="6"><div class="empty"><strong style="color:var(--red)">'+t('connError')+'</strong>'+t('connErrorSub')+'</div></td></tr>';
+  _tableHtml='';document.getElementById('dev-tbody').innerHTML='<tr><td colspan="6"><div class="empty"><strong style="color:var(--red)">'+t('connError')+'</strong>'+t('connErrorSub')+'</div></td></tr>';
 }
 // ── Wake ────────────────────────────────────────────────
 // Envía el magic packet. Si el equipo ya responde, abre un aviso y solo reenvía si el usuario confirma (force).
@@ -361,6 +364,7 @@ async function wakeDevice(id, force=false){
   const btn=document.getElementById('wake-'+id),ind=document.getElementById('ind-'+id);
   if(btn){btn.disabled=true;btn.innerHTML='<span class="spin">⟳</span>';}
   if(ind)ind.className='ind waking';
+  _tableHtml='';    // la fila se tocó a mano: el próximo repintado la reescribe / EN: row touched by hand: next repaint rewrites it
   log('WARN','TX → "'+device.name+'" ['+device.mac+']');
   try{
     const res=await apiFetch('api/wake',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id, force})});
