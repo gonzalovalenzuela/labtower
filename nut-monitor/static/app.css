@@ -128,7 +128,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 /* UPS table */
 .ups-table{width:100%;border-collapse:collapse}
 .ups-table thead th{padding:7px 16px;text-align:left;font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);white-space:nowrap}
-.ups-row{border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;animation:row-in .22s ease both}
+.ups-row{border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+#ups-tbody.rows-in .ups-row{animation:row-in .22s ease both}
 @keyframes row-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
 .ups-row:last-child{border-bottom:none}
 .ups-row:hover{background:var(--bg)}

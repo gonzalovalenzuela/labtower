@@ -1,4 +1,5 @@
 """WOL (estado en vivo), WAN (historial de IP y traceroute por corte) y DNS (sondeo de upstreams y prueba de resolución)."""
+import re
 import socket
 import struct
 import threading
@@ -78,6 +79,18 @@ class WolTable(unittest.TestCase):
     def test_entry_animation_only_on_first_load(self):
         self.assertIn("#dev-tbody.rows-in tr,#wl-tbody tr{animation:row-in", self.CSS)
         self.assertNotRegex(self.CSS, r"(?m)^tbody tr\{[^}]*animation")
+
+    def test_no_module_replays_the_row_animation_on_refresh(self):
+        # Net y UPS también reconstruyen su tabla en cada refresco: la animación de filas solo con .rows-in (primera carga).
+        # EN: Net and UPS also rebuild their table on every refresh: row animation only with .rows-in (first load).
+        for f in sorted(support.ROOT.glob("*/static/app.css")):
+            for rule in re.findall(r"([^{}]+)\{[^}]*animation:row-in", f.read_text(encoding="utf-8")):
+                for sel in rule.split(","):
+                    self.assertTrue(".rows-in" in sel or sel.strip() == "#wl-tbody tr", f"{f}: {sel.strip()}")
+        for mod in ("net-monitor", "nut-monitor"):
+            js = (support.ROOT / mod / "static/app.js").read_text(encoding="utf-8")
+            self.assertIn("if(!_rowsShown){_rowsShown=true;newTbody.classList.add('rows-in');}", js, mod)
+            self.assertIn("let _rowsShown=false;", js, mod)
 
 class WanTraceAndIps(unittest.TestCase):
     def test_trace_destination_is_always_an_ip(self):

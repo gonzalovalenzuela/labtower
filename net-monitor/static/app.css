@@ -138,7 +138,8 @@ thead th[aria-sort=ascending],thead th[aria-sort=descending]{color:var(--teal)}
 thead th[aria-sort=ascending] .sort-ind,thead th[aria-sort=descending] .sort-ind{opacity:1}
 thead th[aria-sort=ascending] .sort-ind::after{content:'\25B2'}
 thead th[aria-sort=descending] .sort-ind::after{content:'\25BC'}
-tbody tr{border-bottom:1px solid var(--border);transition:background .1s;animation:row-in .22s ease both}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+#hosts-tbody.rows-in tr{animation:row-in .22s ease both}
 @keyframes row-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
 tbody tr:last-child{border-bottom:none}
 tbody tr:hover{background:var(--bg)}

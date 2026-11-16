@@ -608,6 +608,7 @@ function renderStats(scan){
   if(se){se.textContent=scan?.error?t('scanFailed')+': '+scan.error:'';se.title=scan?.error||'';se.style.display=scan?.error?'':'none';}
 }
 
+let _rowsShown=false;   // filas ya animadas una vez / EN: rows already animated once
 // Dibuja la tabla de equipos y, si hay uno expandido, su detalle (puertos, historial de conexión, edición). Todo texto de la red pasa por esc().
 // EN: Draw the device table and, if one is expanded, its detail (ports, connection history, editing). All network text goes through esc().
 function renderTable(){
@@ -626,6 +627,9 @@ function renderTable(){
 
   const newTbody=document.createElement('tbody');
   newTbody.id='hosts-tbody';
+  // La entrada animada de las filas solo en la primera carga: el refresco periódico ya no las hace pestañear.
+  // EN: Animated row entry only on the first load: the periodic refresh no longer makes them flicker.
+  if(!_rowsShown){_rowsShown=true;newTbody.classList.add('rows-in');}
 
   renderReviewBar();
   // Detectar nuevos dispositivos

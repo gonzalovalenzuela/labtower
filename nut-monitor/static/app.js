@@ -298,6 +298,7 @@ function renderSidebar(){
   });
 }
 
+let _rowsShown=false;   // filas ya animadas una vez / EN: rows already animated once
 // ── Dashboard: todas las UPS de todos los servidores ──────────────────────────
 // Dibuja la tabla: junta todas las UPS de todos los servidores en una lista, calcula los totales de la cabecera (en línea, a batería, clientes y consumo en vatios: ups.realpower o, si falta, voltaje × corriente) y arma cada fila con su estado, carga, autonomía y detalle. La primera UPS se expande sola.
 // EN: Draw the table: gather every UPS of every server in a list, compute the header totals (online, on battery, clients and power draw in watts: ups.realpower or, if missing, voltage × current) and build each row with its state, charge, runtime and detail. The first UPS expands by itself.
@@ -406,6 +407,9 @@ function renderDashboard(){
 
   // Reconstruir tbody preservando filas expandidas
   const newTbody=document.createElement('tbody');newTbody.id='ups-tbody';
+  // La entrada animada de las filas solo en la primera carga: el refresco periódico ya no las hace pestañear.
+  // EN: Animated row entry only on the first load: the periodic refresh no longer makes them flicker.
+  if(!_rowsShown){_rowsShown=true;newTbody.classList.add('rows-in');}
 
   rows.forEach((row,i)=>{
     const key=row.srv.id+'/'+row.upsName;
