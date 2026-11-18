@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.9f — 2026-11-18
+
+### WoL Console
+- **Arreglo:** «Sesión activa» cuenta desde el inicio de sesión. Antes volvía a cero al cambiar de módulo.
+- **Cambio:** «Wakes enviados» pasa a «Wakes de hoy»: los de hoy de todos los usuarios, desde el registro del servidor. «Último wake» también. Ya no vuelven a cero al cambiar de módulo.
+
 ## 2.1.9e — 2026-11-16
 
 ### Net Monitor
