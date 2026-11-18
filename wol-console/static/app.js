@@ -26,7 +26,7 @@ const LANG = {
     sendAll:'Send to all',
     alreadyOnlineTitle:'Device already on', alreadyOnlineMsg:'is responding to ping. Send magic packet anyway?',
     sendAnyway:'Send anyway', close:'Close',
-    statRegistered:'Registered devices', statWakesSent:'Wakes sent',
+    statRegistered:'Registered devices', statWakesSent:'Wakes today',
     statLastWake:'Last wake', statSession:'Active session',
     themeLight:'Light', themeDark:'Dark',
     permReadonly:'Read-only', permExecute:'Execute', permAdmin:'Administrator',
@@ -67,7 +67,7 @@ const LANG = {
     sendAll:'Enviar a todos',
     alreadyOnlineTitle:'Equipo ya encendido', alreadyOnlineMsg:'ya responde a ping. ¿Deseas enviar el magic packet de todas formas?',
     sendAnyway:'Enviar igual', close:'Cerrar',
-    statRegistered:'Equipos registrados', statWakesSent:'Wakes enviados',
+    statRegistered:'Equipos registrados', statWakesSent:'Wakes de hoy',
     statLastWake:'Último wake', statSession:'Sesión activa',
     themeLight:'Claro', themeDark:'Oscuro',
     permReadonly:'Solo lectura', permExecute:'Ejecución', permAdmin:'Administrador',
@@ -169,7 +169,10 @@ async function checkSession(){
     if(!r.ok)return false;
     const d=await r.json();
     if(!d.username||!d.permissions?.wol||d.permissions.wol==='none')return false;
-    ME=d;return true;
+    ME=d;
+    // «Sesión activa» cuenta desde el login, no desde que se cargó la página. / EN: "Active session" counts from login, not from page load.
+    if(Number.isFinite(d.session_age))sessionStart=Date.now()-d.session_age*1000;
+    return true;
   }catch{return false;}
 }
 
@@ -236,9 +239,10 @@ async function initApp(){
 // EN: Download the device list and repaint. An error is shown only on the first load, so brief outages do not annoy.
 async function refreshDevices(isInitial){
   try{
-    const fresh=await apiFetch('api/devices').then(d=>d.devices);
-    // Merge preservando estado visual (indicadores de wake en curso) sin perder animaciones
-    devices=fresh;
+    const d=await apiFetch('api/devices');
+    devices=d.devices;
+    // Wakes de hoy de todos los usuarios, según el registro del servidor. / EN: Today's wakes from every user, from the server log.
+    if(d.today){wakeCount=d.today.count;lastWakeName=d.today.last;}
     if(isInitial) log('OK', devices.length + t('logLoaded'));
     renderAll();
   }catch(e){

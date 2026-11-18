@@ -202,6 +202,16 @@ def append_wake_log(entry: dict):
         entries = entries[-500:]   # máx 500 entradas
         auth.write_json(LOG_FILE, entries, mode=0o644)
 
+# Wakes de hoy (desde la medianoche local del servidor), de cualquier usuario: cuántos y el último.
+# EN: Today's wakes (since the server's local midnight), from any user: how many and the last one.
+def wakes_today(entries: list, now=None) -> dict:
+    now = time.time() if now is None else now
+    t = time.localtime(now)
+    midnight = time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1))
+    today = [e for e in entries if isinstance(e, dict) and isinstance(e.get("ts"), (int, float)) and midnight <= e["ts"] <= now + 60]
+    last = max(today, key=lambda e: e["ts"], default=None)
+    return {"count": len(today), "last": str(last.get("device_name") or "")[:64] if last else None}
+
 # ─── Devices ──────────────────────────────────────────────────────────────────
 # Candado de la lista de equipos. Regla: cargar → modificar → guardar siempre dentro de este candado.
 # EN: Lock of the device list. Rule: load → modify → save always inside this lock.
@@ -384,7 +394,7 @@ class H(BaseHTTPRequestHandler):
                 for d in devs:
                     n = net.get(mac_key(d.get("mac")))
                     if n: d["net"] = {k: n[k] for k in ("ip", "name", "online", "device_type", "vendor")}
-            self._json(200, {"devices": devs})
+            self._json(200, {"devices": devs, "today": wakes_today(wake_log)})
 
         # Hosts de Net Monitor para agregarlos como equipos WOL; marca cuáles ya están en la lista.
         # EN: Net Monitor hosts to add them as WOL devices; marks which are already in the list.
@@ -425,9 +435,14 @@ class H(BaseHTTPRequestHandler):
 
         elif path == "/api/me":
             sess = auth.get_session(tok)
+            # session_age: segundos desde el login, para «Sesión activa» (no depende del reloj del navegador).
+            # EN: session_age: seconds since login, for "Active session" (does not depend on the browser clock).
+            created = sess.get("created") if sess else None
+            age = max(0, int(time.time() - created)) if isinstance(created, (int, float)) else None
             self._json(200, {"username": sess["username"],
-                              "permissions": sess["permissions"],
-                      "disabled": auth.disabled_modules()} if sess else {})
+                             "permissions": sess["permissions"],
+                             "session_age": age,
+                             "disabled": auth.disabled_modules()} if sess else {})
         else:
             self._json(404, {"error": "Not found"})
 

@@ -92,6 +92,41 @@ class WolTable(unittest.TestCase):
             self.assertIn("if(!_rowsShown){_rowsShown=true;newTbody.classList.add('rows-in');}", js, mod)
             self.assertIn("let _rowsShown=false;", js, mod)
 
+class WolStats(unittest.TestCase):
+    """«Sesión activa» cuenta desde el login y los wakes son los de hoy, de todos: no se reinician al cambiar de módulo.
+    EN: "Active session" counts from login and the wakes are today's, from everyone: they do not reset when switching modules."""
+    JS = (support.ROOT / "wol-console/static/app.js").read_text(encoding="utf-8")
+
+    @classmethod
+    def setUpClass(cls):
+        cls.ro = support.make_user("wstat", support.READONLY)
+        cls.srv = support.Server(wol.H)
+    @classmethod
+    def tearDownClass(cls): cls.srv.close()
+
+    def test_wakes_today_counts_from_local_midnight(self):
+        t = time.localtime()
+        midnight = time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1))
+        log = [{"ts": midnight - 5, "device_name": "yesterday"}, {"ts": midnight + 1, "device_name": "a", "user": "x"},
+               {"ts": midnight + 3, "device_name": "b", "user": "y"}, {"ts": "bad"}, "junk"]
+        self.assertEqual(wol.wakes_today(log, midnight + 10), {"count": 2, "last": "b"})
+        self.assertEqual(wol.wakes_today([], midnight + 10), {"count": 0, "last": None})
+
+    def test_api_devices_and_me_carry_the_stats(self):
+        o = (wol.load_devices, wol.load_wake_log)
+        try:
+            wol.load_devices = list
+            wol.load_wake_log = lambda: [{"ts": int(time.time()), "device_name": "pc", "user": "other"}]
+            s, j = self.srv.call("GET", "/api/devices", token=self.ro)
+            self.assertEqual(s, 200); self.assertEqual(j["today"], {"count": 1, "last": "pc"})
+        finally: wol.load_devices, wol.load_wake_log = o
+        s, j = self.srv.call("GET", "/api/me", token=self.ro)
+        self.assertEqual(s, 200); self.assertIsInstance(j["session_age"], int); self.assertGreaterEqual(j["session_age"], 0)
+
+    def test_page_uses_server_values(self):
+        self.assertIn("if(Number.isFinite(d.session_age))sessionStart=Date.now()-d.session_age*1000;", self.JS)
+        self.assertIn("if(d.today){wakeCount=d.today.count;lastWakeName=d.today.last;}", self.JS)
+
 class WanTraceAndIps(unittest.TestCase):
     def test_trace_destination_is_always_an_ip(self):
         self.assertEqual(wan.trace_dest({"targets": [{"host": "one.example"}, {"host": "1.1.1.1"}]}), "1.1.1.1")
