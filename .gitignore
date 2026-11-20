@@ -40,3 +40,6 @@ logs/
 # Datos de ejecución de Net Monitor / Net Monitor runtime data
 net-monitor/config.json
 net-monitor/hosts.json
+
+# Sitio web (se publica aparte) / Website (published separately)
+labtower-site-*.zip
