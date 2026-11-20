@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.9i — 2026-11-20
+
+### Instalación
+- **Arreglo:** `/var/backups/labtower` crecía sin límite: cada instalación o actualización guardaba una copia de cada archivo de datos y nada borraba las viejas. Ahora se conservan las 5 más nuevas de cada archivo y, de `history.db`, también la más grande. La primera instalación de esta versión limpia las que ya había.
+- **Arreglo:** al actualizar se hacían dos copias de todo (una antes de instalar y otra al quitar la versión anterior). Ahora la segunda se hace solo al desinstalar.
+
+### Teleporter
+- **Cambio:** se conservan las 5 copias previas a restaurar (`pre-restore-*.tar.gz`) más nuevas.
+
 ## 2.1.9h — 2026-11-20
 
 ### AP Monitor
