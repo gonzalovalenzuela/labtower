@@ -7,6 +7,8 @@ Tipos (driver) de cada entrada de configuración:
                 SSID y canales; no informa clientes ni uptime) y cierra la sesión al terminar. Modo «ping»: solo responde o no.
   · instanton — HPE Aruba Instant On. Modo «cloud»: portal en la nube (API no oficial, cuenta sin 2FA); una entrada trae todos
                 los AP del sitio. Modo «ping»: solo responde o no.
+  · unifi     — Ubiquiti UniFi, por el controlador UniFi Network (UniFi OS o clásico). Modo «controller»: estado, radios, SSID y clientes
+                de todos los AP del sitio. Modo «ping»: solo responde o no.
 Todos entregan la misma lista normalizada de AP: [{key, name, model, fw, serial, ip, mac, uptime, online, radios, ssids, clients}].
 Los campos que un equipo no informa quedan en None. Nada aquí cambia la configuración de los equipos: SOLO LECTURA.
 
@@ -15,6 +17,8 @@ EN: AP Monitor — Wi-Fi access points for Net Monitor (Python 3 standard librar
     "web" mode reads its info page — model, firmware, SSIDs and channels, no clients or uptime — and logs out afterwards;
     "ping" mode is reachability only); instanton (HPE Aruba Instant On: "cloud" mode uses the unofficial portal API with an
     account without 2FA and one entry brings every AP of the site; "ping" mode is reachability only).
+    unifi (Ubiquiti UniFi through the UniFi Network controller, UniFi OS or classic: "controller" mode reads every AP of the site; "ping"
+    mode is reachability only).
     All return the same normalised AP list; fields a device does not report stay None. READ ONLY.
 """
 import base64
@@ -40,7 +44,7 @@ POLL_DEFAULT, POLL_MIN, POLL_MAX = 60, 30, 3600
 FAILS_FOR_DOWN = 2                 # lecturas fallidas seguidas para dar un AP por caído / failed reads in a row before an AP is "down"
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._-]{0,31}$")
 HOST_RE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(:\d{1,5})?$")
-DRIVERS = {"openwrt": ("ubus",), "mitrastar": ("web", "ping"), "instanton": ("cloud", "ping")}
+DRIVERS = {"openwrt": ("ubus",), "mitrastar": ("web", "ping"), "instanton": ("cloud", "ping"), "unifi": ("controller", "ping")}
 
 
 class APError(Exception):
@@ -458,13 +462,150 @@ class InstantOnDriver:
         return out
 
 
+# =========================================================================== UniFi (Ubiquiti, controlador UniFi Network)
+# ES: Lee el controlador UniFi Network: UniFi OS (UDM, Cloud Key Gen2+, UniFi OS Server; login en /api/auth/login y la API bajo /proxy/network)
+#     o el controlador clásico (login en /api/login). Usuario local, de preferencia de solo lectura. Dispositivos: stat/device (solo los «uap»);
+#     clientes: stat/sta (solo Wi-Fi). Sin «verificar TLS» se FIJA la huella SHA-256 del certificado la primera vez (TOFU, como DNS Monitor) y, si
+#     cambia, la conexión se corta antes de enviar la contraseña.
+# EN: Reads the UniFi Network controller: UniFi OS (UDM, Cloud Key Gen2+, UniFi OS Server; login at /api/auth/login, API under /proxy/network)
+#     or the classic controller (login at /api/login). Local user, preferably read-only. Devices: stat/device (only "uap"); clients: stat/sta
+#     (Wi-Fi only). Without "verify TLS" the certificate's SHA-256 fingerprint is PINNED the first time (TOFU, like DNS Monitor) and, if it
+#     changes, the connection is dropped before the password is sent.
+UNIFI_BANDS = {"ng": "2.4", "na": "5", "6e": "6"}
+
+
+class UniFiDriver:
+    def __init__(self, cfg):
+        self.cfg, self.cookies, self.csrf, self.prefix = cfg, {}, "", None
+        self.on_pin = None                    # el gestor guarda la huella aprendida / the manager stores the learned fingerprint
+
+    def _hostport(self):
+        h = self.cfg["host"]
+        return (h.rsplit(":", 1)[0], int(h.rsplit(":", 1)[1])) if h.count(":") == 1 else (h, 443)
+
+    def _req(self, method, path, body=None):
+        host, port = self._hostport()
+        verify = bool(self.cfg.get("verify_tls"))
+        ctx = ssl.create_default_context()
+        if not verify:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE   # nosec B501 - not "any certificate": the fingerprint is pinned right below / se fija la huella
+        conn = http.client.HTTPSConnection(host, port, timeout=TIMEOUT, context=ctx)
+        try:
+            conn.connect()
+            if not verify:
+                fp = hashlib.sha256(conn.sock.getpeercert(True)).hexdigest()
+                pin = self.cfg.get("tls_pin") or ""
+                if not pin:
+                    self.cfg["tls_pin"] = fp
+                    if self.on_pin:
+                        self.on_pin(fp)
+                elif pin != fp:
+                    raise APError("UniFi: the controller's certificate changed (pinned fingerprint mismatch); nothing was sent. "
+                                  "Edit and save the entry to learn it again")
+            hdr = {"Accept": "application/json", "Content-Type": "application/json"}
+            if self.cookies:
+                hdr["Cookie"] = "; ".join(f"{k}={v}" for k, v in self.cookies.items())
+            if self.csrf:
+                hdr["X-CSRF-Token"] = self.csrf
+            conn.request(method, path, json.dumps(body).encode() if body is not None else None, hdr)
+            r = conn.getresponse()
+            for c in r.msg.get_all("Set-Cookie") or []:
+                k, _, v = c.split(";", 1)[0].strip().partition("=")
+                if k and len(self.cookies) < 16:
+                    self.cookies[_clean(k, 64)] = _clean(v, 4096)
+            tok = r.getheader("X-Updated-CSRF-Token") or r.getheader("X-CSRF-Token")
+            if tok:
+                self.csrf = _clean(tok, 256)
+            raw = r.read(16 * 1024 * 1024)
+            try:
+                data = json.loads(raw) if raw else {}
+            except ValueError:
+                data = {}
+            return r.status, data
+        except ssl.SSLError as e:
+            raise APError(f"UniFi: TLS error ({e.reason or e}); without \"verify TLS\" the fingerprint is pinned instead")
+        finally:
+            conn.close()
+
+    def _login(self):
+        self.cookies, self.csrf = {}, ""
+        cred = {"username": self.cfg.get("user") or "", "password": self.cfg.get("password") or ""}
+        st, _ = self._req("POST", "/api/auth/login", dict(cred, remember=False))     # UniFi OS
+        if st == 200:
+            self.prefix = "/proxy/network"
+            return
+        if st in (401, 403):
+            raise APError("UniFi: wrong user or password (local account; accounts with 2FA cannot be used)")
+        st, _ = self._req("POST", "/api/login", cred)                                 # classic controller / controlador clásico
+        if st == 200:
+            self.prefix = ""
+            return
+        raise APError("UniFi: wrong user or password" if st in (400, 401, 403) else f"UniFi: login answered HTTP {st}")
+
+    def api(self, path):
+        site = urllib.parse.quote(self.cfg.get("site") or "default", safe="")
+        for attempt in (0, 1):
+            if self.prefix is None:
+                self._login()
+            st, d = self._req("GET", f"{self.prefix}/api/s/{site}/{path}")
+            if st == 401 and attempt == 0:
+                self.prefix = None                   # the session expired: log in again once / la sesión venció: un nuevo login
+                continue
+            if st == 400 and "NoSiteContext" in json.dumps(d):
+                raise APError("UniFi: site not found (use the site id, e.g. \"default\")")
+            if st != 200:
+                raise APError(f"UniFi: HTTP {st} on {path}")
+            return d.get("data") if isinstance(d, dict) and isinstance(d.get("data"), list) else []
+        raise APError("UniFi: not authorised")
+
+    def snapshot(self):
+        if self.cfg.get("mode") == "ping":
+            return [_ap("main", self.cfg["name"], ip=self.cfg["host"], online=ping(self.cfg["host"]), note="ping")]
+        devs = [d for d in self.api("stat/device") if isinstance(d, dict) and d.get("type") == "uap"]
+        try:
+            stas = [c for c in self.api("stat/sta") if isinstance(c, dict) and not c.get("is_wired")]
+        except APError:
+            stas = []                                # clients are optional / opcional
+        by_ap = {}
+        for c in stas:
+            sig, noise = _int(c.get("signal")), _int(c.get("noise"))
+            by_ap.setdefault(_clean(c.get("ap_mac"), 17).lower(), []).append({
+                "mac": _clean(c.get("mac"), 17).lower(), "ip": _clean(c.get("ip"), 45) or None,
+                "name": _clean(c.get("name") or c.get("hostname"), 64) or None, "band": UNIFI_BANDS.get(c.get("radio")),
+                "ssid": _clean(c.get("essid"), 64) or None, "signal": sig, "snr": sig - noise if sig and noise else None,
+                "rate": round((_int(c.get("tx_rate")) or 0) / 1000) or None, "connected": _int(c.get("uptime")), "quality": None})
+        out = []
+        for d in devs:
+            mac = _clean(d.get("mac"), 17).lower()
+            width = {r.get("radio"): r.get("ht") for r in d.get("radio_table") or [] if isinstance(r, dict)}
+            radios = [{"band": UNIFI_BANDS.get(r.get("radio")), "channel": _int(r.get("channel")),
+                       "width": f"{_int(width.get(r.get('radio')))} MHz" if _int(width.get(r.get("radio"))) else None,
+                       "txpower": _int(r.get("tx_power")), "util": _int(r.get("cu_total")), "clients": _int(r.get("num_sta"))}
+                      for r in d.get("radio_table_stats") or [] if isinstance(r, dict)]
+            ssids = {}
+            for v in d.get("vap_table") or []:
+                if isinstance(v, dict) and v.get("essid"):
+                    ssids.setdefault(_clean(v["essid"], 64), set()).add(UNIFI_BANDS.get(v.get("radio")))
+            up = d.get("uplink") or {}
+            note = f"mesh → {_clean(up.get('uplink_device_name'), 32)}" if up.get("type") == "wireless" and up.get("uplink_device_name") else None
+            out.append(_ap(mac or _clean(d.get("_id"), 32), _clean(d.get("name"), 32) or _clean(d.get("model"), 32) or mac,
+                           model=_clean(d.get("model"), 32) or None, fw=_clean(d.get("version"), 32) or None, serial=_clean(d.get("serial"), 32) or None,
+                           ip=_clean(d.get("ip"), 45) or None, mac=mac, uptime=_int(d.get("uptime")), online=d.get("state") == 1,
+                           radios=sorted(radios, key=lambda x: str(x["band"])),
+                           ssids=[{"name": k, "bands": sorted(b for b in v if b)} for k, v in sorted(ssids.items())],
+                           clients=by_ap.get(mac, []), note=note))
+        return out
+
+
 def build_driver(cfg):
-    return {"openwrt": OpenWrtDriver, "mitrastar": MitraStarDriver, "instanton": InstantOnDriver}[cfg["driver"]](cfg)
+    return {"openwrt": OpenWrtDriver, "mitrastar": MitraStarDriver, "instanton": InstantOnDriver, "unifi": UniFiDriver}[cfg["driver"]](cfg)
 
 
 # =========================================================================== Configuración / configuration
 def redact(cfg):
-    out = {k: v for k, v in cfg.items() if k != "password"}
+    out = {k: v for k, v in cfg.items() if k not in ("password", "tls_pin")}
+    out["pinned"] = bool(cfg.get("tls_pin"))
     out["has_password"] = bool(cfg.get("password"))
     return out
 
@@ -478,7 +619,7 @@ def validate(body, current=None):
         raise ValueError("Invalid name (letters, digits, space . _ - ; up to 32)")
     driver = body.get("driver", cur.get("driver"))
     if driver not in DRIVERS:
-        raise ValueError("Invalid type (openwrt, mitrastar or instanton)")
+        raise ValueError("Invalid type (openwrt, mitrastar, instanton or unifi)")
     mode = body.get("mode", cur.get("mode") if cur.get("driver") == driver else None) or DRIVERS[driver][0]
     if mode not in DRIVERS[driver]:
         raise ValueError("Invalid mode for this type")
@@ -498,6 +639,20 @@ def validate(body, current=None):
         cfg["host"] = host
         if driver == "openwrt":
             cfg["user"] = _clean(body.get("user", cur.get("user", "root")), 64) or "root"
+        if driver == "unifi" and mode == "controller":
+            # Usuario local del controlador y sitio («default» si se deja vacío). La huella fijada se conserva mientras no se edite la entrada
+            # (pausar o reanudar no la toca); guardar desde «Editar» la vuelve a aprender en la próxima lectura.
+            # EN: Controller local user and site ("default" if empty). The pinned fingerprint is kept unless the entry is edited (pause or
+            #     resume leave it); saving from "Edit" learns it again on the next read.
+            cfg["user"] = _clean(body.get("user", cur.get("user", "")), 64)
+            if not cfg["user"]:
+                raise ValueError("UniFi controller user required")
+            cfg["site"] = _clean(body.get("site", cur.get("site", "")), 64) or "default"
+            if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", cfg["site"]):
+                raise ValueError("Invalid UniFi site id (letters, digits, _ and -)")
+            cfg["verify_tls"] = bool(body.get("verify_tls", cur.get("verify_tls", False)))
+            if cur.get("tls_pin") and "host" not in body and cur.get("host") == host:
+                cfg["tls_pin"] = cur["tls_pin"]
     if mode != "ping":
         pw = body.get("password") or (cur.get("password") if cur.get("driver") == driver else "") or ""
         if not pw or len(pw) > 128 or not pw.isprintable():
@@ -673,6 +828,8 @@ class Manager:
             return
         w.ev.clear()
         drv = build_driver(cfg)
+        if hasattr(drv, "on_pin"):
+            drv.on_pin = lambda fp: self._learn_pin(aid, cfg, fp, w)
         while not w.stop and not self._stopped:
             with self.lock:
                 self.rec.setdefault(aid, {"aps": [], "ok_ts": 0, "err": None, "fails": 0, "try_ts": 0})["try_ts"] = time.time()
@@ -682,6 +839,16 @@ class Manager:
                 self._fail(aid, cfg, e)
             w.ev.wait(self.poll_seconds())
             w.ev.clear()
+
+    def _learn_pin(self, aid, cfg, fp, w):
+        """Guarda la huella aprendida sin reiniciar el hilo. / Store the learned fingerprint without restarting the thread."""
+        with self.lock:
+            cur = self._find(aid)
+            if cur and not cur.get("tls_pin") and cur.get("host") == cfg.get("host"):
+                cur["tls_pin"] = fp
+                self._save()
+                w.sig = json.dumps(cur, sort_keys=True)
+                self._say("info", f"[{cur['name']}] certificate fingerprint pinned ({fp[:16]}…)")
 
     def _event(self, level, text, key, **params):
         fn = self.hooks.get("event")

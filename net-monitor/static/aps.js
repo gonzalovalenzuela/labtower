@@ -22,7 +22,9 @@ Object.assign(LANG.en, {
   apSearch: 'Search name, IP, MAC, AP or SSID…', apAll: 'All APs', apCount: (n, m) => n + ' of ' + m + ' clients', apNone: 'No clients.', apNoMatch: 'Nothing matches the search.',
   apMdlAdd: 'Add access point', apMdlEdit: 'Edit access point', apName: 'Name', apType: 'Type', apMode: 'How to read it', apHost: 'IP or name', apUser: 'User', apPass: 'Password',
   apAccount: 'Instant On account (e-mail)', apSite: 'Site (empty = all)', apKeep: 'leave empty to keep the stored one', apActive: 'Monitor this entry (untick to pause it without deleting it)',
-  apDrvOpenwrt: 'OpenWrt (ubus)', apDrvMitrastar: 'MitraStar Smart WiFi (Movistar)', apDrvInstanton: 'HPE Aruba Instant On',
+  apDrvOpenwrt: 'OpenWrt (ubus)', apDrvMitrastar: 'MitraStar Smart WiFi (Movistar)', apDrvInstanton: 'HPE Aruba Instant On', apDrvUnifi: 'Ubiquiti UniFi (controller)',
+  apModeController: 'UniFi Network controller (status, radios and clients)', apController: 'Controller (IP or name, optional :port)', apSiteId: 'Site id (empty = default)', apVerifyTls: 'Verify TLS against the system CAs (otherwise the fingerprint is pinned)',
+  apHintUnifi: 'Reads the UniFi Network controller (UniFi OS on a UDM or Cloud Key, or the classic controller) with a local user, preferably read-only, without 2FA. One entry brings every AP of the site. Without "Verify TLS" the certificate fingerprint is pinned on the first read.',
   apModeUbus: 'ubus (status, radios and clients)', apModeWeb: 'Web session (model, firmware, SSIDs and channels)', apModeCloud: 'Cloud portal (status, radios and clients)', apModePing: 'Ping only (online or not)',
   apHintOpenwrt: 'Uses ubus: uhttpd-mod-ubus or, on OpenWrt 19.07 and later, the one in LuCI. The root user works. Channel use only if the AP allows it.',
   apHintWeb: 'Logs in, reads the info page and logs out on every reading. This unit does not report clients or uptime. While LabTower reads it, the unit\'s web page may sign you out.',
@@ -48,7 +50,9 @@ Object.assign(LANG.es, {
   apSearch: 'Buscar nombre, IP, MAC, AP o SSID…', apAll: 'Todos los AP', apCount: (n, m) => n + ' de ' + m + ' clientes', apNone: 'Sin clientes.', apNoMatch: 'Nada coincide con la búsqueda.',
   apMdlAdd: 'Agregar punto de acceso', apMdlEdit: 'Editar punto de acceso', apName: 'Nombre', apType: 'Tipo', apMode: 'Cómo leerlo', apHost: 'IP o nombre', apUser: 'Usuario', apPass: 'Contraseña',
   apAccount: 'Cuenta Instant On (correo)', apSite: 'Sitio (vacío = todos)', apKeep: 'vacío = conservar la guardada', apActive: 'Vigilar esta entrada (desmarca para pausarla sin borrarla)',
-  apDrvOpenwrt: 'OpenWrt (ubus)', apDrvMitrastar: 'MitraStar Smart WiFi (Movistar)', apDrvInstanton: 'HPE Aruba Instant On',
+  apDrvOpenwrt: 'OpenWrt (ubus)', apDrvMitrastar: 'MitraStar Smart WiFi (Movistar)', apDrvInstanton: 'HPE Aruba Instant On', apDrvUnifi: 'Ubiquiti UniFi (controlador)',
+  apModeController: 'Controlador UniFi Network (estado, radios y clientes)', apController: 'Controlador (IP o nombre, :puerto opcional)', apSiteId: 'Id del sitio (vacío = default)', apVerifyTls: 'Verificar TLS con las CA del sistema (si no, se fija la huella)',
+  apHintUnifi: 'Lee el controlador UniFi Network (UniFi OS en un UDM o Cloud Key, o el controlador clásico) con un usuario local, de preferencia de solo lectura y sin 2FA. Una entrada trae todos los AP del sitio. Sin «Verificar TLS» la huella del certificado se fija en la primera lectura.',
   apModeUbus: 'ubus (estado, radios y clientes)', apModeWeb: 'Sesión web (modelo, firmware, SSID y canales)', apModeCloud: 'Portal en la nube (estado, radios y clientes)', apModePing: 'Solo ping (responde o no)',
   apHintOpenwrt: 'Usa ubus: uhttpd-mod-ubus o, en OpenWrt 19.07 y posteriores, el de LuCI. El usuario root sirve. El uso del canal, solo si el AP lo permite.',
   apHintWeb: 'Inicia sesión, lee la página de información y cierra la sesión en cada lectura. Este equipo no informa clientes ni uptime. Mientras LabTower lo lee, la web del equipo te puede cerrar la sesión.',
@@ -64,9 +68,9 @@ Object.assign(LANG.es, {
 const $ = id => document.getElementById(id);
 const AP = { sub: 'status', data: null, hash: '', timer: null, busy: false, again: false, q: '', only: '' };
 const POLLS = [30, 60, 120, 300, 600];
-const MODES = { openwrt: ['ubus'], mitrastar: ['web', 'ping'], instanton: ['cloud', 'ping'] };
-const MODE_LBL = { ubus: 'apModeUbus', web: 'apModeWeb', cloud: 'apModeCloud', ping: 'apModePing' };
-const HINT = { ubus: 'apHintOpenwrt', web: 'apHintWeb', cloud: 'apHintCloud', ping: 'apHintPing' };
+const MODES = { openwrt: ['ubus'], mitrastar: ['web', 'ping'], instanton: ['cloud', 'ping'], unifi: ['controller', 'ping'] };
+const MODE_LBL = { ubus: 'apModeUbus', web: 'apModeWeb', cloud: 'apModeCloud', controller: 'apModeController', ping: 'apModePing' };
+const HINT = { ubus: 'apHintOpenwrt', web: 'apHintWeb', cloud: 'apHintCloud', controller: 'apHintUnifi', ping: 'apHintPing' };
 
 async function api(path, opts) {
   const r = await fetch(path, opts);
@@ -85,6 +89,8 @@ function dur(s) {
 }
 function ago(sec) { return sec == null ? '—' : sec < 60 ? Math.round(sec) + ' ' + t('apSec') : Math.floor(sec / 60) + ' ' + t('apMin'); }
 const bandTxt = b => b ? b.replace('.', _lang === 'es' ? ',' : '.') + ' GHz' : '—';
+// Ancho del canal: «80mhz» (Instant On) se muestra «80 MHz»; «HT40» (OpenWrt) queda igual. / EN: channel width: "80mhz" shows as "80 MHz".
+const widthTxt = w => !w ? '—' : /^\d+\s*mhz$/i.test(w) ? w.replace(/\s*mhz$/i, ' MHz') : w;
 function signal(c) {
   if (c.signal != null) return `<span class="${c.signal >= -65 ? 'ap-ok' : c.signal >= -75 ? 'amber' : 'ap-bad'}">${c.signal} dBm</span>`;
   if (c.snr != null) return `<span class="${c.snr >= 25 ? 'ap-ok' : c.snr >= 15 ? 'amber' : 'ap-bad'}">SNR ${c.snr} dB</span>`;
@@ -136,7 +142,7 @@ function card(a) {
   let body = '';
   if (!ping && a.radios.length) {
     body += `<div class="sw-tablewrap"><table class="sw-table"><thead><tr>${['apBand', 'apChannel', 'apWidth', 'apPower', 'apUtil', 'apClients'].map(h => `<th>${esc(t(h))}</th>`).join('')}</tr></thead><tbody>` +
-      a.radios.map(r => `<tr><td>${esc(bandTxt(r.band))}</td><td>${r.channel != null ? esc(r.channel) : '—'}</td><td>${esc(r.width || '—')}</td><td>${r.txpower != null ? esc(r.txpower) + ' dBm' : '—'}</td>` +
+      a.radios.map(r => `<tr><td>${esc(bandTxt(r.band))}</td><td>${r.channel != null ? esc(r.channel) : '—'}</td><td>${esc(widthTxt(r.width))}</td><td>${r.txpower != null ? esc(r.txpower) + ' dBm' : '—'}</td>` +
         `<td>${r.util != null ? `<span class="${r.util >= 70 ? 'ap-bad' : r.util >= 50 ? 'amber' : ''}">${esc(r.util)} %</span>` : '—'}</td><td>${r.clients != null ? esc(r.clients) : '—'}</td></tr>`).join('') + '</tbody></table></div>';
   }
   if (!ping && a.ssids.length) body += `<div class="ap-ssids"><span class="dim">${esc(t('apSsids'))}:</span> ${a.ssids.map(s => `<span class="sw-pill">${esc(s.name)}${s.bands.length ? ' · ' + esc(s.bands.map(bandTxt).join(' / ')) : ''}</span>`).join(' ')}</div>`;
@@ -192,10 +198,12 @@ async function openModal(id) {
   const m = document.createElement('div'); m.id = 'ap-modal'; m.className = 'sw-ov';
   m.innerHTML = `<div class="sw-dlg" role="dialog"><h3>${esc(t(cur ? 'apMdlEdit' : 'apMdlAdd'))}</h3>` +
     `<label>${esc(t('apName'))}<input id="am-name" maxlength="32" value="${esc(c.name)}"></label>` +
-    `<label>${esc(t('apType'))}<select id="am-driver"><option value="openwrt">${esc(t('apDrvOpenwrt'))}</option><option value="mitrastar">${esc(t('apDrvMitrastar'))}</option><option value="instanton">${esc(t('apDrvInstanton'))}</option></select></label>` +
+    `<label>${esc(t('apType'))}<select id="am-driver"><option value="openwrt">${esc(t('apDrvOpenwrt'))}</option><option value="mitrastar">${esc(t('apDrvMitrastar'))}</option><option value="instanton">${esc(t('apDrvInstanton'))}</option><option value="unifi">${esc(t('apDrvUnifi'))}</option></select></label>` +
     `<label>${esc(t('apMode'))}<select id="am-mode"></select></label><div id="am-hint" class="sw-note"></div>` +
-    `<label class="am-host">${esc(t('apHost'))}<input id="am-host" value="${esc(c.host || '')}" placeholder="192.0.2.x"></label>` +
-    `<label class="am-user">${esc(t('apUser'))}<input id="am-user" maxlength="64" value="${esc(c.driver === 'openwrt' ? c.user || 'root' : 'root')}" autocomplete="off"></label>` +
+    `<label class="am-host"><span id="am-host-l">${esc(t('apHost'))}</span><input id="am-host" value="${esc(c.host || '')}" placeholder="192.0.2.x"></label>` +
+    `<label class="am-user">${esc(t('apUser'))}<input id="am-user" maxlength="64" value="${esc(c.driver === 'openwrt' || c.driver === 'unifi' ? c.user || '' : 'root')}" autocomplete="off"></label>` +
+    `<label class="am-uni">${esc(t('apSiteId'))}<input id="am-usite" maxlength="64" value="${esc(c.driver === 'unifi' ? c.site || '' : '')}" placeholder="default"></label>` +
+    `<label class="chk am-uni"><input type="checkbox" id="am-tls"${c.verify_tls ? ' checked' : ''}> ${esc(t('apVerifyTls'))}</label>` +
     `<label class="am-acct">${esc(t('apAccount'))}<input id="am-acct" maxlength="128" value="${esc(c.driver === 'instanton' ? c.user || '' : '')}" autocomplete="off"></label>` +
     `<label class="am-acct">${esc(t('apSite'))}<input id="am-site" maxlength="64" value="${esc(c.site || '')}"></label>` +
     `<label class="am-pass">${esc(t('apPass'))}<input id="am-pass" type="password" autocomplete="new-password" placeholder="${cur && c.has_password ? esc(t('apKeep')) : ''}"></label>` +
@@ -209,7 +217,9 @@ async function openModal(id) {
     const d = $('am-driver').value, mo = $('am-mode').value, cloud = mo === 'cloud';
     $('am-hint').textContent = t(HINT[mo]);
     m.querySelector('.am-host').style.display = cloud ? 'none' : '';
-    m.querySelector('.am-user').style.display = d === 'openwrt' ? '' : 'none';
+    m.querySelector('.am-user').style.display = d === 'openwrt' || mo === 'controller' ? '' : 'none';
+    m.querySelectorAll('.am-uni').forEach(x => { x.style.display = mo === 'controller' ? '' : 'none'; });
+    $('am-host-l').textContent = t(mo === 'controller' ? 'apController' : 'apHost');
     m.querySelectorAll('.am-acct').forEach(x => { x.style.display = cloud ? '' : 'none'; });
     m.querySelector('.am-pass').style.display = mo === 'ping' ? 'none' : '';
   };
@@ -223,7 +233,11 @@ function formBody(id) {
   const b = { name: $('am-name').value.trim(), driver: $('am-driver').value, mode: $('am-mode').value, enabled: $('am-on').checked, password: $('am-pass').value };
   if (id) b.id = id;
   if (b.mode === 'cloud') { b.user = $('am-acct').value.trim(); b.site = $('am-site').value.trim(); }
-  else { b.host = $('am-host').value.trim(); if (b.driver === 'openwrt') b.user = $('am-user').value.trim() || 'root'; }
+  else {
+    b.host = $('am-host').value.trim();
+    if (b.driver === 'openwrt') b.user = $('am-user').value.trim() || 'root';
+    if (b.mode === 'controller') { b.user = $('am-user').value.trim(); b.site = $('am-usite').value.trim(); b.verify_tls = $('am-tls').checked; }
+  }
   return b;
 }
 

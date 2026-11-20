@@ -3,7 +3,10 @@ EN: AP Monitor: drivers against simulated devices (OpenWrt, MitraStar, Instant O
 import hashlib
 import json
 import os
+import shutil
+import ssl
 import stat
+import subprocess  # nosec B404 - only openssl to make a test certificate
 import tempfile
 import threading
 import unittest
@@ -297,6 +300,122 @@ class InstantOn(unittest.TestCase):
         import base64
         self.assertEqual(auth_q["code_challenge"][0], base64.urlsafe_b64encode(hashlib.sha256(tok["code_verifier"].encode()).digest()).rstrip(b"=").decode())
         self.assertEqual((auth_q["sessionToken"][0], auth_q["code_challenge_method"][0]), ("session", "S256"))
+
+
+# ---------------------------------------------------------------- UniFi (controlador simulado por HTTPS con certificado autofirmado)
+# EN: UniFi (controller simulated over HTTPS with a self-signed certificate)
+UNIFI_DEV = [
+    {"_id": "d1", "type": "uap", "mac": "AA:00:00:00:10:01", "name": "Hall", "model": "U6LR", "version": "6.6.77", "serial": "SN-U", "ip": "192.0.2.41",
+     "state": 1, "uptime": 86400,
+     "radio_table": [{"radio": "ng", "ht": 20}, {"radio": "na", "ht": 80}],
+     "radio_table_stats": [{"radio": "ng", "channel": 6, "tx_power": 20, "cu_total": 31, "num_sta": 1}, {"radio": "na", "channel": 44, "tx_power": 23, "cu_total": 12, "num_sta": 1}],
+     "vap_table": [{"essid": "Lab", "radio": "ng"}, {"essid": "Lab", "radio": "na"}], "uplink": {"type": "wire"}},
+    {"_id": "d2", "type": "uap", "mac": "AA:00:00:00:10:02", "name": "Garden", "model": "UAP-AC-M", "state": 0, "uplink": {"type": "wireless", "uplink_device_name": "Hall"}},
+    {"_id": "d3", "type": "usw", "mac": "AA:00:00:00:10:03", "name": "Switch"}]
+UNIFI_STA = [
+    {"mac": "BB:00:00:00:10:01", "hostname": "phone", "ip": "192.0.2.61", "ap_mac": "aa:00:00:00:10:01", "essid": "Lab", "radio": "na",
+     "signal": -55, "noise": -95, "tx_rate": 866000, "uptime": 300},
+    {"mac": "BB:00:00:00:10:02", "name": "Printer", "ap_mac": "aa:00:00:00:10:01", "essid": "Lab", "radio": "ng", "signal": -70, "tx_rate": 72000, "uptime": 60},
+    {"mac": "BB:00:00:00:10:03", "is_wired": True, "ap_mac": "aa:00:00:00:10:01"}]
+
+
+class UniFiHandler(BaseHTTPRequestHandler):
+    state: ClassVar[dict] = {"os": True, "hits": []}
+    def log_message(self, *a): pass
+    def _j(self, code, body, hdr=None):
+        b = json.dumps(body).encode()
+        self.send_response(code)
+        for k, v in (hdr or {}).items(): self.send_header(k, v)
+        self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+    def do_POST(self):
+        self.state["hits"].append(("POST", self.path))
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        ok = body.get("username") == "ro" and body.get("password") == "pw"
+        if self.path == "/api/auth/login" and self.state["os"]:
+            return self._j(200 if ok else 401, {}, {"Set-Cookie": "TOKEN=t1; Path=/; HttpOnly", "X-CSRF-Token": "csrf1"} if ok else None)
+        if self.path == "/api/login" and not self.state["os"]:
+            return self._j(200 if ok else 400, {"meta": {"rc": "ok" if ok else "error"}}, {"Set-Cookie": "unifises=s1; Path=/; HttpOnly"} if ok else None)
+        self._j(404, {})
+    def do_GET(self):
+        self.state["hits"].append(("GET", self.path))
+        pre = "/proxy/network" if self.state["os"] else ""
+        cookie = self.headers.get("Cookie") or ""
+        if ("TOKEN=t1" if self.state["os"] else "unifises=s1") not in cookie:
+            return self._j(401, {"meta": {"rc": "error", "msg": "api.err.LoginRequired"}})
+        if self.path == pre + "/api/s/default/stat/device": return self._j(200, {"meta": {"rc": "ok"}, "data": UNIFI_DEV})
+        if self.path == pre + "/api/s/default/stat/sta": return self._j(200, {"meta": {"rc": "ok"}, "data": UNIFI_STA})
+        if "/api/s/" in self.path: return self._j(400, {"meta": {"rc": "error", "msg": "api.err.NoSiteContext"}})
+        self._j(404, {})
+
+
+@unittest.skipUnless(shutil.which("openssl"), "needs openssl")
+class UniFi(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        key, crt = os.path.join(cls.tmp, "k.pem"), os.path.join(cls.tmp, "c.pem")
+        subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", key, "-out", crt, "-days", "1", "-subj", "/CN=unifi.test"],  # nosec B603 B607
+                       check=True, capture_output=True)
+        cls.srv = type("Quiet", (ThreadingHTTPServer,), {"handle_error": lambda *a: None})(("127.0.0.1", 0), UniFiHandler)   # the cut-off on a changed certificate is expected
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.load_cert_chain(crt, key)
+        cls.srv.socket = ctx.wrap_socket(cls.srv.socket, server_side=True)
+        cls.srv.daemon_threads = True
+        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+        cls.host = f"127.0.0.1:{cls.srv.server_address[1]}"
+    @classmethod
+    def tearDownClass(cls): cls.srv.shutdown(); cls.srv.server_close(); shutil.rmtree(cls.tmp, ignore_errors=True)
+    def drv(self, **kw):
+        return ap.UniFiDriver({"name": "UniFi", "driver": "unifi", "mode": "controller", "host": self.host, "user": "ro", "password": "pw", "site": "default", **kw})
+
+    def test_unifi_os_reads_aps_radios_ssids_and_wifi_clients(self):
+        UniFiHandler.state.update(os=True, hits=[])
+        d = self.drv(); pins = []; d.on_pin = pins.append
+        aps = d.snapshot()
+        self.assertEqual(d.prefix, "/proxy/network")
+        self.assertEqual([a["name"] for a in aps], ["Hall", "Garden"])                  # the switch is left out
+        a, b = aps
+        self.assertTrue(a["online"]); self.assertFalse(b["online"]); self.assertEqual(b["note"], "mesh → Hall")
+        self.assertEqual((a["model"], a["fw"], a["serial"], a["uptime"], a["ip"]), ("U6LR", "6.6.77", "SN-U", 86400, "192.0.2.41"))
+        self.assertEqual([(r["band"], r["channel"], r["width"], r["txpower"], r["util"], r["clients"]) for r in a["radios"]],
+                         [("2.4", 6, "20 MHz", 20, 31, 1), ("5", 44, "80 MHz", 23, 12, 1)])
+        self.assertEqual(a["ssids"], [{"name": "Lab", "bands": ["2.4", "5"]}])
+        self.assertEqual([(c["name"], c["band"], c["signal"], c["snr"], c["rate"]) for c in a["clients"]], [("phone", "5", -55, 40, 866), ("Printer", "2.4", -70, None, 72)])
+        self.assertEqual(len(pins), 1); self.assertEqual(d.cfg["tls_pin"], pins[0])              # fingerprint learned on the first read
+
+    def test_classic_controller(self):
+        UniFiHandler.state.update(os=False, hits=[])
+        d = self.drv()
+        self.assertEqual(len(d.snapshot()), 2)
+        self.assertEqual(d.prefix, "")
+        self.assertIn(("POST", "/api/login"), UniFiHandler.state["hits"])
+
+    def test_changed_certificate_sends_nothing(self):
+        UniFiHandler.state.update(os=True, hits=[])
+        with self.assertRaisesRegex(ap.APError, "certificate changed"):
+            self.drv(tls_pin="0" * 64).snapshot()
+        self.assertEqual(UniFiHandler.state["hits"], [])                                 # not even the login with the password
+
+    def test_wrong_password_and_unknown_site(self):
+        UniFiHandler.state.update(os=True)
+        with self.assertRaisesRegex(ap.APError, "wrong user or password"):
+            self.drv(password="bad").snapshot()
+        with self.assertRaisesRegex(ap.APError, "site not found"):
+            self.drv(site="other").snapshot()
+
+    def test_validate_and_pin_kept_on_pause(self):
+        o = ap.auth.valid_target
+        try:
+            ap.auth.valid_target = lambda h, *a, **k: True
+            cfg = ap.validate({"name": "U", "driver": "unifi", "mode": "controller", "host": "192.0.2.40:8443", "user": "ro", "password": "pw"})
+            self.assertEqual((cfg["site"], cfg["verify_tls"]), ("default", False))
+            cfg["tls_pin"] = "ab" * 32
+            self.assertEqual(ap.validate({"enabled": False}, cfg)["tls_pin"], "ab" * 32)              # pause/resume keeps the pin
+            self.assertNotIn("tls_pin", ap.validate({"host": "192.0.2.40:8443"}, cfg))                # an edit learns it again
+            self.assertNotIn("tls_pin", ap.redact(cfg)); self.assertTrue(ap.redact(cfg)["pinned"])
+            for bad in ({"user": ""}, {"site": "a/b"}):
+                with self.assertRaises(ValueError):
+                    ap.validate({"name": "U", "driver": "unifi", "mode": "controller", "host": "192.0.2.40", "password": "pw", "user": "ro", **bad})
+        finally: ap.auth.valid_target = o
 
 
 # ---------------------------------------------------------------- Validación y gestor / validation and manager
