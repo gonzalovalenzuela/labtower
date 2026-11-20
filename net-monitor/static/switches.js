@@ -111,17 +111,21 @@ function clock(ts, secs) { const d = new Date(ts * 1000); return typeof PCT !== 
 const nameOf = n => (n.name || n.ip || n.mac || '').toString();
 
 // ── Vistas / views ───────────────────────────────────────────────────────────────────────
+// Tres pestañas: Equipos, Switch Monitor y AP Monitor. La de AP (aps.js) se entera con el evento «netview».
+// EN: Three tabs: Devices, Switch Monitor and AP Monitor. The AP one (aps.js) learns of it through the "netview" event.
+const VIEWS = ['hosts', 'switches', 'aps'];
 function setView(v) {
-  SW.view = v === 'switches' ? 'switches' : 'hosts';
-  $('view-hosts').hidden = SW.view !== 'hosts';
-  $('view-switches').hidden = SW.view !== 'switches';
+  SW.view = VIEWS.includes(v) && $('view-' + v) ? v : 'hosts';
+  VIEWS.forEach(x => { const el = $('view-' + x); if (el) el.hidden = SW.view !== x; });
   document.body.classList.toggle('view-sw', SW.view === 'switches');
+  document.body.classList.toggle('view-ap', SW.view === 'aps');
   const sd = $('sw-side'); if (sd) sd.hidden = SW.view !== 'switches';
   document.querySelectorAll('.view-tab').forEach(b => b.classList.toggle('active', b.dataset.view === SW.view));
   try { localStorage.setItem('pi-net-view', SW.view); } catch (e) {}
-  try { history.replaceState(null, '', SW.view === 'switches' ? '#switches' : location.pathname + location.search); } catch (e) {}
+  try { history.replaceState(null, '', SW.view === 'hosts' ? location.pathname + location.search : '#' + SW.view); } catch (e) {}
   clearInterval(SW.timer);
   if (SW.view === 'switches') { load(); SW.timer = setInterval(() => { if (!document.hidden) load(); }, 10000); }
+  document.dispatchEvent(new CustomEvent('netview', { detail: SW.view }));
 }
 
 async function load() {
@@ -539,9 +543,9 @@ function init() {
   document.querySelectorAll('.view-tab').forEach(b => { b.textContent = t(b.dataset.i18n); });
   try { const sv = localStorage.getItem('pi-net-sub'); if (sv === 'hist' || sv === 'mac') SW.sub = sv; SW.pos = JSON.parse(localStorage.getItem('pi-sw-topo') || '{}') || {}; } catch (e) {}
   let v = 'hosts';
-  try { v = location.hash === '#switches' ? 'switches' : (location.hash === '' && localStorage.getItem('pi-net-view') === 'switches' ? 'switches' : 'hosts'); } catch (e) {}
+  try { const h = location.hash.slice(1), saved = localStorage.getItem('pi-net-view'); v = VIEWS.includes(h) ? h : (location.hash === '' && VIEWS.includes(saved) ? saved : 'hosts'); } catch (e) {}
   setView(v);
-  window.addEventListener('hashchange', () => { if (location.hash === '#switches' && SW.view !== 'switches') setView('switches'); });
+  window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (VIEWS.includes(h) && h !== 'hosts' && SW.view !== h) setView(h); });
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

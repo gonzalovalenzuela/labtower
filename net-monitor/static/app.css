@@ -112,6 +112,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 .stat-card>div:last-child{min-width:0}.stat-val{white-space:nowrap}
 /* Switch Monitor: las tarjetas pasan a otra fila en vez de apretarse. EN: the cards wrap onto another row instead of being squeezed. */
 #view-switches .stats-row{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+#view-aps .stats-row{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
 /* Search + filter row */
 .filter-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .search-wrap{position:relative;flex:1;min-width:200px;max-width:320px}
@@ -268,6 +269,10 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
 .view-tab.active{color:var(--teal);border-bottom-color:var(--teal)}
 .content[hidden]{display:none}
 body.view-sw .tb-right,body.view-sw .tb-actions,body.view-sw .scan-bar,body.view-sw .sb-hosts{display:none!important}
+body.view-ap .tb-right,body.view-ap .tb-actions,body.view-ap .scan-bar,body.view-ap .sb-hosts{display:none!important}
+/* AP Monitor: colores de señal y lista de SSID. EN: signal colours and SSID list. */
+.ap-ok{color:var(--green)}.ap-bad{color:var(--red)}
+.ap-ssids{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px;font-size:12px}
 body.view-sw #sw-side{display:block}
 #sw-side[hidden]{display:none}
 .os-filter-count{font:11px var(--mono);color:var(--text-dim)}

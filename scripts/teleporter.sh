@@ -73,6 +73,7 @@ DATA_FILES=(
   "data/net-monitor/config.json|$DATA_DIR/net-monitor/config.json"
   "data/net-monitor/switches.json|$DATA_DIR/net-monitor/switches.json"
   "data/net-monitor/switches.db|$DATA_DIR/net-monitor/switches.db"
+  "data/net-monitor/aps.json|$DATA_DIR/net-monitor/aps.json"
   "data/proxmox-monitor/clusters.json|$DATA_DIR/proxmox-monitor/clusters.json"
   "data/nas-monitor/nas.json|$DATA_DIR/nas-monitor/nas.json"
   "data/dns-monitor/dns.json|$DATA_DIR/dns-monitor/dns.json"

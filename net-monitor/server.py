@@ -63,6 +63,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "auth"))
 import auth
 
 sys.path.insert(0, str(Path(__file__).parent))
+import aps as apmod  # AP Monitor: puntos de acceso Wi-Fi / Wi-Fi access points
 import hostwatch as hw
 import switches as swmod  # Switch Monitor: drivers, sondeo, historial / drivers, polling, history
 
@@ -1186,6 +1187,17 @@ def sw_manager():
             _sw_mgr = swmod.Manager(DATA_DIR, hooks={"event": auth.record_event, "changed": auth.state_changed, "hosts": _sw_hosts}, log=log)
         return _sw_mgr
 
+# AP Monitor: un gestor por proceso, como Switch Monitor. Los clientes se cruzan con los equipos conocidos por MAC (_sw_hosts).
+# EN: AP Monitor: one manager per process, like Switch Monitor. Clients are matched to known devices by MAC (_sw_hosts).
+_ap_mgr = None
+_ap_lock = threading.Lock()
+def ap_manager():
+    global _ap_mgr
+    with _ap_lock:
+        if _ap_mgr is None:
+            _ap_mgr = apmod.Manager(DATA_DIR, hooks={"event": auth.record_event, "changed": auth.state_changed, "hosts": _sw_hosts}, log=log)
+        return _ap_mgr
+
 # ─── Scanner ──────────────────────────────────────────────────────────────────
 # Estado del escáner (para la barra de progreso), temporizador del próximo escaneo automático e intervalo actual.
 # EN: Scanner state (for the progress bar), timer of the next automatic scan and current interval.
@@ -1602,6 +1614,14 @@ def health_report(detailed=False):
                              else auth.chk(auth.OK, f"{len(cfgs)} switches reachable"))
     except Exception as e:  # noqa: BLE001 - el error queda guardado y se muestra / the error is kept and shown
         c["switches"] = auth.chk(auth.WARN, f"switch monitor: {str(e)[:100]}")
+    try:
+        aps = [a for a in ap_manager().state()["aps"] if not a["paused"]]
+        if aps:
+            bad = [a["name"] for a in aps if a["down"]]
+            c["access_points"] = (auth.chk(auth.WARN, f"{len(bad)} of {len(aps)} access points unreachable: {', '.join(bad)[:120]}") if bad
+                                  else auth.chk(auth.OK, f"{len(aps)} access points"))
+    except Exception as e:  # noqa: BLE001 - el error queda guardado y se muestra / the error is kept and shown
+        c["access_points"] = auth.chk(auth.WARN, f"AP monitor: {str(e)[:100]}")
     return auth.health_reply("net", c, detailed)
 
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
@@ -1716,6 +1736,14 @@ class H(BaseHTTPRequestHandler):
             self._json(200, sw_manager().totals())
         elif path == "/api/switches/config":
             self._json(200, sw_manager().list_config())
+        # AP Monitor: estado de los AP (el número de serie solo con su permiso) y configuración sin claves (admin).
+        # EN: AP Monitor: AP state (serial number only with its permission) and configuration without passwords (admin).
+        elif path == "/api/aps":
+            self._json(200, ap_manager().state(serials=auth.can_see_serials(tok)))
+        elif path == "/api/aps/config":
+            if not auth.check_permission(tok, "net", "admin"):
+                return self._json(403, {"error": "Admin permission required"})
+            self._json(200, ap_manager().list_config())
         elif re.fullmatch(r"/api/switches/[a-z0-9-]+/history", path):
             q = parse_qs(urlparse(self.path).query)
             rng = (q.get("range") or ["1d"])[0]
@@ -1860,6 +1888,32 @@ class H(BaseHTTPRequestHandler):
             except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
                 log.warning(f"switches/{act}: {e}")
                 return self._json(502, {"error": f"{type(e).__name__}: {e}"[:200]})
+            return self._json(404, {"error": "Not found"})
+
+        # AP Monitor: «actualizar ahora» (cualquiera con acceso a Net) y, solo admin, guardar, borrar, probar y cambiar el intervalo.
+        # EN: AP Monitor: "refresh now" (anyone with Net access) and, admin only, save, delete, test and change the interval.
+        elif path == "/api/aps/refresh":
+            return self._json(200, {"ok": True, "n": ap_manager().refresh()})
+        elif path.startswith("/api/aps/"):
+            if not auth.check_permission(tok, "net", "admin"):
+                return self._json(403, {"error": "Admin permission required"})
+            m, act = ap_manager(), path[len("/api/aps/"):]
+            try:
+                if act == "save":
+                    return self._json(200, {"ok": True, "ap": m.save(body)})
+                if act == "delete":
+                    m.delete(str(body.get("id") or ""))
+                    return self._json(200, {"ok": True})
+                if act == "test":
+                    return self._json(200, m.test(body))
+                if act == "poll":
+                    m.set_poll(body.get("seconds"))
+                    return self._json(200, {"ok": True})
+            except ValueError as e:
+                return self._json(400, {"error": str(e)})
+            except Exception as e:  # noqa: BLE001 - error de la petición: se responde sin caer / request error: answered without crashing
+                log.warning(f"aps/{act}: {e}")
+                return self._json(502, {"error": str(e)[:200] if isinstance(e, apmod.APError) else f"{type(e).__name__}: {e}"[:200]})
             return self._json(404, {"error": "Not found"})
 
         # SNMP: guardar la configuración o solo probarla sin guardar (admin).
@@ -2051,6 +2105,8 @@ if __name__ == "__main__":
     start_watch()
     try: sw_manager().start()
     except Exception as e: log.warning(f"Switch Monitor did not start: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
+    try: ap_manager().start()
+    except Exception as e: log.warning(f"AP Monitor did not start: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
     try:
         srv = ThreadingHTTPServer((HOST, PORT), H)
         srv.daemon_threads = True
