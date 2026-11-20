@@ -428,13 +428,20 @@ class InstantOnDriver:
                 cl = []                              # clients are optional / opcional
             by_ap = {}
             for c in cl:
-                if isinstance(c, dict) and c.get("wirelessNetworkId"):
-                    by_ap.setdefault(str(c.get("deviceId") or "").lower(), []).append({
-                        "mac": _clean(c.get("macAddress"), 17).lower(), "ip": _clean(c.get("ipAddress"), 45) or None,
-                        "name": _clean(c.get("name") if c.get("name") != c.get("macAddress") else c.get("hostName"), 64) or None,
-                        "band": band_of(name=c.get("wirelessBand")), "ssid": _clean(c.get("wirelessNetworkName"), 64) or None,
-                        "signal": None, "snr": _int(c.get("snrInDb")), "rate": None, "connected": _int(c.get("stateDurationInSeconds")),
-                        "quality": _clean(c.get("signalQuality"), 16) or None})
+                # Solo clientes Wi-Fi conectados: el portal también lista los que se fueron hace poco (sin SNR ni calidad).
+                # EN: Connected Wi-Fi clients only: the portal also lists recently gone ones (no SNR or quality).
+                if not isinstance(c, dict) or not c.get("wirelessNetworkId") or c.get("status", "up") != "up":
+                    continue
+                mac = _clean(c.get("macAddress"), 17).lower()
+                ip = _clean(c.get("ipAddress"), 45)
+                # Sin nombre conocido el portal repite la MAC: se deja vacío. / With no known name the portal repeats the MAC: left empty.
+                name = next((_clean(x, 64) for x in (c.get("name"), c.get("hostName")) if x and _clean(x, 64).lower() != mac), None)
+                by_ap.setdefault(str(c.get("deviceId") or "").lower(), []).append({
+                    "mac": mac, "ip": ip if ip and ip != "0.0.0.0" else None,  # nosec B104 - an unknown IP as the portal reports it, not a bind
+                    "name": name,
+                    "band": band_of(name=c.get("wirelessBand")), "ssid": _clean(c.get("wirelessNetworkName"), 64) or None,
+                    "signal": None, "snr": _int(c.get("snrInDb")), "rate": None, "connected": _int(c.get("stateDurationInSeconds")),
+                    "quality": _clean(c.get("signalQuality"), 16) or None})
             for d in inv:
                 mac = _clean(d.get("macAddress") or d.get("id"), 17).lower()
                 radios = [{"band": band_of(name=r.get("band")), "channel": _int(r.get("channel")), "width": _clean(r.get("channelWidth"), 16) or None,

@@ -229,7 +229,10 @@ INV = {"elements": [
 CLIENTS = {"elements": [
     {"macAddress": "bb:00:00:00:00:01", "name": "bb:00:00:00:00:01", "hostName": "phone", "ipAddress": "192.0.2.50", "deviceId": "aa:00:00:00:00:01",
      "wirelessNetworkId": "n1", "wirelessNetworkName": "Lab", "wirelessBand": "5ghz", "snrInDb": 32, "signalQuality": "good", "stateDurationInSeconds": 600},
-    {"macAddress": "bb:00:00:00:00:02", "deviceId": "aa:00:00:00:00:01", "wirelessNetworkId": None}]}
+    {"macAddress": "bb:00:00:00:00:02", "deviceId": "aa:00:00:00:00:01", "wirelessNetworkId": None},
+    {"macAddress": "bb:00:00:00:00:03", "name": "gone", "deviceId": "aa:00:00:00:00:01", "wirelessNetworkId": "n1", "status": "down", "wirelessBand": "2.4ghz"},
+    {"macAddress": "bb:00:00:00:00:04", "name": "bb:00:00:00:00:04", "hostName": "BB:00:00:00:00:04", "ipAddress": "0.0.0.0", "status": "up",  # nosec B104 - test data
+     "deviceId": "aa:00:00:00:00:01", "wirelessNetworkId": "n1", "wirelessBand": "2.4ghz", "snrInDb": 20, "signalQuality": "fair"}]}
 
 
 class InstantOn(unittest.TestCase):
@@ -247,8 +250,9 @@ class InstantOn(unittest.TestCase):
         self.assertEqual((a["model"], a["fw"], a["serial"], a["uptime"]), ("AP-303", "3.4.2.0", "SN-A", 51168))
         self.assertEqual(a["radios"], [{"band": "5", "channel": 64, "width": "80mhz", "txpower": 21, "util": 12, "clients": 1}])
         self.assertEqual(a["ssids"], [{"name": "Lab", "bands": ["2.4", "5"]}])
-        self.assertEqual(len(a["clients"]), 1)                                   # the wired client is left out
+        self.assertEqual(len(a["clients"]), 2)                                   # the wired and the gone ("down") clients are left out
         c = a["clients"][0]
+        self.assertEqual((a["clients"][1]["name"], a["clients"][1]["ip"]), (None, None))   # name repeating the MAC and 0.0.0.0 -> empty
         self.assertEqual((c["name"], c["ip"], c["band"], c["ssid"], c["snr"], c["quality"]), ("phone", "192.0.2.50", "5", "Lab", 32, "good"))
         self.assertEqual(b["note"], "mesh → Living")
         with self.assertRaisesRegex(ap.APError, "site not found"):
