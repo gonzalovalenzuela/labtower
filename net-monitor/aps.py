@@ -277,31 +277,50 @@ def parse_mitrastar(html):
 
 class MitraStarDriver:
     def __init__(self, cfg):
-        self.cfg = cfg
+        self.cfg, self.cookies = cfg, {}
 
     def _req(self, path, data=None):
+        """Una petición. Las cookies que entrega el equipo (la de sesión es HttpOnly) se guardan y se reenvían.
+        EN: One request. Cookies the unit hands out (the session one is HttpOnly) are kept and sent back."""
         conn = http.client.HTTPConnection(self.cfg["host"], timeout=TIMEOUT)
         try:
             hdr = {"Content-Type": "application/x-www-form-urlencoded"} if data is not None else {}
-            conn.request("POST" if data is not None else "GET", "/" + path, urllib.parse.urlencode(data) if data is not None else None, hdr)
+            if self.cookies:
+                hdr["Cookie"] = "; ".join(f"{k}={v}" for k, v in self.cookies.items())
+            conn.request("POST" if data is not None else "GET", "/" + path.lstrip("/"), urllib.parse.urlencode(data) if data is not None else None, hdr)
             r = conn.getresponse()
-            return r.status, r.read(1024 * 1024).decode("utf-8", "replace")
+            for c in r.msg.get_all("Set-Cookie") or []:
+                k, _, v = c.split(";", 1)[0].strip().partition("=")
+                if k and len(self.cookies) < 16:
+                    self.cookies[_clean(k, 64)] = _clean(v, 512)
+            return r.status, r.read(1024 * 1024).decode("utf-8", "replace"), r.getheader("Location") or ""
         finally:
             conn.close()
 
     def snapshot(self):
         if self.cfg.get("mode") == "ping":
             return [_ap("main", self.cfg["name"], ip=self.cfg["host"], online=ping(self.cfg["host"]), note="ping")]
-        _, page = self._req("index.cgi")
+        self.cookies = {}                         # each reading is a new session / cada lectura es una sesión nueva
+        _, page, _ = self._req("index.cgi")
         m = re.search(r"var\s+sid\s*=\s*'([0-9A-Fa-f]{4,64})'", page)
         if not m:
             raise APError("login page without sid (is this a MitraStar Smart WiFi?)")
-        self._req("index.cgi", {"login_password_old": "", "submitValue": "1",
-                                "login_password": _md5((self.cfg.get("password") or "") + ":" + m.group(1))})
+        st, page, loc = self._req("index.cgi", {"login_password_old": "", "submitValue": "1",
+                                                "login_password": _md5((self.cfg.get("password") or "") + ":" + m.group(1))})
+        # ES: Con la clave mala el equipo devuelve el login con el aviso «tab_fail» (no hay sesión que cerrar).
+        # EN: With a wrong password the unit returns the login page with the "tab_fail" notice (no session to close).
+        if 'id="tab_fail"' in page:
+            raise APError("wrong password (the device said so; it is the one on the label unless it was changed)")
         try:
-            st, html = self._req("sysinfo.cgi")
-            if st != 200 or "Información de equipo" not in html:
-                raise APError("wrong password, or another session is open on the device")
+            # Como el navegador: se sigue la redirección del login (a wifi5g.cgi) antes de pedir la información. / Like the browser: follow it.
+            if st in (301, 302, 303) and re.fullmatch(r"/?[A-Za-z0-9_]+\.cgi", loc or ""):
+                self._req(loc)
+            st2, html, loc2 = self._req("sysinfo.cgi")
+            if st2 != 200 or "Información de equipo" not in html:
+                # Clave aceptada pero sin sesión: el equipo admite una sola y otro (un navegador) la tiene. / Password accepted but no session.
+                raise APError(f"password accepted, but the device sent its login page again (login HTTP {st}{' → ' + _clean(loc, 40) if loc else ''}, "
+                              f"info HTTP {st2}{' → ' + _clean(loc2, 40) if loc2 else ''}, cookies: {', '.join(self.cookies) or 'none'}): it allows one session "
+                              "at a time; close the device's web page in any browser (or wait for it to expire) and try again")
             d = parse_mitrastar(html)
         finally:
             try:

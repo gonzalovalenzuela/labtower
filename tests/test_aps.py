@@ -149,20 +149,30 @@ SYSINFO = """<html><body><div>MENÚ</div><a href="logout.cgi">Cerrar sesión</a>
 
 
 class MSHandler(BaseHTTPRequestHandler):
+    """Como el equipo real: login correcto = 302 a wifi5g.cgi con una cookie de sesión HttpOnly; sin ella, 302 al login.
+    EN: Like the real unit: a good login = 302 to wifi5g.cgi with an HttpOnly session cookie; without it, 302 to the login."""
     state: ClassVar[dict] = {"logged": False, "hits": [], "form": None}
     def log_message(self, *a): pass
+    def _redirect(self, to, cookie=None):
+        self.send_response(302); self.send_header("Location", to)
+        if cookie: self.send_header("Set-Cookie", cookie)
+        self.send_header("Content-Length", "0"); self.end_headers()
     def do_GET(self):
         p = self.path.lstrip("/")
         self.state["hits"].append(p)
+        has = "sess=abc123" in (self.headers.get("Cookie") or "")
         if p == "index.cgi": return _send(self, 200, "<script>function ButtonSumbit(value){var sid='4e74f030';}</script><form action='index.cgi'></form>")
         if p == "logout.cgi": self.state["logged"] = False; return _send(self, 200, "bye")
-        if p == "sysinfo.cgi": return _send(self, 200, SYSINFO if self.state["logged"] else "<form action='index.cgi'></form>")
+        if p in ("sysinfo.cgi", "wifi5g.cgi"):
+            return _send(self, 200, SYSINFO) if self.state["logged"] and has else self._redirect("index.cgi")
         _send(self, 404, "")
     def do_POST(self):
         f = urllib.parse.parse_qs(self.rfile.read(int(self.headers["Content-Length"])).decode())
         self.state["form"] = f
-        self.state["logged"] = f.get("login_password") == [hashlib.md5(b"pw:4e74f030").hexdigest()]  # nosec B324 - device format
-        _send(self, 200, "ok")
+        ok = f.get("login_password") == [hashlib.md5(b"pw:4e74f030").hexdigest()]  # nosec B324 - device format
+        self.state["logged"] = ok and not self.state.get("busy")             # one session at a time / una sesión a la vez
+        if ok: return self._redirect("wifi5g.cgi", "sess=abc123; Path=/; HttpOnly")
+        _send(self, 200, '<div id="tab_fail" class="finBox"><div class="artBox">Su contraseña es incorrecta</div></div>')
 
 
 class MitraStar(unittest.TestCase):
@@ -186,10 +196,16 @@ class MitraStar(unittest.TestCase):
         self.assertEqual((a["model"], a["serial"], a["clients"], a["uptime"]), ("HGW-500SN2A4-Qv3", "SN0001", None, None))
         self.assertEqual(MSHandler.state["form"]["submitValue"], ["1"])
         self.assertNotIn("login_password_old", {k for k, v in MSHandler.state["form"].items() if v != [""]})   # the clear password is never sent
-        self.assertEqual(MSHandler.state["hits"][-1], "logout.cgi")
+        self.assertEqual(MSHandler.state["hits"][-3:], ["wifi5g.cgi", "sysinfo.cgi", "logout.cgi"])    # follows the login redirect, with the cookie
         MSHandler.state["hits"].clear()
-        with self.assertRaisesRegex(ap.APError, "wrong password"):
+        with self.assertRaisesRegex(ap.APError, "^wrong password"):
             ap.MitraStarDriver({"name": "Ext", "host": self.host, "mode": "web", "password": "bad"}).snapshot()
+        self.assertNotIn("sysinfo.cgi", MSHandler.state["hits"])                # a refused password reads nothing more
+        MSHandler.state.update(busy=True, hits=[])
+        try:
+            with self.assertRaisesRegex(ap.APError, "password accepted.*cookies: sess.*one session at a time"):
+                ap.MitraStarDriver({"name": "Ext", "host": self.host, "mode": "web", "password": "pw"}).snapshot()
+        finally: MSHandler.state["busy"] = False
         self.assertEqual(MSHandler.state["hits"][-1], "logout.cgi")
 
     def test_ping_mode_never_logs_in(self):
