@@ -526,7 +526,7 @@ On the server:
 | `/opt/labtower/` | Code (replaced on every update) |
 | `/var/lib/labtower/` | Data: `auth/` (users, sessions, events; `labtower-auth` only) and `<module>/` (each with its own `metrics.db`) |
 | `/etc/labtower/` | `backup.conf`, backup key and passphrase, `tls/` |
-| `/var/backups/labtower/` | Copies made before updating, uninstalling or restoring |
+| `/var/backups/labtower/` | Copies made before updating, uninstalling or restoring (the 5 newest of each file are kept; for `history.db`, also the largest) |
 | `/var/lib/labtower/state/` | SFTP backup status and restore log |
 | `/usr/local/bin/` | `teleporter`, `labtower-sftp-backup`, `labtower-https`, `labtower-health`, `labtower-resources`, `labtower-resetpw`, `labtower-modules` |
 

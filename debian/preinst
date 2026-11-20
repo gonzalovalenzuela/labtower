@@ -64,6 +64,24 @@ if command -v runuser >/dev/null 2>&1; then
     done
 fi
 
+# ES: Limpieza: de cada archivo se conservan las KEEP_BAK copias más nuevas (el nombre lleva la fecha, así que el orden alfabético es el
+#     cronológico) y, de history.db, también la más grande, que es la que usa la restauración. Solo se tocan archivos <nombre>.<fecha>.bak.
+# EN: Cleanup: of each file the KEEP_BAK newest copies are kept (the name carries the date, so alphabetical order is chronological) and, of
+#     history.db, also the largest, which is the one the restore uses. Only <name>.<date>.bak files are touched.
+KEEP_BAK=5
+prune_bak() {
+    [ -d "$1" ] || return 0
+    find "$1" -maxdepth 1 -type f -name '*.[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9][0-9].bak' -printf '%f\n' \
+        | sed -n 's/^\([A-Za-z0-9._-]*\)\.[0-9]\{8\}_[0-9]\{6\}\.bak$/\1/p' | sort -u | while read -r name; do
+        keep_big=""
+        [ "$name" = history.db ] && keep_big=$(find "$1" -maxdepth 1 -type f -name "$name.*.bak" -printf '%s %f\n' | sort -nr | head -1 | cut -d' ' -f2)
+        find "$1" -maxdepth 1 -type f -name "$name.[0-9]*_[0-9]*.bak" -printf '%f\n' | sort -r | tail -n +$((KEEP_BAK + 1)) | while read -r f; do
+            [ "$f" = "$keep_big" ] || rm -f -- "$1/$f"
+        done
+    done
+}
+
 if [ "$BACKED_UP" = true ]; then
     echo "labtower: backup saved in $BACKUP_DIR"
 fi
+prune_bak "$BACKUP_DIR"

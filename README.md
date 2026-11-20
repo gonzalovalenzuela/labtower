@@ -526,7 +526,7 @@ En el servidor de Labtower:
 | `/opt/labtower/` | Código (lo reemplaza cada actualización) |
 | `/var/lib/labtower/` | Datos: `auth/` (usuarios, sesiones, eventos; solo `labtower-auth`) y `<módulo>/` (cada uno con su `metrics.db`) |
 | `/etc/labtower/` | `backup.conf`, llave y contraseña del respaldo, `tls/` |
-| `/var/backups/labtower/` | Copias antes de actualizar, desinstalar o restaurar |
+| `/var/backups/labtower/` | Copias antes de actualizar, desinstalar o restaurar (se conservan las 5 más nuevas de cada archivo; de `history.db`, también la más grande) |
 | `/var/lib/labtower/state/` | Estado del respaldo SFTP y registro de restauración |
 | `/usr/local/bin/` | `teleporter`, `labtower-sftp-backup`, `labtower-https`, `labtower-health`, `labtower-resources`, `labtower-resetpw`, `labtower-modules` |
 

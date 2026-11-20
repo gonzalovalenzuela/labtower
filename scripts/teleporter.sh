@@ -639,6 +639,9 @@ cmd_restore() {
   # EN: In a subshell: cmd_backup cleans up ITS folders on exit and must not touch this restore's work folder (WORKROOT/TMP).
   if ( ERRORS=0; WORKROOT=""; STAGE=""; cmd_backup "$snap" >/dev/null 2>&1 ); then ok "saved to $snap"
   else warn "could not create the safety snapshot (continuing)"; fi
+  # ES: Se conservan las 5 copias previas a restaurar más nuevas (el nombre lleva la fecha). / EN: The 5 newest pre-restore copies are kept.
+  find "$SAFETY_DIR" -maxdepth 1 -type f -name 'pre-restore-[0-9]*_[0-9]*.tar.gz' -printf '%f\n' 2>/dev/null | sort -r | tail -n +6 \
+    | while read -r f; do rm -f -- "${SAFETY_DIR:?}/$f"; done
 
   hdr "Stopping services"
   if [ "$SKIP_SYSTEM" != "1" ]; then
