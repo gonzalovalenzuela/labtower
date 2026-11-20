@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.10a — 2026-11-20
+
+### AP Monitor
+- **Nuevo:** Ubiquiti UniFi, por el controlador UniFi Network (UniFi OS en un UDM o Cloud Key, o el controlador clásico) o solo ping. Una entrada trae todos los AP del sitio con radios, uso del canal, SSID, enlace mesh y clientes Wi-Fi. Usa un usuario local, de preferencia de solo lectura y sin 2FA.
+- **Nuevo:** UniFi: sin «Verificar TLS», la huella del certificado se fija en la primera lectura; si cambia, no se envía la contraseña.
+- **Cambio:** el ancho del canal de Instant On se muestra como «80 MHz» en vez de «80mhz».
+
 ## 2.1.10 — 2026-11-20
 
 ### Pausar equipos
