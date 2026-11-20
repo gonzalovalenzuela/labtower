@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.9h — 2026-11-20
+
+### AP Monitor
+- **Arreglo:** MitraStar: el login fallaba con «wrong password, or another session is open». El equipo entrega una cookie de sesión que no se reenviaba.
+- **Cambio:** MitraStar: el error ahora distingue clave incorrecta de sesión ocupada por otro navegador.
+- **Arreglo:** Instant On: se mostraban también los clientes que ya se habían desconectado. Ahora solo los conectados.
+- **Arreglo:** Instant On: un cliente sin nombre mostraba su MAC como nombre, y uno sin IP mostraba 0.0.0.0. Ahora quedan vacíos.
+- **Arreglo:** OpenWrt: si el equipo no permite leer el uso del canal, ya no se pide en cada lectura.
+
 ## 2.1.9g — 2026-11-20
 
 ### Net Monitor
