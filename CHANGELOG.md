@@ -1,5 +1,72 @@
 # Changelog
 
+## 2.1.10 — 2026-11-20
+
+### Pausar equipos
+- **Nuevo:** botón ⏸ / ▶ para pausar sin borrar un NAS, un servidor UPS (NUT), un cluster de Proxmox, un servidor DNS, una VPN, un monitor de Uptime, un switch o un punto de acceso. Solo administradores.
+- **Nuevo:** un equipo pausado no se consulta ni avisa y no cuenta en las cifras ni en el Resumen. Aparece como «Pausado». Si todos los equipos de un módulo están en pausa, el Resumen dice «Todos en pausa (N)».
+- **Nuevo:** al reanudar se lee de inmediato. En Proxmox eso incluye SMART, respaldos y red de invitados.
+- **Nuevo:** pausar no cambia la configuración, las claves ni el certificado fijado. Editar un equipo pausado lo deja pausado.
+- **Nuevo:** en DNS el botón dice «Pausar monitoreo» y el bloqueo de anuncios del servidor sigue igual. En Uptime se conserva el historial.
+- **Nuevo:** en UPS Monitor, pausar un servidor NUT con un UPS en batería cierra el corte en ese momento.
+- **Nuevo:** los switches tienen el botón en su tarjeta, además de la casilla en «Editar».
+
+### Todos los módulos
+- **Arreglo:** el aviso «Atención» seguía visible después de resolverse el problema, hasta un minuto o más en Safari. Ahora se actualiza cuando la página muestra datos nuevos y al volver a la pestaña.
+
+### App instalada (iPhone, iPad, Android)
+- **Arreglo:** al deslizar hacia abajo para recargar, el ícono a veces quedaba girando y la página no se recargaba. Ahora se recarga cuando termina el rebote y, si no lo logra, reintenta a los 4 s. A los 10 s el ícono se esconde para poder deslizar de nuevo. Además, solo gira la flecha.
+
+### Net Monitor
+- **Cambio:** la MAC de cada equipo sale primero de la tabla ARP del servidor. Pi-hole y SNMP quedan de respaldo. Al actualizar, el primer escaneo no avisa «MAC cambió» por este cambio.
+- **Arreglo:** «MAC cambió» ya no avisa por una MAC que esa IP ya tuvo (equipos con dos tarjetas en la misma red).
+- **Nuevo:** al tocar la etiqueta «MAC cambió» se ven la MAC anterior y la actual (también en iPhone). Un administrador puede marcarlo como revisado para quitar el aviso.
+- **Arreglo:** la tabla de hosts ya no pestañea con cada refresco.
+
+### AP Monitor (nueva pestaña de Net Monitor)
+- **Nuevo:** muestra los puntos de acceso Wi-Fi: estado, uptime, modelo, firmware, radios (canal, ancho, potencia, uso del canal), SSID y clientes conectados con su señal. Los clientes se cruzan con los equipos conocidos.
+- **Nuevo:** OpenWrt por ubus, directo o el de LuCI (OpenWrt 19.07 y posteriores).
+- **Nuevo:** MitraStar Smart WiFi de Movistar: por sesión web (modelo, firmware, SSID y canales; el equipo no informa clientes) o solo ping. Cierra la sesión después de cada lectura. Si falla, el error distingue clave incorrecta de sesión ocupada por otro navegador.
+- **Nuevo:** HPE Aruba Instant On: por el portal en la nube (API no oficial, cuenta sin 2FA) o solo ping. Una cuenta trae todos los AP del sitio, con sus clientes conectados.
+- **Nuevo:** aviso cuando un AP se cae y cuando vuelve. El número de serie solo con el permiso «Ver números de serie».
+- **Nuevo:** `aps.json` (permisos 600) entra en el Teleporter y en la copia previa a actualizar o desinstalar.
+
+### Switch Monitor
+- **Nuevo:** en un puerto con velocidad baja, «Revisado: solo este aviso» quita el aviso hasta que el puerto vuelva a su velocidad habitual. Sirve para equipos apagados que quedan a 10 Mb/s esperando WOL.
+- **Nuevo:** «Silenciar todos los avisos del puerto» y la casilla «Sin avisos en este puerto (pruebas)» quitan los avisos de velocidad, enlace, rebotes, errores y loop hasta desmarcarla. Esos puertos no cuentan en «Puertos con errores nuevos».
+- **Arreglo:** si el switch rechaza la sesión, la siguiente lectura empieza con una conexión nueva. Antes podía quedar «Sin conexión» hasta reiniciar el servicio.
+- **Nuevo:** cuando un switch rechaza la sesión, el log del servicio anota qué petición falló, cuánto después de entrar y si otro inicio de sesión de LabTower le quitó la sesión. No registra contraseñas ni cookies.
+- **Arreglo:** las tablas ya no pestañean con cada refresco.
+
+### UPS Monitor
+- **Arreglo:** la tabla de UPS ya no pestañea con cada refresco.
+
+### WAN Monitor
+- **Nuevo:** la tarjeta Conexión muestra cuánto lleva encendido el router, en Huawei, OpenWrt y DD-WRT. En OpenWrt el usuario necesita acceso a `system info`.
+- **Arreglo:** si el router enviaba un tiempo inválido, se perdía toda su lectura. Ahora ese dato queda vacío y el resto del chequeo sigue.
+- **Arreglo:** si el router responde algo que no es HTTP, se informa como falta de conexión con el router y el chequeo no se rompe.
+
+### Proxmox Monitor
+- **Arreglo:** el aviso al eliminar un cluster sigue el idioma elegido y avisa si falla.
+
+### DNS Monitor
+- **Arreglo:** un servidor sin lectura muestra «—» en la tabla en vez de «undefined%».
+
+### VPN Monitor
+- **Arreglo:** el detalle de un servidor que nunca respondió ahora muestra Editar y Eliminar.
+
+### WoL Console
+- **Arreglo:** la tabla de equipos ya no pestañea con el refresco cada 5 segundos.
+- **Arreglo:** «Sesión activa» cuenta desde el inicio de sesión. Antes volvía a cero al cambiar de módulo.
+- **Cambio:** «Wakes enviados» pasa a «Wakes de hoy»: los de hoy de todos los usuarios, desde el registro del servidor. «Último wake» también. Ya no vuelven a cero al cambiar de módulo.
+
+### Instalación
+- **Arreglo:** `/var/backups/labtower` crecía sin límite: cada instalación o actualización guardaba una copia de cada archivo de datos y nada borraba las viejas. Ahora se conservan las 5 más nuevas de cada archivo y, de `history.db`, también la más grande. La primera instalación de esta versión limpia las que ya había.
+- **Arreglo:** al actualizar se hacían dos copias de todo. Ahora la segunda, la de `prerm`, se hace solo al desinstalar.
+
+### Teleporter
+- **Cambio:** se conservan las 5 copias previas a restaurar (`pre-restore-*.tar.gz`) más nuevas.
+
 ## 2.1.9i — 2026-11-20
 
 ### Instalación

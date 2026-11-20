@@ -2,6 +2,73 @@
 
 English version of the release notes, from 2.0 on. The full history, including development builds, is in [CHANGELOG.md](CHANGELOG.md) (Spanish).
 
+## 2.1.10 — 2026-11-20
+
+### Pausing devices
+- **New:** ⏸ / ▶ button to pause, without deleting, a NAS, a UPS (NUT) server, a Proxmox cluster, a DNS server, a VPN, an Uptime monitor, a switch or an access point. Administrators only.
+- **New:** a paused device is not polled or alerted on and does not count in the figures or the Overview. It shows as "Paused". If every device of a module is paused, the Overview says "All paused (N)".
+- **New:** resuming reads it at once. In Proxmox that includes SMART, backups and guest networking.
+- **New:** pausing does not change the configuration, the keys or the pinned certificate. Editing a paused device keeps it paused.
+- **New:** in DNS the button says "Pause monitoring" and the server's ad blocking is not affected. In Uptime the history is kept.
+- **New:** in UPS Monitor, pausing a NUT server with a UPS on battery ends the outage at that moment.
+- **New:** switches have the button on their card, besides the checkbox in "Edit".
+
+### All modules
+- **Fix:** the "Attention" notice stayed visible after the problem was solved, for a minute or more in Safari. It now updates when the page shows new data and when you return to the tab.
+
+### Installed app (iPhone, iPad, Android)
+- **Fix:** when pulling down to reload, the icon sometimes kept spinning and the page did not reload. It now reloads when the bounce ends and, if that fails, retries after 4 s. After 10 s the icon hides so you can pull again. Also, only the arrow spins now.
+
+### Net Monitor
+- **Change:** each device's MAC now comes first from the server's ARP table. Pi-hole and SNMP stay as fallbacks. After upgrading, the first scan does not warn "MAC changed" because of this.
+- **Fix:** "MAC changed" no longer warns about a MAC that IP already had (devices with two network cards on the same network).
+- **New:** tapping the "MAC changed" label shows the previous and the current MAC (also on iPhone). An administrator can mark it as reviewed to clear the warning.
+- **Fix:** the hosts table no longer flickers on every refresh.
+
+### AP Monitor (new Net Monitor tab)
+- **New:** shows Wi-Fi access points: status, uptime, model, firmware, radios (channel, width, power, channel use), SSIDs and connected clients with their signal. Clients are matched to known devices.
+- **New:** OpenWrt over ubus, direct or through LuCI (OpenWrt 19.07 and later).
+- **New:** Movistar's MitraStar Smart WiFi: through a web session (model, firmware, SSIDs and channels; the unit does not report clients) or ping only. It logs out after each read. If it fails, the error tells a wrong password apart from a session held by another browser.
+- **New:** HPE Aruba Instant On: through the cloud portal (unofficial API, account without 2FA) or ping only. One account brings every AP of the site, with its connected clients.
+- **New:** alert when an AP goes down and when it comes back. The serial number only with the "See serial numbers" permission.
+- **New:** `aps.json` (permissions 600) is included in the Teleporter and in the copy made before upgrading or uninstalling.
+
+### Switch Monitor
+- **New:** on a port below its usual speed, "Reviewed: this alert only" clears the alert until the port is back at its usual speed. Useful for powered-off devices that drop to 10 Mb/s waiting for WOL.
+- **New:** "Silence every alert of this port" and the "No alerts on this port (testing)" checkbox remove the speed, link, flapping, error and loop alerts until unticked. Those ports do not count in "Ports with new errors".
+- **Fix:** if the switch rejects the session, the next read starts with a new connection. Before, it could stay "Unreachable" until the service was restarted.
+- **New:** when a switch rejects the session, the service log records which request failed, how long after logging in, and whether another LabTower login took the session. No passwords or cookies are logged.
+- **Fix:** the tables no longer flicker on every refresh.
+
+### UPS Monitor
+- **Fix:** the UPS table no longer flickers on every refresh.
+
+### WAN Monitor
+- **New:** the Connection card shows how long the router has been on, for Huawei, OpenWrt and DD-WRT. On OpenWrt the user needs access to `system info`.
+- **Fix:** if the router sent an invalid time, its whole reading was lost. Now that value is left empty and the rest of the check goes on.
+- **Fix:** if the router answers something that is not HTTP, it is reported as no connection to the router and the check does not break.
+
+### Proxmox Monitor
+- **Fix:** the notice when deleting a cluster follows the chosen language and warns if it fails.
+
+### DNS Monitor
+- **Fix:** a server without a reading shows "—" in the table instead of "undefined%".
+
+### VPN Monitor
+- **Fix:** the detail of a server that never answered now shows Edit and Delete.
+
+### WoL Console
+- **Fix:** the device table no longer flickers with the 5-second refresh.
+- **Fix:** "Active session" counts from login. Before, it reset to zero when switching modules.
+- **Change:** "Wakes sent" becomes "Wakes today": today's wakes from every user, from the server log. "Last wake" too. They no longer reset to zero when switching modules.
+
+### Installation
+- **Fix:** `/var/backups/labtower` grew without limit: every install or upgrade saved a copy of each data file and nothing removed the old ones. Now the 5 newest of each file are kept and, for `history.db`, also the largest. The first install of this version cleans up the existing ones.
+- **Fix:** upgrading made two copies of everything. Now the second one, from `prerm`, is made only when uninstalling.
+
+### Teleporter
+- **Change:** the 5 newest pre-restore copies (`pre-restore-*.tar.gz`) are kept.
+
 ## 2.1.9 — 2026-11-09
 
 ### New module: Uptime Monitor
