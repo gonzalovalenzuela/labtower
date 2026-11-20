@@ -6,7 +6,7 @@
 
 [English → README.en.md](README.en.md)
 
-<img src="docs/screenshots/1920x1080/light/overview.png" alt="Resumen" width="900">
+<img src="docs/screenshots/es/1920x1080/light/overview.png" alt="Resumen" width="900">
 
 **Contenido:** [Módulos](#módulos) · [Capturas](#capturas) · [Requisitos](#requisitos) · [Instalar](#instalar) · [Actualizar](#actualizar) · [Primer ingreso](#primer-ingreso) · [Funciones por módulo](#funciones-por-módulo) · [HTTPS](#https) · [Respaldos](#respaldos) · [Salud y operación](#salud-y-operación) · [Configuración](#configuración) · [Seguridad](#seguridad) · [Estructura](#estructura) · [Licencia](#licencia)
 
@@ -18,7 +18,7 @@
 |---|---|---|---|
 | **Resumen** | `/overview/` | 8085 | Estado de todo en una pantalla, línea de tiempo de eventos y modo kiosko |
 | **UPS Monitor** | `/nut/` | 8081 | Lee UPS por NUT: batería, carga, autonomía, salud de la batería, autotests, voltajes, temperatura, historial y CSV |
-| **Net Monitor** | `/net/` | 8083 | Escanea la red: equipos, tipo, SO, puertos, MAC y fabricante |
+| **Net Monitor** | `/net/` | 8083 | Escanea la red (equipos, tipo, SO, puertos, MAC y fabricante) y monitorea switches y puntos de acceso Wi-Fi |
 | **Proxmox Monitor** | `/pve/` | 8084 | Clusters Proxmox VE: nodos, VMs, CTs y Ceph |
 | **NAS Monitor** | `/nas/` | 8086 | Uno o varios NAS (Synology por SNMP, TrueNAS y OpenMediaVault por su API): discos, volúmenes, temperatura, CPU, memoria y red |
 | **DNS Monitor** | `/dns/` | 8087 | Pi-hole (v5 y v6) y AdGuard Home: consultas, % bloqueado, tops, DNS de salida y pausa del bloqueo |
@@ -43,13 +43,13 @@ Todas las pantallas comparten la misma navegación, con el mismo orden y agrupac
 
 ## Capturas
 
-<img src="docs/screenshots/1920x1080/light/ups.png" width="290"> <img src="docs/screenshots/1920x1080/light/net.png" width="290"> <img src="docs/screenshots/1920x1080/dark/proxmox.png" width="290"> <img src="docs/screenshots/1920x1080/light/nas.png" width="290">
+<img src="docs/screenshots/es/1920x1080/light/ups.png" width="290"> <img src="docs/screenshots/es/1920x1080/light/net.png" width="290"> <img src="docs/screenshots/es/1920x1080/dark/proxmox.png" width="290"> <img src="docs/screenshots/es/1920x1080/light/nas.png" width="290">
 
-<img src="docs/screenshots/1920x1080/dark/wan-trace.png" width="290"> <img src="docs/screenshots/1920x1080/light/dns-resolve.png" width="290"> <img src="docs/screenshots/1920x1080/dark/vpn.png" width="290"> <img src="docs/screenshots/1920x1080/light/switches.png" width="290">
+<img src="docs/screenshots/es/1920x1080/dark/wan-trace.png" width="290"> <img src="docs/screenshots/es/1920x1080/light/dns-resolve.png" width="290"> <img src="docs/screenshots/es/1920x1080/dark/vpn.png" width="290"> <img src="docs/screenshots/es/1920x1080/light/switches.png" width="290">
 
-<img src="docs/screenshots/1920x1080/dark/proxmox-node.png" width="290"> <img src="docs/screenshots/1920x1080/light/proxmox-node.png" width="290">
+<img src="docs/screenshots/es/1920x1080/dark/aps.png" width="290"> <img src="docs/screenshots/es/1920x1080/light/aps-clients.png" width="290"> <img src="docs/screenshots/es/1920x1080/dark/uptime.png" width="290"> <img src="docs/screenshots/es/1920x1080/light/wol.png" width="290">
 
-Todas las pantallas (tema claro y oscuro, 4 tamaños) están en [`docs/screenshots/`](docs/screenshots/). Los datos son de demostración.
+Todas las pantallas (tema claro y oscuro, 4 tamaños) están en [`docs/screenshots/`](docs/screenshots/): en español en `es/` y en inglés en la carpeta principal. Los datos son de demostración.
 
 ---
 
@@ -172,7 +172,7 @@ labtower-health
 - **Red:** se detecta sola (la /24 del servidor) o se fija con `SCAN_NETWORK`.
 - **Escaneo:** en una instalación nueva no escanea hasta que lo pidas (botón *Hacer escaneo inicial*). El escaneo automático, la limpieza de equipos sin conexión, SNMP y Pi-hole se configuran en la ventana *Ajustes* (mínimo 60 s entre escaneos); *Escanear red* y *Ajustes* están en la barra superior.
 - **Detección:** ping (TTL), puertos y banner HTTP. No usa `nmap`.
-- **MAC y fabricante**, en este orden: Pi-hole, ARP local, SNMP (ARP de un router o switch). El fabricante sale de la base `manuf` de Wireshark (descarga semanal) o de `ieee-data`.
+- **MAC y fabricante**, en este orden: tabla ARP del servidor, Pi-hole, SNMP (ARP de un router o switch). El fabricante sale de la base `manuf` de Wireshark (descarga semanal) o de `ieee-data`.
 - **Tipos de equipo:** computador, teléfono, tablet, router, switch, punto de acceso, almacenamiento, TV, cámara, impresora, consola de juegos, servidor, teléfono IP, UPS, altavoz inteligente y otros. SO, tipo y grupo se pueden editar a mano.
 - **Basurero** para quitar un equipo de la lista (solo administradores). Si sigue conectado, el próximo escaneo lo vuelve a descubrir.
 - **Proxmox:** las VM y contenedores se reconocen en la tabla (insignia «VM 100» / «CT 200») cruzando MAC, IP y, si no hay otra pista, nombre idéntico. Las tarjetas Hosts / Online / Offline filtran la tabla.
@@ -195,6 +195,16 @@ labtower-health
 - **Topología básica** deducida de las tablas MAC. Etiqueta y «enlace a otro switch» se editan por puerto.
 - Se consulta cada 60 s por defecto (30 s a 1 h, configurable); cada switch se lee de a una petición a la vez, con pausas, porque sus servidores web son frágiles.
 - Diagnóstico por consola: `python3 /opt/labtower/net-monitor/switches.py --config switches.json --once`.
+
+#### AP Monitor (pestaña de Net Monitor)
+- Tercera pestaña, junto a *Equipos* y *Switch Monitor*. Para cada punto de acceso Wi-Fi muestra estado, uptime, modelo, firmware, radios (banda, canal, ancho, potencia, uso del canal y clientes) y SSID. La subpestaña *Clientes* lista los clientes conectados de todos los AP, con banda, SSID, señal, velocidad y tiempo conectado, cruzados con los equipos que ya conoce Net Monitor.
+- **OpenWrt** por ubus: el de `uhttpd-mod-ubus` o, si no está, el de LuCI (OpenWrt 19.07 y posteriores). El usuario `root` sirve. El uso del canal se muestra solo si el equipo permite `iwinfo survey`.
+- **MitraStar Smart WiFi (Movistar):** por sesión web (modelo, firmware, SSID y canales; el equipo no informa clientes ni uptime) o solo ping. Inicia sesión, lee y la cierra en cada lectura; el equipo admite una sola sesión a la vez.
+- **HPE Aruba Instant On:** por el portal en la nube (API no oficial de HPE, puede cambiar) o solo ping. La cuenta no puede tener 2FA: usa una cuenta aparte invitada al sitio. Una cuenta trae todos los AP del sitio, con el enlace mesh y la calidad de señal de cada cliente.
+- **Ubiquiti UniFi:** por el controlador UniFi Network (UniFi OS en un UDM o Cloud Key, o el controlador clásico) o solo ping. Usa un usuario local, de preferencia de solo lectura y sin 2FA, y el id del sitio (`default` si se deja vacío). Una entrada trae todos los AP del sitio con radios, uso del canal, SSID, enlace mesh y clientes. Sin *Verificar TLS*, la huella del certificado se fija en la primera lectura y, si cambia, no se envía la contraseña.
+- **Se agregan desde la interfaz** (botón *+ Agregar AP*, solo administradores), con botón *Probar* antes de guardar. Las claves se guardan en `aps.json` con permisos 600 y la API nunca las devuelve. El número de serie solo lo ve quien tiene el permiso *Ver números de serie*.
+- **Avisos:** AP sin conexión (tras 2 lecturas fallidas) y su vuelta, en la línea de tiempo del Resumen. Cada AP se puede pausar.
+- **Solo lectura:** no cambia nada en los equipos. Se consulta cada 60 s por defecto (30 s a 1 h, configurable).
 
 ### Proxmox Monitor
 - Consulta cada cluster cada 5 s con la página abierta y cada 60 s en reposo.
