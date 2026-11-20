@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.9g — 2026-11-20
+
+### Net Monitor
+- **Nuevo:** pestaña AP Monitor para puntos de acceso Wi-Fi. Muestra estado, uptime, modelo, firmware, radios (canal, ancho, potencia, uso del canal), SSID y clientes conectados con su señal. Los clientes se cruzan con los equipos conocidos.
+- **Nuevo:** OpenWrt por ubus, directo o el de LuCI (OpenWrt 19.07 y posteriores).
+- **Nuevo:** MitraStar Smart WiFi de Movistar: por sesión web (modelo, firmware, SSID y canales; el equipo no informa clientes) o solo ping. Cierra la sesión después de cada lectura.
+- **Nuevo:** HPE Aruba Instant On: por el portal en la nube (API no oficial, cuenta sin 2FA) o solo ping. Una cuenta trae todos los AP del sitio.
+- **Nuevo:** aviso cuando un AP se cae y cuando vuelve. Botón para pausar cada AP. El número de serie solo con el permiso «Ver números de serie».
+- **Nuevo:** `aps.json` (permisos 600) entra en el Teleporter y en la copia previa a actualizar o desinstalar.
+
 ## 2.1.9f — 2026-11-18
 
 ### WoL Console
