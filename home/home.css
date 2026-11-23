@@ -40,6 +40,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 .dot.yellow{background:var(--yellow);box-shadow:0 0 0 2px var(--yellow-dim)}
 .dot.red{background:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.15)}
 .dot.gray{background:var(--border-b)}
+.dot.paused{background:#64748b;border-radius:2px}
 
 
 /* iPad / pantallas táctiles y app web (Añadir a pantalla de inicio) / EN: iPad, touch screens and web-app mode */

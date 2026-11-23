@@ -107,20 +107,26 @@ def health_report(tok, detailed=False):
     pw = auth.check_power()                       # Raspberry Pi only: absent on VMs and other hardware
     if pw: c["power"] = pw
     modules = {}
-    off = auth.disabled_modules()
+    off, mu = auth.disabled_modules(), auth.mutes()
     for name, port in MODULES.items():
         if name in off: continue                  # turned off by the admin: not a failure
         h = _module_health(name, port, tok)
-        if h is None:
+        if name in mu:                            # alarms paused: OK here even if it does not answer / alarmas en pausa: OK aunque no responda
+            c[name] = auth.chk(auth.OK, "alarms paused")
+            modules[name] = {**(h or {}), "status": auth.OK, "muted": mu[name]}
+        elif h is None:
             c[name] = auth.chk(auth.FAIL, f"service on :{port} not answering")
         else:
-            lvl = {"ok": auth.OK, "degraded": auth.WARN}.get(h.get("status"), auth.FAIL)
             bad = [k for k, v in h.get("checks", {}).items() if v.get("level") != auth.OK]
+            if h.pop("muted", None) is not None:  # just resumed: the module's copy of the pauses can be 10 s old / recién reanudado
+                lv = [v.get("level") for v in h.get("checks", {}).values()]
+                h["status"] = auth.FAIL if auth.FAIL in lv else "degraded" if auth.WARN in lv else auth.OK
+            lvl = {"ok": auth.OK, "degraded": auth.WARN}.get(h.get("status"), auth.FAIL)
             c[name] = auth.chk(lvl, ", ".join(bad) if bad else "")
             modules[name] = h
     code, body = auth.health_reply("admin", c, detailed, extra={"modules": modules})
     if detailed is None: return code, body
-    if not detailed: body["modules"] = {k: {"status": v.get("status")} for k, v in modules.items()}
+    if not detailed: body["modules"] = {k: {"status": v.get("status"), **({"muted": v["muted"]} if "muted" in v else {})} for k, v in modules.items()}
     return code, body
 
 # Enciende o apaga un módulo con el ayudante root (sudo, una regla por módulo y acción). Devuelve (ok, mensaje).
@@ -287,6 +293,13 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/health":      # public: levels only; details need a valid session
             code, body = health_report(tok, auth.health_mode(self, tok))
             return self._json(code, body)
+        # Pausas de alarmas: cualquier sesión las ve; «can» = módulos que esta sesión puede pausar (admin del módulo, módulo encendido).
+        # EN: Alarm pauses: any session sees them; "can" = modules this session may pause (admin of the module, module turned on).
+        if path == "/api/mutes":
+            if not auth.get_session(tok): return self._json(401, {"error": "Unauthorized"})
+            off = auth.disabled_modules()
+            return self._json(200, {"mutes": auth.mutes(), "now": int(time.time()),
+                                    "can": [m for m in auth.MUTABLE if m not in off and auth.check_permission(tok, m, "admin")]})
 
         if not auth.check_permission(tok, "wol", "admin") and \
            not auth.check_permission(tok, "nut", "admin"):
@@ -415,6 +428,20 @@ class H(BaseHTTPRequestHandler):
             log.info(f"Password changed by the user themselves: {me_}")
             auth.audit(me_, "password_changed", me_, "", auth.client_ip(self))
             return self._json(200, {"ok": True})
+
+        # Pausar o reanudar las alarmas de un módulo: {"module": id, "for": 3600|14400|86400|0 (hasta reanudar)|null (reanudar)}. Solo el admin de ese módulo.
+        # EN: Pause or resume a module's alarms: {"module": id, "for": 3600|14400|86400|0 (until resumed)|null (resume)}. Only that module's admin.
+        if path == "/api/mutes":
+            sess = auth.get_session(tok)
+            if not sess: return self._json(401, {"error": "Unauthorized"})
+            mid, f = body.get("module"), body.get("for")
+            if mid not in auth.MUTABLE: return self._json(400, {"error": "Invalid module"})
+            if f is not None and (type(f) is not int or f not in auth.MUTE_FOR): return self._json(400, {"error": "Invalid duration"})
+            if not auth.check_permission(tok, mid, "admin"): return self._json(403, {"error": "Pausing alarms requires administrator access on the module"})
+            cur = auth.set_mute(mid, f)
+            auth.audit(sess["username"], "alarms_resumed" if f is None else "alarms_paused", mid,
+                       "" if f is None else ("until resumed" if f == 0 else f"{f // 3600} h"), auth.client_ip(self))
+            return self._json(200, {"ok": True, "mutes": cur, "now": int(time.time())})
 
         if not auth.check_permission(tok, "wol", "admin") and \
            not auth.check_permission(tok, "nut", "admin"):

@@ -1407,6 +1407,7 @@ def record_event(module, level, text, k=None, **params):
         return
     try:
         now = int(time.time())
+        if module in mutes(): return                    # alarms of the module paused: no events / alarmas en pausa: sin eventos
         with _events_lock:
             ev = read_json(EVENTS_FILE, [], list)
             ev = [e for e in ev if isinstance(e, dict) and now - int(e.get("t", 0)) < EVENTS_DAYS * 86400]
@@ -1490,6 +1491,53 @@ def read_events(modules=None, limit=100):
     ev = read_json(EVENTS_FILE, [], list)
     out = [e for e in ev if isinstance(e, dict) and (modules is None or e.get("m") in modules)]
     return list(reversed(out))[:limit]
+
+
+# ─── Pausa de alarmas por módulo ─────────────────────────────────────────────────────────────────────
+# ES: Para probar sin ruido: el módulo sigue leyendo y su página muestra los datos, pero no avisa en el Resumen, cuenta como OK en /api/health
+#     y no anota eventos. {módulo: hasta (epoch); 0 = hasta reanudar}. Solo lo escribe el servicio de autenticación; los módulos lo leen por RPC.
+# EN: For testing without noise: the module keeps reading and its page shows the data, but it raises nothing in the Overview, counts as OK in
+#     /api/health and records no events. {module: until (epoch); 0 = until resumed}. Only the authentication service writes it; modules read it over RPC.
+MUTES_FILE    = Path(os.environ.get("LABTOWER_MUTES", str(USERS_FILE.with_name("mutes.json"))))
+MUTABLE       = ("nut", "net", "pve", "nas", "dns", "wan", "vpn", "uptime")
+MUTE_FOR      = (3600, 14400, 86400, 0)        # 1 h, 4 h, 24 h, 0 = hasta reanudar / until resumed
+MUTES_CACHE_SECONDS = 10.0
+_mutes_lock   = FileLock(MUTES_FILE.with_name(MUTES_FILE.name + ".lock"))
+_mutes_remote = [-1e9, {}]                       # [monotonic time, last answer] in a module
+
+def _mutes_clean(raw, now) -> dict:
+    return {k: v for k, v in (raw.items() if isinstance(raw, dict) else ())
+            if k in MUTABLE and type(v) is int and (v == 0 or v > now)}
+
+# Pausas vigentes (las vencidas no aparecen). En un módulo se piden al servicio y se recuerdan unos segundos.
+# EN: Active pauses (expired ones are left out). In a module they are asked to the service and kept a few seconds.
+def mutes() -> dict:
+    now = int(time.time())
+    if REMOTE:
+        if time.monotonic() - _mutes_remote[0] < MUTES_CACHE_SECONDS: return _mutes_clean(_mutes_remote[1], now)
+        try: _mutes_remote[1] = _rpc("mutes", retries=1).get("mutes") or {}
+        except Exception as e: log.debug(f"mutes: {e}")  # noqa: BLE001 - se usa la última respuesta / the last answer is used
+        _mutes_remote[0] = time.monotonic()
+        return _mutes_clean(_mutes_remote[1], now)
+    return _mutes_clean(read_json(MUTES_FILE, {}, dict), now)
+
+def mute_until(module):
+    """Epoch until which `module` is paused (0 = until resumed), or None when it is not paused."""
+    return mutes().get(module)
+
+# Pausa (for_s de MUTE_FOR) o reanuda (for_s None) las alarmas de un módulo. Devuelve las pausas vigentes.
+# EN: Pause (for_s from MUTE_FOR) or resume (for_s None) a module's alarms. Returns the active pauses.
+@_local
+def set_mute(module, for_s) -> dict:
+    if module not in MUTABLE: raise ValueError("unknown module")
+    if for_s is not None and (type(for_s) is not int or for_s not in MUTE_FOR): raise ValueError("invalid duration")
+    now = int(time.time())
+    with _mutes_lock:
+        cur = _mutes_clean(read_json(MUTES_FILE, {}, dict), now)
+        if for_s is None: cur.pop(module, None)
+        else: cur[module] = 0 if for_s == 0 else now + for_s
+        write_json(MUTES_FILE, cur, indent=None)
+    return cur
 
 
 # ─── Datos del equipo (widget del servidor en el Resumen) ────────────────────────────────────────────
@@ -2066,10 +2114,14 @@ def health_reply(module, checks, detailed=False, extra=None):
     """Build (http_code, body). detailed: True = everything, False = levels only, None = overall status only."""
     levels = [c["level"] for c in checks.values()]
     status = FAIL if FAIL in levels else "degraded" if WARN in levels else OK
+    # Alarmas en pausa: cuenta como OK; los chequeos conservan su nivel real. / EN: Alarms paused: counts as OK; checks keep their real level.
+    mu = mute_until(module) if module in MUTABLE else None
+    if mu is not None: status = OK
     code = 503 if status == FAIL else 200
     if detailed is None:
-        return code, {"status": status}
+        return code, {"status": status, **({"muted": True} if mu is not None else {})}
     body = {"module": module, "version": version(), "status": status, "uptime": int(time.time() - STARTED),
             "checks": {k: ({**v} if detailed else {"level": v["level"]}) for k, v in checks.items()}}
+    if mu is not None: body["muted"] = mu
     if extra and detailed: body.update(extra)
     return code, body

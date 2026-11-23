@@ -138,6 +138,11 @@ class Service:
         except (TypeError, ValueError): limit = 100
         return {"events": self.auth.read_events(mods, limit)}
 
+    # Pausas de alarmas vigentes ({módulo: hasta}); cada módulo la usa en su /api/health. / EN: Active alarm pauses; each module uses them in its /api/health.
+    def op_mutes(self, caller, r):
+        if caller not in CALLERS: return {"error": "forbidden"}
+        return {"mutes": self.auth.mutes()}
+
     def op_health(self, caller, r):
         checks = self.auth.check_common_local()
         checks["events"] = self.auth.check_file(self.auth.EVENTS_FILE)

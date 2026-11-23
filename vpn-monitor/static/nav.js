@@ -34,17 +34,22 @@
       warn: 'Atención', menuType: 'Tipo de menú', wizTitle: 'Elige cómo quieres navegar',
       wizText: 'Puedes cambiarlo cuando quieras desde «Tipo de menú». Se guarda en este navegador.',
       optBar: 'Barra superior con selector', optBarD: 'Un selector con todos los módulos y su estado. En el móvil, una barra inferior.',
-      optSide: 'Menú lateral clásico', optSideD: 'Los módulos agrupados en el panel lateral, como antes.', current: 'Actual', ok: 'Listo'},
+      optSide: 'Menú lateral clásico', optSideD: 'Los módulos agrupados en el panel lateral, como antes.', current: 'Actual', ok: 'Listo',
+      pause: 'En pausa', mPause: 'Pausar alarmas', mResume: 'Reanudar alarmas', mH1: '1 hora', mH4: '4 horas', mH24: '24 horas', mInf: 'Hasta reanudar',
+      mOn: 'Alarmas en pausa', mUntil: 'hasta', mTomorrow: 'mañana', mErr: 'No se pudo cambiar la pausa'},
     en: {mods: 'Modules', opts: 'Options', out: 'Sign out', main: 'Main', switchTo: 'Switch module', up: 'Active', mid: 'Warnings', down: 'Failing', home: 'LabTower home',
       warn: 'Attention', menuType: 'Menu type', wizTitle: 'Choose how you want to navigate',
       wizText: 'You can change it any time from “Menu type”. It is saved in this browser.',
       optBar: 'Top bar with switcher', optBarD: 'One switcher with every module and its status. On phones, a bottom bar.',
-      optSide: 'Classic side menu', optSideD: 'Modules grouped in the side panel, as before.', current: 'Current', ok: 'Done'}
+      optSide: 'Classic side menu', optSideD: 'Modules grouped in the side panel, as before.', current: 'Current', ok: 'Done',
+      pause: 'Paused', mPause: 'Pause alarms', mResume: 'Resume alarms', mH1: '1 hour', mH4: '4 hours', mH24: '24 hours', mInf: 'Until resumed',
+      mOn: 'Alarms paused', mUntil: 'until', mTomorrow: 'tomorrow', mErr: 'Could not change the pause'}
   };
   var SHAPE = {
     up:   '<circle cx="5" cy="5" r="4.5" fill="#15803d"/>',
     mid:  '<path d="M5 .5l4.5 8.5h-9z" fill="#b45309"/>',
-    down: '<rect x=".5" y=".5" width="9" height="9" rx="1.5" fill="#b91c1c"/>'
+    down: '<rect x=".5" y=".5" width="9" height="9" rx="1.5" fill="#b91c1c"/>',
+    pause: '<rect x="1.5" y="1" width="2.6" height="8" rx=".6" fill="#64748b"/><rect x="5.9" y="1" width="2.6" height="8" rx=".6" fill="#64748b"/>'
   };
   var LV = {readonly: 1, execute: 2, admin: 3};
   var health = null, timer = null, st = null;      // st: {box parts, opts, me}
@@ -70,7 +75,8 @@
   }
   function name(id, lang) { var it = I[id]; return it.label || (lang === 'es' ? it.es : it.en); }
   function level(id) {
-    var s = health && health[id]; s = s && s.status;
+    var h = health && health[id], s = h && h.status;
+    if (h && h.muted != null) return 'pause';                                  // alarmas en pausa / alarms paused
     return s === 'ok' ? 'up' : s === 'degraded' ? 'mid' : s ? 'down' : '';
   }
   function paint() {
@@ -364,7 +370,7 @@
   // Además, idioma, tema, reloj y usuario de la barra del módulo suben a esta barra y la del módulo se oculta si no le queda nada propio.
   // EN: Top bar: the side panel header is redundant; if the panel only held the menu it is hidden and the user badge moves to the bar.
   //     Also the module bar's language, theme, clock and user move up into this bar, and the module bar is hidden if nothing of its own is left.
-  var STD = '#gmt, .lang-btns, .theme-btns, #clock, #hclock, div[style*="width:1px"], .topbar-user, .btn-logout';
+  var STD = '#gmute, #gmt, .lang-btns, .theme-btns, #clock, #hclock, div[style*="width:1px"], .topbar-user, .btn-logout';
   function barRight() { var r = st.bar.querySelector('.gbar-r'); if (!r) { r = el('div', 'gbar-r'); st.bar.appendChild(r); } return r; }
   // ¿Queda algo propio del módulo en su barra (botones, campos, enlaces)? / Is anything of the module's own left in its bar (buttons, fields, links)?
   function ownControls(tb) {
@@ -379,6 +385,7 @@
     var oldR = st.bar.querySelector('.gbar-r'); if (oldR) oldR.remove();
     var oldA = st.bar.querySelector('.gbar-act'); if (oldA) oldA.remove();
     document.body.classList.remove('gside-none', 'gtb-none', 'gtb-merged');
+    placeMute();                                                               // antes de mover la barra / before moving the bar
     if (!bar) return;
     // 2) panel lateral / side panel
     var none = false, foot = null;
@@ -420,6 +427,104 @@
       }
     }
     var f2 = st.bar.querySelector('.gbar-r .sb-footer'); if (f2) f2.parentNode.appendChild(f2);   // el usuario al final / user badge last
+  }
+
+  // ── Pausa de alarmas por módulo / per-module alarm pause ──
+  // ES: El admin de un módulo puede pausar sus alarmas 1 h, 4 h, 24 h o hasta reanudar: el módulo sigue leyendo, pero no avisa en el Resumen ni
+  //     en /api/health y no anota eventos. El botón va junto a «Tipo de menú» en la página del módulo; el Resumen usa el mismo menú en cada tarjeta.
+  // EN: A module's admin can pause its alarms for 1 h, 4 h, 24 h or until resumed: the module keeps reading, but raises nothing in the Overview or
+  //     /api/health and records no events. The button sits next to "Menu type" on the module page; the Overview uses the same menu on each card.
+  var MUTABLE = ['nut', 'net', 'pve', 'nas', 'dns', 'wan', 'vpn', 'uptime'];
+  var PAUSE_SVG = '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>';
+  var MU = {d: null, t: 0, p: null};
+  function trM() { return T[st && st.lang === 'es' ? 'es' : 'en']; }
+  function muteGet(force) {
+    if (!force && MU.d && Date.now() - MU.t < 15000) return Promise.resolve(MU.d);
+    if (MU.p) return MU.p;
+    MU.p = fetch('/admin/api/mutes', {cache: 'no-store', credentials: 'same-origin'})
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) { MU.d = d; MU.t = Date.now(); MU.p = null; return d; }, function (e) { MU.p = null; throw e; });
+    return MU.p;
+  }
+  function muteSet(mod, f) {
+    return fetch('/admin/api/mutes', {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({module: mod, 'for': f})})
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (d) {
+          if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+          MU.d = {mutes: d.mutes || {}, now: d.now, can: MU.d && MU.d.can || []}; MU.t = Date.now();
+          try { sessionStorage.removeItem('lt-nav-health'); } catch (e) {}
+          if (st && st.opts) { loadHealth(); paintMute(); }
+          return MU.d;
+        });
+      });
+  }
+  // «Alarmas en pausa hasta 15:30» (o «hasta mañana 09:00»); 0 = hasta reanudar. / EN: "Alarms paused until 15:30"; 0 = until resumed.
+  function muteLabel(until, short) {
+    var tr = trM();
+    if (!until) return short ? tr.pause : tr.mOn;
+    // Mismo formato 24 h / 12 h que el reloj (timefmt.js). / EN: Same 24 h / 12 h format as the clock (timefmt.js).
+    var d = new Date(until * 1000), hm = window.PCT ? window.PCT.time(d) : ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+    if (d.toDateString() !== new Date().toDateString()) hm = tr.mTomorrow + ' ' + hm;
+    return (short ? tr.pause : tr.mOn) + ' ' + tr.mUntil + ' ' + hm;
+  }
+  function muteClose() {
+    var m = document.getElementById('gmute-menu'); if (!m) return;
+    m.remove(); document.removeEventListener('mousedown', m.gout, true); document.removeEventListener('keydown', m.gkey, true);
+    if (m.gbtn && m.gbtn.isConnected) m.gbtn.focus();
+  }
+  // Menú de duraciones (o «Reanudar») bajo el botón; done() se llama tras cambiar. / EN: Duration menu (or "Resume") under the button.
+  function muteMenu(btn, mod, done) {
+    var open = document.getElementById('gmute-menu');
+    muteClose();
+    if (open && open.gbtn === btn) return;                                      // segundo clic: cierra / second click: closes
+    var tr = trM(), cur = MU.d && MU.d.mutes ? MU.d.mutes[mod] : undefined;
+    var m = el('div', 'gmute-menu'); m.id = 'gmute-menu'; m.setAttribute('role', 'menu'); m.gbtn = btn;
+    m.appendChild(el('div', 'gmute-h', cur != null ? muteLabel(cur) : tr.mPause));
+    var err = el('div', 'gmute-err'); err.hidden = true;
+    function item(label, f) {
+      var b = el('button', 'gmute-i', label); b.type = 'button'; b.setAttribute('role', 'menuitem');
+      b.addEventListener('click', function () {
+        m.querySelectorAll('button').forEach(function (x) { x.disabled = true; });
+        muteSet(mod, f).then(function () { muteClose(); if (done) done(); }, function (e) {
+          err.textContent = tr.mErr + (e && e.message ? ': ' + e.message : ''); err.hidden = false;
+          m.querySelectorAll('button').forEach(function (x) { x.disabled = false; });
+        });
+      });
+      m.appendChild(b);
+    }
+    if (cur != null) item(tr.mResume, null);
+    else [[tr.mH1, 3600], [tr.mH4, 14400], [tr.mH24, 86400], [tr.mInf, 0]].forEach(function (o) { item(o[0], o[1]); });
+    m.appendChild(err);
+    document.body.appendChild(m);
+    var r = btn.getBoundingClientRect();
+    m.style.top = Math.round(r.bottom + 4) + 'px';
+    m.style.left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - m.offsetWidth - 8))) + 'px';
+    m.gout = function (e) { if (!m.contains(e.target) && !btn.contains(e.target)) muteClose(); };
+    m.gkey = function (e) { if (e.key === 'Escape') { e.preventDefault(); muteClose(); } };
+    document.addEventListener('mousedown', m.gout, true); document.addEventListener('keydown', m.gkey, true);
+    var first = m.querySelector('.gmute-i'); if (first) first.focus();
+  }
+  // Botón de la página del módulo: solo para su admin y fuera del kiosco. / EN: Module page button: only for its admin and outside the kiosk.
+  function placeMute() {
+    var self = st.opts.self, me = st.me, b = document.getElementById('gmute'), ref = document.getElementById('gmt');
+    var ok = ref && MUTABLE.indexOf(self) >= 0 && me && me.permissions && me.permissions[self] === 'admin' && !document.body.classList.contains('kiosk');
+    if (!ok) { if (b) b.remove(); return; }
+    if (!b) {
+      b = el('button', 'gmt gmute'); b.id = 'gmute'; b.type = 'button'; b.setAttribute('aria-haspopup', 'menu');
+      b.appendChild(icon(PAUSE_SVG, 14)); b.appendChild(el('span', 'gmt-t'));
+      b.addEventListener('click', function () { muteGet().then(function () { muteMenu(b, self); }, function () { muteMenu(b, self); }); });
+    }
+    if (b.nextSibling !== ref || b.parentNode !== ref.parentNode) ref.parentNode.insertBefore(b, ref);
+    paintMute();
+    muteGet().then(paintMute, function () {});
+  }
+  function paintMute() {
+    var b = document.getElementById('gmute'); if (!b || !st) return;
+    var cur = MU.d && MU.d.mutes ? MU.d.mutes[st.opts.self] : undefined, on = cur != null;
+    var t = on ? muteLabel(cur) : trM().mPause;
+    b.classList.toggle('on', on);
+    b.querySelector('.gmt-t').textContent = on ? muteLabel(cur, true) : trM().mPause;
+    b.title = t; b.setAttribute('aria-label', t);
   }
 
   // aplica el tipo de menú elegido / apply the chosen menu type
@@ -500,6 +605,7 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', keepView); else keepView();
 
+  window.labMute = {mods: MUTABLE, get: muteGet, menu: muteMenu, label: muteLabel, icon: PAUSE_SVG, t: function (k) { return trM()[k]; }};
   window.labNav = {
     // opts: {self, lang, me, fetchMe}
     render: function (o) {

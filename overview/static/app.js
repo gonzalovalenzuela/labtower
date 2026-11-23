@@ -415,7 +415,28 @@ function renderEvents(list){
 }
 
 // Estado de cada módulo: se marca en su tarjeta (data-sev) y «solo con problemas» oculta las tarjetas en orden. / Each module's status goes on its card (data-sev); "only with problems" hides the healthy cards.
-function modSev(mods,id,name,key,href,sev){mods.push({id,name,key,href,sev});return sev}
+function modSev(mods,id,name,key,href,n0,sev){if(muted(CARD_MOD[id])){issues.length=n0;sev='ok'}mods.push({id,name,key,href,sev});return sev}
+// Alarmas en pausa por módulo (las pausa su admin desde la tarjeta o la página del módulo): la tarjeta sigue mostrando los datos, pero sus avisos y
+// reglas no cuentan. n0 = cuántos avisos había antes de dibujar la tarjeta; los que agregó se quitan.
+// EN: Per-module alarm pause (its admin pauses it from the card or the module page): the card still shows the data, but its warnings and rules
+// do not count. n0 = how many warnings there were before drawing the card; the ones it added are removed.
+const CARD_MOD={'c-nut':'nut','c-pve':'pve','c-nas':'nas','c-dns':'dns','c-vpn':'vpn','c-upt':'uptime','c-wan':'wan','c-net':'net'};
+const RULE_MOD={ups:'nut',nut:'nut',pve:'pve',nas:'nas',dns:'dns',wan:'wan',vpn:'vpn',uptime:'uptime',net:'net'};
+let MUT={mutes:{},can:[]};
+const muted=mod=>!!mod&&MUT.mutes[mod]!=null;
+function muteDecor(mods){
+  const M=window.labMute;if(!M)return;
+  mods.forEach(m=>{const mod=CARD_MOD[m.id],c=$(m.id),h=c&&c.querySelector('.ch');if(!mod||!h)return;
+    const on=muted(mod);c.classList.toggle('muted',on);
+    // En pausa, la pastilla de estado pasa a «En pausa»; la hora de término va en el título. / EN: While paused the status pill reads "Paused"; the end time goes in the title.
+    if(on){const old=h.querySelector('.pill'),p=document.createElement('span');p.className='pill paused';p.textContent=M.t('pause');p.title=M.label(MUT.mutes[mod]);
+      if(old)old.replaceWith(p);else h.insertBefore(p,h.querySelector('a.go'))}
+    if(MUT.can.includes(mod)){const b=document.createElement('button');b.type='button';b.className='mbtn nokiosk'+(on?' on':'');
+      const t=M.t(on?'mResume':'mPause');b.title=t;b.setAttribute('aria-label',t);b.setAttribute('aria-haspopup','menu');
+      b.innerHTML=`<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">${M.icon}</svg>`;   // constante propia / own constant
+      b.addEventListener('click',()=>{M.get(true).then(()=>M.menu(b,mod,loop),()=>M.menu(b,mod,loop))});h.appendChild(b)}
+  });
+}
 function applySeverity(mods){
   mods.forEach(m=>{const c=$(m.id);if(c)c.dataset.sev=m.sev==='none'?'ok':m.sev});
   fitGrid();
@@ -441,7 +462,7 @@ async function refresh(){
   if(lvl('uptime')){jobs.upt=jget('/uptime/api/monitors?beats=0')}
   if(lvl('wan')){jobs.wan=jget('/wan/api/wan?hist=0');if(wantWH)jobs.wanh=jget('/wan/api/wan/history?range=1d')}
   if(lvl('net')){jobs.net=jget('/net/api/hosts');jobs.sw=jget('/net/api/switches/summary')}
-  jobs.sys=jget('api/system');jobs.ev=jget('api/events?limit=40');
+  jobs.sys=jget('api/system');jobs.ev=jget('api/events?limit=40');jobs.mu=jget('/admin/api/mutes').catch(()=>null);
   const keys=Object.keys(jobs),res=await Promise.allSettled(Object.values(jobs));
   const R={};keys.forEach((k,i)=>R[k]=res[i]);
   if(res.some(r=>r.status==='rejected'&&r.reason&&r.reason.code===401)){return showLogin()}
@@ -460,21 +481,23 @@ async function refresh(){
     piHTs=Date.now();
     try{const h=await jget('api/pihistory');piH=h&&h.pi?h:null}catch(e){}
   }
+  {const d=R.mu&&R.mu.status==='fulfilled'&&R.mu.value;MUT={mutes:(d&&d.mutes)||{},can:(d&&d.can)||[]}}
   const card=(id,show)=>$(id).classList.toggle('hide',!show);
   card('c-nut',!!R.nut);card('c-pve',!!R.pve);card('c-nas',!!R.nas);card('c-dns',!!R.dns);card('c-wan',!!R.wan);card('c-vpn',!!R.vpn);card('c-upt',!!R.upt);card('c-net',!!R.net);fitGrid();
   const fail=(id,name,r)=>{const e=r&&r.reason&&r.reason.message;$(id).innerHTML=`<div class="ch"><h2>${name}</h2>${pill('crit',T('unreach'))}</div>`+(e?`<div class="sub">${esc(e)}</div>`:'');issues.push({lv:'crit',m:name,t:`${name}: ${T('unreach')}${why(e)}`});return 'crit'};
-  if(R.nut)sevs.push(modSev(mods,'c-nut','UPS','ups','/nut/',R.nut.status==='fulfilled'?renderUPS(R.nut.value):fail('c-nut',T('ups'),R.nut)));
-  if(R.pve)sevs.push(modSev(mods,'c-pve','Proxmox','pve','/pve/',R.pve.status==='fulfilled'?renderPVE(R.pve.value):fail('c-pve',T('pve'),R.pve)));
-  if(R.nas)sevs.push(modSev(mods,'c-nas','NAS','nas','/nas/',R.nas.status==='fulfilled'?renderNAS(R.nas.value):fail('c-nas',T('nas'),R.nas)));
-  if(R.dns)sevs.push(modSev(mods,'c-dns','DNS','dns','/dns/',R.dns.status==='fulfilled'?renderDNS(R.dns.value):fail('c-dns',T('dns'),R.dns)));
-  if(R.vpn)sevs.push(modSev(mods,'c-vpn','VPN','vpn','/vpn/',R.vpn.status==='fulfilled'?renderVPN(R.vpn.value):fail('c-vpn',T('vpn'),R.vpn)));
-  if(R.upt)sevs.push(modSev(mods,'c-upt','Uptime','uptime','/uptime/',R.upt.status==='fulfilled'?renderUptime(R.upt.value):fail('c-upt',T('upt'),R.upt)));
-  if(R.wan)sevs.push(modSev(mods,'c-wan','WAN','wan','/wan/',R.wan.status==='fulfilled'?renderWAN(R.wan.value):fail('c-wan',T('wan'),R.wan)));
-  if(R.net)sevs.push(modSev(mods,'c-net','Net','net','/net/',R.net.status==='fulfilled'?renderNet(R.net.value,R.sw&&R.sw.status==='fulfilled'?R.sw.value:null):fail('c-net',T('net'),R.net)));
-  if(R.sys.status==='fulfilled')sevs.push(modSev(mods,'c-pi',(($('c-pi').querySelector('h2')||{}).textContent||'Server'),'pi','',renderPi(R.sys.value)));
+  if(R.nut)sevs.push(modSev(mods,'c-nut','UPS','ups','/nut/',issues.length,R.nut.status==='fulfilled'?renderUPS(R.nut.value):fail('c-nut',T('ups'),R.nut)));
+  if(R.pve)sevs.push(modSev(mods,'c-pve','Proxmox','pve','/pve/',issues.length,R.pve.status==='fulfilled'?renderPVE(R.pve.value):fail('c-pve',T('pve'),R.pve)));
+  if(R.nas)sevs.push(modSev(mods,'c-nas','NAS','nas','/nas/',issues.length,R.nas.status==='fulfilled'?renderNAS(R.nas.value):fail('c-nas',T('nas'),R.nas)));
+  if(R.dns)sevs.push(modSev(mods,'c-dns','DNS','dns','/dns/',issues.length,R.dns.status==='fulfilled'?renderDNS(R.dns.value):fail('c-dns',T('dns'),R.dns)));
+  if(R.vpn)sevs.push(modSev(mods,'c-vpn','VPN','vpn','/vpn/',issues.length,R.vpn.status==='fulfilled'?renderVPN(R.vpn.value):fail('c-vpn',T('vpn'),R.vpn)));
+  if(R.upt)sevs.push(modSev(mods,'c-upt','Uptime','uptime','/uptime/',issues.length,R.upt.status==='fulfilled'?renderUptime(R.upt.value):fail('c-upt',T('upt'),R.upt)));
+  if(R.wan)sevs.push(modSev(mods,'c-wan','WAN','wan','/wan/',issues.length,R.wan.status==='fulfilled'?renderWAN(R.wan.value):fail('c-wan',T('wan'),R.wan)));
+  if(R.net)sevs.push(modSev(mods,'c-net','Net','net','/net/',issues.length,R.net.status==='fulfilled'?renderNet(R.net.value,R.sw&&R.sw.status==='fulfilled'?R.sw.value:null):fail('c-net',T('net'),R.net)));
+  if(R.sys.status==='fulfilled')sevs.push(modSev(mods,'c-pi',(($('c-pi').querySelector('h2')||{}).textContent||'Server'),'pi','',issues.length,renderPi(R.sys.value)));
   if(R.ev.status==='fulfilled')renderEvents(R.ev.value.events||[]);
-  if(window.rulesUpdate){try{await rulesUpdate();sevs.push(rulesEval(R))}catch(e){}}   // reglas de alerta del administrador / admin alert rules
-  applySeverity(mods);
+  if(window.rulesUpdate){try{await rulesUpdate();const n0=issues.length;rulesEval(R);                 // reglas de alerta del administrador / admin alert rules
+    const kept=issues.splice(n0).filter(i=>!muted(RULE_MOD[i.m]));issues.push(...kept);sevs.push(kept.reduce((m,i)=>worst(m,i.lv),'ok'))}catch(e){}}
+  applySeverity(mods);muteDecor(mods);
   fitGrid();   // ES: con el contenido ya pintado (el mosaico del kiosko mide las tarjetas) / EN: with the content painted (kiosk masonry measures the cards)
   const g=sevs.reduce((m,x)=>worst(m,x),'ok');
   const gp=$('gpill');gp.className='pill '+g;$('gtxt').textContent=g==='ok'?T('allok'):g==='warn'?T('attn'):T('fail');

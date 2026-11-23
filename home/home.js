@@ -14,7 +14,7 @@ const H = {
        wolN: 'WOL Console', wolD: 'Wake-on-LAN — enciende equipos remotamente',
        admN: 'Admin Panel', admD: 'Usuarios y permisos, 2FA, respaldos y salud del sistema',
        gPower: 'Energía y servidores', gNet: 'Red', gTools: 'Herramientas', gSys: 'Sistema',
-       chk: 'comprobando...', up: 'activo', warn: 'con avisos', fail: 'con fallas', down: 'sin respuesta'},
+       chk: 'comprobando...', up: 'activo', warn: 'con avisos', fail: 'con fallas', down: 'sin respuesta', paused: 'alarmas en pausa'},
   en: {hero: 'Administration panel for your homelab.<br>UPS, network, Proxmox, NAS, Wake-on-LAN and administration',
        ovN: 'Overview', ovD: 'General status — UPS, Proxmox, network and the server on one screen',
        nutN: 'UPS Monitor', nutD: 'UPS — battery, load and runtime in real time',
@@ -28,7 +28,7 @@ const H = {
        wolN: 'WOL Console', wolD: 'Wake-on-LAN — turn devices on remotely',
        admN: 'Admin Panel', admD: 'Users and permissions, 2FA, backups and system health',
        gPower: 'Power & servers', gNet: 'Network', gTools: 'Tools', gSys: 'System',
-       chk: 'checking...', up: 'active', warn: 'warnings', fail: 'failing', down: 'no response'}
+       chk: 'checking...', up: 'active', warn: 'warnings', fail: 'failing', down: 'no response', paused: 'alarms paused'}
 };
 let lang = 'en';
 try { lang = localStorage.getItem('pi-lang') || ((navigator.language || '').toLowerCase().startsWith('es') ? 'es' : 'en'); } catch (e) {}
@@ -42,9 +42,9 @@ for (const el of document.querySelectorAll('[data-h]')) {
 }
 
 // Estado de cada módulo, junto a la flecha de su tarjeta: consulta su /api/health público (sin sesión; solo trae el estado global) con 3 s de espera.
-// ok → verde «activo», degraded → amarillo «con avisos», fail (503) → rojo «con fallas», sin respuesta → gris «sin respuesta».
+// ok → verde «activo», degraded → amarillo «con avisos», fail (503) → rojo «con fallas», sin respuesta → gris «sin respuesta», alarmas en pausa → gris «alarmas en pausa».
 // EN: Status of every module, next to the arrow of its card: it queries its public /api/health (no session; only the overall status) with a 3 s timeout.
-//     ok → green "active", degraded → yellow "warnings", fail (503) → red "failing", no answer → grey "no response".
+//     ok → green "active", degraded → yellow "warnings", fail (503) → red "failing", no answer → grey "no response", alarms paused → grey "alarms paused".
 const SERVICES = ['overview', 'wol', 'nut', 'net', 'pve', 'nas', 'dns', 'wan', 'vpn', 'uptime', 'admin'];
 const stateOf = {};
 for (const card of document.querySelectorAll('.app-card')) {
@@ -62,10 +62,10 @@ async function checkService(id) {
   try {
     const r = await fetch('/' + id + '/api/health', {signal: AbortSignal.timeout(3000), cache: 'no-store'});
     const d = await r.json().catch(() => ({}));
-    level = d.status === 'ok' ? 'up' : d.status === 'degraded' ? 'warn' : d.status === 'fail' || r.status === 503 ? 'fail' : 'down';
+    level = d.muted ? 'paused' : d.status === 'ok' ? 'up' : d.status === 'degraded' ? 'warn' : d.status === 'fail' || r.status === 503 ? 'fail' : 'down';
   } catch (e) { level = 'down'; }
   const o = stateOf[id];
-  o.dot.className = 'dot ' + ({up: 'green', warn: 'yellow', fail: 'red'}[level] || 'gray');
+  o.dot.className = 'dot ' + ({up: 'green', warn: 'yellow', fail: 'red', paused: 'paused'}[level] || 'gray');
   o.txt.textContent = o.st.title = H[lang][level];
 }
 // Módulos que el admin apagó: su tarjeta no se muestra y no se consulta. / EN: Modules the admin turned off: the card is hidden and not queried.

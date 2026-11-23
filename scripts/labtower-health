@@ -17,6 +17,7 @@ print(f"LabTower: {d['status'].upper()}")
 for k, v in d["checks"].items():
     print(f"  [{icon.get(v['level'], v['level'])}] {k}")
 for m, h in d.get("modules", {}).items():
-    if h.get("status") != "ok": print(f"      {m}: {h.get('status')} — run: curl -s localhost:8082/api/health | python3 -m json.tool")
+    if h.get("muted") is not None: print(f"      {m}: alarms paused")
+    elif h.get("status") != "ok": print(f"      {m}: {h.get('status')} — run: curl -s localhost:8082/api/health | python3 -m json.tool")
 sys.exit({"ok": 0, "degraded": 1}.get(d["status"], 2))
 PY

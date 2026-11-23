@@ -27,6 +27,11 @@ a{color:inherit;text-decoration:none}
 .ch h2{font-size:.95rem;font-weight:650;flex:1}
 .ch .pill{padding:3px 10px;font-size:.72rem}
 .ch a.go{font-size:.75rem;color:var(--blue)}
+/* alarmas en pausa / alarms paused */
+.ch .pill.paused{color:var(--text-mid);border-color:var(--border);background:var(--surface)}
+.mbtn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text-mid);cursor:pointer;flex-shrink:0}
+.mbtn svg{stroke:currentColor;fill:none;stroke-width:2}
+.mbtn:hover,.mbtn.on{color:var(--amber);border-color:var(--amber)}
 .sub{font-size:.78rem;color:var(--text-mid)}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(86px,1fr));gap:8px}
 .kpi{background:var(--surface2);border-radius:var(--r-sm);padding:8px 10px}
