@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.10b — 2026-11-23
+
+### Pausar alarmas
+- **Nuevo:** botón «Pausar alarmas» en cada módulo (UPS, Net, Proxmox, NAS, DNS, WAN, VPN y Uptime), en su tarjeta del Resumen y arriba en su página. Sirve para hacer pruebas sin avisos de equipos que se sabe que estarán detenidos. Solo lo ve el administrador del módulo.
+- **Nuevo:** se elige 1 hora, 4 horas, 24 horas o hasta reanudar; al vencer el plazo se reanuda sola.
+- **Nuevo:** el módulo sigue leyendo y su página muestra los datos, pero sus avisos no aparecen en el Resumen ni en las reglas, no anota eventos y cuenta como OK en `/api/health` y en `labtower-health`. Su tarjeta, el menú y la página de inicio muestran «En pausa».
+- **Nuevo:** pausar y reanudar quedan en la auditoría.
+
 ## 2.1.10a — 2026-11-20
 
 ### AP Monitor
