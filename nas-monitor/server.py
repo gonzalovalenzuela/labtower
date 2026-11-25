@@ -707,13 +707,13 @@ def _history_pruner():
         except Exception as e: log.warning(f"could not prune the history: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
 
 # ─── Certificados TLS ─────────────────────────────────────────────────────────
-# Un hilo se conecta una vez al día a los puertos de certificado de cada NAS (a la hora si un puerto falló, y enseguida al arrancar o si
-# cambian el host o los puertos); el botón «Revisar ahora» (permiso de ejecutar) fuerza una lectura. Solo lee el certificado: no lo valida ni confía en él. Los días, el nivel, las alertas y los eventos se calculan en cada lectura del NAS
+# Un hilo se conecta una vez al día a los puertos de certificado de cada NAS (a los 5 min si un puerto falló, y enseguida al arrancar, si
+# cambian el host o los puertos, o cuando el NAS vuelve a responder o se reinicia, por ejemplo tras actualizar DSM); el botón «Revisar ahora» (permiso de ejecutar) fuerza una lectura. Solo lee el certificado: no lo valida ni confía en él. Los días, el nivel, las alertas y los eventos se calculan en cada lectura del NAS
 # con lo último leído, así que el aviso y el crítico llegan el día que corresponde aunque no se vuelva a conectar.
-# EN: A thread connects once a day to the certificate ports of every NAS (after an hour if a port failed, and at once at startup or when
-#     the host or the ports change); the "Check now" button (execute permission) forces a read. It only reads the certificate: it does not validate or trust it. Days, level, alerts and events are computed on every NAS reading
+# EN: A thread connects once a day to the certificate ports of every NAS (after 5 min if a port failed, and at once at startup, when
+#     the host or the ports change, or when the NAS is reachable again or restarts, e.g. after a DSM update); the "Check now" button (execute permission) forces a read. It only reads the certificate: it does not validate or trust it. Days, level, alerts and events are computed on every NAS reading
 #     from the last read, so the warning and the critical level arrive on the right day without reconnecting.
-CERT_EVERY, CERT_RETRY, CERT_LOOP, CERT_MIN_GAP = 86400, 3600, 30, 10
+CERT_EVERY, CERT_RETRY, CERT_LOOP, CERT_MIN_GAP = 86400, 300, 30, 10
 _cert_gate = threading.Semaphore(2)        # forced checks at once / lecturas forzadas a la vez
 _CERTS: dict = {}            # nid -> {"ts", "sig", "list"}
 _cert_lock = threading.Lock()
@@ -773,6 +773,13 @@ def _cert_events(n: dict, certs: list):
         if lv == "exp": auth.record_event("nas", "crit", f"{name}: certificate on port {p} expired", "nas_certexp", n=name, p=p)
         elif lv in ("warn", "crit"): auth.record_event("nas", lv, f"{name}: certificate on port {p} expires in {days} days", "nas_cert", n=name, p=p, d=days)
         elif ch[0] in ("warn", "crit", "exp"): auth.record_event("nas", "info", f"{name}: certificate on port {p} renewed", "nas_cert_ok", n=name, p=p)
+
+def cert_soon(nid: str) -> None:
+    """Relee los certificados de un NAS en la próxima vuelta del hilo (≤ CERT_LOOP s): al volver a responder o tras un reinicio.
+    EN: Re-read a NAS's certificates on the thread's next round (≤ CERT_LOOP s): when it is reachable again or after a restart."""
+    with _cert_lock:
+        c = _CERTS.get(nid)
+        if c: c["ts"] = 0
 
 def check_certs_due(n: dict, now=None, force=False) -> bool:
     """Revisa los certificados de un NAS si toca (o si force, salvo que se revisaran hace menos de CERT_MIN_GAP s). True si se revisaron.
@@ -871,7 +878,9 @@ def _events(n: dict, snap: dict, prev=None):
     up = sysd.get("uptime")
     if prev is not None and _num(up):
         old = prev.get("uptime")
-        if _num(old) and up < old: auth.record_event("nas", "warn", f"{name}: NAS restarted", "nas_reboot", n=name)
+        if _num(old) and up < old:
+            auth.record_event("nas", "warn", f"{name}: NAS restarted", "nas_reboot", n=name)
+            cert_soon(nid)
         prev["uptime"] = up
 
 # Bucle del hilo de consulta de un NAS: vuelve a leer su configuración (si se borró, termina; si cambió, la adopta), consulta, guarda
@@ -902,6 +911,7 @@ def _poll(nid: str):
                 _events(n, snap, prev)
                 if auth.state_changed(f"nas-dn:{nid}", "up"):
                     auth.record_event("nas", "info", f"{n['name']}: reachable again", "nas_up", n=n["name"])
+                    cert_soon(nid)
                 log.debug(f"[{n['name']}] read in {time.time() - t0:.2f}s")
             except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
                 cache.set_error(str(e)[:200])

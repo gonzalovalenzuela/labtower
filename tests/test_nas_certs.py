@@ -86,16 +86,30 @@ class Levels(unittest.TestCase):
         with mock.patch.object(m, "read_cert", lambda h, p, t: calls.append(p) or {"port": p, "error": "refused"}):
             now = 1_700_000_000
             self.assertTrue(m.check_certs_due(n, now))
-            self.assertFalse(m.check_certs_due(n, now + 3599))                                  # a failed port waits an hour
-            self.assertTrue(m.check_certs_due(n, now + 3600))
-            self.assertTrue(m.check_certs_due({**n, "cert_ports": [443]}, now + 3601))          # ports changed: at once
-            self.assertFalse(m.check_certs_due({**n, "cert_ports": [443]}, now + 3605, force=True))   # forced, but checked 4 s ago
-            self.assertTrue(m.check_certs_due({**n, "cert_ports": [443]}, now + 3612, force=True))
+            self.assertFalse(m.check_certs_due(n, now + 299))                                   # a failed port waits 5 min
+            self.assertTrue(m.check_certs_due(n, now + 300))
+            self.assertTrue(m.check_certs_due({**n, "cert_ports": [443]}, now + 301))           # ports changed: at once
+            self.assertFalse(m.check_certs_due({**n, "cert_ports": [443]}, now + 305, force=True))    # forced, but checked 4 s ago
+            self.assertTrue(m.check_certs_due({**n, "cert_ports": [443]}, now + 312, force=True))
         with mock.patch.object(m, "read_cert", lambda h, p, t: calls.append(p) or {"port": p, "not_after": now + 99 * 86400}):
             m.check_certs_due(n, now + 7300)
             self.assertFalse(m.check_certs_due(n, now + 7300 + 86399))                          # all fine: once a day
             self.assertTrue(m.check_certs_due(n, now + 7300 + 86400))
-        self.assertEqual((calls, m.CERT_EVERY, m.CERT_RETRY), ([5001, 5001, 443, 443, 5001, 5001], 86400, 3600))
+        self.assertEqual((calls, m.CERT_EVERY, m.CERT_RETRY), ([5001, 5001, 443, 443, 5001, 5001], 86400, 300))
+
+    def test_reread_when_back_or_restarted(self):
+        # Tras un upgrade de DSM el 5001 vuelve después del NAS: se relee al volver a responder o al reiniciarse.
+        # EN: After a DSM update port 5001 comes back after the NAS: it is re-read when reachable again or after a restart.
+        n = {"id": "c", "name": "NAS", "type": "synology", "host": "192.0.2.21", "cert_ports": [5001]}
+        now = 1_700_000_000
+        with mock.patch.object(m, "read_cert", lambda h, p, t: {"port": p, "not_after": now + 99 * 86400}):
+            self.assertTrue(m.check_certs_due(n, now))
+            self.assertFalse(m.check_certs_due(n, now + 60))
+            m.cert_soon("c"); m.cert_soon("unknown")
+            self.assertTrue(m.check_certs_due(n, now + 60))
+        src = (ROOT / "nas-monitor/server.py").read_text(encoding="utf-8")
+        self.assertIn('"nas_reboot", n=name)\n            cert_soon(nid)', src)
+        self.assertIn('"nas_up", n=n["name"])\n                    cert_soon(nid)', src)
 
 
 @unittest.skipUnless(shutil.which("openssl"), "openssl not installed")
