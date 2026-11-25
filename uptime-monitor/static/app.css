@@ -302,6 +302,11 @@ a,button,select,summary,label,[role=button]{touch-action:manipulation}
 .nas-detail .nas-head{margin-bottom:0}
 .expand-arrow{font-size:12px;color:var(--text-dim);transition:transform .2s;display:inline-block}
 .expand-arrow.open{transform:rotate(90deg)}
+/* Botón de pausa en cada fila (solo admin). / EN: Per-row pause button (admin only). */
+.up-pz{width:26px;height:26px;padding:0;margin-left:8px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text-mid);font-size:11px;line-height:1;cursor:pointer;vertical-align:middle}
+.up-pz:hover,.up-pz:focus-visible{color:var(--upt);border-color:var(--upt);outline:none}
+.up-pz.on{color:var(--amber);border-color:var(--amber)}
+.up-pz:disabled{opacity:.5;cursor:default}
 .c-spark svg.spark{display:block}
 .nas-gauges{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
 .gauge-box{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm)}

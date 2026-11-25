@@ -543,7 +543,8 @@ function buildDetail(n){
   if(canAdmin())tools+=`<button class="btn-secondary" data-on-click="pauseMonitor" data-on-click-args="${jsargs([{'@':'this'},n.id,!n.paused])}">${esc(n.paused?'▶ '+t('monResume'):'⏸ '+t('monPause'))}</button><button class="btn-secondary" data-on-click="openForm" data-on-click-args="${jsargs([n.id])}">${esc(t('edit'))}</button><button class="btn-secondary" data-on-click="confirmDelete" data-on-click-args="${jsargs([n.id,n.name])}">${esc(t('delete'))}</button>`;
   tools=`<div class="dns-tools">${tools}</div>`;
   if(n.paused)return `<div class="dns-head"><div><h2>${esc(n.name)} ${pill('off',t('monPaused'))}</h2></div>${tools}</div><div class="state-msg">${esc(t('monPausedMsg'))}</div>`;
-  if(!snap.ts)return '<div class="state-msg"><strong>'+esc(t('connecting'))+'</strong>'+esc(t('connectingMsg'))+'</div>';
+  // Sin primera lectura: igual se puede pausar, editar o eliminar. / EN: No first reading yet: it can still be paused, edited or deleted.
+  if(!snap.ts)return `<div class="dns-head"><div><h2>${esc(n.name)}</h2></div>${tools}</div><div class="state-msg"><strong>${esc(t('connecting'))}</strong>${esc(t('connectingMsg'))}</div>`;
   if(snap.error&&!hasData){
     return `<div class="dns-head"><div><h2>${esc(n.name)}</h2></div>${tools}</div><div class="state-msg err"><strong>${esc(t('connError'))}</strong>${esc(snap.error)}<br><br><span style="font-size:12px;font-family:var(--mono)">${esc(t('connErrorHint'))}</span></div>`;
   }

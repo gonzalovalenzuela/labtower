@@ -1,7 +1,7 @@
 // NAS Monitor — página del módulo (/nas/). Muestra uno o varios NAS Synology leídos por SNMP.
 // EN: NAS Monitor — module page (/nas/). Shows one or more Synology NAS read over SNMP.
 const LANG={
-  en:{connecting:'Connecting…',connectingMsg:'Reading the NAS over SNMP.',loginTitle:'Sign in',loginSub:'Enter your credentials to continue.',
+  en:{connecting:'Connecting…',connectingMsg:p=>`Reading the NAS over ${p}.`,loginTitle:'Sign in',loginSub:'Enter your credentials to continue.',
     username:'Username',password:'Password',loginBtn:'Sign in',rememberMe:'Remember me',rem1d:'1 day',rem1w:'1 week',rem1m:'1 month',remForever:'Forever',
     navSection:'Navigation',navNAS:'NAS devices',addNas:'Add NAS',themeLight:'Light',themeDark:'Dark',
     statNasOnline:'NAS online',statAvgCPU:'Avg CPU',statAvgRAM:'Avg RAM',statDisks:'Healthy disks',statVols:'Volume usage',
@@ -34,7 +34,7 @@ const LANG={
     certs:'Certificates',certChecking:'Reading certificates…',certSelf:'self-signed',certDaysLeft:'{n} d',certExpired:'Expired',certErr:'Error',certUntil:'Expires {d}',certCheckNow:'Check now',certChecked:'Certificates checked',certCheckErr:'Could not check the certificates',
     fieldCertPorts:'Certificate ports',fieldCertWarn:'Certificate warning (days)',fieldCertCrit:'Certificate critical (days)',certPortsHint:'TLS ports on this NAS whose certificate expiry is checked, comma-separated (for example 5001, 443). Empty = none.',
     sessionExpired:'Session expired'},
-  es:{connecting:'Conectando…',connectingMsg:'Leyendo el NAS por SNMP.',loginTitle:'Iniciar sesión',loginSub:'Ingresa tus credenciales para continuar.',
+  es:{connecting:'Conectando…',connectingMsg:p=>`Leyendo el NAS por ${p}.`,loginTitle:'Iniciar sesión',loginSub:'Ingresa tus credenciales para continuar.',
     username:'Usuario',password:'Contraseña',loginBtn:'Entrar',rememberMe:'Recordarme',rem1d:'1 día',rem1w:'1 semana',rem1m:'1 mes',remForever:'Siempre',
     navSection:'Navegación',navNAS:'Equipos NAS',addNas:'Agregar NAS',themeLight:'Claro',themeDark:'Oscuro',
     statNasOnline:'NAS en línea',statAvgCPU:'CPU promedio',statAvgRAM:'RAM promedio',statDisks:'Discos sanos',statVols:'Uso de volúmenes',
@@ -251,7 +251,9 @@ function buildDetail(n){
   const snap=n.snap||{};
   const tools=canAdmin()?`<div class="nas-tools"><button class="btn-secondary" data-on-click="pauseNas" data-on-click-args="${jsargs([{'@':'this'},n.id,!n.paused])}">${esc(n.paused?'▶ '+t('resume'):'⏸ '+t('pause'))}</button><button class="btn-secondary" data-on-click="openNasForm" data-on-click-args="${jsargs([n.id])}">${esc(t('edit'))}</button><button class="btn-secondary" data-on-click="confirmDelete" data-on-click-args="${jsargs([n.id,n.name])}" style="color:var(--red)">${esc(t('delete'))}</button></div>`:'';
   if(n.paused)return `<div class="nas-head"><div><h2>${esc(n.name)} ${pill('off',t('paused'))}</h2></div>${tools}</div><div class="state-msg">${esc(t('pausedMsg'))}</div>`;
-  if(!snap.ts){return '<div class="state-msg"><strong>'+esc(t('connecting'))+'</strong>'+esc(t('connectingMsg'))+'</div>';}
+  // Sin primera lectura (p. ej. un equipo apagado que tarda en fallar): igual se puede pausar, editar o eliminar.
+  // EN: No first reading yet (e.g. a switched-off device that is slow to fail): it can still be paused, edited or deleted.
+  if(!snap.ts)return `<div class="nas-head"><div><h2>${esc(n.name)}</h2></div>${tools}</div><div class="state-msg"><strong>${esc(t('connecting'))}</strong>${esc(t('connectingMsg',n.type==='truenas'?'API':n.type==='omv'?'RPC':'SNMP'))}</div>`;
   if(snap.error&&!snap.data?.system){
     return `<div class="nas-head"><div><h2>${esc(n.name)}</h2></div>${tools}</div><div class="state-msg err"><strong>${esc(t('connError'))}</strong>${esc(snap.error)}<br><br><span style="font-size:12px;font-family:var(--mono)">${esc(t(n.type==='truenas'?'connErrorHintTn':n.type==='omv'?'connErrorHintOmv':'connErrorHint'))}</span></div>`;
   }

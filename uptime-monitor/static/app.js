@@ -382,13 +382,19 @@ function certCell(n){
   if(n.cert==='warn')return pill('warn',t('certWarn',d));
   return `<span class="up-pct">${esc(t('certOk',d))}</span>`;
 }
+// Botón ⏸ / ▶ de la fila, en la primera columna para que se vea sin desplazar la tabla (solo admin): pausa o reanuda sin abrir el detalle; no abre ni cierra la fila.
+// EN: Row ⏸ / ▶ button, in the first column so it shows without scrolling the table (admin only): pauses or resumes without opening the detail; it does not toggle the row.
+function pauseIcon(n){
+  const lbl=t(n.paused?'resume':'pause');
+  return `<button type="button" class="up-pz${n.paused?' on':''}" title="${esc(lbl)}" aria-label="${esc(lbl+' · '+n.name)}" data-on-click="pauseMon" data-on-click-stop="1" data-on-click-args="${jsargs([{'@':'this'},n.id,!n.paused])}">${n.paused?'▶':'⏸'}</button>`;
+}
 function renderSummary(){
   const box=document.getElementById('mon-summary');if(!box)return;
   if(!items.length){box.innerHTML='';return;}
   const rows=items.map(n=>{
     const open=n.id===activeId,u=n.uptime||{};
     return `<tr class="nas-row${open?' expanded':''}" data-on-click="toggleMon" data-on-click-args="${jsargs([n.id])}">
-      <td style="white-space:nowrap">${canAdmin()?`<span class="up-grab" data-grab title="${esc(t('dragReorder'))}" aria-hidden="true">⠿</span>`:''}<span class="cluster-dot ${dotOf(n)}"></span></td>
+      <td style="white-space:nowrap">${canAdmin()?`<span class="up-grab" data-grab title="${esc(t('dragReorder'))}" aria-hidden="true">⠿</span>`:''}<span class="cluster-dot ${dotOf(n)}"></span>${canAdmin()?pauseIcon(n):''}</td>
       <td><div class="sum-name">${esc(n.name)}</div><div class="sum-sub">${esc(n.target||'')}</div></td>
       <td><span class="up-badge">${esc(typeLabel(n))}</span></td>
       <td>${statePill(n)}</td>
@@ -401,7 +407,7 @@ function renderSummary(){
     <tr class="detail-row${open?' show':''}"><td colspan="10" class="detail-cell"><div class="nas-detail">${open?buildDetail(n):''}</div></td></tr>`;
   }).join('');
   box.innerHTML=`<div class="card"><div class="card-hd"><span class="card-title">${esc(t('summary'))}</span><span class="card-meta">${esc(items.length)}</span></div>
-    <div class="tbl-wrap"><table class="nas-table"><thead><tr><th style="width:${canAdmin()?44:24}px"></th><th>${esc(t('colMon'))}</th><th>${esc(t('colType'))}</th><th>${esc(t('status'))}</th><th class="c-beats">${esc(t('colBeats'))}</th><th>${esc(t('col24'))}</th><th class="c-temp">${esc(t('col30'))}</th><th class="c-temp">${esc(t('colMs'))}</th><th class="c-temp">${esc(t('colCert'))}</th><th style="width:24px"></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    <div class="tbl-wrap"><table class="nas-table"><thead><tr><th style="width:${canAdmin()?78:24}px"></th><th>${esc(t('colMon'))}</th><th>${esc(t('colType'))}</th><th>${esc(t('status'))}</th><th class="c-beats">${esc(t('colBeats'))}</th><th>${esc(t('col24'))}</th><th class="c-temp">${esc(t('col30'))}</th><th class="c-temp">${esc(t('colMs'))}</th><th class="c-temp">${esc(t('colCert'))}</th><th style="width:24px"></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   fitDetail();
   bindDrag(box);
   if(activeId)drawChart(activeId,-1);        // el canvas se rehízo con la tabla / the canvas was rebuilt with the table

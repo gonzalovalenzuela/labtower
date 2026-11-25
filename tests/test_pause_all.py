@@ -229,6 +229,22 @@ class Pages(unittest.TestCase):
         js = self.read("vpn-monitor/static/app.js")
         self.assertIn("if(!d||!d.clients){return (h||`<div class=\"nas-empty\">${esc(t('connecting'))}</div>`)+tools;}", js)
 
+    def test_nas_and_dns_admin_buttons_before_the_first_reading(self):
+        # Un equipo apagado puede tardar en fallar: mientras dice «Conectando…» igual se pausa, edita o elimina.
+        # EN: A switched-off device may be slow to fail: while it says "Connecting…" it can still be paused, edited or deleted.
+        nas, dns = self.read("nas-monitor/static/app.js"), self.read("dns-monitor/static/app.js")
+        self.assertIn("if(!snap.ts)return `<div class=\"nas-head\"><div><h2>${esc(n.name)}</h2></div>${tools}</div>", nas)
+        self.assertIn("connectingMsg',n.type==='truenas'?'API':n.type==='omv'?'RPC':'SNMP')", nas)
+        self.assertEqual(nas.count("connectingMsg:p=>"), 2)
+        self.assertIn("if(!snap.ts)return `<div class=\"dns-head\"><div><h2>${esc(n.name)}</h2></div>${tools}</div>", dns)
+
+    def test_uptime_row_button(self):
+        # ⏸ / ▶ en la primera columna de cada fila, sin abrir el detalle. / EN: ⏸ / ▶ in each row's first column, without opening the detail.
+        js = self.read("uptime-monitor/static/app.js")
+        self.assertIn('<span class="cluster-dot ${dotOf(n)}"></span>${canAdmin()?pauseIcon(n):\'\'}</td>', js)
+        self.assertIn('data-on-click="pauseMon" data-on-click-stop="1"', js)
+        self.assertIn(".up-pz{", self.read("uptime-monitor/static/app.css"))
+
     def test_overview_and_rules_skip_paused(self):
         ov, rules = self.read("overview/static/app.js"), self.read("overview/static/rules.js")
         for k in ("(d.servers||[]).filter(x=>!x.paused)", "(d.clusters||[]).filter(c=>!c.paused)", "(d.servers||[]).filter(n=>!n.paused)",
