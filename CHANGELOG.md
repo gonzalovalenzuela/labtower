@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.10d — 2026-11-25
+
+### NAS Monitor
+- **Arreglo:** después de actualizar DSM quedaba el aviso «no se pudo leer el certificado» hasta una hora, aunque el NAS ya hubiera vuelto. Ahora el certificado se relee apenas el NAS vuelve a responder o se reinicia, y si falla se reintenta cada 5 min en vez de cada hora.
+
 ## 2.1.10c — 2026-11-25
 
 ### Pausar equipos
