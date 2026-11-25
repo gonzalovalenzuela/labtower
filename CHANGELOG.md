@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.10c — 2026-11-25
+
+### Pausar equipos
+- **Arreglo:** en NAS Monitor y DNS Monitor, un equipo que aún no termina su primera lectura («Conectando…») no mostraba Pausar, Editar ni Eliminar. Ahora sí.
+- **Nuevo:** Uptime Monitor tiene un botón ⏸ / ▶ en cada fila para pausar o reanudar sin abrir el monitor. Solo administradores.
+- **Arreglo:** NAS Monitor decía «Leyendo el NAS por SNMP» también en TrueNAS y OpenMediaVault.
+
 ## 2.1.10b — 2026-11-23
 
 ### Pausar alarmas
