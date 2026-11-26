@@ -174,6 +174,7 @@ labtower-health
 - **Detección:** ping (TTL), puertos y banner HTTP. No usa `nmap`.
 - **MAC y fabricante**, en este orden: tabla ARP del servidor, Pi-hole, SNMP (ARP de un router o switch). El fabricante sale de la base `manuf` de Wireshark (descarga semanal) o de `ieee-data`.
 - **Tipos de equipo:** computador, teléfono, tablet, router, switch, punto de acceso, almacenamiento, TV, cámara, impresora, consola de juegos, servidor, teléfono IP, UPS, altavoz inteligente y otros. SO, tipo y grupo se pueden editar a mano.
+- **Alias, tipo, SO y grupo siguen a la MAC:** se guardan por MAC en `macs.json`, así que se mantienen si el equipo cambia de IP y otro equipo que tome esa IP no los hereda. La fila de la IP antigua queda sin alias. Si una MAC responde en varias IP, todas muestran lo mismo. Los equipos sin MAC conocida (por ejemplo, de otra subred) los guardan por IP. «Conocido» y la vigilancia siguen ligados a la IP.
 - **Basurero** para quitar un equipo de la lista (solo administradores). Si sigue conectado, el próximo escaneo lo vuelve a descubrir.
 - **Proxmox:** las VM y contenedores se reconocen en la tabla (insignia «VM 100» / «CT 200») cruzando MAC, IP y, si no hay otra pista, nombre idéntico. Las tarjetas Hosts / Online / Offline filtran la tabla.
 - Al pasar el mouse (o tocar en iPad) por una IP en UPS, Proxmox, WOL o Resumen aparece una tarjeta con los datos del equipo.

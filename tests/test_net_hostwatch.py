@@ -94,6 +94,97 @@ class Pure(unittest.TestCase):
         self.assertEqual((s["n"], s["loss"]), (21, 4.76)); self.assertEqual(s["max"], 29.0)
         self.assertEqual(hw.latency_summary([])["n"], 0)
 
+class MacProfiles(unittest.TestCase):
+    """Alias, grupo, tipo y SO siguen a la MAC. / EN: Alias, group, type and OS follow the MAC."""
+    A, B = "aa:bb:cc:00:00:01", "AA-BB-CC-00-00-02"
+
+    def test_profile_round_trip(self):
+        h = {"alias": "Laptop", "group": "Office", "device_type": "computer", "type_manual": True, "os": "Linux", "os_manual": False}
+        p = hw.profile_of(h); self.assertEqual(p, {"alias": "Laptop", "group": "Office", "device_type": "computer"})
+        g = {"alias": "x", "group": "y", "type_manual": True, "os": "Win", "os_manual": True, "device_type": "phone"}
+        hw.apply_profile(g, p)
+        self.assertEqual((g["alias"], g["group"], g["device_type"], g["type_manual"]), ("Laptop", "Office", "computer", True))
+        self.assertNotIn("os_manual", g)                                  # the profile has no OS: back to auto-detection
+
+    def test_same_device(self):
+        self.assertTrue(hw.same_device({"mac": self.A}, {"mac": "AA:BB:CC:00:00:01"}))
+        self.assertTrue(hw.same_device({}, {"mac": self.A})); self.assertTrue(hw.same_device({"mac": self.A}, {"mac": ""}))
+        self.assertFalse(hw.same_device({"mac": self.A, "macs_seen": [self.B]}, {"mac": self.B}))   # an old MAC of the IP is another device
+
+    def test_sync_adopts_applies_and_clears_the_old_ip(self):
+        hosts = {"192.0.2.1": {"mac": self.A, "alias": "Laptop", "group": "Office", "online": False, "last_seen": NOW - 99},
+                 "192.0.2.2": {"mac": "aa:bb:cc:00:00:01", "alias": "", "online": True, "last_seen": NOW},
+                 "192.0.2.3": {"mac": self.B, "alias": "Old name", "online": False, "last_seen": NOW - 5},
+                 "192.0.2.4": {"mac": self.B, "alias": "Printer", "online": False, "last_seen": NOW},
+                 "192.0.2.9": {"mac": "", "alias": "No MAC", "online": True}}
+        prof = {}
+        self.assertTrue(hw.sync_profiles(hosts, prof))
+        self.assertEqual(set(prof), {"aabbcc000001", "aabbcc000002"})
+        self.assertEqual(prof["aabbcc000002"]["alias"], "Printer")       # the most recently seen wins
+        self.assertEqual((hosts["192.0.2.2"]["alias"], hosts["192.0.2.2"]["group"]), ("Laptop", "Office"))
+        self.assertEqual(hosts["192.0.2.1"]["alias"], "")                # moved: the old offline IP loses the alias
+        self.assertEqual(hosts["192.0.2.1"]["group"], "Office")
+        self.assertEqual((hosts["192.0.2.3"]["alias"], hosts["192.0.2.4"]["alias"]), ("Printer", "Printer"))   # same alias on every IP of the MAC
+        self.assertEqual(hosts["192.0.2.9"]["alias"], "No MAC")          # no MAC: stays per IP
+        self.assertFalse(hw.sync_profiles(hosts, prof))                  # nothing new to adopt
+
+    def test_set_profile(self):
+        prof = {}
+        self.assertFalse(hw.set_profile(prof, {"alias": "x", "mac": ""}))
+        self.assertTrue(hw.set_profile(prof, {"alias": "x", "mac": self.B})); self.assertEqual(prof["aabbcc000002"]["alias"], "x")
+
+    def test_scan_moves_the_alias_with_the_mac(self):
+        m.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        old, oldp = m.load_hosts(), m.auth.read_json(m.MACS_FILE, {}, dict)
+        saved = {k: getattr(m, k) for k in ("scan_host", "refresh_snmp", "oui_maybe_update", "name_offline_hosts", "_schedule_next_scan", "PIHOLE_PASS")}
+        rec, m._profiles = m.auth.record_event, None
+        A, B, C = self.A, "aa:bb:cc:00:00:02", "aa:bb:cc:00:00:03"
+        m.save_hosts({"192.0.2.1": {"ip": "192.0.2.1", "mac": A, "alias": "Laptop", "group": "Office", "device_type": "computer", "type_manual": True, "online": True, "macs_seen": [A]},
+                      "192.0.2.2": {"ip": "192.0.2.2", "mac": B, "alias": "Printer", "online": True, "macs_seen": [B]},
+                      "192.0.2.3": {"ip": "192.0.2.3", "mac": C, "alias": "Phone", "online": True, "known": True, "macs_seen": [C]}})
+        now = {"192.0.2.1": B, "192.0.2.2": A, "192.0.2.4": C}           # the laptop and the printer swap IPs; the phone moves to .4
+        def fake(ip):
+            if ip not in now: return None
+            return {"ip": ip, "hostname": "", "vendor": "", "mac": now[ip], "os": "Linux", "device_type": "other", "os_raw": "", "ttl": 64,
+                    "latency": 1, "banner": "", "ports": [], "online": True, "last_seen": NOW, "first_seen": NOW}
+        try:
+            m.scan_host, m.refresh_snmp, m.oui_maybe_update, m.name_offline_hosts, m._schedule_next_scan, m.PIHOLE_PASS = fake, lambda: None, lambda: None, lambda h: 0, lambda: None, ""
+            m.auth.record_event = lambda *a, **k: None
+            m.run_scan("192.0.2.0/29")
+            h = m.load_hosts()
+            self.assertEqual((h["192.0.2.1"]["alias"], h["192.0.2.1"].get("group"), h["192.0.2.1"].get("type_manual")), ("Printer", None, None))
+            self.assertEqual((h["192.0.2.2"]["alias"], h["192.0.2.2"]["group"], h["192.0.2.2"]["device_type"]), ("Laptop", "Office", "computer"))
+            self.assertEqual((h["192.0.2.4"]["alias"], h["192.0.2.3"]["alias"]), ("Phone", ""))      # the old offline IP loses the alias
+            self.assertTrue(h["192.0.2.3"]["known"]); self.assertNotIn("known", h["192.0.2.4"])     # "known" stays tied to the IP
+            self.assertEqual(m.auth.read_json(m.MACS_FILE, {}, dict)["aabbcc000003"]["alias"], "Phone")
+        finally:
+            for k, v in saved.items(): setattr(m, k, v)
+            m.auth.record_event = rec; m.save_hosts(old); m.auth.write_json(m.MACS_FILE, oldp); m._profiles = None
+
+    def test_edit_applies_to_every_ip_of_the_mac(self):
+        m.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        old, oldp = m.load_hosts(), m.auth.read_json(m.MACS_FILE, {}, dict)
+        m._profiles = None
+        m.save_hosts({"192.0.2.60": {"ip": "192.0.2.60", "online": True, "mac": self.A}, "192.0.2.61": {"ip": "192.0.2.61", "online": True, "mac": self.A},
+                      "192.0.2.62": {"ip": "192.0.2.62", "online": True, "mac": ""}})
+        srv = support.Server(m.H); hdr = {"Origin": "http://127.0.0.1"}
+        try:
+            adm = support.make_user("macprof_adm", ADMIN)
+            st, _ = srv.call("POST", "/api/hosts/update", {"ip": "192.0.2.60", "alias": "NAS", "group": "Rack"}, token=adm, headers=hdr)
+            h = m.load_hosts(); self.assertEqual(st, 200)
+            self.assertEqual([(h[ip]["alias"], h[ip]["group"]) for ip in ("192.0.2.60", "192.0.2.61")], [("NAS", "Rack")] * 2)
+            self.assertEqual(m.auth.read_json(m.MACS_FILE, {}, dict)["aabbcc000001"], {"alias": "NAS", "group": "Rack"})
+            st, _ = srv.call("POST", "/api/hosts/update", {"ip": "192.0.2.62", "alias": "Lab"}, token=adm, headers=hdr)
+            self.assertEqual((st, m.load_hosts()["192.0.2.62"]["alias"]), (200, "Lab"))                # no MAC: per IP
+            self.assertEqual(len(m.auth.read_json(m.MACS_FILE, {}, dict)), 1)
+        finally:
+            srv.close(); m.save_hosts(old); m.auth.write_json(m.MACS_FILE, oldp); m._profiles = None
+
+    def test_backups_include_the_profiles(self):
+        for f in ("debian/preinst", "debian/prerm", "scripts/teleporter.sh"):
+            self.assertIn("net-monitor/macs.json", (support.ROOT / f).read_text(encoding="utf-8"), f)
+
+
 class Server(unittest.TestCase):
     def setUp(self):
         self.ev = []

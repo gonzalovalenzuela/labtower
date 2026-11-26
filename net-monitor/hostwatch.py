@@ -137,3 +137,71 @@ def latency_summary(points):
     p95 = v[min(len(v) - 1, math.ceil(0.95 * len(v)) - 1)] if v else None
     return {"n": n, "avg": round(sum(v) / len(v), 1) if v else None, "p95": round(p95, 1) if p95 is not None else None,
             "max": round(max(v), 1) if v else None, "loss": round(100.0 * sum(1 for _, _, ok in points if not ok) / n, 2)}
+
+# ─── Datos editados a mano que siguen a la MAC ────────────────────────────────
+# El alias, el grupo y el tipo y SO elegidos a mano se guardan por MAC (macs.json), no por IP: si el equipo cambia de IP los
+# conserva, y si otro equipo toma esa IP no los hereda. Los equipos sin MAC conocida (p. ej. de otra subred) siguen por IP.
+# «Conocido» y la vigilancia siguen ligados a la IP.
+# EN: Alias, group and hand-picked type and OS are kept per MAC (macs.json), not per IP: a device that changes IP keeps them, and
+#     another device taking that IP does not inherit them. Devices with no known MAC (e.g. on another subnet) stay per IP.
+#     "Known" and watching stay tied to the IP.
+PROFILES_MAX = 4096
+
+def profile_of(h):
+    """Lo editado a mano de un equipo. / EN: What was edited by hand on a device."""
+    p = {"alias": str(h.get("alias") or ""), "group": str(h.get("group") or "")}
+    if h.get("type_manual") and h.get("device_type"): p["device_type"] = h["device_type"]
+    if h.get("os_manual") and h.get("os"): p["os"] = h["os"]
+    return p
+
+def _has_manual(p): return any(p.values())
+
+def apply_profile(h, p):
+    """Pone en el equipo lo guardado para su MAC. / EN: Put on the device what is kept for its MAC."""
+    h["alias"] = p.get("alias", "")
+    if p.get("group"): h["group"] = p["group"]
+    else: h.pop("group", None)
+    if p.get("device_type"): h["device_type"], h["type_manual"] = p["device_type"], True
+    else: h.pop("type_manual", None)                       # back to auto-detection on the next scan
+    if p.get("os"): h["os"], h["os_manual"] = p["os"], True
+    else: h.pop("os_manual", None)
+
+def same_device(existing, result):
+    """ES: ¿el resultado del escaneo es el mismo equipo que ya estaba en esa IP? Sí si alguno no tiene MAC o si es la misma MAC; no si
+    llegó otra MAC (otro equipo tomó la IP), y entonces no hereda lo editado a mano del anterior.
+    EN: is the scan result the same device that was already on that IP? Yes when either has no MAC or it is the same MAC; no when
+    another MAC arrived (another device took the IP), and then it does not inherit what was edited by hand on the previous one."""
+    a, b = _mac((existing or {}).get("mac")), _mac((result or {}).get("mac"))
+    return not a or not b or a == b
+
+def sync_profiles(hosts, profiles):
+    """ES: 1) adopta como perfil lo editado a mano de las MAC que aún no tienen uno (el equipo conectado o el visto más recientemente);
+    2) aplica el perfil a todas las IP con esa MAC; 3) una IP desconectada cuya MAC responde en otra IP pierde el alias (el equipo se
+    cambió de IP). Devuelve True si agregó perfiles (hay que guardar macs.json).
+    EN: 1) adopts as profile what was edited by hand for MACs that still have none (the online device or the most recently seen);
+    2) applies the profile to every IP with that MAC; 3) an offline IP whose MAC answers on another IP loses the alias (the device
+    moved). Returns True when it added profiles (macs.json must be saved)."""
+    rows = [(_mac(h.get("mac")), h) for h in hosts.values() if isinstance(h, dict)]
+    rows = [(k, h) for k, h in rows if k]
+    added = False
+    best = {}
+    for k, h in rows:
+        if k in profiles or not _has_manual(profile_of(h)): continue
+        rank = (bool(h.get("online")), _num(h.get("last_seen")) or 0)
+        if k not in best or rank > best[k][0]: best[k] = (rank, h)
+    for k, (_, h) in best.items():
+        if len(profiles) >= PROFILES_MAX: break
+        profiles[k] = profile_of(h); added = True
+    online = {k for k, h in rows if h.get("online")}
+    for k, h in rows:
+        if k in profiles: apply_profile(h, profiles[k])
+        if not h.get("online") and k in online: h["alias"] = ""
+    return added
+
+def set_profile(profiles, h):
+    """ES: guarda lo editado a mano del equipo bajo su MAC; False si no tiene MAC (sigue por IP).
+    EN: keeps what was edited by hand on the device under its MAC; False when it has no MAC (stays per IP)."""
+    k = _mac(h.get("mac"))
+    if not k or (k not in profiles and len(profiles) >= PROFILES_MAX): return False
+    profiles[k] = profile_of(h)
+    return True

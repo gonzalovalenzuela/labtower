@@ -77,6 +77,7 @@ STATIC_DIR    = Path(__file__).parent / "static"
 DATA_DIR      = auth.module_dir("net-monitor")      # solo la ruta; la carpeta se crea al arrancar (auth.prepare_module en main)
 LEGACY_FILES = ("hosts.json", "config.json")
 DATA_FILE     = DATA_DIR / "hosts.json"
+MACS_FILE     = DATA_DIR / "macs.json"       # alias, group, type and OS edited by hand, per MAC (see hostwatch.sync_profiles)
 CONF_FILE     = DATA_DIR / "config.json"
 
 # Candado de config.json. Regla: cargar → modificar → guardar dentro de este candado.
@@ -1158,6 +1159,19 @@ def load_hosts() -> dict:
 # EN: Lock of hosts.json. _live_hosts points to the in-memory table while a scan runs, so a manual edit and the scan share the same data and do not overwrite each other.
 _hosts_lock = threading.RLock()
 _live_hosts = None   # the scan's in-memory table while a scan runs, so manual edits are not overwritten
+_profiles = None     # macs.json in memory (loaded on first use); read and changed only under _hosts_lock
+
+# Lo editado a mano por MAC (macs.json, modo 600). Se usa siempre bajo _hosts_lock, así escaneo y ediciones comparten los mismos datos.
+# EN: What was edited by hand per MAC (macs.json, mode 600). Always used under _hosts_lock, so scan and edits share the same data.
+def mac_profiles() -> dict:
+    global _profiles
+    with _hosts_lock:
+        if _profiles is None: _profiles = auth.read_json(MACS_FILE, {}, dict)
+        return _profiles
+
+def save_profiles():
+    with _hosts_lock:
+        auth.write_json(MACS_FILE, mac_profiles(), mode=0o600)
 
 # Guarda hosts.json con permisos 0640 (grupo labtower), porque WOL Console (otro proceso) también lo lee.
 # EN: Save hosts.json with 0640 permissions (group labtower), because WOL Console (another process) also reads it.
@@ -1317,6 +1331,7 @@ def run_scan(network: str | None = None, single_ip: str | None = None):
         with _hosts_lock:
             hosts = load_hosts()
             _live_hosts = hosts
+            if hw.sync_profiles(hosts, mac_profiles()): save_profiles()       # keep what was edited by hand before a device's IP is reused
         refresh_snmp()
         if PIHOLE_PASS and time.time() - _pihole_ts > 60:        # names changed in Pi-hole show up in this very scan
             try: refresh_pihole_cache()
@@ -1357,7 +1372,10 @@ def run_scan(network: str | None = None, single_ip: str | None = None):
                             existing = hosts.get(ip_str, {})
                             is_new = ip_str not in hosts
                             result["first_seen"] = existing.get("first_seen", result["first_seen"])
-                            result["alias"]      = existing.get("alias", "")
+                            # Lo editado a mano solo se hereda si es el mismo equipo (misma MAC o sin MAC); si la MAC tiene perfil, manda el perfil.
+                            # EN: What was edited by hand is inherited only by the same device (same MAC or no MAC); a MAC with a profile uses the profile.
+                            inherit = hw.same_device(existing, result)
+                            result["alias"]      = existing.get("alias", "") if inherit else ""
                             # Marcar como "nuevo" si nunca se vio antes o apareció en últimas 48h
                             new_threshold = int(time.time()) - 48 * 3600
                             result["new_device"] = is_new or (result["first_seen"] > new_threshold and is_new)
@@ -1369,16 +1387,18 @@ def run_scan(network: str | None = None, single_ip: str | None = None):
                                 if not result.get(k) and existing.get(k):
                                     result[k] = existing[k]
                             # Keep manually chosen device type
-                            if existing.get("type_manual"):
+                            if inherit and existing.get("type_manual"):
                                 result["device_type"] = existing.get("device_type", result["device_type"])
                                 result["type_manual"] = True
                             # Respetar OS editado manualmente
-                            if existing.get("os_manual"):
+                            if inherit and existing.get("os_manual"):
                                 result["os"]        = existing["os"]
                                 result["os_manual"] = True
                             # Lo editado a mano y las marcas de este módulo sobreviven al escaneo
                             for k in ("group", "known", "watch", "mac_prev", "mac_changed", "macs_seen"):
-                                if k in existing and k not in result: result[k] = existing[k]
+                                if k in existing and k not in result and (inherit or k != "group"): result[k] = existing[k]
+                            prof = mac_profiles().get(hw._mac(result.get("mac")))
+                            if prof: hw.apply_profile(result, prof)
                             result["ports_seen"], newp = hw.port_news(existing, result)
                             if existing and not first_inventory:
                                 mc = hw.mac_change(existing, result)
@@ -1426,6 +1446,7 @@ def run_scan(network: str | None = None, single_ip: str | None = None):
                 gone = purge_after_scan(hosts, int(load_config().get("purge_days", 0) or 0))
                 if gone: log.info(f"Removed {len(gone)} devices offline for too long")
             except Exception as e: log.debug(f"purge: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
+            if hw.sync_profiles(hosts, mac_profiles()): save_profiles()
             save_hosts(hosts)
             _live_hosts = None
         online = sum(1 for h in hosts.values() if h.get("online"))
@@ -2034,6 +2055,9 @@ class H(BaseHTTPRequestHandler):
                     if grp and not re.fullmatch(r"[\w .+/()-]{1,20}", grp):
                         return self._json(400, {"error": "Invalid group name"})
                     h["group"] = grp
+                # Con MAC conocida, lo editado se guarda por MAC y se aplica a todas sus IP. / EN: With a known MAC, the edit is kept per MAC and applied to all its IPs.
+                if any(k in body for k in ("alias", "os", "device_type", "group")) and hw.set_profile(mac_profiles(), h):
+                    hw.sync_profiles(hosts, mac_profiles()); save_profiles()
                 save_hosts(hosts)
             self._json(200, {"ok": True})
 

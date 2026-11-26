@@ -174,6 +174,7 @@ labtower-health
 - **Detection:** ping (TTL), ports and HTTP banner. It does not use `nmap`.
 - **MAC and vendor**, in this order: the server's ARP table, Pi-hole, SNMP (ARP table of a router or switch). Vendors come from the Wireshark `manuf` list (weekly download) or `ieee-data`.
 - **Device types:** computer, phone, tablet, router, switch, access point, storage, TV, camera, printer, game console, server, IP phone, UPS, smart speaker and other. OS, type and group can be edited by hand.
+- **Alias, type, OS and group follow the MAC:** they are kept per MAC in `macs.json`, so they stay when a device changes IP and another device taking that IP does not inherit them. The row of the old IP loses its alias. When a MAC answers on several IPs, all of them show the same. Devices with no known MAC (e.g. on another subnet) keep them per IP. "Known" and watching stay tied to the IP.
 - **Trash button** to remove a host from the list (admins only). If it is still connected, the next scan discovers it again.
 - **Proxmox:** VMs and containers are recognised in the table ("VM 100" / "CT 200" badge) by matching MAC, IP and, with no other clue, an identical name. The Hosts / Online / Offline cards filter the table.
 - Hovering (or tapping on iPad) an IP in UPS, Proxmox, WOL or Overview shows a card with the host's data.
