@@ -362,5 +362,7 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
 @media(max-width:520px){.dns-table thead th:last-child,.dns-table tbody tr:not(.detail-row) td:last-child{display:none}}
 
 .up-ok{color:var(--green)}.up-bad{color:var(--red)}
+/* DNS de salida que ya no está en la configuración. / EN: Upstream no longer in the configuration. */
+.top-row.up-gone{opacity:.55}
 .res-form{display:flex;gap:8px;padding:12px 16px;flex-wrap:wrap}.res-form input{flex:1;min-width:180px}
 .res-ans{padding:2px 16px 10px;font:12px/1.6 var(--mono);color:var(--text-mid)}

@@ -303,7 +303,7 @@ labtower-health
 - El historial vive en `metrics.db` del módulo: cada revisión 2 días y un resumen por hora 365 días (`UPTIME_KEEP_DAYS`). Entra en los respaldos.
 
 ### DNS Monitor
-- **Salud de los DNS de salida:** cada 60 s se le pregunta `example.com` directamente a cada DNS de salida que informa Pi-hole o AdGuard Home; la lista muestra si responde y en cuánto. Uno que no responde genera una alerta (crítica si ninguno responde) y un evento en la línea de tiempo del Resumen. No se sondean DoH/DoT, esta máquina ni direcciones link-local.
+- **Salud de los DNS de salida:** cada 60 s se le pregunta `example.com` directamente a cada DNS de salida que informa Pi-hole o AdGuard Home; la lista muestra si responde y en cuánto. Uno que no responde genera una alerta (crítica si ninguno responde) y un evento en la línea de tiempo del Resumen. No se sondean DoH/DoT, esta máquina ni direcciones link-local. Los DNS de salida que siguen en las estadísticas pero ya no están en la configuración de AdGuard Home o Pi-hole v6 aparecen atenuados como «ya no configurado», sin sondeo ni avisos.
 - **Consultas por hora y por cliente:** «Consultas por hora» con rangos (1 día, 1 semana, 1 mes, todo) y, en Pi-hole, un gráfico de actividad por cliente.
 - **Prueba de resolución** (nivel «ejecutar»): escribe un nombre y se pregunta al servidor DNS y a un resolutor externo (`1.1.1.1`, cambiable con `DNS_COMPARE`); muestra las respuestas de ambos y avisa si el nombre está **bloqueado** por tu DNS.
 

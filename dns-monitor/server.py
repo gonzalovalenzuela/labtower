@@ -237,6 +237,21 @@ def hour_rows(rows, now=None):
         a = acc.setdefault(h, [0, 0]); a[0] += int(t or 0); a[1] += int(b or 0)
     return [(h, a[0], a[1]) for h, a in sorted(acc.items())]
 
+# ─── DNS de salida configurados ───────────────────────────────────────────────
+# Pi-hole y AdGuard muestran en sus estadísticas los DNS de salida usados en el periodo guardado (24 h por omisión), aunque
+# ya se hayan quitado de la configuración. Se marcan con «old»: se ven atenuados, no se sondean y no generan avisos.
+# Si no se pudo leer la configuración (conf None), no se marca nada.
+# EN: Pi-hole and AdGuard list in their statistics the upstreams used in the kept period (24 h by default), even after they
+#     were removed from the configuration. They are marked "old": shown dimmed, not probed and raising no alerts.
+#     When the configuration could not be read (conf None), nothing is marked.
+def _lst(v): return v if isinstance(v, list) else []
+
+def mark_old(ups: list, conf) -> None:
+    if not conf: return
+    for u in ups:
+        k = dnsq.upstream_key(u.get("ip") or u.get("name"), u.get("port"))
+        if k and k not in conf: u["old"] = True
+
 # ─── Pi-hole ──────────────────────────────────────────────────────────────────
 # v6: POST /api/auth da un «sid» que se manda en la cabecera X-FTL-SID (dura unos minutos y se renueva al usarlo).
 # v5: /admin/api.php con ?auth=<token>; el token es el que muestra Ajustes → API.
@@ -306,6 +321,9 @@ def pihole_collect(cfg, st):
             ups.append({"name": x.get("name") or x.get("ip"), "ip": x.get("ip"), "port": x.get("port"), "count": cnt, "ms": ms})
             if ms is not None and cnt: wsum += ms * cnt; wcnt += cnt
         snap["upstreams"], snap["ms"] = ups, (round(wsum / wcnt, 1) if wcnt else None)
+        dc = _g(get("/api/config/dns"), "config", "dns", default={}) or {}
+        rev = [str(x).split(",")[2] for x in _lst(dc.get("revServers")) if len(str(x).split(",")) >= 3]
+        mark_old(ups, dnsq.config_upstreams(_lst(dc.get("upstreams")) + rev))
         hh = get("/api/history")
         h6 = [(x.get("timestamp"), x.get("total"), x.get("blocked")) for x in (_g(hh, "history", default=[]) or []) if isinstance(x, dict) and _num(x.get("timestamp"))]
         snap["hourly"] = bin24(h6); snap["hours"] = hour_rows(h6)
@@ -389,6 +407,11 @@ def adguard_collect(cfg, st):
     times = dict(_pairs(stt.get("top_upstreams_avg_time")))
     snap["upstreams"] = [{"name": k, "ip": k, "port": None, "count": v, "ms": round(times[k] * 1000, 1) if _num(times.get(k)) and times[k] > 0 else None}
                          for k, v in _pairs(stt.get("top_upstreams_responses"))[:6]]
+    try:
+        c, di = _ag(cfg, "GET", "/control/dns_info")
+        if c == 200 and isinstance(di, dict) and _lst(di.get("upstream_dns")) and not di.get("upstream_dns_file"):
+            mark_old(snap["upstreams"], dnsq.config_upstreams(_lst(di.get("upstream_dns")) + _lst(di.get("fallback_dns")) + _lst(di.get("local_ptr_upstreams"))))
+    except DnsError as e: warnings.append(f"dns_info: {e}")
     dq, bf = stt.get("dns_queries") or [], stt.get("blocked_filtering") or []
     if stt.get("time_units") == "hours" and len(dq) <= 24 and dq:
         pad = 24 - len(dq)
@@ -429,6 +452,7 @@ def probe_upstreams(snap: dict, st: dict):
     ups = snap.get("upstreams") or []
     pr = st.setdefault("probe", {"ts": 0.0, "res": {}})
     def target(u):            # (address, port) of an upstream that may be probed, else None
+        if u.get("old"): return None
         hp = dnsq.split_upstream(u.get("ip") or u.get("name"), u.get("port"))
         return hp if hp and (hp[1] == 53 or hp[1] >= 1024) and auth.valid_target(hp[0]) else None
     if time.time() - pr["ts"] >= PROBE_EVERY:
@@ -479,7 +503,7 @@ def compute_alerts(s: dict) -> list:
     if s.get("blocking") == "disabled": a.append({"lv": "warn", "type": "blocking_off", "value": s.get("timer")})
     elif s.get("blocking") == "failed": a.append({"lv": "crit", "type": "blocking_failed"})
     if _num(s.get("domains_blocked")) and s["domains_blocked"] == 0 and s.get("blocking") == "enabled": a.append({"lv": "warn", "type": "no_lists"})
-    ups = s.get("upstreams") or []
+    ups = [u for u in s.get("upstreams") or [] if not u.get("old")]          # removed from the configuration: no alerts
     probed = [u for u in ups if u.get("probe")]
     down = [u for u in probed if not u["probe"]["ok"]]
     if down: a.append({"lv": "crit" if len(down) == len(probed) else "warn", "type": "upstream_down", "value": ", ".join(str(u.get("name") or u.get("ip")) for u in down)[:80]})

@@ -102,7 +102,7 @@ const LANG={
  "topBlocked": "Top blocked",
  "topClients": "Top clients",
  "upstreams": "Upstream DNS",
- "upOk": "answers", "upDown": "no answer", "resTitle": "Resolution test", "resName": "Domain name (e.g. example.com)", "resBtn": "Resolve", "resServer": "This DNS server", "resOutside": "Outside resolver", "resBlocked": "Blocked by this DNS (the outside resolver answers)", "resFailed": "This DNS server did not answer", "resSame": "Answers received", "resNone": "no answer records", "resErr": "Could not resolve",
+ "upOk": "answers", "upDown": "no answer", "upOld": "no longer configured", "upOldTip": "Still in the DNS statistics, but no longer in its configuration. It raises no alerts.", "resTitle": "Resolution test", "resName": "Domain name (e.g. example.com)", "resBtn": "Resolve", "resServer": "This DNS server", "resOutside": "Outside resolver", "resBlocked": "Blocked by this DNS (the outside resolver answers)", "resFailed": "This DNS server did not answer", "resSame": "Answers received", "resNone": "no answer records", "resErr": "Could not resolve",
  "hourly": "Queries per hour (last 24 h)",
  "qTitleH": "Queries per hour",
  "qTitleD": "Queries per day",
@@ -237,7 +237,7 @@ const LANG={
  "topBlocked": "Dominios más bloqueados",
  "topClients": "Clientes más activos",
  "upstreams": "DNS de salida",
- "upOk": "responde", "upDown": "sin respuesta", "resTitle": "Prueba de resolución", "resName": "Nombre de dominio (ej. example.com)", "resBtn": "Resolver", "resServer": "Este servidor DNS", "resOutside": "Resolutor externo", "resBlocked": "Bloqueado por este DNS (el resolutor externo sí responde)", "resFailed": "Este servidor DNS no respondió", "resSame": "Respuestas recibidas", "resNone": "sin registros de respuesta", "resErr": "No se pudo resolver",
+ "upOk": "responde", "upDown": "sin respuesta", "upOld": "ya no configurado", "upOldTip": "Sigue en las estadísticas del DNS, pero ya no está en su configuración. No genera avisos.", "resTitle": "Prueba de resolución", "resName": "Nombre de dominio (ej. example.com)", "resBtn": "Resolver", "resServer": "Este servidor DNS", "resOutside": "Resolutor externo", "resBlocked": "Bloqueado por este DNS (el resolutor externo sí responde)", "resFailed": "Este servidor DNS no respondió", "resSame": "Respuestas recibidas", "resNone": "sin registros de respuesta", "resErr": "No se pudo resolver",
  "hourly": "Consultas por hora (últimas 24 h)",
  "qTitleH": "Consultas por hora",
  "qTitleD": "Consultas por día",
@@ -559,7 +559,7 @@ function buildDetail(n){
   h+=queriesCard(n.id,d)+clientsCard(n.id);
   h+=topList(t('topDomains'),d.top_domains,'var(--dns)')+topList(t('topBlocked'),d.top_blocked,'var(--red)')+topList(t('topClients'),d.top_clients,'var(--blue)');
   const upState=u=>!u.probe?'':u.probe.ok?` <span class="up-ok" title="${esc(t('upOk'))}">●</span> `+esc(u.probe.ms)+' ms':` <span class="up-bad" title="${esc(t('upDown'))}">●</span> `+esc(t('upDown'));
-  const ups=(d.upstreams||[]).map(u=>`<div class="top-row"><span class="tn" title="${esc(u.ip||'')}">${esc(u.name||u.ip||'—')}${u.port?`<small>:${esc(u.port)}</small>`:''}</span><span class="tc">${esc(fmtNum(u.count))}${u.ms!=null?' · '+esc(u.ms)+' ms':''}${upState(u)}</span></div>`).join('');
+  const ups=(d.upstreams||[]).map(u=>`<div class="top-row${u.old?' up-gone':''}"${u.old?` title="${esc(t('upOldTip'))}"`:''}><span class="tn" title="${esc(u.ip||'')}">${esc(u.name||u.ip||'—')}${u.port?`<small>:${esc(u.port)}</small>`:''}</span><span class="tc">${esc(fmtNum(u.count))}${u.ms!=null?' · '+esc(u.ms)+' ms':''}${u.old?' · '+esc(t('upOld')):upState(u)}</span></div>`).join('');
   h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('upstreams'))}</div></div>${ups||`<div class="dns-empty">${esc(t('noData'))}</div>`}</div>`;
   if(canExec())h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('resTitle'))}</div></div>
     <div class="res-form"><input type="text" id="res-name" maxlength="253" placeholder="${esc(t('resName'))}" value="${esc(RES.name)}" data-on-change="saveRes"><select id="res-type" data-on-change="saveRes"><option>A</option><option${RES.type==='AAAA'?' selected':''}>AAAA</option></select><button class="btn-secondary" data-on-click="runResolve" data-on-click-args="${jsargs([n.id])}">${esc(t('resBtn'))}</button></div>

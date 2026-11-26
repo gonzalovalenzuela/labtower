@@ -65,6 +65,8 @@ class Fake:
         if path == "/api/stats/upstreams":
             return h._send(200, {"upstreams": [{"ip": "1.1.1.1", "name": "one.one.one.one", "port": 53, "count": 300, "statistics": {"response": 0.020, "variance": 0}},
                                                {"ip": "9.9.9.9", "name": None, "port": 53, "count": 100, "statistics": {"response": 0.060, "variance": 0}}]})
+        if path == "/api/config/dns":
+            return h._send(200, {"config": {"dns": {"upstreams": ["1.1.1.1#53"], "revServers": ["true,192.0.2.0/24,192.0.2.1,example.lan"]}}})
         if path == "/api/history":
             return h._send(200, {"history": [{"timestamp": NOW - 600 * i, "total": 10, "cached": 4, "blocked": 2, "forwarded": 4} for i in range(1, 30)]})
         if path == "/api/info/version": return h._send(200, {"version": {"core": {"local": {"version": "v6.1"}}}})
@@ -96,7 +98,10 @@ class Fake:
             return h._send(200, {"time_units": "hours", "num_dns_queries": 2000, "num_blocked_filtering": 300, "num_replaced_safebrowsing": 10, "num_replaced_parental": 0,
                                  "avg_processing_time": 0.0123, "dns_queries": [10] * 24, "blocked_filtering": [2] * 24,
                                  "top_queried_domains": [{"a.example": 90}, {"b.example": 10}], "top_blocked_domains": [{"ad.example": 50}],
-                                 "top_clients": [{"192.0.2.10": 1500}], "top_upstreams_responses": [{"1.1.1.1:53": 900}], "top_upstreams_avg_time": [{"1.1.1.1:53": 0.015}]})
+                                 "top_clients": [{"192.0.2.10": 1500}], "top_upstreams_responses": [{"1.1.1.1:53": 900}, {"https://dns10.quad9.net:443/dns-query": 300}],
+                                 "top_upstreams_avg_time": [{"1.1.1.1:53": 0.015}, {"https://dns10.quad9.net:443/dns-query": 6.0}]})
+        if path == "/control/dns_info":
+            return h._send(200, {"upstream_dns": ["# comment", "1.1.1.1", "[/example.lan/]192.0.2.1"], "upstream_dns_file": "", "fallback_dns": [], "local_ptr_upstreams": []})
         if path == "/control/filtering/status": return h._send(200, {"enabled": True, "filters": [{"enabled": True, "rules_count": 5000}, {"enabled": False, "rules_count": 9999}]})
         if path == "/control/protection" and method == "POST":
             self.blocking = bool(body["enabled"]); return h._send(200, {})
@@ -166,6 +171,9 @@ class Collect(unittest.TestCase):
             s = m.collect(self.cfg(f), {})
             self.assertEqual((s["queries"], s["blocked"], s["pct"], s["blocking"], s["ms"], s["domains_blocked"], s["version"]), (2000, 310, 15.5, "enabled", 12.3, 5000, "v0.107.50"))
             self.assertEqual(s["top_domains"][0], {"name": "a.example", "count": 90}); self.assertEqual(s["upstreams"][0]["ms"], 15.0)
+            # El DoH quitado de la configuración queda marcado y su lentitud no genera aviso.
+            # EN: The DoH removed from the configuration is marked and its slowness raises no alert.
+            self.assertEqual([bool(u.get("old")) for u in s["upstreams"]], [False, True]); self.assertEqual(s["alerts"], [])
             self.assertEqual(sum(s["hourly"]["total"]), 240)
             with self.assertRaisesRegex(m.DnsError, "Wrong username or password"): m.collect(self.cfg(f, password="bad"), {})
         finally: f.close()
@@ -198,6 +206,43 @@ class Collect(unittest.TestCase):
         try:
             r = m.test_connection(self.cfg(f)); self.assertEqual((r["api"], r["queries"]), ("v6", 1000)); self.assertEqual(f.sessions, set())
         finally: f.close()
+
+
+class ConfiguredUpstreams(unittest.TestCase):
+    def test_pihole_v6_marks_removed_upstreams(self):
+        f = Fake("ph6")
+        try:
+            s = m.collect(m.validate({"name": "T", "url": f.url, "type": "pihole", "password": f.password}), {})
+            self.assertEqual({u["ip"]: bool(u.get("old")) for u in s["upstreams"]}, {"1.1.1.1": False, "9.9.9.9": True})
+        finally: f.close()
+
+    def test_keys_match_between_statistics_and_configuration(self):
+        k = m.dnsq.upstream_key
+        self.assertEqual(k("https://dns10.quad9.net/dns-query"), k("https://dns10.quad9.net:443/dns-query"))
+        self.assertEqual(k("tls://DNS10.quad9.net"), ("tls", "dns10.quad9.net", 853, ""))
+        self.assertEqual(k("1.1.1.1"), k("1.1.1.1:53")); self.assertEqual(k("1.1.1.1"), k("1.1.1.1", 53)); self.assertEqual(k("udp://1.1.1.1"), k("1.1.1.1#53"))
+        self.assertEqual(k("127.0.0.1#5335"), ("udp", "127.0.0.1", 5335, ""))
+        self.assertEqual(k("2606:4700::1111"), k("[2606:4700::1111]:53")); self.assertEqual(k("2606:4700::1111", 53), ("udp", "2606:4700::1111", 53, ""))
+        self.assertNotEqual(k("tcp://1.1.1.1"), k("1.1.1.1")); self.assertNotEqual(k("https://dns.google/dns-query"), k("https://dns.google/resolve"))
+        for bad in ("", "sdns://AQcAAAAAAAAA", "ftp://x", "1.1.1.1:99999", "blocklist:x", "ho st"): self.assertIsNone(k(bad), bad)
+        self.assertIsNone(k("blocklist", -1)); self.assertIsNone(k("cache", -1))
+
+    def test_configuration_list(self):
+        c = m.dnsq.config_upstreams
+        self.assertEqual(c(["# c", "1.1.1.1 9.9.9.9", "[/example.lan/]192.0.2.1", "[/local/]#", ""]),
+                         {("udp", "1.1.1.1", 53, ""), ("udp", "9.9.9.9", 53, ""), ("udp", "192.0.2.1", 53, "")})
+        self.assertIsNone(c([])); self.assertIsNone(c(["# only a comment"])); self.assertIsNone(c(["1.1.1.1", "sdns://AQcAAAAAAAAA"]))
+
+    def test_nothing_marked_without_configuration(self):
+        ups = [{"ip": "1.1.1.1", "port": 53}]
+        m.mark_old(ups, None); self.assertNotIn("old", ups[0])
+        m.mark_old(ups, {("udp", "9.9.9.9", 53, "")}); self.assertTrue(ups[0]["old"])
+
+    def test_old_upstreams_are_not_probed_or_alerted(self):
+        base = {"blocking": "enabled", "domains_blocked": 10}
+        self.assertEqual(m.compute_alerts({**base, "upstreams": [{"ms": 6000, "old": True}, {"ms": 5, "old": True, "probe": {"ok": False}}]}), [])
+        snap, st = {"upstreams": [{"ip": "192.0.2.53", "port": 53, "old": True}]}, {}
+        m.probe_upstreams(snap, st); self.assertNotIn("probe", snap["upstreams"][0]); self.assertEqual(st["probe"]["res"], {})
 
 
 class Alerts(unittest.TestCase):

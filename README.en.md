@@ -303,7 +303,7 @@ labtower-health
 - The history lives in the module's `metrics.db`: every check for 2 days and an hourly summary for 365 days (`UPTIME_KEEP_DAYS`). It is included in backups.
 
 ### DNS Monitor
-- **Upstream health:** every 60 s `example.com` is asked directly to each upstream DNS reported by Pi-hole or AdGuard Home; the list shows whether it answers and how fast. One that does not answer raises an alert (critical if none answers) and an event on the Overview timeline. DoH/DoT, this machine and link-local addresses are not probed.
+- **Upstream health:** every 60 s `example.com` is asked directly to each upstream DNS reported by Pi-hole or AdGuard Home; the list shows whether it answers and how fast. One that does not answer raises an alert (critical if none answers) and an event on the Overview timeline. DoH/DoT, this machine and link-local addresses are not probed. Upstreams still in the statistics but no longer in the AdGuard Home or Pi-hole v6 configuration show dimmed as "no longer configured", with no probing or alerts.
 - **Queries per hour and per client:** "Queries per hour" with ranges (1 day, 1 week, 1 month, all) and, on Pi-hole, a per-client activity chart.
 - **Resolution test** ("execute" level): type a name and it is asked to the DNS server and to an outside resolver (`1.1.1.1`, changeable with `DNS_COMPARE`); it shows both answers and warns when the name is **blocked** by your DNS.
 

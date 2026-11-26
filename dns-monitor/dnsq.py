@@ -89,3 +89,50 @@ def split_upstream(text, port=None):
     except ValueError: return None
     p = int(p) if str(p).isdigit() else 53
     return (ip, p) if 1 <= p <= 65535 else None
+
+# Puertos por omisión de cada esquema de DNS de salida (sin esquema = UDP).
+# EN: Default port of each upstream scheme (no scheme = UDP).
+_DEF_PORT = {"udp": 53, "tcp": 53, "tls": 853, "quic": 853, "https": 443, "h3": 443}
+
+# Forma comparable de un DNS de salida, para cruzar las estadísticas con la configuración: (esquema, host, puerto, ruta).
+# Acepta «1.1.1.1», «1.1.1.1:53», «127.0.0.1#5335», «2606:4700::1111», «[2606:4700::1111]:53», «tls://dns.quad9.net» o
+# «https://dns.quad9.net:443/dns-query». None si no se entiende (p. ej. un sello sdns:// o un puerto inválido).
+# EN: Comparable form of an upstream, to match the statistics with the configuration: (scheme, host, port, path).
+#     None when it cannot be understood (e.g. an sdns:// stamp or an invalid port).
+def upstream_key(text, port=None):
+    t = str(text or "").strip()
+    scheme, sep, rest = t.partition("://")
+    scheme = scheme.lower() if sep else "udp"
+    if not sep: rest = t
+    if scheme not in _DEF_PORT: return None
+    hp, _, path = rest.partition("/")
+    m = re.fullmatch(r"\[([0-9a-fA-F:.]+)\](?:[:#](\d{1,5}))?", hp)
+    if m: host, p = m.group(1), m.group(2)
+    elif hp.count(":") > 1: host, _, p = hp.partition("#")                    # bare IPv6, port only with "#"
+    else: host, _, p = hp.replace("#", ":").partition(":")
+    if p and not p.isdigit(): return None
+    p = int(p) if p else (port if port is not None else _DEF_PORT[scheme])
+    if not host or not isinstance(p, int) or not 1 <= p <= 65535: return None
+    try: host = str(ipaddress.ip_address(host))
+    except ValueError:
+        host = host.lower().rstrip(".")
+        if not re.fullmatch(r"[a-z0-9.-]+", host): return None
+    return (scheme, host, p, "/" + path.split("?")[0].strip("/") if scheme in ("https", "h3") else "")
+
+# Conjunto de DNS de salida de una lista de configuración (una entrada por línea; varias separadas por espacios).
+# Salta comentarios «#…» y, en las reglas por dominio «[/lan/]192.0.2.1», toma lo que va después de «]».
+# None si hay alguna entrada que no se entiende o la lista queda vacía: entonces no se marca nada como antiguo.
+# EN: Set of upstreams in a configuration list (one entry per line; several separated by spaces). Skips "#…" comments
+#     and, in per-domain rules "[/lan/]192.0.2.1", takes what follows "]". None when an entry cannot be understood
+#     or the list is empty: then nothing is marked as old.
+def config_upstreams(lines):
+    keys = set()
+    for ln in lines or []:
+        ln = str(ln).strip()
+        if ln.startswith("[/"): ln = ln.partition("]")[2].strip()
+        if not ln or ln.startswith("#"): continue                          # also "[/lan/]#" = default upstreams
+        for tok in ln.split():
+            k = upstream_key(tok)
+            if k is None: return None
+            keys.add(k)
+    return keys or None
