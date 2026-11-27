@@ -9,6 +9,7 @@ import math
 DEFAULT_MAX_AGE_H = 168         # 7 days; configurable per cluster (was 36 h before 2.1.4d)
 LEGACY_DEFAULT_H = 36           # the old default: it was never selectable, so a saved 36 means "never changed"
 MAX_IGNORE = 200
+DEFAULT_SNAP_DAYS = 30          # a snapshot older than this counts as forgotten; configurable per cluster
 
 def _i(x, default=0):
     try:
@@ -79,6 +80,35 @@ def apply_config(cache, cfg):
     order = {"never": 0, "old": 1, "ok": 2, "ignored": 3, "unknown": 4}
     cache["rows"].sort(key=lambda r: (order.get(r["status"], 4), r["vmid"]))
     cache["max_age_h"], cache["ignore"] = cfg["max_age_h"], cfg["ignore"]
+    if "snap_days" in cfg and isinstance(cache.get("snaps_all"), list):
+        cache["snap_days"] = cfg["snap_days"]
+        cache["snaps"], cache["alerts"] = old_snapshots(cache["snaps_all"], cfg["snap_days"], cfg["ignore"], cache.get("ts") or 0)
+
+# Snapshots olvidados: los de más de `days` días (las VMs/CTs ignoradas en respaldos tampoco cuentan aquí). Devuelve (lista, avisos):
+# lista ordenada del más antiguo al más nuevo; un aviso por VM/CT con cuántos tiene y la edad del más antiguo.
+# snaps = [{"vmid", "name", "type", "node", "snap", "ts"}]
+# EN: Forgotten snapshots: those older than `days` days (VMs/CTs ignored for backups do not count here either). Returns (list, alerts):
+#     list from the oldest to the newest; one alert per VM/CT with how many it has and the age of the oldest.
+def old_snapshots(snaps, days, ignore, now):
+    ign, limit = {_i(v) for v in ignore or []}, days * 86400
+    old = sorted((s for s in snaps if isinstance(s, dict) and _i(s.get("vmid")) not in ign and _i(s.get("ts")) and now - _i(s["ts"]) > limit),
+                 key=lambda s: _i(s["ts"]))
+    per = {}
+    for s in old:
+        a = per.setdefault(s["vmid"], {"lv": "warn", "type": "snap_old", "vmid": s["vmid"], "name": s.get("name") or str(s["vmid"]),
+                                        "n": 0, "days": int((now - _i(s["ts"])) // 86400), "limit": days})
+        a["n"] += 1
+    return old, list(per.values())
+
+# Snapshots de la respuesta de /nodes/<n>/<qemu|lxc>/<vmid>/snapshot («current» es el estado actual, no un snapshot).
+# EN: Snapshots from /nodes/<n>/<qemu|lxc>/<vmid>/snapshot ("current" is the live state, not a snapshot).
+def parse_snapshots(data, guest):
+    out = []
+    for x in data if isinstance(data, list) else []:
+        if not isinstance(x, dict) or x.get("name") in (None, "current") or not _i(x.get("snaptime")): continue
+        out.append({"vmid": _i(guest.get("vmid")), "name": _s(guest.get("name")), "type": "ct" if guest.get("type") == "lxc" else "vm",
+                    "node": _s(guest.get("node")), "snap": _s(x.get("name"), 40), "ts": _i(x.get("snaptime"))})
+    return out
 
 # Compacta las tareas de /cluster/tasks: solo vzdump de los últimos `days` días. ok = None mientras sigue corriendo.
 # EN: Compact the /cluster/tasks list: only vzdump of the last `days` days. ok = None while it is still running.
@@ -120,7 +150,9 @@ def clean_config(body):
     for v in ign:
         if isinstance(v, bool) or not isinstance(v, int) or not (100 <= v <= 999999999): raise ValueError("Invalid VM id")
         ids.append(v)
-    return {"max_age_h": int(h), "ignore": sorted(set(ids))}
+    sd = body.get("snap_days", DEFAULT_SNAP_DAYS)
+    if isinstance(sd, bool) or not isinstance(sd, int) or not (1 <= sd <= 365): raise ValueError("Invalid snapshot age")
+    return {"max_age_h": int(h), "ignore": sorted(set(ids)), "snap_days": sd}
 
 
 # ES: Los ajustes guardados con el antiguo valor por defecto (36 h) pasan al nuevo (7 días): antes no se podía elegir, así que 36 nunca fue una decisión.

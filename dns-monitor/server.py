@@ -252,6 +252,44 @@ def mark_old(ups: list, conf) -> None:
         k = dnsq.upstream_key(u.get("ip") or u.get("name"), u.get("port"))
         if k and k not in conf: u["old"] = True
 
+# ─── Comparar servidores del mismo tipo ───────────────────────────────────────
+# ES: Cada CFG_EVERY segundos se leen de cada servidor sus listas de bloqueo (y de permitidos), sus DNS de salida y sus registros locales
+#     (Local DNS / CNAME en Pi-hole v6, reescrituras en AdGuard). Los servidores del mismo tipo se comparan: si difieren, cada uno muestra
+#     las diferencias y queda con aviso. Pi-hole v5 no expone su configuración y no se compara.
+# EN: Every CFG_EVERY seconds each server's blocklists (and allowlists), upstreams and local records (Local DNS / CNAME on Pi-hole v6,
+#     rewrites on AdGuard) are read. Servers of the same type are compared: when they differ, each one shows the differences and keeps a
+#     warning. Pi-hole v5 does not expose its configuration and is not compared.
+CFG_EVERY = 600
+CFG_MAX   = 2000
+CFG_CATS  = ("lists", "ups", "local")
+
+def cfg_sets(lists, ups, local) -> dict:
+    """Normalized, sorted sets; None for a category that could not be read (it is then not compared)."""
+    def norm(xs): return sorted({re.sub(r"\s+", " ", str(x)).strip()[:200] for x in xs if str(x).strip() and not str(x).strip().startswith("#")})[:CFG_MAX] if xs is not None else None
+    return {"lists": norm(lists), "ups": norm(ups), "local": norm(local)}
+
+def config_diffs(entries) -> list:
+    """entries = [(id, name, type, sets)]. Pairs of the same type that differ: [{"a", "b", "an", "bn", "diff": {cat: {"a": [...], "b": [...]}}, "n"}]."""
+    out = []
+    for i, (ia, na, ta, sa) in enumerate(entries):
+        for ib, nb, tb, sb in entries[i + 1:]:
+            if ta != tb or not sa or not sb: continue
+            diff = {}
+            for c in CFG_CATS:
+                if sa.get(c) is None or sb.get(c) is None: continue
+                a_only, b_only = sorted(set(sa[c]) - set(sb[c])), sorted(set(sb[c]) - set(sa[c]))
+                if a_only or b_only: diff[c] = {"a": a_only[:50], "b": b_only[:50]}
+            if diff: out.append({"a": ia, "b": ib, "an": na, "bn": nb, "diff": diff, "n": sum(len(d["a"]) + len(d["b"]) for d in diff.values())})
+    return out
+
+def _cmp_entries():
+    out = []
+    for n in load_servers():
+        c = _cache.get(n["id"])
+        if c is None or auth.paused(n) or not c.state.get("cfgsets"): continue
+        out.append((n["id"], n["name"], n["type"], c.state["cfgsets"]))
+    return out
+
 # ─── Pi-hole ──────────────────────────────────────────────────────────────────
 # v6: POST /api/auth da un «sid» que se manda en la cabecera X-FTL-SID (dura unos minutos y se renueva al usarlo).
 # v5: /admin/api.php con ?auth=<token>; el token es el que muestra Ajustes → API.
@@ -324,6 +362,11 @@ def pihole_collect(cfg, st):
         dc = _g(get("/api/config/dns"), "config", "dns", default={}) or {}
         rev = [str(x).split(",")[2] for x in _lst(dc.get("revServers")) if len(str(x).split(",")) >= 3]
         mark_old(ups, dnsq.config_upstreams(_lst(dc.get("upstreams")) + rev))
+        if dc and time.time() - st.get("cfg_ts", 0) >= CFG_EVERY:                           # configuration to compare servers
+            ls = get("/api/lists")
+            st["cfgsets"] = cfg_sets([f'{x.get("type") or "block"} {x.get("address")}' for x in _lst(_g(ls, "lists", default=[])) if isinstance(x, dict) and x.get("enabled", True)] if ls else None,
+                                     _lst(dc.get("upstreams")), _lst(dc.get("hosts")) + [f"CNAME {x}" for x in _lst(dc.get("cnameRecords"))])
+            st["cfg_ts"] = time.time()
         hh = get("/api/history")
         h6 = [(x.get("timestamp"), x.get("total"), x.get("blocked")) for x in (_g(hh, "history", default=[]) or []) if isinstance(x, dict) and _num(x.get("timestamp"))]
         snap["hourly"] = bin24(h6); snap["hours"] = hour_rows(h6)
@@ -411,6 +454,13 @@ def adguard_collect(cfg, st):
         c, di = _ag(cfg, "GET", "/control/dns_info")
         if c == 200 and isinstance(di, dict) and _lst(di.get("upstream_dns")) and not di.get("upstream_dns_file"):
             mark_old(snap["upstreams"], dnsq.config_upstreams(_lst(di.get("upstream_dns")) + _lst(di.get("fallback_dns")) + _lst(di.get("local_ptr_upstreams"))))
+        if c == 200 and isinstance(di, dict) and time.time() - st.get("cfg_ts", 0) >= CFG_EVERY:   # configuration to compare servers
+            cf, fs = _ag(cfg, "GET", "/control/filtering/status")
+            cr, rw = _ag(cfg, "GET", "/control/rewrite/list")
+            lists = [f'block {x.get("url")}' for x in _lst((fs or {}).get("filters")) if isinstance(x, dict) and x.get("enabled")] + \
+                    [f'allow {x.get("url")}' for x in _lst((fs or {}).get("whitelist_filters")) if isinstance(x, dict) and x.get("enabled")] if cf == 200 and isinstance(fs, dict) else None
+            st["cfgsets"] = cfg_sets(lists, _lst(di.get("upstream_dns")), [f'{x.get("domain")} {x.get("answer")}' for x in _lst(rw) if isinstance(x, dict)] if cr == 200 else None)
+            st["cfg_ts"] = time.time()
     except DnsError as e: warnings.append(f"dns_info: {e}")
     dq, bf = stt.get("dns_queries") or [], stt.get("blocked_filtering") or []
     if stt.get("time_units") == "hours" and len(dq) <= 24 and dq:
@@ -444,29 +494,48 @@ PROBE_NAME  = "example.com"
 BLOCK_ANSWERS = ("0.0.0." + "0", "::")                       # addresses a DNS blocker answers with (a comparison, not a bind)
 COMPARE_DNS = os.environ.get("DNS_COMPARE", "1.1.1.1")     # outside resolver used by the resolution test
 
-# Pregunta «example.com» directamente a cada DNS de salida (cada 60 s) y anota si responde y en cuánto. Solo se sondean direcciones IP
-# permitidas (no esta máquina ni enlace local, y solo el puerto 53 o puertos altos) y nunca DoH/DoT, que no se pueden consultar por UDP.
-# EN: Ask "example.com" directly to each upstream (every 60 s) and note whether it answers and how fast. Only allowed IP addresses
-#     are probed (not this machine or link-local, and only port 53 or high ports) and never DoH/DoT, which cannot be queried over UDP.
+# Pregunta «example.com» directamente a cada DNS de salida (cada 60 s) y anota si responde y en cuánto: por UDP, por TLS (DoT) o por
+# HTTPS (DoH). Solo se sondean direcciones permitidas (no esta máquina ni enlace local); por UDP solo el puerto 53 o puertos altos, y por
+# DoT/DoH su puerto habitual (853 / 443) o uno alto. DoQ, HTTP/3 y los sellos sdns:// no se sondean.
+# EN: Ask "example.com" directly to each upstream (every 60 s) and note whether it answers and how fast: over UDP, TLS (DoT) or HTTPS (DoH).
+#     Only allowed addresses are probed (not this machine or link-local); over UDP only port 53 or high ports, and over DoT/DoH their usual
+#     port (853 / 443) or a high one. DoQ, HTTP/3 and sdns:// stamps are not probed.
+PROBE_PORTS = {"udp": 53, "tls": 853, "https": 443}
+
+def _probe_ip(host):
+    """A resolved address of `host` that may be probed, else None."""
+    try: addrs = [host] if dnsq.split_upstream(host) else list(dict.fromkeys(a[4][0] for a in socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)))
+    except OSError: return None
+    return next((a for a in addrs if auth.valid_target(a, resolve=False)), None)
+
+def probe_target(u: dict, resolve=_probe_ip):
+    """(kind, ip, host, port, path) of an upstream that may be probed, else None."""
+    if u.get("old"): return None
+    k = dnsq.upstream_key(u.get("ip") or u.get("name"), u.get("port"))
+    if not k or k[0] not in PROBE_PORTS or not (k[2] == PROBE_PORTS[k[0]] or k[2] >= 1024): return None
+    ip = resolve(k[1])
+    return (k[0], ip, k[1], k[2], k[3]) if ip else None
+
 def probe_upstreams(snap: dict, st: dict):
     ups = snap.get("upstreams") or []
-    pr = st.setdefault("probe", {"ts": 0.0, "res": {}})
-    def target(u):            # (address, port) of an upstream that may be probed, else None
-        if u.get("old"): return None
-        hp = dnsq.split_upstream(u.get("ip") or u.get("name"), u.get("port"))
-        return hp if hp and (hp[1] == 53 or hp[1] >= 1024) and auth.valid_target(hp[0]) else None
+    pr = st.setdefault("probe", {"ts": 0.0, "res": {}, "tg": {}})
     if time.time() - pr["ts"] >= PROBE_EVERY:
-        res, threads = {}, []
-        def work(hp):
-            r = dnsq.query(hp[0], hp[1], PROBE_NAME, "A", 2.0)
-            res[hp] = {"ok": bool(r.get("ok")), "ms": r.get("ms"), "error": r.get("error")}
-        for hp in list(dict.fromkeys(h for h in map(target, ups) if h))[:8]:
-            th = threading.Thread(target=work, args=(hp,), daemon=True); th.start(); threads.append(th)
-        for th in threads: th.join(4)
-        pr["res"], pr["ts"] = res, time.time()
+        res, threads, tg = {}, [], {}
+        def work(t):
+            kind, ip, host, port, path = t
+            r = (dnsq.query(ip, port, PROBE_NAME, "A", 2.0) if kind == "udp" else
+                 dnsq.query_tls(ip, host, port, PROBE_NAME, "A", 3.0) if kind == "tls" else dnsq.query_https(ip, host, port, path, PROBE_NAME, "A", 3.0))
+            res[t] = {"ok": bool(r.get("ok")), "ms": r.get("ms"), "error": r.get("error"), **({"hs": r["hs"]} if r.get("hs") is not None else {})}
+        for u in ups:
+            key = str(u.get("ip") or u.get("name")) + "|" + str(u.get("port"))
+            tg[key] = probe_target(u)
+        for t in list(dict.fromkeys(t for t in tg.values() if t))[:8]:
+            th = threading.Thread(target=work, args=(t,), daemon=True); th.start(); threads.append(th)
+        for th in threads: th.join(5)
+        pr["res"], pr["tg"], pr["ts"] = res, tg, time.time()
     for u in ups:
-        hp = target(u)
-        if hp and hp in pr["res"]: u["probe"] = pr["res"][hp]
+        t = pr["tg"].get(str(u.get("ip") or u.get("name")) + "|" + str(u.get("port")))
+        if t and t in pr["res"]: u["probe"] = {**pr["res"][t], "kind": t[0]}
 
 # Prueba de resolución: pregunta el mismo nombre a este servidor DNS y a un resolutor externo, y compara.
 # EN: Resolution test: ask the same name to this DNS server and to an outside resolver, and compare.
@@ -830,9 +899,20 @@ def _poll(sid: str):
             try:
                 snap = collect(n, cache.state)
                 snap["name"] = n["name"]
+                for d in config_diffs(_cmp_entries()):                       # differs from another server of the same type
+                    if sid not in (d["a"], d["b"]): continue
+                    other = d["bn"] if d["a"] == sid else d["an"]
+                    snap["alerts"].append({"lv": "warn", "type": "config_diff", "value": other})
+                for x in load_servers():
+                    if x["id"] == sid or x.get("type") != n.get("type"): continue
+                    bad = any(a["type"] == "config_diff" and a["value"] == x["name"] for a in snap["alerts"])
+                    ch = auth.state_changed(f"dns-cmp:{sid}:{x['id']}", "diff" if bad else "same")
+                    if ch and bad: auth.record_event("dns", "warn", f"{n['name']}: configuration differs from {x['name']}", "dns_cfg_diff", n=n["name"], o=x["name"])
+                    elif ch and ch[0] == "diff": auth.record_event("dns", "info", f"{n['name']}: configuration matches {x['name']} again", "dns_cfg_same", n=n["name"], o=x["name"])
                 push_hours(sid, snap.pop("hours", None))
                 push_history(sid, snap)
                 cache.update(snap)
+                auth.metrics_report("dns", f"dns:{sid}", [("dns_pct", n["name"], snap.get("pct"))])     # alert rules on the server
                 _events(n, snap)
                 if auth.state_changed(f"dns-dn:{sid}", "up"):
                     auth.record_event("dns", "info", f"{n['name']}: reachable again", "dns_up", n=n["name"])
@@ -888,7 +968,8 @@ def health_report(detailed=False):
 # ─── HTTP ─────────────────────────────────────────────────────────────────────
 _test_gate = threading.Semaphore(2)
 
-class H(BaseHTTPRequestHandler):
+class H(auth.Audited, BaseHTTPRequestHandler):
+    AUDIT_MODULE = "dns"          # accepted changes go to the audit log (auth.Audited)
     timeout = 30
     def log_message(self, fmt, *a):
         # send_error() llega aquí con (código, mensaje) y un 501 de HEAD trae el mensaje en a[1]: solo se registra un código numérico.
@@ -952,7 +1033,9 @@ class H(BaseHTTPRequestHandler):
                 if n["id"] not in _pollers or not _pollers[n["id"]].is_alive(): ensure_poller(n)
                 snap = (DnsCache(n["id"]) if auth.paused(n) else _cache.get(n["id"], DnsCache(n["id"]))).snap()
                 out.append({**public(n), "paused": auth.paused(n), "snap": snap, "history": get_history(n["id"]) if with_hist else []})
-            return self._json(200, {"servers": out})
+            # Alias de Net Monitor para los clientes, solo para quien puede ver Net Monitor. / EN: Net Monitor aliases for the clients, only for who may see Net Monitor.
+            names = auth.net_names() if auth.check_permission(tok, "net", "readonly") else {}
+            return self._json(200, {"servers": out, "names": names, "compare": config_diffs(_cmp_entries())})
         mh = re.fullmatch(r"/api/dns/([A-Za-z0-9_-]{1,40})/history", path)
         if mh:
             if not any(n.get("id") == mh.group(1) for n in load_servers()): return self._json(404, {"error": "Server not found"})

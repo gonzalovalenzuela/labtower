@@ -109,7 +109,7 @@
     <div class="nas-form">
       <div class="two-col">
         <div class="field"><label data-i18n="fieldType">Type</label>
-          <select id="f-type" data-on-change="typeChanged"><option value="http">HTTP(S)</option><option value="tcp">TCP</option><option value="dns">DNS</option></select></div>
+          <select id="f-type" data-on-change="typeChanged"><option value="http">HTTP(S)</option><option value="tcp">TCP</option><option value="dns">DNS</option><option value="ping">Ping (ICMP)</option><option value="domain" data-i18n="typeDomain">Domain expiry</option></select></div>
         <div class="field"><label data-i18n="fieldName">Name</label><input type="text" id="f-name" maxlength="60" autocomplete="off"></div>
       </div>
       <div id="http-box" style="display:flex;flex-direction:column;gap:12px">
@@ -118,6 +118,10 @@
           <div class="field"><label data-i18n="fieldExpect">Expected status codes</label><input type="text" id="f-expect" value="200-399" autocomplete="off"></div>
           <div class="field"><label data-i18n="fieldKeyword">Keyword (optional)</label><input type="text" id="f-keyword" maxlength="100" autocomplete="off"></div>
         </div>
+        <div class="two-col">
+          <div class="field"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="f-kw-absent"><span data-i18n="fieldKwAbsent">The keyword must NOT appear</span></label></div>
+          <div class="field"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="f-follow"><span data-i18n="fieldFollow">Follow redirects</span></label></div>
+        </div>
         <div id="tls-box" class="two-col">
           <div class="field"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="f-insecure"><span data-i18n="fieldInsecure">Do not verify the certificate</span></label><span class="secret-hint" data-i18n="insecureHint"></span></div>
           <div class="field"><label data-i18n="fieldCertDays">Warn days before expiry</label><input type="number" id="f-cert-days" value="14" min="1" max="90"></div>
@@ -125,7 +129,10 @@
       </div>
       <div id="tcp-box" class="two-col" style="display:none">
         <div class="field"><label>Host / IP</label><input type="text" id="f-host" placeholder="192.0.2.20" autocomplete="off"></div>
-        <div class="field"><label data-i18n="fieldPort">Port</label><input type="number" id="f-port" min="1" max="65535" placeholder="22"></div>
+        <div class="field" id="port-field"><label data-i18n="fieldPort">Port</label><input type="number" id="f-port" min="1" max="65535" placeholder="22"></div>
+      </div>
+      <div id="domain-box" class="two-col" style="display:none">
+        <div class="field"><label data-i18n="fieldDomain">Domain</label><input type="text" id="f-domain" placeholder="example.com" autocomplete="off"></div>
       </div>
       <div id="dns-box" style="display:none;flex-direction:column;gap:12px">
         <div class="two-col">
@@ -137,12 +144,12 @@
           <div class="field"><label data-i18n="fieldExpectIp">Expected IP (optional)</label><input type="text" id="f-expect-ip" placeholder="192.0.2.20" autocomplete="off"></div>
         </div>
       </div>
-      <div class="two-col" style="grid-template-columns:1fr 1fr 1fr">
+      <div class="two-col" id="timing-box" style="grid-template-columns:1fr 1fr 1fr">
         <div class="field"><label data-i18n="fieldInterval">Interval (s)</label><input type="number" id="f-interval" value="60" min="20" max="3600"></div>
         <div class="field"><label data-i18n="fieldTimeout">Timeout (s)</label><input type="number" id="f-timeout" value="10" min="2" max="30"></div>
         <div class="field"><label data-i18n="fieldDownAfter">Failures before down</label><input type="number" id="f-down-after" value="3" min="1" max="6"></div>
       </div>
-      <span class="secret-hint" data-i18n="downAfterHint"></span>
+      <span class="secret-hint" id="down-hint" data-i18n="downAfterHint"></span>
       <div class="test-result" id="test-result"></div>
     </div>
     <div class="modal-acts">

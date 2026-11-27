@@ -44,7 +44,10 @@ const LANG={
   "fieldTimeout":"Timeout (s)",
   "fieldDownAfter":"Failures before down",
   "downAfterHint":"Failed checks in a row before the monitor is marked down (3 by default). Until then it shows Pending.",
-  "hint_http":"GET to the URL. Up when the status code is in the list (example: 200-399 or 200,301) and the page contains the keyword, if one is set (case-insensitive). Redirects are not followed.",
+  "hint_http":"GET to the URL. Up when the status code is in the list (example: 200-399 or 200,301) and the page contains the keyword, if one is set (case-insensitive), or does not contain it if so chosen. Redirects are followed only when that box is ticked.",
+  "hint_ping":"Sends an ICMP echo (ping) to the host. Up when it answers within the timeout.",
+  "hint_domain":"Reads the domain's expiry date from its registry (RDAP, or WHOIS when there is none) twice a day. Warns 30 days before, critical at 7 days, and down when it has expired or the date cannot be read.",
+  "typeDomain":"Domain expiry","fieldDomain":"Domain","fieldKwAbsent":"The keyword must NOT appear","fieldFollow":"Follow redirects","domExp":"Domain expires",
   "hint_tcp":"Opens a TCP connection to the port (SSH, SMB, MQTT, a database…). Up when the connection is accepted.",
   "hint_dns":"Resolves the name. Up when it returns a record and, if an IP is set, that IP is among the answers.",
   "cancel":"Cancel",
@@ -148,7 +151,10 @@ const LANG={
   "fieldTimeout":"Tiempo de espera (s)",
   "fieldDownAfter":"Fallos para marcar caído",
   "downAfterHint":"Revisiones fallidas seguidas antes de marcar el monitor como caído (3 por defecto). Mientras tanto queda Pendiente.",
-  "hint_http":"GET a la URL. Arriba si el código de respuesta está en la lista (ejemplo: 200-399 o 200,301) y la página contiene la palabra clave, si se indica (sin distinguir mayúsculas). No se siguen redirecciones.",
+  "hint_http":"GET a la URL. Arriba si el código de respuesta está en la lista (ejemplo: 200-399 o 200,301) y la página contiene la palabra clave, si se indica (sin distinguir mayúsculas), o no la contiene si así se elige. Las redirecciones se siguen solo si se marca esa casilla.",
+  "hint_ping":"Envía un eco ICMP (ping) al equipo. Arriba si responde dentro del tiempo límite.",
+  "hint_domain":"Lee la fecha de vencimiento del dominio en su registro (RDAP, o WHOIS si no tiene) dos veces al día. Avisa 30 días antes, crítico a los 7 días, y caído si ya venció o no se puede leer la fecha.",
+  "typeDomain":"Vencimiento de dominio","fieldDomain":"Dominio","fieldKwAbsent":"La palabra clave NO debe aparecer","fieldFollow":"Seguir redirecciones","domExp":"El dominio vence",
   "hint_tcp":"Abre una conexión TCP al puerto (SSH, SMB, MQTT, una base de datos…). Arriba si la conexión se acepta.",
   "hint_dns":"Resuelve el nombre. Arriba si devuelve un registro y, si se indica una IP, esa IP está entre las respuestas.",
   "cancel":"Cancelar",
@@ -259,6 +265,7 @@ async function doLogin(){
     const d=await r.json();
     if(!r.ok||!d.ok){err.textContent=d.error||'Error';err.className='login-err show';return;}
     if(d.must_change_password){location.href='/admin/change-password?next='+encodeURIComponent(location.pathname);return;}
+    if(d.must_setup_2fa){location.href='/admin/setup-2fa?next='+encodeURIComponent(location.pathname);return;}   // 2FA obligatorio / mandatory 2FA
     ME=d;applyPermissions();await initApp();
     const ls=document.getElementById('login-screen');ls.style.opacity='0';setTimeout(()=>ls.style.display='none',150);
   }catch(e){err.textContent='Error: '+e.message;err.className='login-err show';}
@@ -376,6 +383,9 @@ function beatBar(n){
   return `<div class="beats" role="img" aria-label="${esc(b.length?up+'/'+b.length+' '+t('st_up'):t('noData'))}">${cells}</div>`;
 }
 function certCell(n){
+  // Monitor de dominio: la misma columna muestra su vencimiento. / EN: Domain monitor: the same column shows its expiry.
+  if(n.type==='domain'&&n.dom){const d=n.dom_exp?Math.floor((n.dom_exp-Date.now()/1000)/86400):null;
+    return n.dom==='expired'?pill('crit',t('certExpired')):n.dom==='ok'?`<span class="up-pct">${esc(t('certOk',d))}</span>`:pill(n.dom,t('certWarn',d));}
   if(!n.cert)return '<span class="sum-sub">—</span>';
   const d=certDays(n);
   if(n.cert==='expired')return pill('crit',t('certExpired'));
@@ -436,7 +446,8 @@ function buildDetail(n){
     <div class="card"><div class="card-hd"><span class="card-title">${esc(t('lastCheck'))}</span><span class="card-meta">${esc(t('every',n.interval))}</span></div>
     ${kv(t('lastCheck'),esc(l?ago(l.ts):'—'))}${kv(t('status'),statePill(n))}${kv(t('colMs'),esc(fmtMs(l&&l.ms)))}
     ${n.since?kv(t('sinceFor'),esc(fmtDur(Date.now()/1000-n.since))):''}${l&&l.code?kv(t('httpCode'),esc(l.code)):''}
-    ${n.cert_exp?kv(t('certExp'),esc(new Date(n.cert_exp*1000).toLocaleDateString(_lang))+' · '+certCell(n)):''}</div></div>`;
+    ${n.cert_exp?kv(t('certExp'),esc(new Date(n.cert_exp*1000).toLocaleDateString(_lang))+' · '+certCell(n)):''}
+    ${n.dom_exp?kv(t('domExp'),esc(new Date(n.dom_exp*1000).toLocaleDateString(_lang))+' · '+certCell(n)):''}</div></div>`;
   h+=chartSection(n);
   const tools=[];
   if(canExec())tools.push(`<button class="btn-secondary" data-on-click="checkNow" data-on-click-args="${jsargs([n.id])}">${esc(t('checkNow'))}</button>`);
@@ -503,7 +514,9 @@ let editingId=null;
 const $=id=>document.getElementById(id);
 function typeChanged(){
   const ty=$('f-type').value;
-  $('http-box').style.display=ty==='http'?'flex':'none';$('tcp-box').style.display=ty==='tcp'?'grid':'none';$('dns-box').style.display=ty==='dns'?'flex':'none';
+  $('http-box').style.display=ty==='http'?'flex':'none';$('tcp-box').style.display=ty==='tcp'||ty==='ping'?'grid':'none';$('dns-box').style.display=ty==='dns'?'flex':'none';
+  $('port-field').style.display=ty==='ping'?'none':'';$('domain-box').style.display=ty==='domain'?'grid':'none';
+  $('timing-box').style.display=ty==='domain'?'none':'grid';$('down-hint').style.display=ty==='domain'?'none':'';          // el dominio se revisa dos veces al día / domains are checked twice a day
   $('tls-box').style.display=ty==='http'&&$('f-url').value.trim().toLowerCase().startsWith('https://')?'grid':'none';
   $('add-hint').textContent=t('hint_'+ty);
 }
@@ -515,9 +528,10 @@ function openForm(id){
   $('f-name').value=n?n.name:'';
   $('f-url').value=n&&n.url?n.url:'';$('f-expect').value=n&&n.expect?n.expect:'200-399';$('f-keyword').value=n&&n.keyword?n.keyword:'';
   $('f-insecure').checked=!!(n&&n.insecure);$('f-cert-days').value=n&&n.cert_days?n.cert_days:14;
+  $('f-kw-absent').checked=!!(n&&n.kw_absent);$('f-follow').checked=!!(n&&n.follow);$('f-domain').value=n&&n.domain?n.domain:'';
   $('f-host').value=n&&n.host?n.host:'';$('f-port').value=n&&n.port?n.port:'';
   $('f-qname').value=n&&n.qname?n.qname:'';$('f-rtype').value=n&&n.rtype?n.rtype:'A';$('f-server').value=n&&n.server?n.server:'';$('f-expect-ip').value=n&&n.expect_ip?n.expect_ip:'';
-  $('f-interval').value=n?n.interval:60;$('f-timeout').value=n?n.timeout:10;$('f-down-after').value=n?n.down_after:3;
+  $('f-interval').value=n&&n.type!=='domain'?n.interval:60;$('f-timeout').value=n?n.timeout:10;$('f-down-after').value=n?n.down_after:3;
   $('test-result').className='test-result';
   typeChanged();
   $('add-overlay').classList.add('show');$('f-name').focus();
@@ -525,13 +539,15 @@ function openForm(id){
 function formBody(){
   const ty=$('f-type').value,num=(id,d)=>{const v=parseInt($(id).value,10);return Number.isFinite(v)?v:d;};
   const b={type:ty,name:$('f-name').value.trim(),interval:num('f-interval',60),timeout:num('f-timeout',10),down_after:num('f-down-after',3)};
-  if(ty==='http')Object.assign(b,{url:$('f-url').value.trim(),expect:$('f-expect').value.trim()||'200-399',keyword:$('f-keyword').value.trim(),insecure:$('f-insecure').checked,cert_days:num('f-cert-days',14)});
+  if(ty==='http')Object.assign(b,{url:$('f-url').value.trim(),expect:$('f-expect').value.trim()||'200-399',keyword:$('f-keyword').value.trim(),kw_absent:$('f-kw-absent').checked,follow:$('f-follow').checked,insecure:$('f-insecure').checked,cert_days:num('f-cert-days',14)});
   else if(ty==='tcp')Object.assign(b,{host:$('f-host').value.trim(),port:num('f-port',0)});
+  else if(ty==='ping')Object.assign(b,{host:$('f-host').value.trim()});
+  else if(ty==='domain')Object.assign(b,{domain:$('f-domain').value.trim()});
   else Object.assign(b,{qname:$('f-qname').value.trim(),rtype:$('f-rtype').value,server:$('f-server').value.trim(),expect_ip:$('f-expect-ip').value.trim()});
   if(editingId)b.id=editingId;
   return b;
 }
-function filled(b){return !!b.name&&!!(b.type==='http'?b.url:b.type==='tcp'?b.host&&b.port:b.qname);}
+function filled(b){return !!b.name&&!!(b.type==='http'?b.url:b.type==='tcp'?b.host&&b.port:b.type==='ping'?b.host:b.type==='domain'?b.domain:b.qname);}
 async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>({}));return {ok:r.ok,status:r.status,d};}
 async function testMon(){
   const btn=$('btn-test'),res=$('test-result'),b=formBody();

@@ -237,6 +237,7 @@ async function doLogin(){
     const d=await r.json();
     if(!r.ok||!d.ok){err.textContent=d.error||'Error';err.className='login-err show';return;}
     if(d.must_change_password){location.href='/admin/change-password?next='+encodeURIComponent(location.pathname);return;}
+    if(d.must_setup_2fa){location.href='/admin/setup-2fa?next='+encodeURIComponent(location.pathname);return;}   // 2FA obligatorio / mandatory 2FA
     ME=d;applyPermissions();await initApp();
     const ls=document.getElementById('login-screen');ls.style.opacity='0';setTimeout(()=>ls.style.display='none',150);
   }catch(e){err.textContent='Error: '+e.message;err.className='login-err show';}

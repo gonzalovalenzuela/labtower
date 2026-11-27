@@ -67,11 +67,34 @@ class Pure(unittest.TestCase):
         self.assertEqual(new, [])
 
     def test_config_validation(self):
-        self.assertEqual(bk.clean_config({"max_age_h": 24, "ignore": [105, 101, 105]}), {"max_age_h": 24, "ignore": [101, 105]})
-        self.assertEqual(bk.clean_config({}), {"max_age_h": 168, "ignore": []})
-        for bad in (None, [], {"max_age_h": 0}, {"max_age_h": 9000}, {"max_age_h": True}, {"max_age_h": "9"}, {"max_age_h": float("nan")},
+        self.assertEqual(bk.clean_config({"max_age_h": 24, "ignore": [105, 101, 105]}), {"max_age_h": 24, "ignore": [101, 105], "snap_days": 30})
+        self.assertEqual(bk.clean_config({}), {"max_age_h": 168, "ignore": [], "snap_days": 30})
+        self.assertEqual(bk.clean_config({"snap_days": 90})["snap_days"], 90)
+        for bad in (None, [], {"snap_days": 0}, {"snap_days": 400}, {"snap_days": True}, {"snap_days": "30"}, {"max_age_h": 0}, {"max_age_h": 9000}, {"max_age_h": True}, {"max_age_h": "9"}, {"max_age_h": float("nan")},
                     {"ignore": "x"}, {"ignore": [True]}, {"ignore": [5]}, {"ignore": ["101"]}, {"ignore": list(range(100, 400))}):
             with self.assertRaises(ValueError, msg=bad): bk.clean_config(bad)
+
+class Snapshots(unittest.TestCase):
+    def test_parse_and_old(self):
+        g = {"vmid": 101, "name": "web", "type": "qemu", "node": "pve1"}
+        data = [{"name": "current", "snaptime": 0}, {"name": "pre-upgrade", "snaptime": 1_000_000}, {"name": "x"}, "bad", {"name": "fresh", "snaptime": 1_000_000 + 40 * 86400}]
+        sn = bk.parse_snapshots(data, g) + bk.parse_snapshots([{"name": "old-ct", "snaptime": 900_000}], {"vmid": 200, "name": "ct", "type": "lxc", "node": "pve2"})
+        self.assertEqual([(s["vmid"], s["snap"], s["type"]) for s in sn], [(101, "pre-upgrade", "vm"), (101, "fresh", "vm"), (200, "old-ct", "ct")])
+        now = 1_000_000 + 45 * 86400
+        old, al = bk.old_snapshots(sn, 30, [], now)
+        self.assertEqual([s["snap"] for s in old], ["old-ct", "pre-upgrade"])                      # oldest first; "fresh" (5 d) is not old
+        self.assertEqual({a["vmid"]: (a["n"], a["days"], a["limit"], a["type"]) for a in al}, {101: (1, 45, 30, "snap_old"), 200: (1, 46, 30, "snap_old")})
+        self.assertEqual(bk.old_snapshots(sn, 30, [200], now)[0][0]["snap"], "pre-upgrade")       # ignored VMs/CTs do not count
+        cache = {"ts": now, "rows": [], "snaps_all": sn, "max_age_h": 24, "ignore": []}
+        bk.apply_config(cache, {"max_age_h": 24, "ignore": [], "snap_days": 3})
+        self.assertEqual((cache["snap_days"], len(cache["snaps"])), (3, 3))
+
+    def test_alerts_reach_the_overview(self):
+        src = (support.ROOT / "proxmox-monitor/server.py").read_text(encoding="utf-8")
+        self.assertIn('list((_backups.get(cid) or {}).get("alerts", []))', src)
+        ov = (support.ROOT / "overview/static/app.js").read_text(encoding="utf-8")
+        self.assertEqual(ov.count("pa_snap_old:"), 2); self.assertEqual(ov.count("pve_al_snap_old:"), 2)
+
 
 class Fake:
     def __init__(self, fail_storage=False): self.fail = fail_storage; self.calls = []; self.tasks = []; self.age = {100: 3, 101: 50}
@@ -162,7 +185,10 @@ class Api(unittest.TestCase):
             self.assertEqual(srv.call("POST", url, {"max_age_h": 0}, token=admin)[0], 400)
             code, j = srv.call("POST", url, {"max_age_h": 24, "ignore": [105, 101]}, token=admin)
             self.assertEqual((code, j["ignore"]), (200, [101, 105]))
-            self.assertEqual(store[0]["backup"], {"max_age_h": 24, "ignore": [101, 105]})
+            self.assertEqual(store[0]["backup"], {"max_age_h": 24, "ignore": [101, 105], "snap_days": 30})
+            self.assertEqual(srv.call("POST", url, {"snap_days": 60}, token=admin)[0], 200)                       # what is not sent is kept
+            self.assertEqual(store[0]["backup"], {"max_age_h": 24, "ignore": [101, 105], "snap_days": 60})
+            self.assertEqual(srv.call("POST", url, {"snap_days": 0}, token=admin)[0], 400)
             self.assertEqual(srv.call("POST", "/api/clusters/nope/backup", {}, token=admin)[0], 404)
             m._backups["c1"] = {"ts": 1, "rows": [], "tasks": [], "storages": [], "max_age_h": 24, "ignore": []}
             m._diag_state = {"boots": {}, "reboots": [], "unsafe": {}}

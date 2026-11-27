@@ -467,7 +467,8 @@ def health_report(detailed=False):
 # ─── HTTP ───────────────────────────────────────────────────────────────────
 _test_gate = threading.Semaphore(2)
 
-class H(BaseHTTPRequestHandler):
+class H(auth.Audited, BaseHTTPRequestHandler):
+    AUDIT_MODULE = "vpn"          # accepted changes go to the audit log (auth.Audited)
     timeout = 30
     def log_message(self, fmt, *a):
         # send_error() llega aquí con (código, mensaje) y un 501 de HEAD trae el mensaje en a[1]: solo se registra un código numérico.

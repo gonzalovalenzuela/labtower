@@ -1288,6 +1288,26 @@ class Manager:
                         out[(sid, m["port"])] = other
         return out
 
+    def locate(self):
+        """ES: switch y puerto de acceso de cada MAC: {mac sin separadores: {"sw", "port", "label"}}. Se ignoran los enlaces entre switches y los
+        uplinks; si una MAC aparece en varios puertos de acceso, gana el que tiene menos MAC (el más cercano al equipo).
+        EN: access switch and port of each MAC. Inter-switch links and uplinks are ignored; when a MAC shows on several access ports, the one with
+        the fewest MACs (closest to the device) wins."""
+        best = {}
+        with self.lock:
+            links = self._links_locked()
+            count = {}
+            for sid, r in self.rec.items():
+                for m in r.get("macs") or []: count[(sid, m["port"])] = count.get((sid, m["port"]), 0) + 1
+            for cfg in self.cfg["switches"]:
+                sid, meta = cfg["id"], cfg.get("ports") or {}
+                for m in (self.rec.get(sid) or {}).get("macs") or []:
+                    pm = meta.get(str(m["port"])) or {}
+                    if pm.get("uplink") or (sid, m["port"]) in links: continue
+                    k, n = _mkey(m["mac"]), count[(sid, m["port"])]
+                    if k and (k not in best or n < best[k][0]): best[k] = (n, {"sw": cfg["name"], "port": m["port"], "label": pm.get("label", "")})
+        return {k: v for k, (_, v) in best.items()}
+
     def macs(self):
         """Tabla MAC de todos los switches, cruzada con los equipos que conoce Net Monitor. / MAC tables of all switches, matched with the hosts Net Monitor knows."""
         try:

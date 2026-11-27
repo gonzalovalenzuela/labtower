@@ -148,6 +148,7 @@ async function doLogin(){
     // Cuenta con contraseña por cambiar (admin/admin inicial): se va a la pantalla obligatoria antes de entrar.
     // EN: Account with a password to change (initial admin/admin): go to the mandatory screen before entering.
     if(d.must_change_password){location.href='/admin/change-password?next='+encodeURIComponent(location.pathname);return;}
+    if(d.must_setup_2fa){location.href='/admin/setup-2fa?next='+encodeURIComponent(location.pathname);return;}   // 2FA obligatorio / mandatory 2FA
     if(!d.permissions?.wol||d.permissions.wol==='none'){
       err.textContent='No tienes acceso a WOL Console';err.className='login-err show';return;
     }

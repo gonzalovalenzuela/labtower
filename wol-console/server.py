@@ -306,7 +306,8 @@ def health_report(detailed=False):
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
 # Manejador HTTP. Cada petición se atiende en su propio hilo.
 # EN: HTTP handler. Each request is served in its own thread.
-class H(BaseHTTPRequestHandler):
+class H(auth.Audited, BaseHTTPRequestHandler):
+    AUDIT_MODULE = "wol"          # accepted changes go to the audit log (auth.Audited)
     timeout = 30      # a stalled client must not hold a thread forever
 
     def log_message(self, fmt, *a):

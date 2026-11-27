@@ -102,7 +102,7 @@ const LANG={
  "topBlocked": "Top blocked",
  "topClients": "Top clients",
  "upstreams": "Upstream DNS",
- "upOk": "answers", "upDown": "no answer", "upOld": "no longer configured", "upOldTip": "Still in the DNS statistics, but no longer in its configuration. It raises no alerts.", "resTitle": "Resolution test", "resName": "Domain name (e.g. example.com)", "resBtn": "Resolve", "resServer": "This DNS server", "resOutside": "Outside resolver", "resBlocked": "Blocked by this DNS (the outside resolver answers)", "resFailed": "This DNS server did not answer", "resSame": "Answers received", "resNone": "no answer records", "resErr": "Could not resolve",
+ "upOk": "answers", "upDown": "no answer", "upOld": "no longer configured", "upTls": "TLS connection {0} ms", "upOldTip": "Still in the DNS statistics, but no longer in its configuration. It raises no alerts.", "resTitle": "Resolution test", "resName": "Domain name (e.g. example.com)", "resBtn": "Resolve", "resServer": "This DNS server", "resOutside": "Outside resolver", "resBlocked": "Blocked by this DNS (the outside resolver answers)", "resFailed": "This DNS server did not answer", "resSame": "Answers received", "resNone": "no answer records", "resErr": "Could not resolve",
  "hourly": "Queries per hour (last 24 h)",
  "qTitleH": "Queries per hour",
  "qTitleD": "Queries per day",
@@ -133,8 +133,10 @@ const LANG={
   "blocking_failed": "Blocking failed",
   "no_lists": "No domains in the block lists",
   "slow_upstream": "Slow upstream DNS ({0} ms)",
-  "upstream_down": "Upstream DNS not answering: {0}"
- }
+  "upstream_down": "Upstream DNS not answering: {0}",
+  "config_diff": "Configuration differs from {0}"
+ },
+ "cmpTitle": "Differences with {0}", "cmpHere": "Only here", "cmpThere": "Only in {0}", "cmpLists": "Lists", "cmpUps": "Upstream DNS", "cmpLocal": "Local records",
 },
   es:{
  "loginTitle": "Iniciar sesión",
@@ -237,7 +239,7 @@ const LANG={
  "topBlocked": "Dominios más bloqueados",
  "topClients": "Clientes más activos",
  "upstreams": "DNS de salida",
- "upOk": "responde", "upDown": "sin respuesta", "upOld": "ya no configurado", "upOldTip": "Sigue en las estadísticas del DNS, pero ya no está en su configuración. No genera avisos.", "resTitle": "Prueba de resolución", "resName": "Nombre de dominio (ej. example.com)", "resBtn": "Resolver", "resServer": "Este servidor DNS", "resOutside": "Resolutor externo", "resBlocked": "Bloqueado por este DNS (el resolutor externo sí responde)", "resFailed": "Este servidor DNS no respondió", "resSame": "Respuestas recibidas", "resNone": "sin registros de respuesta", "resErr": "No se pudo resolver",
+ "upOk": "responde", "upDown": "sin respuesta", "upOld": "ya no configurado", "upTls": "conexión TLS {0} ms", "upOldTip": "Sigue en las estadísticas del DNS, pero ya no está en su configuración. No genera avisos.", "resTitle": "Prueba de resolución", "resName": "Nombre de dominio (ej. example.com)", "resBtn": "Resolver", "resServer": "Este servidor DNS", "resOutside": "Resolutor externo", "resBlocked": "Bloqueado por este DNS (el resolutor externo sí responde)", "resFailed": "Este servidor DNS no respondió", "resSame": "Respuestas recibidas", "resNone": "sin registros de respuesta", "resErr": "No se pudo resolver",
  "hourly": "Consultas por hora (últimas 24 h)",
  "qTitleH": "Consultas por hora",
  "qTitleD": "Consultas por día",
@@ -268,8 +270,10 @@ const LANG={
   "blocking_failed": "El bloqueo falló",
   "no_lists": "No hay dominios en las listas de bloqueo",
   "slow_upstream": "DNS de salida lento ({0} ms)",
-  "upstream_down": "DNS de salida sin respuesta: {0}"
- }
+  "upstream_down": "DNS de salida sin respuesta: {0}",
+  "config_diff": "La configuración difiere de {0}"
+ },
+ "cmpTitle": "Diferencias con {0}", "cmpHere": "Solo aquí", "cmpThere": "Solo en {0}", "cmpLists": "Listas", "cmpUps": "DNS de salida", "cmpLocal": "Registros locales",
 }
 };
 
@@ -315,6 +319,7 @@ async function doLogin(){
     const d=await r.json();
     if(!r.ok||!d.ok){err.textContent=d.error||'Error';err.className='login-err show';return;}
     if(d.must_change_password){location.href='/admin/change-password?next='+encodeURIComponent(location.pathname);return;}
+    if(d.must_setup_2fa){location.href='/admin/setup-2fa?next='+encodeURIComponent(location.pathname);return;}   // 2FA obligatorio / mandatory 2FA
     ME=d;applyPermissions();await initApp();
     const ls=document.getElementById('login-screen');ls.style.opacity='0';setTimeout(()=>ls.style.display='none',150);
   }catch(e){err.textContent='Error: '+e.message;err.className='login-err show';}
@@ -352,7 +357,7 @@ async function fetchAll(){
     const r=await fetch('api/dns'+(wantHist?'':'?hist=0'));
     if(r.status===401){location.reload();return;}
     const d=await r.json();
-    items=d.servers||[];
+    items=d.servers||[];NAMES=d.names||{};CMP=d.compare||[];
     items.forEach(n=>{if(wantHist)_histCache[n.id]=n.history; else n.history=_histCache[n.id]||[];});
     if(wantHist)_histTs=Date.now();
     if(activeId!==''&&!items.some(n=>n.id===activeId))activeId=items[0]?.id||null;
@@ -436,9 +441,25 @@ function renderSummary(){
   fitDetail();drawCharts(activeId);
 }
 function fitDetail(){const w=document.querySelector('#dns-summary .tbl-wrap');if(w)w.style.setProperty('--wrapw',w.clientWidth+'px');}
+// Clientes más activos: el alias de Net Monitor en grande y la IP debajo. / EN: Top clients: the Net Monitor alias big and the IP below.
+let NAMES={},CMP=[];
+// Diferencias de configuración con los otros servidores del mismo tipo (listas, DNS de salida y registros locales).
+// EN: Configuration differences with the other servers of the same type (lists, upstreams and local records).
+function compareCards(id){
+  const lbl={lists:t('cmpLists'),ups:t('cmpUps'),local:t('cmpLocal')},li=x=>`<li>${esc(x)}</li>`;
+  return CMP.filter(c=>c.a===id||c.b===id).map(c=>{
+    const me=c.a===id,other=me?c.bn:c.an;
+    const rows=Object.entries(c.diff).map(([k,d])=>{const here=me?d.a:d.b,there=me?d.b:d.a;
+      return `<div class="cmp-cat"><div class="cmp-k">${esc(lbl[k]||k)}</div>${here.length?`<div class="cmp-h">${esc(t('cmpHere'))}</div><ul>${here.map(li).join('')}</ul>`:''}${there.length?`<div class="cmp-h">${esc(t('cmpThere',other))}</div><ul>${there.map(li).join('')}</ul>`:''}</div>`}).join('');
+    return `<div class="node-card cmp"><div class="node-hd"><div class="node-name">${esc(t('cmpTitle',other))}</div></div>${rows}</div>`;
+  }).join('');
+}
+function topClients(title,list,color){
+  return topList(title,(list||[]).map(x=>{const ip=x.ip||x.name||'',nm=NAMES[ip]||(x.name&&x.name!==ip?x.name:'');return {...x,name:nm||ip,sub:nm?ip:''}}),color);
+}
 function topList(title,list,color){
   const mx=Math.max(1,...(list||[]).map(x=>x.count||0));
-  const rows=(list||[]).length?list.map(x=>`<div class="top-row"><span class="tn" title="${esc(x.name||'')}">${esc(x.name||'—')}</span><span class="tc">${esc(fmtNum(x.count))}</span><div class="tb">${bar((x.count||0)/mx*100,101,101,color)}</div></div>`).join(''):`<div class="dns-empty">${esc(t('noData'))}</div>`;
+  const rows=(list||[]).length?list.map(x=>`<div class="top-row"><span class="tn" title="${esc(x.name||'')}">${esc(x.name||'—')}${x.sub?`<small class="tn-sub">${esc(x.sub)}</small>`:''}</span><span class="tc">${esc(fmtNum(x.count))}</span><div class="tb">${bar((x.count||0)/mx*100,101,101,color)}</div></div>`).join(''):`<div class="dns-empty">${esc(t('noData'))}</div>`;
   return `<div class="node-card"><div class="node-hd"><div class="node-name">${esc(title)}</div></div>${rows}</div>`;
 }
 // Barras de las últimas 24 horas (total y bloqueadas), como SVG sin JavaScript extra; el título de cada barra da la hora y los valores.
@@ -557,10 +578,15 @@ function buildDetail(n){
     +bigNum(t('gLists'),fmtNum(d.domains_blocked),'')+bigNum(t('gClients'),d.clients==null?'—':d.clients,'')+bigNum(t('gResp'),d.ms==null?'—':d.ms,d.ms==null?'':'ms',d.ms>=200?'var(--orange)':'var(--text)')+'</div>';
   h+='<div class="dns-grid">';
   h+=queriesCard(n.id,d)+clientsCard(n.id);
-  h+=topList(t('topDomains'),d.top_domains,'var(--dns)')+topList(t('topBlocked'),d.top_blocked,'var(--red)')+topList(t('topClients'),d.top_clients,'var(--blue)');
-  const upState=u=>!u.probe?'':u.probe.ok?` <span class="up-ok" title="${esc(t('upOk'))}">●</span> `+esc(u.probe.ms)+' ms':` <span class="up-bad" title="${esc(t('upDown'))}">●</span> `+esc(t('upDown'));
+  h+=topList(t('topDomains'),d.top_domains,'var(--dns)')+topList(t('topBlocked'),d.top_blocked,'var(--red)')+topClients(t('topClients'),d.top_clients,'var(--blue)');
+  // Sondeo propio (UDP, DoT o DoH): en DoT/DoH «ms» es la consulta y el título suma lo que tardó la conexión TLS.
+  // EN: Own probe (UDP, DoT or DoH): on DoT/DoH "ms" is the query and the title adds how long the TLS connection took.
+  const upState=u=>{const p=u.probe;if(!p)return'';const k=p.kind&&p.kind!=='udp'?(p.kind==='tls'?'DoT':'DoH'):'';
+    return p.ok?` <span class="up-ok" title="${esc(t('upOk')+(k?' · '+k:'')+(p.hs!=null?' · '+t('upTls',p.hs):''))}">●</span> `+esc(p.ms)+' ms'
+      :` <span class="up-bad" title="${esc(t('upDown')+(k?' · '+k:'')+(p.error?': '+p.error:''))}">●</span> `+esc(t('upDown'));};
   const ups=(d.upstreams||[]).map(u=>`<div class="top-row${u.old?' up-gone':''}"${u.old?` title="${esc(t('upOldTip'))}"`:''}><span class="tn" title="${esc(u.ip||'')}">${esc(u.name||u.ip||'—')}${u.port?`<small>:${esc(u.port)}</small>`:''}</span><span class="tc">${esc(fmtNum(u.count))}${u.ms!=null?' · '+esc(u.ms)+' ms':''}${u.old?' · '+esc(t('upOld')):upState(u)}</span></div>`).join('');
   h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('upstreams'))}</div></div>${ups||`<div class="dns-empty">${esc(t('noData'))}</div>`}</div>`;
+  h+=compareCards(n.id);
   if(canExec())h+=`<div class="node-card"><div class="node-hd"><div class="node-name">${esc(t('resTitle'))}</div></div>
     <div class="res-form"><input type="text" id="res-name" maxlength="253" placeholder="${esc(t('resName'))}" value="${esc(RES.name)}" data-on-change="saveRes"><select id="res-type" data-on-change="saveRes"><option>A</option><option${RES.type==='AAAA'?' selected':''}>AAAA</option></select><button class="btn-secondary" data-on-click="runResolve" data-on-click-args="${jsargs([n.id])}">${esc(t('resBtn'))}</button></div>
     <div id="res-out">${resultHtml(RES.out)}</div></div>`;

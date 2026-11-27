@@ -12,9 +12,9 @@
   const HREF = {pi: '', ups: '/nut/', nas: '/nas/', pve: '/pve/', dns: '/dns/', wan: '/wan/'};
   const L = {
     en: {title: 'Alert rules', edit: 'Edit', save: 'Save', cancel: 'Cancel', add: 'Add rule', rm: 'Remove', warn: 'Warning', crit: 'Critical', on: 'Active', saveErr: 'Could not save',
-         none: 'No rules yet. Use Edit to be warned when, for example, the server temperature goes above 65 °C or the UPS battery drops below 50 %.', noneRO: '', hint: 'Evaluated on this page every refresh; matches appear in the attention panel.', is: 'is'},
+         none: 'No rules yet. Use Edit to be warned when, for example, the server temperature goes above 65 °C or the UPS battery drops below 50 %.', noneRO: '', hint: 'Checked on the server every minute: a rule that holds 3 readings in a row goes to the timeline, and while it holds it shows in the attention panel.', is: 'is'},
     es: {title: 'Reglas de alerta', edit: 'Editar', save: 'Guardar', cancel: 'Cancelar', add: 'Agregar regla', rm: 'Quitar', warn: 'Aviso', crit: 'Crítico', on: 'Activa', saveErr: 'No se pudo guardar',
-         none: 'Aún no hay reglas. Usa Editar para que te avise, por ejemplo, si la temperatura del servidor pasa de 65 °C o la batería del UPS baja de 50 %.', noneRO: '', hint: 'Se evalúan en esta página en cada actualización; las que se cumplen salen en el panel de atención.', is: 'está en'}
+         none: 'Aún no hay reglas. Usa Editar para que te avise, por ejemplo, si la temperatura del servidor pasa de 65 °C o la batería del UPS baja de 50 %.', noneRO: '', hint: 'Se revisan en el servidor cada minuto: si una se cumple 3 lecturas seguidas queda en la línea de tiempo, y mientras se cumpla sale en el panel de atención.', is: 'está en'}
   };
   const X = k => (L[lang] || L.en)[k] || k, name = k => M[k][lang === 'es' ? 2 : 3];
   let RU = [], canEdit = false, loaded = false, editing = false, ts = 0;
@@ -107,4 +107,5 @@
   // Se llama en cada actualización: las reglas se leen una vez por minuto. / Called on every refresh: rules are read once a minute.
   window.rulesUpdate = async function () { if (!loaded || Date.now() - ts > 60000) await load(); render(); };
   window.rulesLang = () => render();
+  window.ruleName = k => M[k] ? name(k) : k;    // la usa la línea de tiempo / used by the timeline
 })();

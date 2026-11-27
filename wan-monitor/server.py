@@ -823,6 +823,7 @@ def probe_loop():
             log.error(f"probe round failed: {e}"); S.wake.wait(5); continue
         if not r["up"] and first_fail is None: first_fail = r["ts"]
         if r["up"]: first_fail = None
+        auth.metrics_report("wan", "wan", [("wan_rtt", "", r.get("rtt")), ("wan_loss", "", r.get("loss"))])     # alert rules on the server
         with S.lock: S.last = r; S.history.append({"ts": r["ts"], "up": 1 if r["up"] else 0, "rtt": r["rtt"], "loss": r["loss"], "jitter": r["jitter"], "gw": r["gw"], "dns": r["dns"]})
         store_sample(r)
         store_targets(r)
@@ -942,7 +943,8 @@ def health_report(detailed=False):
     return auth.health_reply("wan", c, detailed)
 
 # ─── HTTP ─────────────────────────────────────────────────────────────────────
-class H(BaseHTTPRequestHandler):
+class H(auth.Audited, BaseHTTPRequestHandler):
+    AUDIT_MODULE = "wan"          # accepted changes go to the audit log (auth.Audited)
     timeout = 30
     def log_message(self, fmt, *a):
         # send_error() llega aquí con (código, mensaje) y un 501 de HEAD trae el mensaje en a[1]: solo se registra un código numérico.

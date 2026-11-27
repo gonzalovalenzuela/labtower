@@ -36,14 +36,18 @@
       optBar: 'Barra superior con selector', optBarD: 'Un selector con todos los módulos y su estado. En el móvil, una barra inferior.',
       optSide: 'Menú lateral clásico', optSideD: 'Los módulos agrupados en el panel lateral, como antes.', current: 'Actual', ok: 'Listo',
       pause: 'En pausa', mPause: 'Pausar alarmas', mResume: 'Reanudar alarmas', mH1: '1 hora', mH4: '4 horas', mH24: '24 horas', mInf: 'Hasta reanudar',
-      mOn: 'Alarmas en pausa', mUntil: 'hasta', mTomorrow: 'mañana', mErr: 'No se pudo cambiar la pausa'},
+      mOn: 'Alarmas en pausa', mUntil: 'hasta', mTomorrow: 'mañana', mErr: 'No se pudo cambiar la pausa',
+      mSched: 'Programar pausas…', mSchedT: 'Pausas programadas (cada semana)', mDays: ['L', 'M', 'X', 'J', 'V', 'S', 'D'], mDayN: ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'],
+      mAdd: 'Agregar ventana', mSave: 'Guardar', mCancel: 'Cancelar', mNone: 'Sin pausas programadas.', mStart: 'Inicio', mDur: 'Duración', mRm: 'Quitar', mNoDay: 'Elige al menos un día'},
     en: {mods: 'Modules', opts: 'Options', out: 'Sign out', main: 'Main', switchTo: 'Switch module', up: 'Active', mid: 'Warnings', down: 'Failing', home: 'LabTower home',
       warn: 'Attention', menuType: 'Menu type', wizTitle: 'Choose how you want to navigate',
       wizText: 'You can change it any time from “Menu type”. It is saved in this browser.',
       optBar: 'Top bar with switcher', optBarD: 'One switcher with every module and its status. On phones, a bottom bar.',
       optSide: 'Classic side menu', optSideD: 'Modules grouped in the side panel, as before.', current: 'Current', ok: 'Done',
       pause: 'Paused', mPause: 'Pause alarms', mResume: 'Resume alarms', mH1: '1 hour', mH4: '4 hours', mH24: '24 hours', mInf: 'Until resumed',
-      mOn: 'Alarms paused', mUntil: 'until', mTomorrow: 'tomorrow', mErr: 'Could not change the pause'}
+      mOn: 'Alarms paused', mUntil: 'until', mTomorrow: 'tomorrow', mErr: 'Could not change the pause',
+      mSched: 'Schedule pauses…', mSchedT: 'Scheduled pauses (every week)', mDays: ['M', 'T', 'W', 'T', 'F', 'S', 'S'], mDayN: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+      mAdd: 'Add window', mSave: 'Save', mCancel: 'Cancel', mNone: 'No scheduled pauses.', mStart: 'Start', mDur: 'Duration', mRm: 'Remove', mNoDay: 'Pick at least one day'}
   };
   var SHAPE = {
     up:   '<circle cx="5" cy="5" r="4.5" fill="#15803d"/>',
@@ -446,12 +450,13 @@
       .then(function (d) { MU.d = d; MU.t = Date.now(); MU.p = null; return d; }, function (e) { MU.p = null; throw e; });
     return MU.p;
   }
-  function muteSet(mod, f) {
-    return fetch('/admin/api/mutes', {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({module: mod, 'for': f})})
+  function muteSet(mod, f, sched) {
+    var body = sched ? {module: mod, schedule: sched} : {module: mod, 'for': f};
+    return fetch('/admin/api/mutes', {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)})
       .then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (d) {
           if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
-          MU.d = {mutes: d.mutes || {}, now: d.now, can: MU.d && MU.d.can || []}; MU.t = Date.now();
+          MU.d = {mutes: d.mutes || {}, now: d.now, can: MU.d && MU.d.can || [], schedules: d.schedules || (MU.d && MU.d.schedules) || {}}; MU.t = Date.now();
           try { sessionStorage.removeItem('lt-nav-health'); } catch (e) {}
           if (st && st.opts) { loadHealth(); paintMute(); }
           return MU.d;
@@ -494,6 +499,11 @@
     }
     if (cur != null) item(tr.mResume, null);
     else [[tr.mH1, 3600], [tr.mH4, 14400], [tr.mH24, 86400], [tr.mInf, 0]].forEach(function (o) { item(o[0], o[1]); });
+    var wins = MU.d && MU.d.schedules ? MU.d.schedules[mod] || [] : [];
+    var sb = el('button', 'gmute-i gmute-sched', tr.mSched + (wins.length ? ' (' + wins.length + ')' : '')); sb.type = 'button'; sb.setAttribute('role', 'menuitem');
+    if (wins.length) sb.title = wins.map(schedText).join('\n');
+    sb.addEventListener('click', function () { schedEdit(m, mod, done); });
+    m.appendChild(sb);
     m.appendChild(err);
     document.body.appendChild(m);
     var r = btn.getBoundingClientRect();
@@ -503,6 +513,64 @@
     m.gkey = function (e) { if (e.key === 'Escape') { e.preventDefault(); muteClose(); } };
     document.addEventListener('mousedown', m.gout, true); document.addEventListener('keydown', m.gkey, true);
     var first = m.querySelector('.gmute-i'); if (first) first.focus();
+  }
+  // ── Pausas programadas: ventanas semanales {d: días (0 = lunes), s: minuto de inicio, dur: minutos} en la hora del servidor.
+  // EN: Scheduled pauses: weekly windows {d: days (0 = Monday), s: start minute, dur: minutes} in the server's time.
+  var SCHED_DURS = [15, 30, 60, 120, 180, 240, 360, 480, 720, 1440];
+  function durText(n) { return n < 60 ? n + ' min' : (n / 60) + ' h'; }
+  function hhmm(n) { return ('0' + Math.floor(n / 60)).slice(-2) + ':' + ('0' + n % 60).slice(-2); }
+  function schedText(w) { var tr = trM(); return w.d.map(function (x) { return tr.mDays[x]; }).join(' ') + ' ' + hhmm(w.s) + ' · ' + durText(w.dur); }
+  function schedRow(w) {
+    var tr = trM(), r = el('div', 'gsched-row'), days = el('div', 'gsched-days');
+    tr.mDays.forEach(function (lbl, i) {
+      var b = el('button', 'gsched-day', lbl); b.type = 'button'; b.dataset.d = i; b.title = tr.mDayN[i];
+      b.setAttribute('aria-pressed', w.d.indexOf(i) >= 0 ? 'true' : 'false'); b.setAttribute('aria-label', tr.mDayN[i]);
+      b.addEventListener('click', function () { b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); });
+      days.appendChild(b);
+    });
+    var t = el('input', 'gsched-t'); t.type = 'time'; t.value = hhmm(w.s); t.required = true; t.setAttribute('aria-label', tr.mStart);
+    var s = el('select', 'gsched-dur'); s.setAttribute('aria-label', tr.mDur);
+    SCHED_DURS.forEach(function (n) { var o = el('option', null, durText(n)); o.value = n; if (n === w.dur) o.selected = true; s.appendChild(o); });
+    var x = el('button', 'gsched-rm', '×'); x.type = 'button'; x.title = tr.mRm; x.setAttribute('aria-label', tr.mRm);
+    x.addEventListener('click', function () { r.remove(); });
+    r.appendChild(days); r.appendChild(t); r.appendChild(s); r.appendChild(x);
+    return r;
+  }
+  // Reemplaza el menú por el editor de ventanas. / EN: Replaces the menu with the window editor.
+  function schedEdit(m, mod, done) {
+    var tr = trM(), wins = MU.d && MU.d.schedules ? MU.d.schedules[mod] || [] : [];
+    m.innerHTML = ''; m.classList.add('gsched');
+    m.appendChild(el('div', 'gmute-h', tr.mSchedT));
+    var list = el('div', 'gsched-list'), none = el('div', 'gsched-none', tr.mNone);
+    wins.forEach(function (w) { list.appendChild(schedRow(w)); });
+    m.appendChild(list); m.appendChild(none);
+    var sync = function () { none.hidden = list.children.length > 0; };
+    new MutationObserver(sync).observe(list, {childList: true}); sync();
+    var err = el('div', 'gmute-err'); err.hidden = true;
+    var bar = el('div', 'gsched-act'), add = el('button', 'gmute-i', tr.mAdd), cancel = el('button', 'gsched-btn', tr.mCancel), save = el('button', 'gsched-btn gsched-save', tr.mSave);
+    [add, cancel, save].forEach(function (b) { b.type = 'button'; });
+    add.addEventListener('click', function () { if (list.children.length < 7) list.appendChild(schedRow({d: [6], s: 180, dur: 120})); });
+    cancel.addEventListener('click', muteClose);
+    save.addEventListener('click', function () {
+      var out = [], bad = false;
+      list.querySelectorAll('.gsched-row').forEach(function (r) {
+        var d = []; r.querySelectorAll('.gsched-day').forEach(function (b) { if (b.getAttribute('aria-pressed') === 'true') d.push(+b.dataset.d); });
+        var v = (r.querySelector('.gsched-t').value || '').split(':');
+        if (!d.length || v.length < 2) { bad = true; return; }
+        out.push({d: d, s: (+v[0]) * 60 + (+v[1]), dur: +r.querySelector('.gsched-dur').value});
+      });
+      if (bad) { err.textContent = tr.mNoDay; err.hidden = false; return; }
+      m.querySelectorAll('button,input,select').forEach(function (x) { x.disabled = true; });
+      muteSet(mod, null, out).then(function () { muteClose(); if (done) done(); }, function (e) {
+        err.textContent = tr.mErr + (e && e.message ? ': ' + e.message : ''); err.hidden = false;
+        m.querySelectorAll('button,input,select').forEach(function (x) { x.disabled = false; });
+      });
+    });
+    m.appendChild(add); m.appendChild(err);
+    bar.appendChild(cancel); bar.appendChild(save); m.appendChild(bar);
+    var r0 = m.gbtn.getBoundingClientRect();
+    m.style.left = Math.round(Math.max(8, Math.min(r0.left, window.innerWidth - m.offsetWidth - 8))) + 'px';
+    (list.querySelector('button') || add).focus();
   }
   // Botón de la página del módulo: solo para su admin y fuera del kiosco. / EN: Module page button: only for its admin and outside the kiosk.
   function placeMute() {

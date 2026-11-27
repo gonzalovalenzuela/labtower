@@ -46,10 +46,17 @@ const LANG = {
     sfEnable:'Turn on 2FA', sfDisable:'Turn off 2FA', sfStep1:'1. In your authenticator app (Google Authenticator, Aegis, 1Password…) choose «Scan QR code» and scan this:', sfManual:'Can’t scan it? Add the account by typing this key (type: time based):',
     sfOpen:'Open in authenticator', sfStep2:'2. Type the 6-digit code it shows:', sfConfirm:'Confirm', sfCode:'6-digit code', sfRecTitle:'Save these recovery codes now. Each works once if you lose your phone. They will not be shown again:',
     sfDone:'Done, I saved them', sfEnabled:'2FA is on', sfDisabled:'2FA is off', sfDisablePrompt:'Turn off two-factor authentication? You will need your password.', sfBadCode:'That code is not valid',
+    sfPolicy:'Require 2FA for administrators', sfPolicyHint:'Anyone with administrator access on any module must turn 2FA on before using LabTower.', sfPolicyOn:'2FA is now required for administrators', sfPolicyOff:'2FA is no longer required',
+    sfPolicyNeedOwn:'Turn on 2FA for your own account first', sfRequired:'Required for administrators',
     sfReset:'Reset 2FA', sfResetConfirm:u=>`Reset two-factor authentication for "${u}"? They will sign in with the password only until they set it up again.`, sfResetDone:'2FA reset', sf2fa:'2FA',
     auTitle:'Audit log', auHint:'Who changed what: users, permissions, passwords, 2FA, sessions, backups and lockouts. The last 5,000 entries are kept.', auWhen:'When', auActor:'Who', auAction:'Action', auTarget:'Target', auDetail:'Detail', auNone:'No entries yet.', auRefresh:'Refresh',
     au_login:'Signed in', au_user_created:'User created', au_user_deleted:'User deleted', au_permissions_changed:'Permissions changed', au_password_changed:'Password changed', au_password_reset:'Password reset by admin',
     au_session_revoked:'Session closed', au_sessions_revoked:'Other sessions closed', au_2fa_enabled:'2FA turned on', au_2fa_disabled:'2FA turned off', au_2fa_reset:'2FA reset', au_2fa_failed:'Wrong 2FA code', au_2fa_recovery_used:'Recovery code used',
+    au_item_added:'Added',au_item_edited:'Edited',au_item_deleted:'Deleted',au_item_paused:'Paused',au_item_resumed:'Resumed',au_item_changed:'Switch / AP change',
+    au_dns_blocking:'DNS blocking changed',au_check_now:'Check now',au_net_scan:'Network scan',au_wol_wake:'Wake-on-LAN',au_speedtest:'Speed test',au_layout_changed:'Order changed',
+    au_cert_pinned:'Certificate pinned',au_ssh_key_created:'SSH key created',au_device_edited:'Device edited',au_devices_deleted:'Devices removed',au_settings_changed:'Settings changed',au_changed:'Change',
+    au_alarms_paused:'Alarms paused',au_alarms_resumed:'Alarms resumed',au_alarm_schedule_saved:'Scheduled pauses saved',au_alert_rules_saved:'Alert rules saved',au_wan_config_changed:'WAN settings changed',
+    au_wan_ip_since_changed:'Public IP start date changed',au_battery_date_set:'Battery date set',au_battery_date_cleared:'Battery date cleared',au_energy_price_set:'kWh price set',au_energy_price_cleared:'kWh price cleared',au_policy_2fa_on:'2FA required for admins',au_policy_2fa_off:'2FA no longer required',
     au_lockout_ip:'IP locked out', au_lockout_account:'Account locked out', au_backup_created:'Backup created', au_backup_failed:'Backup failed', au_backup_downloaded:'Backup downloaded', au_backup_deleted:'Backup deleted', au_restore_started:'Restore started', au_restore_failed:'Restore failed',
     tpTitle:'Backup & restore', tpUpload:'Upload backup', tpCreate:'Create backup',
     tpHint:'Back up users, WOL devices, UPS servers and history, Net Monitor, Proxmox and the NUT configuration. To move to a new installation: install the package, sign in with the default user, upload the backup here and press Restore.',
@@ -117,10 +124,17 @@ const LANG = {
     sfEnable:'Activar 2FA', sfDisable:'Desactivar 2FA', sfStep1:'1. En tu app de autenticación (Google Authenticator, Aegis, 1Password…) elige «Escanear código QR» y escanea este:', sfManual:'¿No puedes escanearlo? Agrega la cuenta escribiendo esta clave (tipo: basada en tiempo):',
     sfOpen:'Abrir en la app', sfStep2:'2. Escribe el código de 6 dígitos que muestra:', sfConfirm:'Confirmar', sfCode:'Código de 6 dígitos', sfRecTitle:'Guarda estos códigos de recuperación ahora. Cada uno sirve una vez si pierdes el teléfono. No se vuelven a mostrar:',
     sfDone:'Listo, ya los guardé', sfEnabled:'2FA activado', sfDisabled:'2FA desactivado', sfDisablePrompt:'¿Desactivar la autenticación en dos pasos? Necesitarás tu contraseña.', sfBadCode:'Ese código no es válido',
+    sfPolicy:'Exigir 2FA a los administradores', sfPolicyHint:'Quien tenga acceso de administrador en algún módulo debe activar el 2FA antes de usar LabTower.', sfPolicyOn:'Ahora el 2FA es obligatorio para los administradores', sfPolicyOff:'El 2FA ya no es obligatorio',
+    sfPolicyNeedOwn:'Primero activa el 2FA en tu propia cuenta', sfRequired:'Obligatorio para administradores',
     sfReset:'Restablecer 2FA', sfResetConfirm:u=>`¿Restablecer la autenticación en dos pasos de "${u}"? Entrará solo con la contraseña hasta que la configure otra vez.`, sfResetDone:'2FA restablecido', sf2fa:'2FA',
     auTitle:'Registro de auditoría', auHint:'Quién cambió qué: usuarios, permisos, contraseñas, 2FA, sesiones, respaldos y bloqueos. Se conservan las últimas 5.000 entradas.', auWhen:'Cuándo', auActor:'Quién', auAction:'Acción', auTarget:'Objetivo', auDetail:'Detalle', auNone:'Aún no hay entradas.', auRefresh:'Actualizar',
     au_login:'Inicio de sesión', au_user_created:'Usuario creado', au_user_deleted:'Usuario eliminado', au_permissions_changed:'Permisos cambiados', au_password_changed:'Contraseña cambiada', au_password_reset:'Contraseña restablecida por un admin',
     au_session_revoked:'Sesión cerrada', au_sessions_revoked:'Otras sesiones cerradas', au_2fa_enabled:'2FA activado', au_2fa_disabled:'2FA desactivado', au_2fa_reset:'2FA restablecido', au_2fa_failed:'Código 2FA incorrecto', au_2fa_recovery_used:'Código de recuperación usado',
+    au_item_added:'Agregado',au_item_edited:'Editado',au_item_deleted:'Eliminado',au_item_paused:'Pausado',au_item_resumed:'Reanudado',au_item_changed:'Cambio en switch o AP',
+    au_dns_blocking:'Bloqueo DNS cambiado',au_check_now:'Revisar ahora',au_net_scan:'Escaneo de red',au_wol_wake:'Encendido por WOL',au_speedtest:'Prueba de velocidad',au_layout_changed:'Orden cambiado',
+    au_cert_pinned:'Certificado fijado',au_ssh_key_created:'Llave SSH creada',au_device_edited:'Equipo editado',au_devices_deleted:'Equipos eliminados',au_settings_changed:'Ajustes cambiados',au_changed:'Cambio',
+    au_alarms_paused:'Alarmas en pausa',au_alarms_resumed:'Alarmas reanudadas',au_alarm_schedule_saved:'Pausas programadas guardadas',au_alert_rules_saved:'Reglas de alerta guardadas',au_wan_config_changed:'Ajustes de WAN cambiados',
+    au_wan_ip_since_changed:'Fecha inicial de la IP pública cambiada',au_battery_date_set:'Fecha de batería fijada',au_battery_date_cleared:'Fecha de batería borrada',au_energy_price_set:'Precio del kWh fijado',au_energy_price_cleared:'Precio del kWh borrado',au_policy_2fa_on:'2FA obligatorio para admins',au_policy_2fa_off:'2FA ya no obligatorio',
     au_lockout_ip:'IP bloqueada', au_lockout_account:'Cuenta bloqueada', au_backup_created:'Respaldo creado', au_backup_failed:'Respaldo fallido', au_backup_downloaded:'Respaldo descargado', au_backup_deleted:'Respaldo eliminado', au_restore_started:'Restauración iniciada', au_restore_failed:'Restauración fallida',
     tpTitle:'Respaldo y restauración', tpUpload:'Subir respaldo', tpCreate:'Crear respaldo',
     tpHint:'Respalda usuarios, dispositivos WOL, servidores UPS e historial, Net Monitor, Proxmox y la configuración de NUT. Para migrar a una instalación nueva: instala el paquete, entra con el usuario por defecto, sube el respaldo aquí y pulsa Restaurar.',
@@ -251,6 +265,7 @@ async function doLogin() {
     // Contraseña por cambiar (admin/admin inicial): pantalla obligatoria antes de entrar.
     // EN: Password to change (initial admin/admin): mandatory screen before entering.
     if (d.must_change_password) { location.href = 'change-password?next=' + encodeURIComponent(location.pathname); return; }
+    if (d.must_setup_2fa) { location.href = 'setup-2fa?next=' + encodeURIComponent(location.pathname); return; }   // 2FA obligatorio / mandatory 2FA
     await loadMe();
     await loadUsers();
     document.getElementById('login-screen').style.display = 'none';
@@ -946,8 +961,16 @@ function sfRender() {
       <input id="sf-code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="${esc(t('sfCode'))}" style="width:160px;margin-right:8px">
       <button class="btn-primary" data-on-click="sfConfirm">${esc(t('sfConfirm'))}</button>`;
   } else {
-    h += _sf.enabled ? `<button class="btn-sec" data-on-click="sfDisable">${esc(t('sfDisable'))}</button>`
+    const req = _sf.policy && _sf.policy.require_2fa_admins;
+    h += _sf.enabled ? (req ? `<span class="ucreated">${esc(t('sfRequired'))}</span>` : `<button class="btn-sec" data-on-click="sfDisable">${esc(t('sfDisable'))}</button>`)
                      : `<button class="btn-primary" data-on-click="sfBegin">${esc(t('sfEnable'))}</button>`;
+  }
+  // Política: 2FA obligatorio para administradores (solo el admin de todos los módulos la cambia). / EN: Policy: mandatory 2FA for admins.
+  if (_sf.can_policy) {
+    const on = !!(_sf.policy && _sf.policy.require_2fa_admins);
+    h += `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)"><label style="display:flex;gap:8px;align-items:center;font-size:13px">
+      <input type="checkbox" id="sf-policy"${on ? ' checked' : ''} data-on-change="sfPolicy"> ${esc(t('sfPolicy'))}</label>
+      <div class="ucreated" style="margin-top:4px">${esc(t('sfPolicyHint'))}</div></div>`;
   }
   box.innerHTML = h + '</div>';
 }
@@ -967,6 +990,15 @@ async function sfConfirm() {
   await sfLoad(); sfRender(); loadUsers(); auLoad();
 }
 function sfRecDone() { _sfRec = null; sfRender(); }
+async function sfPolicy() {
+  const cb = document.getElementById('sf-policy'), on = !!(cb && cb.checked);
+  if (on && !_sf.enabled) { if (cb) cb.checked = false; return toast(t('sfPolicyNeedOwn'), true); }
+  const pw = await askPassword(); if (!pw) { sfRender(); return; }
+  const r = await fetch('api/policy', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({require_2fa_admins:on, current_password:pw})});
+  const d = await r.json().catch(()=>({}));
+  if (!r.ok) { toast(d.error || t('tpFailed'), true); return sfLoad(); }
+  toast(t(on ? 'sfPolicyOn' : 'sfPolicyOff')); await sfLoad(); auLoad();
+}
 async function sfDisable() {
   if (!confirm(t('sfDisablePrompt'))) return;
   const pw = await askPassword(); if (!pw) return;
@@ -986,6 +1018,8 @@ async function sfResetUser(user) {
 async function auLoad() {
   try { const r = await fetch('api/audit?limit=150'); if (r.ok) { _au = (await r.json()).audit || []; auRender(); } } catch(e) {}
 }
+// Módulo que anotó la acción (las del panel no lo muestran). / EN: Module that recorded the action (the panel's own do not show it).
+const AU_MOD = {nut: 'UPS', net: 'Net', pve: 'Proxmox', nas: 'NAS', dns: 'DNS', wan: 'WAN', vpn: 'VPN', uptime: 'Uptime', wol: 'WOL', overview: 'Overview'};
 function auRender() {
   const tb = document.getElementById('au-tbody'); if (!tb) return;
   const locale = _lang === 'es' ? 'es-CL' : 'en-US';
@@ -993,7 +1027,7 @@ function auRender() {
   tb.innerHTML = _au.map(e => `<tr>
       <td><span class="ucreated">${esc(new Date(e.t*1000).toLocaleString(locale))}</span></td>
       <td><b>${esc(e.a||'')}</b></td>
-      <td>${esc(t('au_' + e.x) === 'au_' + e.x ? e.x : t('au_' + e.x))}</td>
+      <td>${esc(t('au_' + e.x) === 'au_' + e.x ? e.x : t('au_' + e.x))}${AU_MOD[e.m] ? ` <span class="ucreated">· ${esc(AU_MOD[e.m])}</span>` : ''}</td>
       <td><span class="ucreated">${esc(e.g||'')}</span></td>
       <td><span class="ucreated" title="${esc(e.ip||'')}">${esc([e.d, e.ip].filter(Boolean).join(' · '))}</span></td></tr>`).join('');
 }
@@ -1036,4 +1070,4 @@ function upCopyCmd(ev) {
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ closeDrawer, closeModals, confirmDelete, doLogin, editUser, exCancel, exGo, exPlainToggle, logout, mdToggle, openDrawer, reauthCancel, reauthOk, saveUser, setLang, setTheme, upCheck, upCopyCmd, sfBegin, sfConfirm, sfDisable, sfRecDone, sfResetUser, auLoad, ssClose, ssCloseOthers, toggleNav, tpCheck, tpCreate, tpDelete, tpDownload, tpRestoreGo, tpRestoreOpen });
+if (window.cspRegister) cspRegister({ closeDrawer, closeModals, confirmDelete, doLogin, editUser, exCancel, exGo, exPlainToggle, logout, mdToggle, openDrawer, reauthCancel, reauthOk, saveUser, setLang, setTheme, upCheck, upCopyCmd, sfBegin, sfConfirm, sfDisable, sfRecDone, sfResetUser, auLoad, ssClose, ssCloseOthers, toggleNav, tpCheck, tpCreate, tpDelete, tpDownload, tpRestoreGo, tpRestoreOpen, sfPolicy });

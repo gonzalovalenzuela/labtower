@@ -402,6 +402,65 @@ def ups_stats(sid, ups):
     _stats_cache[k] = (now, st)
     return st
 
+# ─── Historial de cortes de luz y consumo de energía ────────────────────────────
+# ES: Para el detalle de cada UPS: por mes (12 meses) el número de cortes, su duración media y el más largo, los últimos cortes, y la energía
+#     consumida (kWh) hoy, en 30 días y por mes, integrando los vatios del historial (un hueco de más de OUT_GAP no cuenta). Con el precio del
+#     kWh que fija el administrador (energy.json) también el costo. Se recalcula como mucho cada ENERGY_TTL segundos.
+# EN: For each UPS detail: per month (12 months) the number of outages, their average and longest duration, the latest outages, and the
+#     energy used (kWh) today, over 30 days and per month, integrating the history watts (a gap longer than OUT_GAP does not count). With the
+#     kWh price the administrator sets (energy.json) also the cost. Recomputed at most every ENERGY_TTL seconds.
+ENERGY_FILE = DATA_DIR / "energy.json"
+ENERGY_TTL  = 300
+OUT_LIST    = 20
+_energy_cache = {}
+
+def energy_price():
+    p = auth.read_json(ENERGY_FILE, {}, dict).get("price")
+    return float(p) if isinstance(p, (int, float)) and not isinstance(p, bool) and 0 < p < 1e6 else None
+
+def _month(ts): return time.strftime("%Y-%m", time.localtime(ts))
+
+def _months12(now):
+    lt = time.localtime(now); y, mo = lt.tm_year, lt.tm_mon; out = []
+    for _ in range(12):
+        out.append(f"{y:04d}-{mo:02d}"); mo -= 1
+        if mo == 0: y, mo = y - 1, 12
+    return out[::-1]
+
+def energy_report(sid, ups, now=None):
+    now = int(now or time.time()); k = (sid, ups)
+    c = _energy_cache.get(k)
+    if c and now - c[0] < ENERGY_TTL: return {**c[1], "price": energy_price()}
+    months = _months12(now)
+    lt = time.localtime(now)
+    first = int(time.mktime((int(months[0][:4]), int(months[0][5:]), 1, 0, 0, 0, 0, 0, -1)))
+    today0 = int(time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1)))
+    conn = db_connect()
+    try:
+        # Wh por día local: vatios de cada muestra × segundos desde la anterior. / EN: Wh per local day: each sample's watts × seconds since the previous one.
+        days = conn.execute("""SELECT strftime('%Y-%m-%d', ts, 'unixepoch', 'localtime') AS d, SUM(w * dt) / 3600.0 AS wh, MAX(w) AS mx, MIN(ts) AS t0 FROM (
+                                 SELECT ts, watts AS w, ts - LAG(ts) OVER (ORDER BY ts) AS dt FROM history WHERE srv_id=? AND ups=? AND ts>=?)
+                               WHERE dt > 0 AND dt <= ? GROUP BY d""", (sid, ups, min(first, now - 30 * 86400), OUT_GAP)).fetchall()
+        outs = conn.execute("SELECT t_start, t_end, min_charge FROM outages WHERE srv_id=? AND ups=? AND t_start>=? ORDER BY t_start DESC",
+                            (sid, ups, first)).fetchall()
+    finally: conn.close()
+    has_power = any((r["mx"] or 0) > 0 for r in days)
+    kwh_m = {m: 0.0 for m in months}; kwh_30 = kwh_today = 0.0
+    for r in days:
+        wh = r["wh"] or 0.0
+        if r["d"][:7] in kwh_m: kwh_m[r["d"][:7]] += wh / 1000
+        if r["t0"] >= now - 30 * 86400: kwh_30 += wh / 1000
+        if r["t0"] >= today0: kwh_today += wh / 1000
+    om = {m: [] for m in months}
+    for t0, t1, _mc in outs:
+        if _month(t0) in om: om[_month(t0)].append((t1 or now) - t0)
+    data = {"months": [{"m": m, "kwh": round(kwh_m[m], 2) if has_power else None, "n": len(om[m]),
+                        "avg": round(sum(om[m]) / len(om[m])) if om[m] else None, "max": max(om[m]) if om[m] else None} for m in months],
+            "kwh_today": round(kwh_today, 3) if has_power else None, "kwh_30": round(kwh_30, 2) if has_power else None,
+            "outages": [{"start": t0, "end": t1, "dur": (t1 or now) - t0, "min_charge": mc} for t0, t1, mc in outs[:OUT_LIST]]}
+    _energy_cache[k] = (now, data)
+    return {**data, "price": energy_price()}
+
 # Las filas se acumulan en memoria y se escriben juntas cada DB_FLUSH_SEC segundos
 # (un commit por lote en vez de uno cada POLL_SEC por UPS: menos desgaste de la SD).
 # Si el UPS no está en línea (ups.status distinto de OL: batería, carga baja, etc.)
@@ -749,6 +808,7 @@ class SCache:
         self.id = sid; self.name = sid; self._lock = threading.RLock()
         self._ups = {}; self._clients = {}
         self._error = None; self._last_ok = None; self._ver = ""
+        self._rule_rd = {}            # UPS name → readings for the alert rules (auth.metrics_report)
 
     # Borra el estado (por ejemplo cuando el usuario cambia la dirección del servidor).
     # EN: Clear the state (for example when the user changes the server address).
@@ -756,6 +816,7 @@ class SCache:
         with self._lock:
             self._ups = {}; self._clients = {}
             self._error = None; self._last_ok = None; self._ver = ""
+            self._rule_rd = {}
 
     # Guarda una lectura nueva y la anota en el historial (fuera del candado). Convierte las variables NUT a números
     # seguros y calcula los vatios. Si el estado no empieza con «OL» se escribe a disco de inmediato.
@@ -789,6 +850,11 @@ class SCache:
             selftest_track(self.id, name, vars_, entry["ts"])
             _status_event(self.id, name, status, entry)
             _power_events(self.id, name, vars_)
+            self._rule_rd[name] = [("ups_charge", name, entry["charge"] if vars_.get("battery.charge") is not None else None),
+                                   ("ups_load", name, entry["load"] if vars_.get("ups.load") is not None else None),
+                                   ("ups_temp", name, entry["temp"] if (vars_.get("ups.temperature") or vars_.get("battery.temperature")) is not None else None),
+                                   ("ups_runtime", name, entry["runtime"] / 60 if vars_.get("battery.runtime") is not None else None)]
+            auth.metrics_report("nut", f"nut:{self.id}", [x for v in self._rule_rd.values() for x in v])     # alert rules on the server
         except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
             log.debug(f"db_insert error: {e}")
 
@@ -1011,30 +1077,17 @@ def health_report(detailed=False):
     else:     c["history_fresh"] = auth.chk(auth.OK)
     return auth.health_reply("nut", c, detailed)
 
-# Nombres que Net Monitor conoce para las IP (alias o nombre de host); vacío si Net Monitor no está. Se renueva cada 30 s.
-# EN: Names Net Monitor knows for IPs (alias or hostname); empty if Net Monitor is absent. Refreshed every 30 s.
-_names_cache = [0.0, {}]
+# Nombres que Net Monitor conoce para las IP (alias o nombre de host); vacío si Net Monitor no está (auth.net_names).
+# EN: Names Net Monitor knows for IPs (alias or hostname); empty if Net Monitor is absent (auth.net_names).
 def net_names() -> dict:
-    now = time.time()
-    if now - _names_cache[0] < 30: return _names_cache[1]
-    out = {}
-    try:
-        data = auth.read_published(NET_HOSTS_FILE, None, dict)       # published by Net Monitor: untrusted input
-        for ip, h in (data or {}).items():
-            if not isinstance(h, dict): continue
-            n = str(h.get("alias") or h.get("hostname") or "").strip()
-            n = re.sub(r"[\x00-\x1f\x7f]", "", n)[:60]
-            if n and isinstance(ip, str) and len(ip) <= 45: out[ip] = n
-    except Exception as e:  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
-        log.debug(f"net names: {e}")
-    _names_cache[0], _names_cache[1] = now, out
-    return out
+    return auth.net_names(NET_HOSTS_FILE)
 
 
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
 # Manejador HTTP. Cada petición se atiende en su propio hilo.
 # EN: HTTP handler. Each request is served in its own thread.
-class H(BaseHTTPRequestHandler):
+class H(auth.Audited, BaseHTTPRequestHandler):
+    AUDIT_MODULE = "nut"          # accepted changes go to the audit log (auth.Audited)
     timeout = 30      # a stalled client must not hold a thread forever
     def log_message(self, fmt, *a):
         # send_error() llega aquí con (código, mensaje) y un 501 de HEAD trae el mensaje en a[1]: solo se registra un código numérico.
@@ -1140,6 +1193,12 @@ class H(BaseHTTPRequestHandler):
                 since = now - range_secs[range_] if range_ in range_secs else 0
             rows  = db_query(sid, ups, since_ts=since, limit=RANGE_LIMIT.get(range_, 4320), until_ts=until)
             self._json(200, {"history": rows})
+        # Cortes de luz por mes, últimos cortes y consumo en kWh de un UPS. / EN: Outages per month, latest outages and kWh used by one UPS.
+        elif path == "/api/energy":
+            qs  = parse_qs(urlparse(self.path).query)
+            sid, ups = qs.get("srv", [""])[0], qs.get("ups", [""])[0]
+            if not any(x["id"] == sid for x in load_servers()) or not ups or len(ups) > 64: return self._json(404, {"error": "Unknown UPS"})
+            self._json(200, {**energy_report(sid, ups), "can_edit": auth.check_permission(tok, "nut", "admin")})
         # Exporta el historial de un UPS como archivo CSV descargable (hasta 8640 puntos).
         # EN: Export a UPS history as a downloadable CSV file (up to 8640 points).
         elif path == "/api/export/csv":
@@ -1264,6 +1323,17 @@ class H(BaseHTTPRequestHandler):
             who = (auth.get_session(tok) or {}).get("username", "?")
             auth.audit(who, "battery_date_set" if date else "battery_date_cleared", ups, date, auth.client_ip(self), module="nut")
             self._json(200, {"ok": True, "date": date or None})
+        # Precio del kWh para el costo del consumo (admin); null lo quita. / EN: kWh price for the energy cost (admin); null clears it.
+        elif path == "/api/energy-price":
+            if not auth.check_permission(tok, "nut", "admin"):
+                return self._json(403, {"error": "Admin permission required"})
+            p = body.get("price")
+            if p is not None and (isinstance(p, bool) or not isinstance(p, (int, float)) or not 0 < p < 1e6):
+                return self._json(400, {"error": "Invalid price"})
+            auth.write_json(ENERGY_FILE, {"price": p} if p is not None else {})
+            who = (auth.get_session(tok) or {}).get("username", "?")
+            auth.audit(who, "energy_price_set" if p is not None else "energy_price_cleared", "", "" if p is None else str(p), auth.client_ip(self), module="nut")
+            self._json(200, {"ok": True, "price": p})
         # Prueba de conexión a un upsd sin guardarlo: devuelve los UPS que encuentra o el error.
         # EN: Connection test to an upsd without saving it: returns the UPS units it finds or the error.
         elif path == "/api/test":

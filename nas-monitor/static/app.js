@@ -25,12 +25,12 @@ const LANG={
     power:'Power supply',fans:'Fans',normal:'Normal',failed:'Failed',upgradeYes:'Update available',upgradeNo:'Up to date',upgradeUnk:'—',updates:'System update',
     volumes:'Volumes',disks:'Disks',network:'Network',ups:'UPS',diskLoad:'Disk activity',diskAllIdle:'All disks idle ({n})',diskIdleN:'Idle disks: {n}',history:'History (last hours)',histCpuMem:'CPU / RAM',histTemp:'Temperature',filterAll:'All',trend:'CPU / RAM',accumulating:'Collecting data…',noDataChart:'No data for this range',summary:'NAS Summary',colNas:'NAS',colModel:'Model',colAlerts:'Alerts',histNet:'Network traffic',
     noVolumes:'No volume data (is this a Synology with the Synology MIB enabled?)',noDisks:'No disk data',noNet:'No network data yet',noHist:'Collecting history…',
-    daysFull:'~{n} days until full',tempTip:'24 h: max {a} · avg {b} °C — 7 days: max {c} °C',linkDown:'Link down',netErrs:'Errors in/out',
+    daysFull:'~{n} days until full',tempTip:'24 h: max {a} · avg {b} °C — 7 days: max {c} °C',sect:{realloc:'reallocated',pending:'pending',uncorrect:'uncorrectable'},sectLbl:'Bad sectors',sectLog:'Changes',linkDown:'Link down',netErrs:'Errors in/out',
     used:'used',free:'free',rx:'In',tx:'Out',model2:'Model',status:'Status',charge:'Battery',loadPct:'Load',
     disk:{1:'Normal',2:'Initialized',3:'Not initialized',4:'System partition failed',5:'Crashed',6:'Disconnected'},
     raid:{1:'Normal',2:'Repairing',3:'Migrating',4:'Expanding',5:'Deleting',6:'Creating',7:'Syncing',8:'Checking parity',9:'Assembling',10:'Canceling',11:'Degraded',12:'Crashed',13:'Scrubbing',14:'Deploying',15:'Undeploying',16:'Mounting cache',17:'Unmounting cache',18:'Expanding (SHR)',19:'Converting (SHR)',20:'Migrating (SHR)',21:'Unknown'},
     al:{system:'System partition failure',power:'Power supply failure',fan:'Fan failure',temp:v=>`High temperature (${v} °C)`,cpu:v=>`High CPU (${v}%)`,mem:v=>`High memory use (${v}%)`,
-        disk:(i,v)=>`${i}: ${LANG.en.disk[v]||v}`,disk_temp:(i,v)=>`${i}: ${v} °C`,raid:(i,v)=>`${i}: ${LANG.en.raid[v]||v}`,vol_full:(i,v)=>`${i} is ${v}% full`,vol_days:(i,v)=>`${i}: fills up in ~${v} days at the current growth`,remote:(i,v)=>`${i}: ${v}`,upgrade:'A system update is available',cert:(i,v)=>`${i}: certificate expires in ${v} days`,cert_exp:i=>`${i}: certificate expired`,cert_err:(i,v)=>`${i}: cannot read the certificate (${v})`},
+        disk:(i,v)=>`${i}: ${LANG.en.disk[v]||v}`,disk_temp:(i,v)=>`${i}: ${v} °C`,disk_sectors:(i,v)=>`${i}: bad sectors went up (${v})`,raid:(i,v)=>`${i}: ${LANG.en.raid[v]||v}`,vol_full:(i,v)=>`${i} is ${v}% full`,vol_days:(i,v)=>`${i}: fills up in ~${v} days at the current growth`,remote:(i,v)=>`${i}: ${v}`,upgrade:'A system update is available',cert:(i,v)=>`${i}: certificate expires in ${v} days`,cert_exp:i=>`${i}: certificate expired`,cert_err:(i,v)=>`${i}: cannot read the certificate (${v})`},
     certs:'Certificates',certChecking:'Reading certificates…',certSelf:'self-signed',certDaysLeft:'{n} d',certExpired:'Expired',certErr:'Error',certUntil:'Expires {d}',certCheckNow:'Check now',certChecked:'Certificates checked',certCheckErr:'Could not check the certificates',
     fieldCertPorts:'Certificate ports',fieldCertWarn:'Certificate warning (days)',fieldCertCrit:'Certificate critical (days)',certPortsHint:'TLS ports on this NAS whose certificate expiry is checked, comma-separated (for example 5001, 443). Empty = none.',
     sessionExpired:'Session expired'},
@@ -58,12 +58,12 @@ const LANG={
     power:'Fuente de poder',fans:'Ventiladores',normal:'Normal',failed:'Falla',upgradeYes:'Actualización disponible',upgradeNo:'Al día',upgradeUnk:'—',updates:'Actualización del sistema',
     volumes:'Volúmenes',disks:'Discos',network:'Red',ups:'UPS',diskLoad:'Actividad de disco',diskAllIdle:'Todos los discos en reposo ({n})',diskIdleN:'Discos en reposo: {n}',history:'Historial (últimas horas)',histCpuMem:'CPU / RAM',histTemp:'Temperatura',filterAll:'Todo',trend:'CPU / RAM',accumulating:'Reuniendo datos…',noDataChart:'Sin datos en este rango',summary:'Resumen de NAS',colNas:'NAS',colModel:'Modelo',colAlerts:'Avisos',histNet:'Tráfico de red',
     noVolumes:'Sin datos de volúmenes (¿es un Synology con la MIB de Synology habilitada?)',noDisks:'Sin datos de discos',noNet:'Aún sin datos de red',noHist:'Reuniendo historial…',
-    daysFull:'~{n} días para llenarse',tempTip:'24 h: máx {a} · prom {b} °C — 7 días: máx {c} °C',linkDown:'Enlace caído',netErrs:'Errores ent./sal.',
+    daysFull:'~{n} días para llenarse',tempTip:'24 h: máx {a} · prom {b} °C — 7 días: máx {c} °C',sect:{realloc:'reasignados',pending:'pendientes',uncorrect:'incorregibles'},sectLbl:'Sectores dañados',sectLog:'Cambios',linkDown:'Enlace caído',netErrs:'Errores ent./sal.',
     used:'usado',free:'libre',rx:'Entrada',tx:'Salida',model2:'Modelo',status:'Estado',charge:'Batería',loadPct:'Carga',
     disk:{1:'Normal',2:'Inicializado',3:'Sin inicializar',4:'Falla de partición del sistema',5:'Dañado',6:'Desconectado'},
     raid:{1:'Normal',2:'Reparando',3:'Migrando',4:'Expandiendo',5:'Eliminando',6:'Creando',7:'Sincronizando',8:'Verificando paridad',9:'Ensamblando',10:'Cancelando',11:'Degradado',12:'Dañado',13:'Depurando datos',14:'Desplegando',15:'Retirando',16:'Montando caché',17:'Desmontando caché',18:'Expandiendo (SHR)',19:'Convirtiendo (SHR)',20:'Migrando (SHR)',21:'Desconocido'},
     al:{system:'Falla en la partición del sistema',power:'Falla en la fuente de poder',fan:'Falla en un ventilador',temp:v=>`Temperatura alta (${v} °C)`,cpu:v=>`CPU alta (${v}%)`,mem:v=>`Memoria alta (${v}%)`,
-        disk:(i,v)=>`${i}: ${LANG.es.disk[v]||v}`,disk_temp:(i,v)=>`${i}: ${v} °C`,raid:(i,v)=>`${i}: ${LANG.es.raid[v]||v}`,vol_full:(i,v)=>`${i} está al ${v}%`,vol_days:(i,v)=>`${i}: se llena en ~${v} días al ritmo actual`,remote:(i,v)=>`${i}: ${v}`,upgrade:'Hay una actualización del sistema disponible',cert:(i,v)=>`${i}: el certificado vence en ${v} días`,cert_exp:i=>`${i}: certificado vencido`,cert_err:(i,v)=>`${i}: no se pudo leer el certificado (${v})`},
+        disk:(i,v)=>`${i}: ${LANG.es.disk[v]||v}`,disk_temp:(i,v)=>`${i}: ${v} °C`,disk_sectors:(i,v)=>`${i}: aumentaron los sectores dañados (${v})`,raid:(i,v)=>`${i}: ${LANG.es.raid[v]||v}`,vol_full:(i,v)=>`${i} está al ${v}%`,vol_days:(i,v)=>`${i}: se llena en ~${v} días al ritmo actual`,remote:(i,v)=>`${i}: ${v}`,upgrade:'Hay una actualización del sistema disponible',cert:(i,v)=>`${i}: el certificado vence en ${v} días`,cert_exp:i=>`${i}: certificado vencido`,cert_err:(i,v)=>`${i}: no se pudo leer el certificado (${v})`},
     certs:'Certificados',certChecking:'Leyendo certificados…',certSelf:'autofirmado',certDaysLeft:'{n} d',certExpired:'Vencido',certErr:'Error',certUntil:'Vence el {d}',certCheckNow:'Revisar ahora',certChecked:'Certificados revisados',certCheckErr:'No se pudieron revisar los certificados',
     fieldCertPorts:'Puertos de certificados',fieldCertWarn:'Aviso de certificado (días)',fieldCertCrit:'Crítico de certificado (días)',certPortsHint:'Puertos TLS de este NAS cuyo certificado se revisa, separados por coma (por ejemplo 5001, 443). Vacío = ninguno.',
     sessionExpired:'Sesión vencida'}
@@ -112,6 +112,7 @@ async function doLogin(){
     const d=await r.json();
     if(!r.ok||!d.ok){err.textContent=d.error||'Error';err.className='login-err show';return;}
     if(d.must_change_password){location.href='/admin/change-password?next='+encodeURIComponent(location.pathname);return;}
+    if(d.must_setup_2fa){location.href='/admin/setup-2fa?next='+encodeURIComponent(location.pathname);return;}   // 2FA obligatorio / mandatory 2FA
     ME=d;applyPermissions();await initApp();
     const ls=document.getElementById('login-screen');ls.style.opacity='0';setTimeout(()=>ls.style.display='none',150);
   }catch(e){err.textContent='Error: '+e.message;err.className='login-err show';}
@@ -298,7 +299,12 @@ function buildDetail(n){
   if(!(d.disks||[]).length)h+=`<div class="nas-empty">${esc(t('noDisks'))}</div>`;
   (d.disks||[]).forEach(x=>{
     const st=x.status_text||(LANG[_lang].disk||{})[x.status]||('#'+x.status);
+    // Sectores dañados (SMART 5/197/198) y sus últimos cambios. / EN: Bad sectors (SMART 5/197/198) and their latest changes.
+    const SN=LANG[_lang].sect,sec=x.sectors?['realloc','pending','uncorrect'].filter(k=>x.sectors[k]!=null).map(k=>`${SN[k]} ${x.sectors[k]}`).join(' · '):'';
+    const up=(d.alerts||[]).some(a=>a.type==='disk_sectors'&&a.item===x.name);
+    const log=(x.sect_log||[]).slice().reverse().map(c=>`${new Date(c.ts*1000).toLocaleDateString(_lang==='es'?'es-CL':'en-GB')} ${SN[c.a]||c.a}: ${c.o} → ${c.v}`).join('\n');
     h+=`<div class="disk-row"><span class="dn">${esc(x.name)}</span><span class="dm">${esc(x.model||'—')}<small>${esc(x.type||'')}</small></span><span class="dt${x.temp>=DISK_HOT?' hot':''}"${x.t24?` title="${esc(t('tempTip').replace('{a}',x.t24.max24).replace('{b}',x.t24.avg24).replace('{c}',x.t24.max7))}"`:''}>${x.temp==null?'—':esc(x.temp)+' °C'}${x.t24?` <small>▲${esc(x.t24.max24)}</small>`:''}</span>${pill(x.lv,st)}</div>`;
+    if(sec)h+=`<div class="disk-sect${up?' up':''}"${log?` title="${esc(t('sectLog')+':\n'+log)}"`:''}>${esc(t('sectLbl'))}: ${esc(sec)}${up?' ▲':''}</div>`;
   });
   h+='</div>';
   // Red

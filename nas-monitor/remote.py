@@ -483,6 +483,19 @@ _OMV_SMART_LV = {"GOOD": "ok", "BAD_ATTRIBUTE_NOW": "crit", "BAD_STATUS": "crit"
                  "BAD_SECTOR": "warn", "BAD_SECTOR_MANY": "crit", "UNKNOWN": "info"}
 _OMV_FS_SKIP = ("swap", "vfat", "iso9660", "squashfs", "udf", "")
 
+# Atributos SMART de sectores dañados: 5 reasignados, 197 pendientes, 198 incorregibles. / EN: Bad-sector SMART attributes.
+SMART_ATTRS = {5: "realloc", 197: "pending", 198: "uncorrect"}
+SECT_EVERY  = 900            # s between OpenMediaVault attribute reads (each one runs smartctl on the NAS)
+
+def omv_sectors(rows):
+    """{"realloc", "pending", "uncorrect"} from the rows of Smart.getAttributes."""
+    out = {}
+    for r in rows if isinstance(rows, list) else []:
+        k = SMART_ATTRS.get(_int(r.get("id"))) if isinstance(r, dict) else None
+        v = _int(str(r.get("rawvalue") or "").split()[0]) if k and str(r.get("rawvalue") or "").strip() else None
+        if k and v is not None: out[k] = v
+    return out
+
 def omv_collect(cfg, prev, learn=None):
     state = prev.setdefault("omv", OmvSession()); state.bind(cfg)
     rpc = OmvRpc(cfg, state, learn)
@@ -535,11 +548,20 @@ def omv_collect(cfg, prev, learn=None):
         t = _flt(s.get("temperature"))
         o["temp"] = t if t is not None and 0 < t < 150 else None
         o["state"] = clean(s.get("overallstatus") or "", 40).upper() or None
+    # Sectores dañados cada SECT_EVERY s (Smart.getAttributes corre smartctl en el NAS). / EN: Bad sectors every SECT_EVERY s.
+    sc = prev.get("omv_sect") or {"ts": 0, "v": {}}
+    if time.time() - sc["ts"] >= SECT_EVERY:
+        sc = {"ts": time.time(), "v": {}}
+        for f, o in by_file.items():
+            if not o["state"]: continue                              # no SMART data for this device
+            try: sc["v"][f] = omv_sectors(rows(rpc.call("Smart", "getAttributes", {"devicefile": f})))
+            except RemoteError: pass
+        prev["omv_sect"] = sc
     disks = []
-    for i, (_f, o) in enumerate(sorted(by_file.items(), key=lambda kv: kv[1]["name"]), 1):
+    for i, (f, o) in enumerate(sorted(by_file.items(), key=lambda kv: kv[1]["name"]), 1):
         lv = _OMV_SMART_LV.get(o["state"] or "UNKNOWN", "warn") if o["state"] else "ok"
         disks.append({"idx": str(i), "name": o["name"], "model": o["model"], "type": o["type"], "status": None,
-                      "status_text": o["state"] or "OK", "lv": lv, "temp": o["temp"]})
+                      "status_text": o["state"] or "OK", "lv": lv, "temp": o["temp"], **({"sectors": sc["v"][f]} if sc["v"].get(f) else {})})
 
     raids, seen = [], set()
     for f in sorted(fss, key=lambda x: str(x.get("label") or x.get("devicefile") or "")):

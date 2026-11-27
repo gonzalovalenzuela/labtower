@@ -34,6 +34,7 @@ const LANG={
     pwVolt:'Input voltage',pwVoltFmt:(a,b,c)=>`${a}–${b} V (nominal ${c})`,pwSag:'Sags',pwSurge:'Surges',pwXfer:'Transfers to battery',pwNone:'None',pwWindow:'last',pwNeedHist:'Collecting voltage history…',pwBand:(l,h)=>`Outside ${l}–${h} V (±10 %)`,
     batTitle:'Battery',batRuntime:'Runtime now',batFull:'Runtime at full charge',batPlus50:'If the load rises 50 %',batAge:'Battery age',batSetDateTip:'Set the date the battery was replaced',batSince:(d)=>`replaced ${d}`,batUnknown:'unknown',batAskDate:'Date the battery was replaced (YYYY-MM-DD). Leave empty to use the date the UPS reports:',batDateSaved:'Battery date saved',batYears:(y)=>`${y} years`,batMonths:(m)=>m<1?'less than 1 month':m===1?'1 month':`${m} months`,batAging:'Capacity trend',batAgingFmt:(c,w)=>`${c>0?'+':''}${c} % in ${w} weeks`,batCollecting:'collecting data (needs about a month)',batAgingWarn:'The battery holds noticeably less than before: consider replacing it',batOldWarn:'Battery older than 4 years: consider replacing it',batTests:'Self-tests',batTestNow:'Last result',batNoTests:'No self-test recorded yet (only changes are logged)',batApprox:'estimate',tkpassed:'passed',tkfailed:'failed',tkrunning:'running',tknone:'none',tkother:'other',
     avStreak:'Online streak',avSince:'since monitoring began',avOnBatt:'On battery now',av24:'Availability 24 h',av7:'Availability 7 d',av30:'Availability 30 d',avLast:'Last outage',avNone:'None recorded',avCount:'Outages (30 d)',avMin:'min. charge',
+    enTitle:'Power outages and energy',enToday:'Energy today',en30:'Energy 30 d',enCost30:'Cost 30 d',enPrice:'kWh price',enSet:'Set',enAsk:'kWh price (blank removes it):',enSaved:'Price saved',enMonth:'Month',enOut:'Outages',enAvg:'Avg. duration',enMax:'Longest',enKwh:'kWh',enCost:'Cost',enLast:n=>`Latest outages (${n})`,enStart:'Start',enDur:'Duration',enNoPower:'The UPS does not report power: no energy data.',enBad:'Invalid price',
     chartTitle_voltage:'Input vs output voltage',
     chartLegend_input:'Input',chartLegend_output:'Output',chartLegend_watts:'Watts',
     chartTitle_power:'Power consumption',chartTitle_temp:'UPS temperature',chartLegend_temp:'Temperature (°C)',chartTitle_runtime:'Runtime',chartLegend_runtime:'Runtime (min)',
@@ -87,6 +88,7 @@ const LANG={
     pwVolt:'Voltaje de entrada',pwVoltFmt:(a,b,c)=>`${a}–${b} V (nominal ${c})`,pwSag:'Bajones',pwSurge:'Subidas',pwXfer:'Cambios a batería',pwNone:'Ninguno',pwWindow:'últimas',pwNeedHist:'Recopilando historial de voltaje…',pwBand:(l,h)=>`Fuera de ${l}–${h} V (±10 %)`,
     batTitle:'Batería',batRuntime:'Autonomía ahora',batFull:'Autonomía con batería llena',batPlus50:'Si la carga sube 50 %',batAge:'Edad de la batería',batSetDateTip:'Indicar la fecha en que se cambió la batería',batSince:(d)=>`cambiada ${d}`,batUnknown:'desconocida',batAskDate:'Fecha en que se cambió la batería (AAAA-MM-DD). Déjala vacía para usar la fecha que informa el UPS:',batDateSaved:'Fecha de la batería guardada',batYears:(y)=>`${y} años`,batMonths:(m)=>m<1?'menos de 1 mes':m===1?'1 mes':`${m} meses`,batAging:'Tendencia de capacidad',batAgingFmt:(c,w)=>`${c>0?'+':''}${c} % en ${w} semanas`,batCollecting:'reuniendo datos (hace falta cerca de un mes)',batAgingWarn:'La batería aguanta bastante menos que antes: conviene cambiarla',batOldWarn:'Batería de más de 4 años: conviene cambiarla',batTests:'Autotests',batTestNow:'Último resultado',batNoTests:'Aún no hay autotests registrados (solo se anotan los cambios)',batApprox:'estimación',tkpassed:'aprobado',tkfailed:'falló',tkrunning:'en curso',tknone:'ninguno',tkother:'otro',
     avStreak:'Tiempo en línea',avSince:'desde que se monitorea',avOnBatt:'En batería ahora',av24:'Disponibilidad 24 h',av7:'Disponibilidad 7 d',av30:'Disponibilidad 30 d',avLast:'Último corte',avNone:'Ninguno registrado',avCount:'Cortes (30 d)',avMin:'carga mín.',
+    enTitle:'Cortes de luz y consumo',enToday:'Consumo hoy',en30:'Consumo 30 d',enCost30:'Costo 30 d',enPrice:'Precio kWh',enSet:'Cambiar',enAsk:'Precio del kWh (vacío lo quita):',enSaved:'Precio guardado',enMonth:'Mes',enOut:'Cortes',enAvg:'Duración media',enMax:'Más largo',enKwh:'kWh',enCost:'Costo',enLast:n=>`Últimos cortes (${n})`,enStart:'Inicio',enDur:'Duración',enNoPower:'El UPS no informa potencia: no hay datos de consumo.',enBad:'Precio no válido',
     chartTitle_voltage:'Voltaje entrada vs salida',
     chartLegend_input:'Entrada',chartLegend_output:'Salida',chartLegend_watts:'Watts',
     chartTitle_power:'Consumo',chartTitle_temp:'Temperatura de la UPS',chartLegend_temp:'Temperatura (°C)',chartTitle_runtime:'Autonomía',chartLegend_runtime:'Autonomía (min)',
@@ -164,6 +166,7 @@ async function doLogin(){
     // Cuenta con contraseña por cambiar (admin/admin inicial): se va a la pantalla obligatoria antes de entrar.
     // EN: Account with a password to change (initial admin/admin): go to the mandatory screen before entering.
     if(d.must_change_password){location.href='/admin/change-password?next='+encodeURIComponent(location.pathname);return;}
+    if(d.must_setup_2fa){location.href='/admin/setup-2fa?next='+encodeURIComponent(location.pathname);return;}   // 2FA obligatorio / mandatory 2FA
     if(!d.permissions?.nut||d.permissions.nut==='none'){err.textContent=t('noAccess')||'No access to UPS Monitor';err.className='login-err show';return;}
     ME=d;applyPermissions();await initApp();
     document.getElementById('login-screen').style.display='none';
@@ -538,6 +541,7 @@ function renderDashboard(){
         ${availHtml(row.stats)}
         ${batHtml(row.stats,row.srv.id,row.upsName)}
         ${powerHtml(row.stats)}
+        ${energyHtml(row.srv.id,row.upsName)}
         <div class="vars-section">
           ${VARS.map(([k,l,u])=>{const val=row.v[k];return`<div class="var-cell"><span class="var-key">${l}</span><span class="var-val">${val?esc(val)+' '+u:'<span style="opacity:.3">—</span>'}</span></div>`;}).join('')}
         </div>
@@ -767,6 +771,47 @@ async function testServer(){
 
 // Guarda el servidor nuevo o el editado.
 // EN: Save the new or the edited server.
+// Cortes de luz por mes, últimos cortes y consumo (kWh y costo): se piden aparte cada 5 min, porque recorren el historial de un año.
+// EN: Outages per month, latest outages and energy (kWh and cost): requested apart every 5 min, because they walk a year of history.
+const ENERGY={};
+function energyLoad(sid,ups,force){
+  const k=sid+'|'+ups,c=ENERGY[k];if(!force&&c&&(c.busy||Date.now()-c.ts<300000))return;
+  ENERGY[k]={ts:c?c.ts:0,d:c&&c.d,busy:true};
+  fetch(`api/energy?srv=${encodeURIComponent(sid)}&ups=${encodeURIComponent(ups)}`,{credentials:'same-origin'}).then(r=>r.ok?r.json():null).catch(()=>null).then(d=>{
+    ENERGY[k]={ts:Date.now(),d:d||(c&&c.d)};
+    document.querySelectorAll('[data-energy]').forEach(el=>{if(el.dataset.energy===k)el.outerHTML=energyHtml(sid,ups)});
+  });
+}
+const fmtKwh=v=>v==null?'—':(v<10?v.toFixed(2):v<100?v.toFixed(1):Math.round(v))+' kWh';
+const fmtMoney=v=>v==null?'—':'$ '+Math.round(v).toLocaleString(_lang==='es'?'es-CL':'en-US');
+function energyHtml(sid,ups){
+  energyLoad(sid,ups);
+  const k=sid+'|'+ups,d=(ENERGY[k]||{}).d,attr=`data-energy="${esc(k)}"`;
+  if(!d)return`<div ${attr}></div>`;
+  const cell=(a,b)=>`<div class="var-cell"><span class="var-key">${esc(a)}</span><span class="var-val">${b}</span></div>`,P=d.price;
+  const cost=v=>P&&v!=null?fmtMoney(v*P):'—';
+  const cells=[cell(t('enToday'),fmtKwh(d.kwh_today)),cell(t('en30'),fmtKwh(d.kwh_30))];
+  if(P)cells.push(cell(t('enCost30'),cost(d.kwh_30)));
+  cells.push(cell(t('enPrice'),(P?esc(fmtMoney(P)):'—')+(d.can_edit?` <button type="button" class="bat-edit" data-on-click="setEnergyPrice" data-on-click-args="${jsargs([sid,ups,P||''])}" title="${esc(t('enSet'))}" aria-label="${esc(t('enSet'))}">✎</button>`:'')));
+  const mon=m=>new Date(+m.slice(0,4),+m.slice(5)-1,1).toLocaleDateString(_lang==='es'?'es-CL':'en-GB',{month:'short',year:'numeric'});
+  const rows=d.months.slice().reverse().filter(m=>m.n||m.kwh).map(m=>`<tr><td>${esc(mon(m.m))}</td><td>${m.n}</td><td>${m.avg!=null?fmtDur(m.avg):'—'}</td><td>${m.max!=null?fmtDur(m.max):'—'}</td><td>${fmtKwh(m.kwh)}</td>${P?`<td>${cost(m.kwh)}</td>`:''}</tr>`).join('');
+  const outs=d.outages.map(o=>`<tr><td>${esc(fdt(o.start))}</td><td>${fmtDur(o.dur)}${o.end?'':' …'}</td><td>${o.min_charge!=null?Math.round(o.min_charge)+' %':'—'}</td></tr>`).join('');
+  return `<div class="energy" ${attr}><div class="en-h">${esc(t('enTitle'))}</div><div class="vars-section bat">${cells.join('')}</div>`+
+    (d.kwh_30==null?`<div class="en-note">${esc(t('enNoPower'))}</div>`:'')+
+    (rows?`<table class="en-tbl"><thead><tr><th>${esc(t('enMonth'))}</th><th>${esc(t('enOut'))}</th><th>${esc(t('enAvg'))}</th><th>${esc(t('enMax'))}</th><th>${esc(t('enKwh'))}</th>${P?`<th>${esc(t('enCost'))}</th>`:''}</tr></thead><tbody>${rows}</tbody></table>`:'')+
+    (outs?`<details class="en-last"><summary>${esc(t('enLast',d.outages.length))}</summary><table class="en-tbl"><thead><tr><th>${esc(t('enStart'))}</th><th>${esc(t('enDur'))}</th><th>${esc(t('avMin'))}</th></tr></thead><tbody>${outs}</tbody></table></details>`:'')+`</div>`;
+}
+async function setEnergyPrice(sid,ups,cur){
+  const v=window.prompt(t('enAsk'),cur===''?'':String(cur));
+  if(v===null)return;
+  const s=v.trim().replace(/\./g,'').replace(',','.'),p=s===''?null:Number(s);
+  if(p!==null&&!(p>0&&p<1e6)){toast(t('enBad'),true);return;}
+  try{
+    const r=await fetch('api/energy-price',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({price:p})});
+    const d=await r.json();if(!r.ok)throw new Error(d.error||'HTTP '+r.status);
+    toast(t('enSaved'),false);Object.keys(ENERGY).forEach(k=>{const [a,b]=k.split('|');energyLoad(a,b,true)});
+  }catch(e){toast(e.message,true);}
+}
 async function setBatteryDate(sid,upsName,cur){
   const v=window.prompt(t('batAskDate'),cur||new Date().toISOString().slice(0,10));
   if(v===null)return;
@@ -987,4 +1032,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ clearLog, closeAddServer, closeModals, confirmDeleteServer, doLogin, exportCSV, logout, openAddServer, openEditServer, pauseServer, saveServer, setBatteryDate, setLang, setTheme, setVChartRange, testServer, toggleNav, toggleVCmp });
+if (window.cspRegister) cspRegister({ clearLog, closeAddServer, closeModals, confirmDeleteServer, doLogin, exportCSV, logout, openAddServer, openEditServer, pauseServer, saveServer, setBatteryDate, setEnergyPrice, setLang, setTheme, setVChartRange, testServer, toggleNav, toggleVCmp });

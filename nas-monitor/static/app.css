@@ -349,3 +349,7 @@ canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
 .nas-form input[type=checkbox]{width:auto}
 .remember-chk{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;font-size:12.5px}
 .remember-chk input{width:15px;height:15px;margin:0;cursor:pointer}
+/* Sectores dañados del disco; «up» = subieron en los últimos 7 días. / EN: Disk bad sectors; "up" = went up in the last 7 days. */
+.disk-sect{padding:0 16px 8px 96px;margin-top:-4px;font-size:11px;color:var(--text-dim);font-family:var(--mono);border-bottom:1px solid var(--border)}
+.disk-sect.up{color:var(--amber,#b45309);font-weight:600}
+.disk-row:has(+ .disk-sect){border-bottom:none}

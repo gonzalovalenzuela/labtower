@@ -180,6 +180,29 @@ class H(BaseHTTPRequestHandler):
     # o un navegador desatendido no bastan. Usa el mismo freno de intentos que el cambio de contraseña. Devuelve None si está bien, o (código, mensaje).
     # EN: Password re-entry for critical actions (create user, create/restore backup, reset someone else's password): a stolen session or an
     #     unattended browser is not enough. Uses the same attempt brake as the password change. Returns None when fine, or (code, message).
+    # Activar el propio 2FA: «begin» (pide la contraseña, devuelve el secreto y el QR) y «enable» (confirma con un código, devuelve los
+    # códigos de recuperación). Lo usan la tarjeta de Seguridad y la pantalla de 2FA obligatorio.
+    # EN: Turning one's own 2FA on: "begin" (asks for the password, returns the secret and the QR) and "enable" (confirms with a code,
+    #     returns the recovery codes). Used by the Security card and by the mandatory 2FA screen.
+    def _totp_step(self, action, me, body):
+        if action == "begin":
+            e = self._reauth(me, body)
+            if e: return self._json(e[0], {"error": e[1]})
+            r = auth.totp_begin(me)
+            if not r: return self._json(409, {"error": "Two-factor authentication is already on"})
+            try: r["qr"] = qrsvg.svg(r["uri"])
+            except ValueError: r["qr"] = ""
+            return self._json(200, r)
+        wait = auth.password_guard_wait(me)
+        if wait: return self._json(429, {"error": f"Too many failed attempts. Try again in {wait} s"})
+        rec, err = auth.totp_enable(me, body.get("code"))
+        if err:
+            auth.password_guard_fail(me)
+            return self._json(400, {"error": err})
+        auth.password_guard_ok(me)
+        auth.audit(me, "2fa_enabled", me, "", auth.client_ip(self))
+        return self._json(200, {"ok": True, "recovery": rec})
+
     def _reauth(self, me, body):
         cur = body.get("current_password")
         if not isinstance(cur, str) or not cur:
@@ -278,13 +301,16 @@ class H(BaseHTTPRequestHandler):
         # EN: Mandatory password-change screen: public (a pending session is not valid for anything else).
         if path in ("/change-password", "/change-password.html"):
             return self._file(STATIC_DIR / "change-password.html", "text/html; charset=utf-8")
+        # Pantalla de 2FA obligatorio (política): pública, como la anterior. / EN: Mandatory 2FA screen (policy): public, like the one above.
+        if path in ("/setup-2fa", "/setup-2fa.html"):
+            return self._file(STATIC_DIR / "setup-2fa.html", "text/html; charset=utf-8")
 
         # Quién es la sesión pendiente de cambiar contraseña (la página lo usa para saludar o volver al login).
         # EN: Who the session pending a password change is (the page uses it to greet or go back to the login).
         if path == "/api/self":
             sess = auth.get_session(tok, allow_pending=True)
-            return self._json(200, {"username": sess["username"],
-                                    "must_change_password": sess["must_change_password"]} if sess else {})
+            return self._json(200, {"username": sess["username"], "must_change_password": sess["must_change_password"],
+                                    "must_setup_2fa": bool(sess.get("must_setup_2fa"))} if sess else {})
 
         if path == "/api/version":     # shown in the page footer; only with a session (or from this machine)
             return self._json(200, {"version": auth.version()} if (auth.get_session(tok) or auth.is_local_request(self)) else {})
@@ -298,7 +324,7 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/mutes":
             if not auth.get_session(tok): return self._json(401, {"error": "Unauthorized"})
             off = auth.disabled_modules()
-            return self._json(200, {"mutes": auth.mutes(), "now": int(time.time()),
+            return self._json(200, {"mutes": auth.mutes(), "now": int(time.time()), "schedules": auth.mute_schedules(),
                                     "can": [m for m in auth.MUTABLE if m not in off and auth.check_permission(tok, m, "admin")]})
 
         if not auth.check_permission(tok, "wol", "admin") and \
@@ -332,7 +358,7 @@ class H(BaseHTTPRequestHandler):
             self._json(200, auth.update_info())
         elif path == "/api/2fa":
             sess = auth.get_session(tok)
-            self._json(200, auth.totp_status(sess["username"]) if sess else {})
+            self._json(200, {**auth.totp_status(sess["username"]), "policy": auth.policy(), "can_policy": self._is_full_admin(tok)} if sess else {})
         elif path == "/api/audit":
             q = parse_qs(urlparse(self.path).query)
             try: lim = max(1, min(1000, int((q.get("limit") or ["200"])[0])))
@@ -436,6 +462,14 @@ class H(BaseHTTPRequestHandler):
             if not sess: return self._json(401, {"error": "Unauthorized"})
             mid, f = body.get("module"), body.get("for")
             if mid not in auth.MUTABLE: return self._json(400, {"error": "Invalid module"})
+            # Ventanas semanales: {"module": id, "schedule": [{"d": [días], "s": minuto, "dur": minutos}, …]} ([] = sin ventanas).
+            # EN: Weekly windows: {"module": id, "schedule": [...]} ([] = no windows).
+            if "schedule" in body:
+                if not auth.check_permission(tok, mid, "admin"): return self._json(403, {"error": "Pausing alarms requires administrator access on the module"})
+                if auth.sched_clean(body["schedule"]) is None: return self._json(400, {"error": "Invalid schedule"})
+                sch = auth.set_schedule(mid, body["schedule"])
+                auth.audit(sess["username"], "alarm_schedule_saved", mid, str(len(sch.get(mid, []))), auth.client_ip(self))
+                return self._json(200, {"ok": True, "mutes": auth.mutes(), "schedules": sch, "now": int(time.time())})
             if f is not None and (type(f) is not int or f not in auth.MUTE_FOR): return self._json(400, {"error": "Invalid duration"})
             if not auth.check_permission(tok, mid, "admin"): return self._json(403, {"error": "Pausing alarms requires administrator access on the module"})
             cur = auth.set_mute(mid, f)
@@ -443,12 +477,33 @@ class H(BaseHTTPRequestHandler):
                        "" if f is None else ("until resumed" if f == 0 else f"{f // 3600} h"), auth.client_ip(self))
             return self._json(200, {"ok": True, "mutes": cur, "now": int(time.time())})
 
+        # 2FA obligatorio: una sesión pendiente solo por la política puede activar su propio 2FA (y nada más).
+        # EN: Mandatory 2FA: a session pending only because of the policy may turn its own 2FA on (and nothing else).
+        if path in ("/api/2fa/begin", "/api/2fa/enable"):
+            ps = auth.get_session(tok, allow_pending=True)
+            if ps and ps.get("must_setup_2fa") and not ps.get("must_change_password"):
+                return self._totp_step(path.rsplit("/", 1)[1], ps["username"], body)
+
         if not auth.check_permission(tok, "wol", "admin") and \
            not auth.check_permission(tok, "nut", "admin"):
             return self._json(401, {"error": "Unauthorized"})
 
         sess = auth.get_session(tok)
         me   = sess["username"] if sess else ""
+
+        # Política de 2FA obligatorio para administradores: la cambia solo el admin de todos los módulos, con su contraseña y con su propio
+        # 2FA ya activo (así no se deja a sí mismo fuera). / EN: Mandatory 2FA policy for admins: only the admin of every module changes it,
+        # with their password and with their own 2FA already on (so they cannot lock themselves out).
+        if path == "/api/policy":
+            if not self._is_full_admin(tok): return self._json(403, {"error": "Changing the security policy requires administrator access on all modules"})
+            on = body.get("require_2fa_admins")
+            if not isinstance(on, bool): return self._json(400, {"error": "Invalid request body"})
+            e = self._reauth(me, body)
+            if e: return self._json(e[0], {"error": e[1]})
+            if on and not auth.totp_status(me).get("enabled"): return self._json(409, {"error": "Turn on two-factor authentication for your own account first"})
+            p = auth.set_policy(on)
+            auth.audit(me, "policy_2fa_on" if on else "policy_2fa_off", "", "", auth.client_ip(self))
+            return self._json(200, {"ok": True, "policy": p})
 
         # Módulos: apagar o encender uno que no se usa. Solo el admin de todos los módulos (cambia el sistema entero).
         # EN: Modules: turn an unused one off or on. Only the admin of every module (it changes the whole system).
@@ -518,25 +573,10 @@ class H(BaseHTTPRequestHandler):
         if path.startswith("/api/2fa/"):
             action = path.rsplit("/", 1)[1]
             ip = auth.client_ip(self)
-            if action == "begin":
-                e = self._reauth(me, body)
-                if e: return self._json(e[0], {"error": e[1]})
-                r = auth.totp_begin(me)
-                if not r: return self._json(409, {"error": "Two-factor authentication is already on"})
-                try: r["qr"] = qrsvg.svg(r["uri"])
-                except ValueError: r["qr"] = ""
-                return self._json(200, r)
-            if action == "enable":
-                wait = auth.password_guard_wait(me)
-                if wait: return self._json(429, {"error": f"Too many failed attempts. Try again in {wait} s"})
-                rec, err = auth.totp_enable(me, body.get("code"))
-                if err:
-                    auth.password_guard_fail(me)
-                    return self._json(400, {"error": err})
-                auth.password_guard_ok(me)
-                auth.audit(me, "2fa_enabled", me, "", ip)
-                return self._json(200, {"ok": True, "recovery": rec})
+            if action in ("begin", "enable"): return self._totp_step(action, me, body)
             if action == "disable":
+                if auth.policy()["require_2fa_admins"] and any(v == "admin" for v in sess["permissions"].values()):
+                    return self._json(409, {"error": "Two-factor authentication is required for administrators"})
                 e = self._reauth(me, body)
                 if e: return self._json(e[0], {"error": e[1]})
                 if not auth.totp_disable(me): return self._json(404, {"error": "Two-factor authentication is not on"})

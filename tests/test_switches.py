@@ -8,6 +8,7 @@ import threading
 import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import ClassVar
 
 from tests import support
@@ -421,6 +422,26 @@ class ManagerTests(unittest.TestCase):
         self.assertEqual((rows["B8:27:EB:00:00:01"]["ip"], rows["B8:27:EB:00:00:01"]["name"]), ("192.0.2.50", "Pi-hole"))
         self.assertIsNone(rows["AA:AA:AA:00:00:09"]["ip"])
         self.assertEqual(rows["AA:AA:AA:00:00:09"]["switch"], "zx310s")
+
+    def test_locate_each_mac_on_its_access_port(self):
+        a = self.add("sw-a")["id"]; b = self.add("sw-b")["id"]
+        self.m.set_port_meta(a, 8, "to core", True); self.m.set_port_meta(a, 3, "desk", False)
+        self.feed(a, mk_snap("sw-a", 2_000_000.0, [mk_port(3), mk_port(8)], mac="AA:BB:CC:DD:EE:0A",
+                             macs=[{"mac": "B8:27:EB:00:00:01", "vlan": 1, "port": 3}, {"mac": "AA:AA:AA:00:00:09", "vlan": 1, "port": 8}]))
+        self.feed(b, mk_snap("sw-b", 2_000_000.0, [mk_port(1), mk_port(2)], mac="AA:BB:CC:DD:EE:0B",
+                             macs=[{"mac": "AA:AA:AA:00:00:09", "vlan": 1, "port": 2}, {"mac": "B8:27:EB:00:00:01", "vlan": 1, "port": 1},
+                                   {"mac": "CC:CC:CC:00:00:01", "vlan": 1, "port": 1}]))
+        loc = self.m.locate()
+        self.assertEqual(loc["b827eb000001"], {"sw": "sw-a", "port": 3, "label": "desk"})          # fewer MACs on that port wins
+        self.assertEqual(loc["aaaaaa000009"], {"sw": "sw-b", "port": 2, "label": ""})              # the uplink is ignored
+        self.assertEqual(loc["cccccc000001"]["sw"], "sw-b")
+
+    def test_hosts_page_has_the_switch_port_column(self):
+        root = os.path.join(os.path.dirname(__file__), "..")
+        rd = lambda f: Path(root, f).read_text(encoding="utf-8")
+        html, js, css, srv = rd("net-monitor/static/index.html"), rd("net-monitor/static/app.js"), rd("net-monitor/static/app.css"), rd("net-monitor/server.py")
+        self.assertIn('data-sort="swport"', html); self.assertIn("swport: h=>", js); self.assertEqual(js.count('<td colspan="10"'), 2)
+        self.assertIn(".tbl-wrap.no-sw .c-sw{display:none}", css); self.assertIn('if sp: h["swport"] = sp', srv)
 
     def test_temperature_alert_levels_and_events(self):
         sid = self.add()["id"]

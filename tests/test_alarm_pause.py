@@ -68,6 +68,51 @@ class Rpc(unittest.TestCase):
         finally: auth.write_json(auth.MUTES_FILE, {})
 
 
+class Schedules(unittest.TestCase):
+    """Pausas programadas semanales en la hora local del servidor. / Weekly scheduled pauses in the server's local time."""
+    def setUp(self): auth.write_json(auth.MUTES_FILE, {}); auth.write_json(auth.SCHED_FILE, {})
+    tearDown = setUp
+
+    @staticmethod
+    def at(wday_hm, base=None):
+        """Epoch of the next local time with that weekday (0 = Monday), hour and minute."""
+        wd, h, mi = wday_hm
+        lt = time.localtime(base or time.time())
+        t = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, h, mi, 0, 0, 0, -1))
+        return int(t + ((wd - lt.tm_wday) % 7) * 86400)
+
+    def test_validation(self):
+        ok = {"d": [6, 6, 0], "s": 180, "dur": 120}
+        self.assertEqual(auth.sched_clean([ok]), [{"d": [0, 6], "s": 180, "dur": 120}])
+        for bad in ({**ok, "d": []}, {**ok, "d": [7]}, {**ok, "d": [True]}, {**ok, "s": 1440}, {**ok, "s": "3"}, {**ok, "dur": 45}, {**ok, "dur": 0}, "x"):
+            self.assertIsNone(auth.sched_clean([bad]), bad)
+        self.assertIsNone(auth.sched_clean([ok] * 8)); self.assertIsNone(auth.sched_clean("x"))
+
+    def test_window_and_midnight(self):
+        w = [{"d": [6], "s": 23 * 60, "dur": 120}]                       # Sunday 23:00 for 2 h: crosses into Monday
+        start = self.at((6, 23, 0))
+        self.assertEqual(auth.sched_end(w, start + 30 * 60), start + 7200)
+        self.assertEqual(auth.sched_end(w, start + 90 * 60), start + 7200)   # Monday 00:30, still inside
+        self.assertIsNone(auth.sched_end(w, start - 60)); self.assertIsNone(auth.sched_end(w, start + 7200))
+
+    def test_scheduled_pause_and_manual_resume(self):
+        now = int(time.time()); lt = time.localtime(now)
+        auth.set_schedule("dns", [{"d": [lt.tm_wday], "s": lt.tm_hour * 60 + lt.tm_min, "dur": 60}])
+        end = auth.mute_until("dns"); self.assertTrue(end and now < end <= now + 3600)
+        self.assertEqual(auth.mute_schedules()["dns"][0]["dur"], 60)
+        auth.set_mute("dns", 0); self.assertEqual(auth.mute_until("dns"), 0)          # "until resumed" wins over the window
+        auth.set_mute("dns", None); self.assertIsNone(auth.mute_until("dns"))         # resumed by hand: the rest of the window is skipped
+        auth.set_schedule("dns", []); self.assertEqual(auth.mute_schedules(), {})
+        with self.assertRaises(ValueError): auth.set_schedule("dns", [{"d": [1], "s": 0, "dur": 7}])
+        with self.assertRaises(ValueError): auth.set_schedule("admin", [])
+
+    def test_backups_and_nav(self):
+        for f in ("debian/preinst", "debian/prerm", "scripts/teleporter.sh"):
+            self.assertIn("mute_schedules.json", (ROOT / f).read_text(encoding="utf-8"), f)
+        nav = (ROOT / "assets/nav.js").read_text(encoding="utf-8")
+        self.assertIn("function schedEdit(m, mod, done)", nav); self.assertIn("{module: mod, schedule: sched}", nav)
+
+
 class Api(unittest.TestCase):
     @classmethod
     def setUpClass(cls): cls.srv = support.Server(panel.H)
@@ -97,6 +142,17 @@ class Api(unittest.TestCase):
         code, d = self.srv.call("POST", "/api/mutes", {"module": "nas", "for": None}, token=self.nas_adm)
         self.assertEqual((code, d["mutes"]), (200, {}))
         self.assertTrue(auth.read_audit(5, "mute_nas", "alarms_resumed"))
+
+    def test_schedule_api(self):
+        auth.write_json(auth.SCHED_FILE, {})
+        w = [{"d": [6], "s": 180, "dur": 120}]
+        self.assertEqual(self.srv.call("POST", "/api/mutes", {"module": "nas", "schedule": w}, token=self.ro)[0], 403)
+        self.assertEqual(self.srv.call("POST", "/api/mutes", {"module": "nas", "schedule": [{"d": [], "s": 0, "dur": 60}]}, token=self.nas_adm)[0], 400)
+        code, d = self.srv.call("POST", "/api/mutes", {"module": "nas", "schedule": w}, token=self.nas_adm)
+        self.assertEqual((code, d["schedules"]), (200, {"nas": w}))
+        self.assertEqual(self.srv.call("GET", "/api/mutes", token=self.ro)[1]["schedules"], {"nas": w})
+        self.assertEqual(auth.read_audit(5, "mute_nas", "alarm_schedule_saved")[0]["d"], "1")
+        auth.write_json(auth.SCHED_FILE, {})
 
     def test_rejects_bad_input(self):
         for body in ({"module": "wol", "for": 0}, {"module": "x", "for": 0}, {"module": "nas", "for": 60}, {"module": "nas", "for": "0"}, {"module": "nas", "for": False}):

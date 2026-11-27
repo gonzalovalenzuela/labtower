@@ -231,12 +231,12 @@ td{padding:10px 14px;vertical-align:middle}
 }
 @media(max-width:1280px){
   /* iPad / tablets: vendor / MAC moves to the expanded row so the table fits */
-  .tbl-wrap th:nth-child(5),#hosts-tbody>tr>td:nth-child(5){display:none}
+  .tbl-wrap th:nth-child(-n+6):nth-child(n+5),#hosts-tbody>tr>td:nth-child(-n+6):nth-child(n+5){display:none}
   #hosts-tbody>tr>td:nth-child(2){max-width:210px;overflow-wrap:anywhere}
 }
 @media(max-width:700px){
   /* hosts table: keep status / host / type / OS; the rest is in the expanded row */
-  .tbl-wrap th:nth-child(n+5):nth-child(-n+8),#hosts-tbody>tr>td:nth-child(n+5):nth-child(-n+8){display:none}
+  .tbl-wrap th:nth-child(n+5):nth-child(-n+9),#hosts-tbody>tr>td:nth-child(n+5):nth-child(-n+9){display:none}
 }
 @media(max-width:480px){
   .tbl-wrap th:nth-child(4),#hosts-tbody>tr>td:nth-child(4){display:none}
@@ -374,3 +374,5 @@ label.chk{flex-direction:row!important;align-items:center;gap:6px!important}
 canvas.vchart{width:100%;height:var(--chart-h,140px);display:block}
 /* Último escaneo fallido / failed last scan */
 .stat-err{font-size:11px;color:var(--red);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Columna Switch / puerto: solo si Switch Monitor tiene switches. / EN: Switch / port column: only when Switch Monitor has switches. */
+.tbl-wrap.no-sw .c-sw{display:none}

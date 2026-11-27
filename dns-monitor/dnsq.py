@@ -1,9 +1,11 @@
-"""Cliente DNS mínimo (UDP, sin dependencias) para sondear resolutores y probar nombres desde DNS Monitor."""
-# EN: Minimal DNS client (UDP, no dependencies) to probe resolvers and test names from DNS Monitor.
+"""Cliente DNS mínimo (UDP, DoT y DoH, sin dependencias) para sondear resolutores y probar nombres desde DNS Monitor."""
+# EN: Minimal DNS client (UDP, DoT and DoH, no dependencies) to probe resolvers and test names from DNS Monitor.
+import http.client
 import ipaddress
 import re
 import secrets
 import socket
+import ssl
 import struct
 import time
 
@@ -136,3 +138,72 @@ def config_upstreams(lines):
             if k is None: return None
             keys.add(k)
     return keys or None
+
+
+# ─── DNS cifrado: DoT (TLS, RFC 7858) y DoH (HTTPS, RFC 8484) ─────────────────
+# ES: Se conecta a la IP ya validada (ip) y verifica el certificado contra el nombre (host), así un cambio de DNS entre la validación y la
+#     conexión no puede llevar la consulta a otra parte. «ms» es solo la consulta, sin la conexión: así se compara con lo que ve el
+#     resolutor, que mantiene la conexión abierta; «hs» es lo que tardó la conexión TLS.
+# EN: Connects to the already validated IP (ip) and checks the certificate against the name (host), so a DNS change between the check and
+#     the connection cannot send the query elsewhere. "ms" is the query alone, without the connection: comparable with what the resolver
+#     sees, as it keeps the connection open; "hs" is how long the TLS connection took.
+def _tls_ctx():
+    ctx = ssl.create_default_context()
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    return ctx
+
+def _recv_exact(s, n):
+    buf = b""
+    while len(buf) < n:
+        chunk = s.recv(n - len(buf))
+        if not chunk: raise ValueError("connection closed")
+        buf += chunk
+    return buf
+
+def _finish(r, t0, t1, t2):
+    r["hs"], r["ms"] = round((t1 - t0) * 1000, 1), round((t2 - t1) * 1000, 1)
+    r["ok"] = r["rcode"] in (0, 3)
+    return r
+
+def _err(e):
+    if isinstance(e, ssl.SSLCertVerificationError): return "certificate: " + str(e.verify_message or "not valid")[:60]
+    if isinstance(e, ssl.SSLError): return "TLS: " + (e.reason or "error")[:60]
+    if isinstance(e, (TimeoutError, socket.timeout)): return "timeout"
+    if isinstance(e, OSError): return (e.strerror or "error")[:60]
+    return str(e)[:60] or "error"
+
+def query_tls(ip, host, port, name, qtype="A", timeout=3.0):
+    """DNS over TLS: the query with a 2-byte length prefix over a TLS connection."""
+    qid, pkt = build_query(name, TYPES[qtype])
+    t0 = time.monotonic()
+    try:
+        with socket.create_connection((ip, int(port)), timeout=timeout) as raw, _tls_ctx().wrap_socket(raw, server_hostname=host) as s:
+            t1 = time.monotonic()
+            s.sendall(struct.pack(">H", len(pkt)) + pkt)
+            n = struct.unpack(">H", _recv_exact(s, 2))[0]
+            r = parse_response(_recv_exact(s, n), qid)
+            return _finish(r, t0, t1, time.monotonic())
+    except (OSError, ValueError) as e:
+        return {"ok": False, "error": _err(e)}
+
+class _PinnedHTTPS(http.client.HTTPSConnection):
+    """HTTPS to a fixed IP with the certificate checked against `host`."""
+    def __init__(self, ip, host, port, timeout):
+        super().__init__(host, int(port), timeout=timeout, context=_tls_ctx()); self._ip = ip
+    def connect(self):
+        self.sock = self._context.wrap_socket(socket.create_connection((self._ip, self.port), self.timeout), server_hostname=self.host)
+
+def query_https(ip, host, port, path, name, qtype="A", timeout=3.0):
+    """DNS over HTTPS: POST of the DNS message (application/dns-message)."""
+    qid, pkt = build_query(name, TYPES[qtype])
+    c = _PinnedHTTPS(ip, host, port, timeout)
+    t0 = time.monotonic()
+    try:
+        c.connect(); t1 = time.monotonic()
+        c.request("POST", path or "/dns-query", body=pkt, headers={"Content-Type": "application/dns-message", "Accept": "application/dns-message"})
+        resp = c.getresponse(); body = resp.read(65536)
+        if resp.status != 200: return {"ok": False, "error": f"HTTP {resp.status}"}
+        return _finish(parse_response(body, qid), t0, t1, time.monotonic())
+    except (OSError, ValueError, http.client.HTTPException) as e:
+        return {"ok": False, "error": _err(e)}
+    finally: c.close()

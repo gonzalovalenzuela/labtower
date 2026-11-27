@@ -9,6 +9,7 @@ corren con su propio usuario del sistema, no pueden leer esos archivos y le pide
     event     anota un evento en la línea de tiempo (el módulo lo fija el sistema operativo, no el que llama)
     events    lee la línea de tiempo (solo el Resumen)
     health    estado de los archivos de usuarios y sesiones
+    metrics   lecturas para las reglas de alerta (los módulos las informan; el Resumen las lee)
 No existe ninguna operación para crear una sesión sin contraseña ni para leer usuarios: un módulo comprometido no puede falsificar sesiones ni
 llevarse hashes. Quién llama se sabe por SO_PEERCRED (lo rellena el kernel, no el cliente).
 
@@ -142,6 +143,13 @@ class Service:
     def op_mutes(self, caller, r):
         if caller not in CALLERS: return {"error": "forbidden"}
         return {"mutes": self.auth.mutes()}
+
+    # Lecturas para las reglas de alerta: los módulos las informan; solo el Resumen las lee. / EN: Readings for the alert rules: modules report, only the Overview reads.
+    def op_metrics(self, caller, r):
+        if caller in ("overview", "root"): return {"metrics": self.auth.metrics_all()}
+        if caller not in CALLERS or not isinstance(r.get("readings"), list): return {"error": "forbidden"}
+        self.auth.metrics_store(caller, r["readings"])
+        return {"ok": True}
 
     def op_health(self, caller, r):
         checks = self.auth.check_common_local()

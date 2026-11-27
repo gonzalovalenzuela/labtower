@@ -567,7 +567,8 @@ def _smart_loop(cluster, cache):
 # EN: ─── Backups ───────────────────────────────────────────────────────────────
 #     For each VM/CT: its newest backup (read from the content of the storages that allow "backup") and whether it is too
 #     old. Plus the vzdump tasks of the last 7 days. Read in a separate thread every PVE_BACKUP_EVERY seconds.
-_backups: dict = {}           # { cluster_id: {"ts", "max_age_h", "ignore", "rows", "tasks", "storages"} }
+_backups: dict = {}           # { cluster_id: {"ts", "max_age_h", "ignore", "rows", "tasks", "storages", "snap_days", "snaps", "alerts", …} }
+SNAP_MAX_GUESTS = 300         # snapshot lists read per round (one API call each)
 _backup_threads: dict = {}
 _guest_threads: dict = {}
 _bk_seen: dict = {}           # { cluster_id: set of failed task ids already reported (None before the first reading) }
@@ -576,8 +577,9 @@ def _backup_round(cluster, client, cache):
     from urllib.parse import quote
     cid, cname = cluster["id"], cluster["name"]
     cfg = cluster.get("backup") if isinstance(cluster.get("backup"), dict) else {}
-    try:    cfg = backups.migrate_config(backups.clean_config(cfg)) if cfg else {"max_age_h": backups.DEFAULT_MAX_AGE_H, "ignore": []}
-    except ValueError: cfg = {"max_age_h": backups.DEFAULT_MAX_AGE_H, "ignore": []}
+    dflt = {"max_age_h": backups.DEFAULT_MAX_AGE_H, "ignore": [], "snap_days": backups.DEFAULT_SNAP_DAYS}
+    try:    cfg = backups.migrate_config(backups.clean_config(cfg)) if cfg else dflt
+    except ValueError: cfg = dflt
     nodes = cache.snap().get("data", {}).get("nodes") or []
     guests, targets, seen_shared = [], [], set()
     for n in nodes:
@@ -617,7 +619,17 @@ def _backup_round(cluster, client, cache):
     for t in failed:
         who = f"VM {t['vmid']}" if t["vmid"] else "job"
         auth.record_event("pve", "crit", f"{cname}/{t['node']}: backup {who} failed ({t['status'][:60]})", "pve_backup_fail", c=cname, n=t["node"], w=who, e=t["status"][:60])
-    _backups[cid] = {"ts": int(now), "max_age_h": cfg["max_age_h"], "ignore": cfg["ignore"], "rows": rows, "tasks": tasks, "storages": storages}
+    # Snapshots de cada VM/CT (uno por consulta, con VM.Audit); si ninguno se pudo leer, se anota el error. / EN: Each VM/CT snapshots; if none could be read, the error is kept.
+    snaps, snap_err, tried = [], None, 0
+    for g in guests[:SNAP_MAX_GUESTS]:
+        if g.get("template"): continue
+        tried += 1
+        try: snaps += backups.parse_snapshots(client.get(f"/nodes/{quote(g['node'], safe='')}/{g['type']}/{int(g['vmid'])}/snapshot").get("data"), g)
+        except Exception as e: snap_err = str(e)[:120]  # noqa: BLE001 - se guarda y se muestra / kept and shown
+    if snaps or not tried: snap_err = None
+    old, sal = backups.old_snapshots(snaps, cfg["snap_days"], cfg["ignore"], now)
+    _backups[cid] = {"ts": int(now), "max_age_h": cfg["max_age_h"], "ignore": cfg["ignore"], "rows": rows, "tasks": tasks, "storages": storages,
+                     "snap_days": cfg["snap_days"], "snaps_all": snaps, "snaps": old, "snap_err": snap_err, "alerts": sal}
 
 def _backup_loop(cluster, cache):
     cid = cluster["id"]
@@ -693,7 +705,7 @@ def _alert_key(cid, a):
 
 def all_alerts(cid):
     with _xlock:
-        return list((_live.get(cid) or {}).get("alerts", [])) + list((_extra.get(cid) or {}).get("alerts", []))
+        return list((_live.get(cid) or {}).get("alerts", [])) + list((_extra.get(cid) or {}).get("alerts", [])) + list((_backups.get(cid) or {}).get("alerts", []))
 
 # Evento al aparecer cada alerta nueva (la primera vez solo se memoriza, para que reiniciar no repita lo ya conocido).
 # EN: One event when each new alert appears (the first time it only remembers, so a restart does not repeat what was already known).
@@ -1095,6 +1107,10 @@ def _poll_cluster(cluster):
 
             cache.update({"nodes": nodes_data, "version": version,
                           "name": cluster["name"], "ceph": ceph, "ceph_sum": cephsum, "corosync": corosync})
+            # Lecturas para las reglas de alerta del Resumen (CPU y memoria de cada nodo en línea). / EN: Readings for the Overview alert rules.
+            auth.metrics_report("pve", f"pve:{cid}", [r for nd in nodes_data if nd.get("status") == "online" for r in (
+                ("pve_cpu", f"{cluster['name']}/{nd['name']}", (nd.get("cpu") or 0) * 100),
+                ("pve_ram", f"{cluster['name']}/{nd['name']}", nd["mem"] / nd["maxmem"] * 100 if nd.get("maxmem") else None))])
             _cluster_events(cluster, nodes_data, ceph)
             _observe_reboots(cluster, nodes_data)
             _diag_events(cluster, corosync, cephsum)
@@ -1179,7 +1195,8 @@ def health_report(detailed=False):
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
 # Manejador HTTP. Cada petición se atiende en su propio hilo.
 # EN: HTTP handler. Each request is served in its own thread.
-class H(BaseHTTPRequestHandler):
+class H(auth.Audited, BaseHTTPRequestHandler):
+    AUDIT_MODULE = "pve"          # accepted changes go to the audit log (auth.Audited)
     timeout = 30      # a stalled client must not hold a thread forever
     def log_message(self, fmt, *a):
         # send_error() llega aquí con (código, mensaje) y un 501 de HEAD trae el mensaje en a[1]: solo se registra un código numérico.
@@ -1427,12 +1444,14 @@ class H(BaseHTTPRequestHandler):
         if m:
             if not auth.check_permission(tok, "pve", "admin"):
                 return self._json(403, {"error": "Admin permission required"})
-            try:    cfg = backups.clean_config(body)
-            except ValueError as e: return self._json(400, {"error": str(e)})
             with _cl_lock:
                 clusters = load_clusters()
                 for c in clusters:
                     if c["id"] == m.group(1):
+                        # Lo que no viene se conserva (la página manda solo lo que cambia). / EN: What is not sent is kept (the page sends only what changes).
+                        old = c.get("backup") if isinstance(c.get("backup"), dict) else {}
+                        try:    cfg = backups.clean_config({**old, **body} if isinstance(body, dict) else body)
+                        except ValueError as e: return self._json(400, {"error": str(e)})
                         c["backup"] = cfg
                         save_clusters(clusters)
                         backups.apply_config(_backups.get(c["id"]), cfg)        # the page asks again right away: do not answer with the old settings

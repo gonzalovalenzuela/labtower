@@ -38,10 +38,12 @@ import queue
 import random
 import re
 import secrets
+import shutil
 import socket
 import sqlite3
 import ssl
 import struct
+import subprocess  # nosec B404 - solo «whois» con su ruta completa y argumentos fijos / only "whois" with its full path and fixed arguments
 import sys
 import threading
 import time
@@ -49,7 +51,8 @@ import uuid
 from collections import deque as _deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse, urlsplit
+from urllib.parse import parse_qs, urljoin, urlparse, urlsplit
+from urllib.request import Request, urlopen
 
 ThreadingHTTPServer.request_queue_size = 128
 
@@ -64,7 +67,10 @@ STATIC_DIR  = Path(__file__).parent / "static"
 DATA_DIR    = auth.module_dir("uptime-monitor")
 DATA_FILE   = DATA_DIR / "uptime.json"
 STATE_FILE  = DATA_DIR / "state.json"
-TYPES       = ("http", "tcp", "dns")
+TYPES       = ("http", "tcp", "dns", "ping", "domain")
+MAX_REDIRECTS = 5                # redirecciones seguidas como mucho / most redirects followed
+DOMAIN_EVERY  = 43200            # s: el vencimiento de un dominio se revisa dos veces al día / domain expiry is checked twice a day
+DOMAIN_WARN, DOMAIN_CRIT = 30, 7 # días: aviso y crítico antes de vencer / days: warning and critical before it expires
 MAX_MON     = 100
 BAR_BEATS   = 50                 # revisiones en la barra / checks in the bar
 BEATS_KEEP  = 2 * 86400          # s: cada revisión / every check
@@ -126,12 +132,14 @@ def validate(body: dict, current: dict | None = None) -> dict:
     name = str(body.get("name", cfg.get("name", "")) or "").strip()
     if not name or len(name) > 60 or _CTRL.search(name): raise ValueError("Invalid name")
     cfg["name"] = name
+    if (current or {}).get("type") == "domain":                                  # its fixed 12 h interval is set again below (or dropped for another type)
+        cfg.pop("interval", None); cfg.pop("timeout", None)
     cfg["interval"] = _int(body, cfg, "interval", 60, 20, 3600, "interval")
     cfg["timeout"] = _int(body, cfg, "timeout", 10, 2, 30, "timeout")
-    if cfg["timeout"] >= cfg["interval"]: raise ValueError("The timeout must be shorter than the interval")
+    if cfg["timeout"] >= cfg["interval"] and typ != "domain": raise ValueError("The timeout must be shorter than the interval")
     cfg["down_after"] = _int(body, cfg, "down_after", 3, 1, 6, "failures before down")
     cfg.pop("retries", None)
-    for k in ("url", "expect", "keyword", "insecure", "cert_days", "host", "port", "qname", "rtype", "server", "expect_ip"): cfg.pop(k, None)
+    for k in ("url", "expect", "keyword", "kw_absent", "follow", "insecure", "cert_days", "host", "port", "qname", "rtype", "server", "expect_ip", "domain"): cfg.pop(k, None)
     if typ == "http":
         url = str(body.get("url", (current or {}).get("url", "")) or "").strip()
         if not url or len(url) > 2000 or _CTRL.search(url) or " " in url: raise ValueError("Invalid URL")
@@ -147,14 +155,22 @@ def validate(body: dict, current: dict | None = None) -> dict:
         kw = str(body.get("keyword", (current or {}).get("keyword", "")) or "").strip()
         if len(kw) > 100 or _CTRL.search(kw): raise ValueError("Invalid keyword")
         cfg["keyword"] = kw
+        cfg["kw_absent"] = bool(body.get("kw_absent", (current or {}).get("kw_absent", False))) and bool(kw)    # the word must NOT appear
+        cfg["follow"] = bool(body.get("follow", (current or {}).get("follow", False)))                          # follow redirects
         if u.scheme == "https":
             cfg["insecure"] = bool(body.get("insecure", (current or {}).get("insecure", False)))
             cfg["cert_days"] = _int(body, current or {}, "cert_days", 14, 1, 90, "certificate warning days")
-    elif typ == "tcp":
+    elif typ in ("tcp", "ping"):
         host = str(body.get("host", (current or {}).get("host", "")) or "").strip()
         if not host or host.startswith("-") or not auth.valid_target(host, allow_loopback=True): raise ValueError("Invalid host")
         cfg["host"] = host
-        cfg["port"] = _int(body, current or {}, "port", 0, 1, 65535, "port")
+        if typ == "tcp": cfg["port"] = _int(body, current or {}, "port", 0, 1, 65535, "port")
+    elif typ == "domain":
+        dom = str(body.get("domain", (current or {}).get("domain", "")) or "").strip().rstrip(".").lower()
+        if dom.startswith(("http://", "https://")): dom = (urlsplit(dom).hostname or "").lower()
+        if not dom or "." not in dom or not auth.valid_host(dom) or ":" in dom or re.fullmatch(r"[0-9.]+", dom): raise ValueError("Invalid domain")
+        cfg["domain"] = dom
+        cfg["interval"], cfg["timeout"] = DOMAIN_EVERY, max(cfg["timeout"], 15)
     else:
         qn = str(body.get("qname", (current or {}).get("qname", "")) or "").strip().rstrip(".").lower()
         if not qn or not auth.valid_host(qn) or ":" in qn: raise ValueError("Invalid name to resolve")
@@ -180,6 +196,8 @@ def reorder(items: list, order: list) -> list:
 def target_of(m: dict) -> str:
     """Short description of what a monitor checks."""
     if m["type"] == "http": return m.get("url", "")
+    if m["type"] == "ping": return m.get("host", "")
+    if m["type"] == "domain": return m.get("domain", "")
     if m["type"] == "tcp":
         h = m.get("host", "")
         return f"[{h}]:{m.get('port')}" if ":" in h else f"{h}:{m.get('port')}"
@@ -205,12 +223,13 @@ def _code_ok(code: int, expect: str) -> bool:
     try: return any(lo <= code <= hi for lo, hi in parse_expect(expect))
     except ValueError: return 200 <= code <= 399
 
-def check_http(m: dict) -> dict:
-    u = urlsplit(m["url"]); host = u.hostname; https = u.scheme == "https"
+def _http_once(url: str, m: dict, want_body: bool):
+    """One GET: (status, Location, body, certificate expiry). Connects to the checked address."""
+    u = urlsplit(url); host = u.hostname; https = u.scheme == "https"
     port = u.port or (443 if https else 80); to = m.get("timeout", 10)
     path = (u.path or "/") + ("?" + u.query if u.query else "")
     fam, sa = _connect_addr(host, port, allow_loopback=False)
-    t0 = time.monotonic(); exp = None
+    exp = None
     sock = socket.socket(fam, socket.SOCK_STREAM); sock.settimeout(to)
     try:
         sock.connect(sa)
@@ -226,11 +245,8 @@ def check_http(m: dict) -> dict:
         if u.port: hh += f":{u.port}"
         conn.request("GET", path, headers={"Host": hh, "User-Agent": UA, "Accept": "*/*", "Connection": "close"})
         r = conn.getresponse()
-        body = r.read(MAX_BODY) if m.get("keyword") else b""
-        ms = (time.monotonic() - t0) * 1000
-        if not _code_ok(r.status, m.get("expect") or "200-399"): raise CheckError(f"HTTP {r.status}")
-        if m.get("keyword") and m["keyword"].lower() not in body.decode("utf-8", "replace").lower(): raise CheckError("keyword not found")
-        return {"ms": ms, "code": r.status, "cert_exp": exp}
+        body = r.read(MAX_BODY) if want_body else b""
+        return r.status, r.getheader("Location"), body, exp
     except CheckError as e:
         e.cert_exp = exp; raise
     except SOCK_TIMEOUT: raise CheckError("timed out")
@@ -239,6 +255,154 @@ def check_http(m: dict) -> dict:
     finally:
         try: sock.close()
         except OSError: pass
+
+# GET a la URL; con «follow» sigue hasta MAX_REDIRECTS redirecciones (cada destino pasa la misma validación). La palabra clave debe estar
+# en la página o, con «kw_absent», NO estar. El certificado que se vigila es el de la URL configurada (el primer salto).
+# EN: GET to the URL; with "follow" up to MAX_REDIRECTS redirects are followed (each target passes the same check). The keyword must be
+#     on the page or, with "kw_absent", must NOT be. The certificate watched is the configured URL's (the first hop).
+def check_http(m: dict) -> dict:
+    t0 = time.monotonic(); url, exp = m["url"], None
+    for hop in range(MAX_REDIRECTS + 1):
+        try: status, loc, body, e = _http_once(url, m, bool(m.get("keyword")))
+        except CheckError as err:
+            if hop: err.cert_exp = exp
+            raise
+        if hop == 0: exp = e
+        if not (m.get("follow") and 300 <= status < 400 and loc): break
+        url = urljoin(url, loc.strip())
+        nu = urlsplit(url)
+        if nu.scheme not in ("http", "https") or not nu.hostname or nu.username is not None:
+            err = CheckError("redirect to an invalid URL"); err.cert_exp = exp; raise err
+    else:
+        err = CheckError("too many redirects"); err.cert_exp = exp; raise err
+    ms = (time.monotonic() - t0) * 1000
+    def fail(msg): err = CheckError(msg); err.cert_exp = exp; return err
+    if not _code_ok(status, m.get("expect") or "200-399"): raise fail(f"HTTP {status}")
+    if m.get("keyword"):
+        found = m["keyword"].lower() in body.decode("utf-8", "replace").lower()
+        if m.get("kw_absent") and found: raise fail("keyword found")
+        if not m.get("kw_absent") and not found: raise fail("keyword not found")
+    return {"ms": ms, "code": status, "cert_exp": exp}
+
+# ─── Ping (ICMP sin privilegios) / Ping (unprivileged ICMP) ─────────────────────
+# ES: Socket ICMP de datagramas de Linux: no necesita root ni capacidades (lo permite net.ipv4.ping_group_range, que systemd abre para todos),
+#     así funciona con el servicio endurecido (NoNewPrivileges). Se envía un eco y se espera la respuesta con el mismo número de secuencia.
+# EN: Linux datagram ICMP socket: needs no root or capabilities (allowed by net.ipv4.ping_group_range, which systemd opens to everyone), so it
+#     works with the hardened service (NoNewPrivileges). One echo is sent and the reply with the same sequence number is awaited.
+def _icmp_sum(b: bytes) -> int:
+    if len(b) % 2: b += b"\0"
+    s = sum(struct.unpack(f"!{len(b) // 2}H", b)); s = (s >> 16) + (s & 0xFFFF); s += s >> 16
+    return ~s & 0xFFFF
+
+def check_ping(m: dict) -> dict:
+    fam, sa = _connect_addr(m["host"], 0, allow_loopback=True, kind=socket.SOCK_DGRAM)
+    v6 = fam == socket.AF_INET6
+    seq, data = secrets.randbelow(65536), b"labtower-uptime"
+    req = struct.pack("!BBHHH", 128 if v6 else 8, 0, 0, 0, seq) + data
+    if not v6: req = req[:2] + struct.pack("!H", _icmp_sum(req)) + req[4:]       # the kernel fills it for IPv6
+    try: s = socket.socket(fam, socket.SOCK_DGRAM, socket.IPPROTO_ICMPV6 if v6 else socket.IPPROTO_ICMP)
+    except OSError: raise CheckError("ping not allowed on this system (net.ipv4.ping_group_range)")
+    to = m.get("timeout", 10); end = time.monotonic() + to
+    try:
+        s.settimeout(to); t0 = time.monotonic(); s.sendto(req, sa)
+        while True:
+            b = s.recv(2048)
+            if not v6 and b and b[0] >> 4 == 4: b = b[(b[0] & 0x0F) * 4:]              # some systems include the IPv4 header
+            if len(b) >= 8 and b[0] == (129 if v6 else 0) and struct.unpack("!H", b[6:8])[0] == seq: break
+            if time.monotonic() > end: raise CheckError("timed out")
+            s.settimeout(max(0.1, end - time.monotonic()))
+    except SOCK_TIMEOUT: raise CheckError("timed out")
+    except OSError as e: raise CheckError(str(e.strerror or e)[:120])
+    finally: s.close()
+    return {"ms": (time.monotonic() - t0) * 1000}
+
+# ─── Vencimiento de dominios / Domain expiry ────────────────────────────────────
+# ES: Primero RDAP (el reemplazo estándar de WHOIS, JSON por HTTPS): la lista de servidores RDAP de cada TLD se baja de la IANA y se guarda
+#     una semana en rdap.json. Si el TLD no tiene RDAP o falla, se usa «whois» y se busca la fecha de vencimiento en el texto.
+# EN: First RDAP (the standard WHOIS replacement, JSON over HTTPS): the RDAP servers of each TLD are downloaded from IANA and kept a week in
+#     rdap.json. When the TLD has no RDAP or it fails, "whois" is used and the expiry date is looked for in the text.
+RDAP_BOOT  = "https://data.iana.org/rdap/dns.json"
+RDAP_FILE  = DATA_DIR / "rdap.json"
+RDAP_TTL   = 7 * 86400
+RDAP_MAX   = 2 << 20
+_rdap_lock = threading.Lock()
+
+def _get_json(url: str, timeout: float):
+    if not url.startswith("https://"): raise CheckError("RDAP: not HTTPS")
+    req = Request(url, headers={"Accept": "application/rdap+json, application/json", "User-Agent": UA})
+    with urlopen(req, timeout=timeout, context=ssl.create_default_context()) as r:   # nosec B310 - https only, checked above
+        raw = r.read(RDAP_MAX + 1)
+    if len(raw) > RDAP_MAX: raise CheckError("RDAP: answer too large")
+    return json.loads(raw)
+
+def rdap_servers(timeout: float) -> dict:
+    """{tld: [base URLs]} from the IANA bootstrap file (cached RDAP_TTL)."""
+    with _rdap_lock:
+        c = auth.read_json(RDAP_FILE, {}, dict)
+        if c.get("ts", 0) > time.time() - RDAP_TTL and isinstance(c.get("map"), dict): return c["map"]
+        try: boot = _get_json(RDAP_BOOT, timeout)
+        except (OSError, ValueError, CheckError) as e:
+            log.info(f"RDAP bootstrap: {e}"); return c.get("map") if isinstance(c.get("map"), dict) else {}
+        out = {}
+        for svc in boot.get("services") or []:
+            if isinstance(svc, list) and len(svc) == 2:
+                urls = [u for u in svc[1] if isinstance(u, str) and u.startswith("https://")]
+                for tld in svc[0]:
+                    if isinstance(tld, str) and urls: out[tld.lower()] = urls
+        auth.write_json(RDAP_FILE, {"ts": int(time.time()), "map": out})
+        return out
+
+def _parse_date(s: str):
+    """Epoch (UTC) of the first date found: 2027-03-15[T…], 2027.03.15, 2027/03/15 or 15-Mar-2027."""
+    import calendar
+    s = str(s or "")
+    m = re.search(r"(\d{4})[-./](\d{2})[-./](\d{2})", s)
+    if m: y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    else:
+        m = re.search(r"(\d{1,2})[- ]([A-Za-z]{3})[a-z]*[- ](\d{4})", s)
+        months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+        if not m or m.group(2).lower() not in months: return None
+        y, mo, d = int(m.group(3)), months.index(m.group(2).lower()) + 1, int(m.group(1))
+    if not (1 <= mo <= 12 and 1 <= d <= 31 and 1990 <= y <= 2200): return None
+    return calendar.timegm((y, mo, d, 0, 0, 0))
+
+def rdap_expiry(domain: str, timeout: float):
+    tld = domain.rsplit(".", 1)[-1]
+    for base in rdap_servers(timeout).get(tld, [])[:2]:
+        try: d = _get_json(base.rstrip("/") + "/domain/" + domain, timeout)
+        except (OSError, ValueError, CheckError) as e: log.debug(f"RDAP {domain}: {e}"); continue
+        for ev in d.get("events") or []:
+            if isinstance(ev, dict) and str(ev.get("eventAction", "")).lower() in ("expiration", "registration expiration"):
+                t = _parse_date(ev.get("eventDate"))
+                if t: return t
+    return None
+
+WHOIS_RE = re.compile(r"^\s*(?:registry expiry date|registrar registration expiration date|expiration date|expiry date|expires(?: on)?|"
+                      r"expire date|paid-till|renewal date|fecha de expiraci[oó]n)\s*[:.]+\s*(.+)$", re.IGNORECASE | re.MULTILINE)
+
+def whois_expiry(domain: str, timeout: float):
+    exe = shutil.which("whois")
+    if not exe: raise CheckError("RDAP unavailable and whois not installed")
+    try: out = subprocess.run([exe, domain], capture_output=True, text=True, timeout=timeout, check=False).stdout[:200000]  # nosec B603 - fixed command, validated domain
+    except subprocess.TimeoutExpired: raise CheckError("whois timed out")
+    for m in WHOIS_RE.finditer(out):
+        t = _parse_date(m.group(1))
+        if t: return t
+    return None
+
+def check_domain(m: dict) -> dict:
+    t0, to = time.monotonic(), m.get("timeout", 15)
+    exp = rdap_expiry(m["domain"], to) or whois_expiry(m["domain"], to)
+    if not exp: raise CheckError("expiry date not found")
+    ms = (time.monotonic() - t0) * 1000
+    if exp <= time.time(): e = CheckError("domain expired"); e.dom_exp = exp; raise e
+    return {"ms": ms, "dom_exp": exp}
+
+def dom_state(exp, now: float) -> str | None:
+    if not exp: return None
+    if exp <= now: return "expired"
+    d = (exp - now) / 86400
+    return "crit" if d <= DOMAIN_CRIT else "warn" if d <= DOMAIN_WARN else "ok"
 
 def check_tcp(m: dict) -> dict:
     fam, sa = _connect_addr(m["host"], m["port"], allow_loopback=True)
@@ -309,12 +473,12 @@ def check_dns(m: dict) -> dict:
     if m.get("expect_ip") and m["expect_ip"] not in ips: raise CheckError("resolved to " + ", ".join(ips[:3]))
     return {"ms": ms, "ips": ips[:8]}
 
-CHECKS = {"http": check_http, "tcp": check_tcp, "dns": check_dns}
+CHECKS = {"http": check_http, "tcp": check_tcp, "dns": check_dns, "ping": check_ping, "domain": check_domain}
 
 def run_check(m: dict) -> dict:
     """{'ok': bool, 'ms', 'error', 'cert_exp', …} for one check; never raises."""
     try: r = CHECKS[m["type"]](m); r["ok"] = True; r["error"] = None
-    except CheckError as e: r = {"ok": False, "ms": None, "error": str(e), "cert_exp": getattr(e, "cert_exp", None)}
+    except CheckError as e: r = {"ok": False, "ms": None, "error": str(e), "cert_exp": getattr(e, "cert_exp", None), "dom_exp": getattr(e, "dom_exp", None)}
     except Exception as e:  # noqa: BLE001 - un error en una revisión no puede detener el monitor / a bug in a check must not stop the monitor
         log.warning(f"[{m.get('name')}] check failed: {e!r}"); r = {"ok": False, "ms": None, "error": "internal error"}
     if r.get("ms") is not None: r["ms"] = round(r["ms"], 1)
@@ -430,13 +594,13 @@ class Mon:
     def __init__(self, mid):
         self.id, self.lock, self.wake = mid, threading.RLock(), threading.Event()
         self.beats = _deque(maxlen=BAR_BEATS)                           # [ts, st, ms]
-        self.fails, self.status, self.last, self.cert_exp = 0, None, None, None
+        self.fails, self.status, self.last, self.cert_exp, self.dom_exp = 0, None, None, None, None
     def snap(self):
         with self.lock:
             st = _state.get(self.id) or {}
             return {"status": self.status or ({1: "up", 0: "down"}.get(self.beats[-1][1]) if self.beats else None) or st.get("st"),
                     "since": st.get("since"), "last": dict(self.last) if self.last else None, "fails": self.fails,
-                    "cert_exp": self.cert_exp, "beats": list(self.beats)}
+                    "cert_exp": self.cert_exp, "dom_exp": self.dom_exp, "beats": list(self.beats)}
 
 _mons: dict = {}
 _threads: dict = {}
@@ -452,6 +616,7 @@ def apply_result(m: dict, mon: Mon, r: dict, now: float):
         elif mon.status is None: mon.status = "pending"
         mon.last = {"ts": int(now), "ok": r["ok"], "ms": r.get("ms"), "error": r.get("error"), "code": r.get("code")}
         if r.get("cert_exp"): mon.cert_exp = r["cert_exp"]
+        if r.get("dom_exp"): mon.dom_exp = r["dom_exp"]
         mon.beats.append([int(now), st, r.get("ms")])
     _wq.put((m["id"], int(now), st, r.get("ms")))
     changed = False
@@ -472,6 +637,13 @@ def apply_result(m: dict, mon: Mon, r: dict, now: float):
                 if cs == "warn": auth.record_event("uptime", "warn", f"{name}: certificate expires in {d} days", "uptime_cert", n=name, d=d)
                 elif cs == "expired": auth.record_event("uptime", "crit", f"{name}: certificate expired", "uptime_certexp", n=name)
                 s["cert"] = cs; changed = True
+        if m["type"] == "domain" and r.get("dom_exp"):
+            ds = dom_state(r["dom_exp"], now)
+            if ds != s.get("dom"):
+                d = max(0, int((r["dom_exp"] - now) // 86400))
+                if ds in ("warn", "crit"): auth.record_event("uptime", ds, f"{name}: domain expires in {d} days", "uptime_dom", n=name, d=d)
+                elif ds == "expired": auth.record_event("uptime", "crit", f"{name}: domain expired", "uptime_domexp", n=name)
+                s["dom"] = ds; changed = True
     if changed: save_state()
 
 def _loop(mid: str):
@@ -529,11 +701,12 @@ def start_all():
     for m in load_monitors(): ensure_monitor(m)
 
 def public(m: dict, mon: Mon | None, stats: dict, with_beats=True) -> dict:
-    sn = mon.snap() if mon else {"status": None, "since": None, "last": None, "fails": 0, "cert_exp": None, "beats": []}
-    if auth.paused(m): sn = {**sn, "status": None, "since": None, "last": None, "fails": 0, "cert_exp": None}   # paused: no current state
+    sn = mon.snap() if mon else {"status": None, "since": None, "last": None, "fails": 0, "cert_exp": None, "dom_exp": None, "beats": []}
+    if auth.paused(m): sn = {**sn, "status": None, "since": None, "last": None, "fails": 0, "cert_exp": None, "dom_exp": None}   # paused: no current state
     out = {**m, "paused": auth.paused(m), "target": target_of(m), **{k: v for k, v in sn.items() if k != "beats"}, "uptime": stats.get(m["id"], {})}
     if with_beats: out["beats"] = sn["beats"]
     out["cert"] = cert_state(sn["cert_exp"], m.get("cert_days", 14), time.time()) if m["type"] == "http" and m.get("url", "").startswith("https://") else None
+    out["dom"] = dom_state(sn.get("dom_exp"), time.time()) if m["type"] == "domain" else None
     return out
 
 def health_report(detailed=False):
@@ -546,13 +719,16 @@ def health_report(detailed=False):
     elif dead:    c["uptime_monitors"] = auth.chk(auth.FAIL, "monitor stopped: " + ", ".join(dead[:10]))
     else:         c["uptime_monitors"] = auth.chk(auth.OK, f"{len(items) - len(paused)} running" + (f", {len(paused)} paused" if paused else ""))
     c["uptime_services"] = auth.chk(auth.WARN, "down: " + ", ".join(down[:10])) if down else auth.chk(auth.OK, "every service is up")
+    if any(m["type"] == "domain" for m in items) and not shutil.which("whois"):
+        c["whois"] = auth.chk(auth.WARN, "whois not installed: domains without RDAP cannot be checked (apt install whois)")
     return auth.health_reply("uptime", c, detailed)
 
 # ─── HTTP ───────────────────────────────────────────────────────────────────
 _test_gate = threading.Semaphore(2)
 _ID = r"([a-f0-9\-]{36})"
 
-class H(BaseHTTPRequestHandler):
+class H(auth.Audited, BaseHTTPRequestHandler):
+    AUDIT_MODULE = "uptime"          # accepted changes go to the audit log (auth.Audited)
     timeout = 30
     def log_message(self, fmt, *a):
         # send_error() llega aquí con (código, mensaje) y un 501 de HEAD trae el mensaje en a[1]: solo se registra un código numérico.

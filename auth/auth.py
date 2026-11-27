@@ -55,6 +55,7 @@ import hashlib
 import hmac
 import json
 import logging
+import math
 import os
 import re
 import secrets
@@ -66,6 +67,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 try:
     import fcntl
@@ -683,6 +685,33 @@ def create_session(username: str, permissions: dict, ttl: int = SESSION_TTL, han
 #       · if the user no longer exists, it is deleted (removing a user cuts their session at once);
 #       · the permissions returned are always the CURRENT ones from users.json, not the ones at login;
 #       · the 24 h window is renewed, but written to disk only if more than RENEW_EVERY seconds passed.
+# ─── Política: 2FA obligatorio para administradores ──────────────────────────────────────────────────
+# ES: Con «require_2fa_admins» activo, quien es administrador de al menos un módulo y no tiene 2FA queda con la sesión pendiente (como el cambio
+#     obligatorio de contraseña): no sirve en ningún módulo hasta activar el 2FA en /admin/setup-2fa. policy.json lo escribe el servicio de
+#     autenticación; se lee con caché según la firma del archivo, porque get_session lo consulta en cada petición.
+# EN: With "require_2fa_admins" on, an administrator of at least one module without 2FA gets a pending session (like the mandatory password
+#     change): valid in no module until 2FA is turned on at /admin/setup-2fa. policy.json is written by the authentication service; it is read
+#     with a cache keyed on the file signature, because get_session checks it on every request.
+POLICY_FILE = Path(os.environ.get("LABTOWER_POLICY", str(USERS_FILE.with_name("policy.json"))))
+_policy_cache = [object(), {"require_2fa_admins": False}]     # [file signature, policy]; the sentinel forces the first read
+
+def policy() -> dict:
+    sig = _file_sig(POLICY_FILE)
+    if sig != _policy_cache[0]:
+        d = read_json(POLICY_FILE, {}, dict)
+        _policy_cache[0], _policy_cache[1] = sig, {"require_2fa_admins": d.get("require_2fa_admins") is True}
+    return dict(_policy_cache[1])
+
+@_local
+def set_policy(require_2fa_admins: bool) -> dict:
+    write_json(POLICY_FILE, {"require_2fa_admins": bool(require_2fa_admins)})
+    return policy()
+
+def needs_2fa(user) -> bool:
+    """True when the policy asks this account (an administrator of some module) to turn 2FA on first."""
+    if not isinstance(user, dict) or user.get("totp") or not policy()["require_2fa_admins"]: return False
+    return any(v == "admin" for v in (user.get("permissions") or {}).values())
+
 # Devuelve la sesión del token (o None). Si la cuenta tiene must_change_password (primer ingreso con la contraseña inicial, o marcada por un admin), la sesión NO es válida para nada, salvo para cambiar la contraseña (allow_pending=True): así ningún módulo da acceso hasta que se cambie.
 # EN: Return the session of the token (or None). If the account has must_change_password (first login with the initial password, or flagged by an admin), the session is NOT valid for anything except changing the password (allow_pending=True): no module grants access until it is changed.
 def get_session(token: str, allow_pending: bool = False) -> dict | None:
@@ -714,10 +743,11 @@ def _get_session_local(token: str, allow_pending: bool = False) -> dict | None:
             s["expires"] = now + ttl
             sessions[key] = s
             _save_sessions(sessions)
-        if user.get("must_change_password") and not allow_pending:
+        setup = needs_2fa(user)
+        if (user.get("must_change_password") or setup) and not allow_pending:
             return None
         return {**s, "permissions": dict(user.get("permissions", {})),
-                "must_change_password": bool(user.get("must_change_password"))}
+                "must_change_password": bool(user.get("must_change_password")), "must_setup_2fa": setup}
 
 # Cierre de sesión (logout).
 # EN: Logout.
@@ -1183,7 +1213,7 @@ def login_session(handler, username, password, remember=None, code=None):
     if not u: return None, err
     token = create_session(username, u["permissions"], ttl, handler)
     return {"token": token, "ttl": ttl, "username": username, "permissions": u["permissions"],
-            "must_change_password": bool(u.get("must_change_password", False))}, None
+            "must_change_password": bool(u.get("must_change_password", False)), "must_setup_2fa": needs_2fa(u)}, None
 
 # Freno para operaciones que verifican una contraseña con la sesión ya abierta (cambio de contraseña): 5 fallos en 10 min bloquean 5 min.
 # EN: Brake for operations that verify a password with a session already open (password change): 5 failures in 10 min lock for 5 min.
@@ -1235,6 +1265,75 @@ def token_from_request(headers, cookie_str="") -> str | None:
         part = part.strip()
         if part.startswith("session="): return part[8:].strip()
     return None
+
+
+# ─── Auditoría de los módulos / module audit ──────────────────────────────────────────────────────────
+# ES: Cada módulo hereda Audited en su manejador HTTP: después de cada POST, PUT o DELETE que el módulo aceptó (código < 300) se anota en el
+#     registro de auditoría quién hizo qué: agregar, editar, borrar o pausar algo, cambiar ajustes y acciones como despertar por WOL, pausar
+#     el bloqueo DNS, escanear o revisar ahora. Se salta el inicio y cierre de sesión, las pruebas de conexión y lo que el módulo ya anota.
+#     Nunca se guardan claves: solo el nombre, el id y unos pocos campos conocidos.
+# EN: Each module's HTTP handler inherits Audited: after every POST, PUT or DELETE the module accepted (code < 300) the audit log records
+#     who did what: add, edit, delete or pause something, change settings and actions such as a WOL wake, pausing DNS blocking, a scan or a
+#     check now. Sign-in and sign-out, connection tests and what the module already records are skipped. Secrets are never stored: only the
+#     name, the id and a few known fields.
+_AUD_SKIP = re.compile(r"^/api/(login|logout|test|me|ping|fingerprint|snmp/test|wan/router/test|wan/config|wan/ip/since|battery-date|energy-price|rules|"
+                       r"switches/refresh|aps/refresh|switches/test|aps/test)$|/(resolve|test)$")
+_AUD_RULES = (
+    ("POST", r"/pause$", "pause"), ("POST", r"/blocking$", "dns_blocking"), ("POST", r"/(check|certs)$", "check_now"),
+    ("POST", r"^/api/scan/start$", "net_scan"), ("POST", r"^/api/(wake|wake_all)$", "wol_wake"), ("POST", r"^/api/wan/speedtest$", "speedtest"),
+    ("POST", r"/layout$|^/api/order$", "layout_changed"), ("POST", r"/pin$", "cert_pinned"), ("POST", r"^/api/ssh-key$", "ssh_key_created"),
+    ("POST", r"^/api/hosts/update$", "device_edited"), ("POST", r"^/api/hosts/(delete|purge)$", "devices_deleted"),
+    ("POST", r"^/api/(snmp|oui|oui/update|pihole/config|scan/interval)$|/backup$", "settings_changed"),
+    ("*", r"^/api/(switches|aps)/", "item_changed"),
+    ("POST", r"^/api/[a-z]+$", "item_added"), ("*", r"^/api/[a-z]+/[A-Za-z0-9_-]+$", "item_edited"),
+)
+_AUD_FIELDS = ("name", "ip", "mac", "alias", "seconds", "enabled", "paused", "for", "interval", "device_type", "group", "os", "known", "watch")
+
+def audit_action(method, path, body):
+    """(action, target, detail) for a change, or None when it is not audited."""
+    if _AUD_SKIP.search(path): return None
+    act = "item_deleted" if method == "DELETE" else next((a for m, rx, a in _AUD_RULES if m in (method, "*") and re.search(rx, path)), "changed")
+    b = body if isinstance(body, dict) else {}
+    if act == "pause": act = "item_paused" if b.get("paused", True) else "item_resumed"
+    seg = [s for s in path.split("/") if s][2:3]
+    target = str(b.get("name") or b.get("ip") or b.get("mac") or (seg[0] if seg else ""))[:80]
+    detail = " ".join(f"{k}={str(b[k])[:40]}" for k in _AUD_FIELDS if k in b and k != "name" and isinstance(b[k], (str, int, float, bool)))
+    return act, target, (path[:100] + (" " + detail if detail else ""))[:200]
+
+def audit_request(handler, method):
+    code = getattr(handler, "_audit_code", None)
+    if code is None or code >= 300: return
+    try:
+        path = urlparse(handler.path).path
+        a = audit_action(method, path, getattr(handler, "_audit_body", None))
+        if not a: return
+        sess = get_session(token_from_request(dict(handler.headers), handler.headers.get("Cookie", "")))
+        if sess: audit(sess["username"], a[0], a[1], a[2], client_ip(handler), module=getattr(handler, "AUDIT_MODULE", "") or "")
+    except Exception as e: log.debug(f"audit: {e}")  # noqa: BLE001 - la auditoría nunca corta la respuesta / auditing never breaks the answer
+
+def _audited(fn, method):
+    def wrapper(self):
+        self._audit_code, self._audit_body = None, None
+        try: return fn(self)
+        finally: audit_request(self, method)
+    wrapper.__name__ = fn.__name__
+    return wrapper
+
+class Audited:
+    """Mixin for a module's BaseHTTPRequestHandler: audits the accepted POST, PUT and DELETE requests (see audit_request)."""
+    AUDIT_MODULE = ""
+    def __init_subclass__(cls, **kw):
+        super().__init_subclass__(**kw)
+        for name in ("do_POST", "do_PUT", "do_DELETE"):
+            if name in cls.__dict__: setattr(cls, name, _audited(cls.__dict__[name], name[3:]))
+        if "_body" in cls.__dict__:
+            inner = cls.__dict__["_body"]
+            def _body(self, *a, **k):
+                d = inner(self, *a, **k); self._audit_body = d; return d
+            cls._body = _body
+    def send_response(self, code, message=None):
+        self._audit_code = code
+        super().send_response(code, message)
 
 
 # ─── Defensa CSRF ─────────────────────────────────────────────────────────────
@@ -1519,7 +1618,68 @@ def mutes() -> dict:
         except Exception as e: log.debug(f"mutes: {e}")  # noqa: BLE001 - se usa la última respuesta / the last answer is used
         _mutes_remote[0] = time.monotonic()
         return _mutes_clean(_mutes_remote[1], now)
-    return _mutes_clean(read_json(MUTES_FILE, {}, dict), now)
+    cur = _mutes_clean(read_json(MUTES_FILE, {}, dict), now)
+    sch = read_json(SCHED_FILE, {}, dict)
+    skip = sch.get("skip") if isinstance(sch.get("skip"), dict) else {}
+    for mod, wins in (sch.get("w") or {}).items() if isinstance(sch.get("w"), dict) else ():
+        end = sched_end(wins, now) if mod in MUTABLE else None
+        if end is None or (isinstance(skip.get(mod), int) and skip[mod] >= end): continue      # resumed by hand during this window
+        if mod not in cur or (cur[mod] != 0 and end > cur[mod]): cur[mod] = end
+    return cur
+
+# ─── Pausas programadas (semanales, por módulo) ──────────────────────────────────────────────────────
+# ES: Ventanas semanales en la hora local del servidor: {"d": días (0 = lunes … 6 = domingo), "s": minuto de inicio (0–1439), "dur": minutos}.
+#     Mientras una ventana está abierta el módulo cuenta como pausado hasta su fin. Reanudar a mano durante una ventana la salta (skip).
+#     mute_schedules.json = {"w": {módulo: [ventanas]}, "skip": {módulo: fin de la ventana saltada}}; lo escribe solo el servicio de autenticación.
+# EN: Weekly windows in the server's local time: {"d": days (0 = Monday … 6 = Sunday), "s": start minute (0–1439), "dur": minutes}.
+#     While a window is open the module counts as paused until its end. Resuming by hand during a window skips it.
+#     mute_schedules.json = {"w": {module: [windows]}, "skip": {module: end of the skipped window}}; only the authentication service writes it.
+SCHED_FILE  = Path(os.environ.get("LABTOWER_MUTE_SCHED", str(USERS_FILE.with_name("mute_schedules.json"))))
+SCHED_MAX   = 7
+SCHED_DURS  = (15, 30, 60, 120, 180, 240, 360, 480, 720, 1440)
+
+def sched_clean(wins):
+    """Validated windows, or None when the list is wrong (the whole save is rejected)."""
+    if not isinstance(wins, list) or len(wins) > SCHED_MAX: return None
+    out = []
+    for w in wins:
+        if not isinstance(w, dict): return None
+        d, s, dur = w.get("d"), w.get("s"), w.get("dur")
+        if not isinstance(d, list) or not d or any(type(x) is not int or not 0 <= x <= 6 for x in d): return None
+        if type(s) is not int or not 0 <= s <= 1439 or type(dur) is not int or dur not in SCHED_DURS: return None
+        out.append({"d": sorted(set(d)), "s": s, "dur": dur})
+    return out
+
+def sched_end(wins, now=None):
+    """End (epoch) of the window open at `now`, or None. Checks windows that started today or yesterday (a window may cross midnight)."""
+    now = int(now or time.time()); best = None
+    for w in sched_clean(wins) or []:
+        for back in (0, 1):
+            lt = time.localtime(now - back * 86400)
+            if lt.tm_wday not in w["d"]: continue
+            start = int(time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, w["s"] // 60, w["s"] % 60, 0, 0, 0, -1)))
+            end = start + w["dur"] * 60
+            if start <= now < end and (best is None or end > best): best = end
+    return best
+
+def mute_schedules() -> dict:
+    sch = read_json(SCHED_FILE, {}, dict).get("w")
+    return {m: v for m, v in sch.items() if m in MUTABLE and sched_clean(v)} if isinstance(sch, dict) else {}
+
+@_local
+def set_schedule(module, wins) -> dict:
+    if module not in MUTABLE: raise ValueError("unknown module")
+    clean = sched_clean(wins)
+    if clean is None: raise ValueError("invalid schedule")
+    with _mutes_lock:
+        sch = read_json(SCHED_FILE, {}, dict)
+        w = sch.get("w") if isinstance(sch.get("w"), dict) else {}
+        if clean: w[module] = clean
+        else: w.pop(module, None)
+        sch["w"] = w
+        if isinstance(sch.get("skip"), dict): sch["skip"].pop(module, None)
+        write_json(SCHED_FILE, sch, indent=None)
+    return mute_schedules()
 
 def mute_until(module):
     """Epoch until which `module` is paused (0 = until resumed), or None when it is not paused."""
@@ -1537,7 +1697,87 @@ def set_mute(module, for_s) -> dict:
         if for_s is None: cur.pop(module, None)
         else: cur[module] = 0 if for_s == 0 else now + for_s
         write_json(MUTES_FILE, cur, indent=None)
-    return cur
+        sch = read_json(SCHED_FILE, {}, dict)
+        end = sched_end((sch.get("w") or {}).get(module) if isinstance(sch.get("w"), dict) else None, now)
+        if for_s is None and end:                     # resumed by hand during a scheduled window: skip the rest of it
+            sch["skip"] = {**(sch.get("skip") if isinstance(sch.get("skip"), dict) else {}), module: end}
+            write_json(SCHED_FILE, sch, indent=None)
+    return mutes()
+
+
+# ─── Nombres que Net Monitor conoce para las IP ──────────────────────────────────────────────────────
+# ES: Alias (o nombre de host) de cada IP según hosts.json, que Net Monitor publica para el grupo labtower. Es entrada no confiable: se
+#     limpia y se acorta. Vacío si Net Monitor no está. Se recuerda NAMES_TTL segundos. Solo se muestra a quien puede ver Net Monitor.
+# EN: Alias (or host name) of each IP from hosts.json, which Net Monitor publishes for the labtower group. Untrusted input: cleaned and
+#     shortened. Empty when Net Monitor is absent. Kept NAMES_TTL seconds. Only shown to users who may see Net Monitor.
+NET_HOSTS_FILE = Path(os.environ.get("NET_HOSTS_FILE", str(DATA_ROOT / "net-monitor" / "hosts.json")))
+NAMES_TTL = 30
+_names = {}
+
+def net_names(path=None) -> dict:
+    path = str(path or NET_HOSTS_FILE); now = time.time()
+    c = _names.get(path)
+    if c and now - c[0] < NAMES_TTL: return c[1]
+    out = {}
+    for ip, h in (read_published(path, None, dict) or {}).items():
+        if not isinstance(h, dict): continue
+        n = re.sub(r"[\x00-\x1f\x7f]", "", str(h.get("alias") or h.get("hostname") or "").strip())[:60]
+        if n and isinstance(ip, str) and len(ip) <= 45: out[ip] = n
+    _names[path] = (now, out)
+    return out
+
+
+# ─── Lecturas para las reglas de alerta del Resumen ──────────────────────────────────────────────────
+# ES: Cada módulo informa sus lecturas actuales (batería del UPS, CPU del NAS, latencia…) con metrics_report(); se juntan por módulo y se
+#     envían al servicio de autenticación como mucho cada METRIC_SEND segundos. El Resumen las pide (metrics_all) y evalúa las reglas en el
+#     servidor, aunque nadie tenga la página abierta. Un módulo solo puede informar métricas de su prefijo (el módulo lo fija el sistema operativo).
+# EN: Each module reports its current readings (UPS battery, NAS CPU, latency…) with metrics_report(); they are gathered per module and sent to
+#     the authentication service at most every METRIC_SEND seconds. The Overview asks for them (metrics_all) and evaluates the rules on the
+#     server, even when nobody has the page open. A module can only report metrics with its own prefix (the operating system sets the module).
+METRIC_SEND   = 30
+METRIC_STALE  = 300                              # s: older readings no longer count (paused or removed item, module stopped)
+METRIC_MAX    = 300
+METRIC_PREFIX = {"nut": "ups_", "nas": "nas_", "pve": "pve_", "dns": "dns_", "wan": "wan_"}
+_metric_lock  = threading.Lock()
+_metric_src   = {}                               # in a module: source id → (time, [[metric, who, value], ...])
+_metric_sent  = [0.0]
+_metric_store = {}                               # in the authentication service: module → (time, readings)
+
+def _metric_ok(v): return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+def metrics_report(module, source, readings, now=None):
+    """readings: [(metric, who, value)] of one source (a UPS server, a NAS, a cluster…); None values are skipped."""
+    now = now or time.time()
+    rows = [[str(m), str(w or "")[:80], float(v)] for m, w, v in readings if _metric_ok(v)]
+    with _metric_lock:
+        _metric_src[str(source)] = (now, rows)
+        for k in [k for k, (t, _) in _metric_src.items() if now - t > METRIC_STALE]: del _metric_src[k]
+        if now - _metric_sent[0] < METRIC_SEND: return
+        _metric_sent[0] = now
+        allrows = [r for _, rs in _metric_src.values() for r in rs][:METRIC_MAX]
+    if REMOTE:
+        try: _rpc("metrics", retries=1, readings=allrows)
+        except Exception as e: log.debug(f"metrics: {e}")  # noqa: BLE001 - se reintenta en la próxima lectura / retried on the next reading
+    else: metrics_store(module, allrows, now)
+
+def metrics_store(module, rows, now=None):
+    """Keep the readings of a module (in the authentication service). Wrong rows and other modules' metrics are dropped."""
+    pre = METRIC_PREFIX.get(module)
+    if not pre or not isinstance(rows, list): return
+    ok = [[r[0], r[1], float(r[2])] for r in rows[:METRIC_MAX] if isinstance(r, list) and len(r) == 3 and isinstance(r[0], str) and r[0].startswith(pre)
+          and len(r[0]) <= 32 and isinstance(r[1], str) and len(r[1]) <= 80 and _metric_ok(r[2])]
+    with _metric_lock: _metric_store[module] = (now or time.time(), ok)
+
+def metrics_all(now=None) -> dict:
+    """Current readings of every module: {module: [[metric, who, value], ...]}, without the stale ones."""
+    now = now or time.time()
+    if REMOTE:
+        try: d = _rpc("metrics", retries=2).get("metrics") or {}
+        except Exception as e:  # noqa: BLE001 - sin lecturas esta vuelta / no readings this round
+            log.debug(f"metrics: {e}"); return {}
+        return {m: rows for m, rows in d.items() if m in METRIC_PREFIX and isinstance(rows, list)}
+    with _metric_lock:
+        return {m: list(rows) for m, (t, rows) in _metric_store.items() if now - t <= METRIC_STALE}
 
 
 # ─── Datos del equipo (widget del servidor en el Resumen) ────────────────────────────────────────────

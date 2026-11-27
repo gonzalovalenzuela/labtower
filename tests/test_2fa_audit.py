@@ -4,6 +4,7 @@ import time
 import unittest
 from typing import ClassVar
 
+from tests import support
 from tests.support import ADMIN, Server, auth, load, make_user
 
 
@@ -184,6 +185,101 @@ class ModuleRpc(unittest.TestCase):
         e = auth.read_audit(1)[0]
         self.assertEqual((e["m"], e["a"], e["x"]), ("net", "ana", "device_added"))
         self.assertEqual(svc.handle("nobody", {"op": "audit", "actor": "a", "action": "b"}), {"error": "forbidden"})
+
+class Mandatory2fa(unittest.TestCase):
+    """Política: los administradores deben activar 2FA; hasta entonces su sesión queda pendiente. / Policy: admins must turn 2FA on first."""
+    @classmethod
+    def setUpClass(cls): cls.srv = Server(load("auth/admin_panel.py").H)
+    @classmethod
+    def tearDownClass(cls): cls.srv.close(); auth.write_json(auth.POLICY_FILE, {})
+    def setUp(self):
+        auth.write_json(auth.POLICY_FILE, {}); self.pw = "Passw0rd-long-1"
+        self.boss = f"pb{time.time_ns() % 10**9}"; self.btok = make_user(self.boss, ADMIN, self.pw)
+        self.adm = f"pa{time.time_ns() % 10**9}"; self.atok = make_user(self.adm, {**support.READONLY, "dns": "admin"}, self.pw)
+        self.ro = f"pr{time.time_ns() % 10**9}"; self.rtok = make_user(self.ro, support.READONLY, self.pw)
+        for u in (self.boss, self.adm, self.ro): auth.throttle_clear("u:" + u)
+        auth.throttle_clear("ip:198.51.100.7")
+    tearDown = lambda self: auth.write_json(auth.POLICY_FILE, {})
+
+    def enable_2fa(self, tok):
+        st, b = self.srv.call("POST", "/api/2fa/begin", {"current_password": self.pw}, tok); self.assertEqual(st, 200, b)
+        st, b2 = self.srv.call("POST", "/api/2fa/enable", {"code": now_code(b["secret"])}, tok); self.assertEqual(st, 200, b2)
+
+    def test_policy_and_pending_session(self):
+        s = self.srv
+        body = {"require_2fa_admins": True, "current_password": self.pw}
+        self.assertIn(s.call("POST", "/api/policy", body, self.atok)[0], (401, 403))               # not admin of every module
+        self.assertEqual(s.call("POST", "/api/policy", body, self.btok)[0], 409)                     # own 2FA off: would lock themselves out
+        self.enable_2fa(self.btok)
+        self.assertEqual(s.call("POST", "/api/policy", {**body, "current_password": "bad"}, self.btok)[0], 403)
+        st, d = s.call("POST", "/api/policy", body, self.btok); self.assertEqual((st, d["policy"]), (200, {"require_2fa_admins": True}))
+        self.assertTrue(auth.read_audit(5, self.boss, "policy_2fa_on"))
+        # an admin of one module without 2FA: pending everywhere, except turning 2FA on
+        self.assertIsNone(auth.get_session(self.atok)); self.assertTrue(auth.get_session(self.atok, allow_pending=True)["must_setup_2fa"])
+        self.assertEqual(s.call("GET", "/api/self", token=self.atok)[1]["must_setup_2fa"], True)
+        lr = auth.login_session(Req(), self.adm, self.pw)[0]; self.assertTrue(lr["must_setup_2fa"])
+        self.assertIsNotNone(auth.get_session(self.rtok))                                            # not an admin: unaffected
+        self.assertFalse(auth.login_session(Req(), self.ro, self.pw)[0]["must_setup_2fa"])
+        self.assertEqual(s.call("POST", "/api/2fa/disable", {"current_password": self.pw}, self.btok)[0], 409)   # cannot turn it off now
+        self.enable_2fa(self.atok)                                                                   # works with the pending session
+        self.assertIsNotNone(auth.get_session(self.atok))
+        self.assertEqual(s.call("POST", "/api/policy", {"require_2fa_admins": False, "current_password": self.pw}, self.btok)[0], 200)
+        self.assertFalse(auth.policy()["require_2fa_admins"])
+
+    def test_page_and_redirects(self):
+        root = support.ROOT
+        self.assertEqual(self.srv.call("GET", "/setup-2fa")[0], 200)
+        for f in ("nas-monitor", "dns-monitor", "net-monitor", "proxmox-monitor", "uptime-monitor", "wol-console", "nut-monitor", "wan-monitor", "vpn-monitor", "overview", "auth"):
+            self.assertIn("must_setup_2fa", (root / f / "static/app.js").read_text(encoding="utf-8"), f)
+        js = (root / "auth/static/setup-2fa.js").read_text(encoding="utf-8")
+        self.assertIn("cspRegister({ begin, confirmCode, done, logout })", js); self.assertNotRegex((root / "auth/static/setup-2fa.html").read_text(), r"\son[a-z]+=")
+        for f in ("debian/preinst", "debian/prerm", "scripts/teleporter.sh"): self.assertIn("auth/policy.json", (root / f).read_text(), f)
+
+
+class ModuleChanges(unittest.TestCase):
+    """Cada cambio aceptado en un módulo queda en la auditoría (auth.Audited). / Every accepted change in a module is audited."""
+    def test_actions(self):
+        a = auth.audit_action
+        self.assertEqual(a("POST", "/api/dns", {"name": "Pi-hole", "password": "secret"}), ("item_added", "Pi-hole", "/api/dns"))
+        self.assertEqual(a("DELETE", "/api/nas/abc", None)[:2], ("item_deleted", "abc"))
+        self.assertEqual(a("PUT", "/api/servers/s1", {"name": "UPS"})[:2], ("item_edited", "UPS"))
+        self.assertEqual(a("POST", "/api/monitors/" + "a" * 36 + "/pause", {"paused": False})[0], "item_resumed")
+        self.assertEqual(a("POST", "/api/dns/x/blocking", {"enabled": False, "seconds": 300}), ("dns_blocking", "x", "/api/dns/x/blocking seconds=300 enabled=False"))
+        self.assertEqual(a("POST", "/api/wake", {"mac": "aa:bb:cc:00:00:01"})[:2], ("wol_wake", "aa:bb:cc:00:00:01"))
+        self.assertEqual(a("POST", "/api/snmp", {"community": "x"})[0], "settings_changed")
+        self.assertEqual(a("POST", "/api/switches/s1/ports", {})[0], "item_changed")
+        self.assertEqual(a("POST", "/api/hosts/update", {"ip": "192.0.2.5", "alias": "NAS"}), ("device_edited", "192.0.2.5", "/api/hosts/update ip=192.0.2.5 alias=NAS"))
+        for skip in ("/api/login", "/api/logout", "/api/test", "/api/dns/x/resolve", "/api/rules", "/api/wan/config", "/api/switches/refresh"):
+            self.assertIsNone(a("POST", skip, {}), skip)
+        self.assertNotIn("secret", str(a("POST", "/api/nas", {"name": "N", "password": "secret", "api_key": "secret"})))
+
+    @staticmethod
+    def wait(actor, action=None):
+        """The entry is written right after the answer is sent: wait for it a moment."""
+        for _ in range(40):
+            r = auth.read_audit(5, actor, action)
+            if r: return r
+            time.sleep(0.05)
+        return []
+
+    def test_accepted_changes_are_recorded(self):
+        m = load("uptime-monitor/server.py")
+        self.assertTrue(issubclass(m.H, auth.Audited)); self.assertEqual(m.H.AUDIT_MODULE, "uptime")
+        srv = support.Server(m.H)
+        try:
+            adm = support.make_user("aud_mod", support.ADMIN); ro = support.make_user("aud_ro", support.READONLY)
+            body = {"type": "tcp", "name": "SSH box", "host": "192.0.2.22", "port": 22}
+            self.assertEqual(srv.call("POST", "/api/monitors", body, token=ro)[0], 403)                 # refused: not recorded
+            st, d = srv.call("POST", "/api/monitors", body, token=adm); self.assertIn(st, (200, 201))
+            e = self.wait("aud_mod")[0]
+            self.assertEqual((e["x"], e["g"]), ("item_added", "SSH box"))
+            self.assertFalse(auth.read_audit(5, "aud_ro"))
+            mid = (d.get("monitor") or d).get("id")
+            if mid: srv.call("DELETE", "/api/monitors/" + mid, token=adm); self.assertEqual(self.wait("aud_mod", "item_deleted")[0]["x"], "item_deleted")
+        finally: srv.close()
+        for f in ("nut-monitor", "net-monitor", "proxmox-monitor", "nas-monitor", "dns-monitor", "wan-monitor", "vpn-monitor", "uptime-monitor", "wol-console"):
+            self.assertIn("class H(auth.Audited, BaseHTTPRequestHandler):", (support.ROOT / f / "server.py").read_text(encoding="utf-8"), f)
+
 
 if __name__ == "__main__":
     unittest.main()

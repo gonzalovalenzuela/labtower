@@ -30,6 +30,7 @@ const LANG={
     clusterAdded:(name)=>`${name} added`,
     deleteClusterConfirm:(name)=>`Delete cluster "${name}"?`,
     cpuAlert:(pct)=>`CPU at ${pct}%`,ramAlert:(pct)=>`RAM at ${pct}%`,
+    snTitle:n=>`Snapshots older than ${n} days`,snNone:'No old snapshots.',snDays:'days for a snapshot to count as old',snErr:'Could not read the snapshots',snAge:n=>`${n} d`,
     bkSelAll:'Select all',bkSelNone:'Clear selection',bkSelPending:'Select those without backup or too old',bkIgnoreSel:n=>`Ignore selected (${n})`,bkUnignoreSel:n=>`Stop ignoring selected (${n})`,bkTitle:'Backups (vzdump)',bkWait:'Reading backups… (first read takes a minute)',bkNone:'No backup storage found. The API token needs Datastore.Audit on the storages.',bkOk:'Up to date',bkOld:'Too old',bkNever:'No backup',bkIgnored:'Ignored',bkUnknown:'Unknown',bkAge:(h)=>h<48?`${h} h ago`:`${Math.floor(h/24)} d ago`,bkProblems:(n)=>`${n} without a recent backup`,bkAllOk:'Backups up to date',bkMax:(h)=>`Marked old after ${Math.round(h/24*10)/10} days`,bkDays:'days',bkApply:'Apply',bkIgnore:'Ignore',bkUnignore:'Stop ignoring',bkFailedTasks:'Failed backup tasks',bkVerified:'verified',bkVerFail:'verification failed',bkSaved:'Saved',bkStorageErr:'Could not read storage',bkCopies:(n)=>`${n} copies`,
     xTitle:'Capacity & health',xWait:'Collecting data…',xPerm:'Not available: the API token lacks permission (see the README)',
     xDays:'Days until full',xDaysNone:'Not enough history or not growing',xDaysHist:d=>'Collecting history ('+d+' of 2 days needed)',xDaysFlat:'Not growing',xDaysV:d=>d+' d',xCeph:'Ceph cluster',
@@ -75,6 +76,7 @@ const LANG={
     clusterAdded:(name)=>`${name} agregado`,
     deleteClusterConfirm:(name)=>`¿Eliminar el cluster "${name}"?`,
     cpuAlert:(pct)=>`CPU al ${pct}%`,ramAlert:(pct)=>`RAM al ${pct}%`,
+    snTitle:n=>`Snapshots de más de ${n} días`,snNone:'No hay snapshots antiguos.',snDays:'días para que un snapshot cuente como antiguo',snErr:'No se pudieron leer los snapshots',snAge:n=>`${n} d`,
     bkSelAll:'Seleccionar todas',bkSelNone:'Limpiar selección',bkSelPending:'Seleccionar las sin respaldo o muy viejas',bkIgnoreSel:n=>`Ignorar seleccionadas (${n})`,bkUnignoreSel:n=>`Dejar de ignorar seleccionadas (${n})`,bkTitle:'Respaldos (vzdump)',bkWait:'Leyendo respaldos… (la primera lectura tarda un minuto)',bkNone:'No hay storages de respaldo. El token de la API necesita Datastore.Audit en los storages.',bkOk:'Al día',bkOld:'Muy viejo',bkNever:'Sin respaldo',bkIgnored:'Ignorado',bkUnknown:'Desconocido',bkAge:(h)=>h<48?`hace ${h} h`:`hace ${Math.floor(h/24)} d`,bkProblems:(n)=>`${n} sin respaldo reciente`,bkAllOk:'Respaldos al día',bkMax:(h)=>`Se marca como vieja tras ${Math.round(h/24*10)/10} días`,bkDays:'días',bkApply:'Aplicar',bkIgnore:'Ignorar',bkUnignore:'Dejar de ignorar',bkFailedTasks:'Tareas de respaldo fallidas',bkVerified:'verificado',bkVerFail:'verificación fallida',bkSaved:'Guardado',bkStorageErr:'No se pudo leer el storage',bkCopies:(n)=>`${n} copias`,
     xTitle:'Capacidad y salud',xWait:'Recopilando datos…',xPerm:'No disponible: el token de la API no tiene permiso (ver el README)',
     xDays:'Días hasta llenarse',xDaysNone:'Sin historial suficiente o no crece',xDaysHist:d=>'Reuniendo historial ('+d+' de 2 días necesarios)',xDaysFlat:'No crece',xDaysV:d=>d+' d',xCeph:'Cluster Ceph',
@@ -152,6 +154,7 @@ async function doLogin(){
     // Cuenta con contraseña por cambiar (admin/admin inicial): se va a la pantalla obligatoria antes de entrar.
     // EN: Account with a password to change (initial admin/admin): go to the mandatory screen before entering.
     if(d.must_change_password){location.href='/admin/change-password?next='+encodeURIComponent(location.pathname);return;}
+    if(d.must_setup_2fa){location.href='/admin/setup-2fa?next='+encodeURIComponent(location.pathname);return;}   // 2FA obligatorio / mandatory 2FA
     ME=d;applyPermissions();await initApp();
     const ls=document.getElementById('login-screen');ls.style.opacity='0';setTimeout(()=>ls.style.display='none',150);
   }catch(e){err.textContent='Error: '+e.message;err.className='login-err show';}
@@ -417,6 +420,18 @@ async function bkSetDays(cid){
     _diagTs[cid]=0;renderDashboard();toast(t('bkSaved'));
   }catch(e){toast(e.message,true);}
 }
+// Cambia a partir de cuántos días un snapshot cuenta como antiguo (1 a 365). / EN: Change after how many days a snapshot counts as old (1 to 365).
+async function snSetDays(cid){
+  const bk=_diag[cid]&&_diag[cid].backups;if(!bk)return;
+  const d=parseInt(document.getElementById('sn-days')?.value||'',10);
+  if(!(d>=1&&d<=365)){toast(t('snDays')+': 1-365',true);return;}
+  try{
+    const r=await fetch('api/clusters/'+encodeURIComponent(cid)+'/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({snap_days:d})});
+    if(!r.ok)throw new Error((await r.json()).error||'Error');
+    bk.snap_days=d;bk.snaps=(bk.snaps_all||[]).filter(s=>!(bk.ignore||[]).includes(s.vmid)&&Date.now()/1000-s.ts>d*86400).sort((a,b)=>a.ts-b.ts);
+    _diagTs[cid]=0;renderDashboard();toast(t('bkSaved'));
+  }catch(e){toast(e.message,true);}
+}
 async function toggleBkIgnore(cid,vmid){
   const bk=_diag[cid]&&_diag[cid].backups;if(!bk)return;
   const set=new Set(bk.ignore||[]);if(set.has(vmid))set.delete(vmid);else set.add(vmid);
@@ -571,6 +586,28 @@ function buildDiag(cluster){
       }
       b.appendChild(l);
     });
+    // Snapshots antiguos (olvidados): lista y, para el admin, a partir de cuántos días cuentan. / EN: Old (forgotten) snapshots: list and, for the admin, after how many days they count.
+    if(bk.snap_days){
+      const h=document.createElement('div');h.style.cssText='margin-top:10px;font-weight:600';h.textContent=t('snTitle',bk.snap_days);b.appendChild(h);
+      if(isPveAdmin()){
+        const w=document.createElement('div');w.style.cssText='display:flex;gap:6px;align-items:center;margin:2px 0 6px;font-size:11px;color:var(--text-dim)';
+        const inp=document.createElement('input');inp.type='number';inp.id='sn-days';inp.min='1';inp.max='365';inp.value=String(bk.snap_days);inp.style.cssText='width:56px;text-align:center';inp.setAttribute('aria-label',t('snDays'));
+        const bt=document.createElement('button');bt.type='button';bt.className='btn-secondary';bt.style.cssText='width:auto;padding:3px 10px;font-size:11px';bt.textContent=t('bkApply');bt.setAttribute('data-on-click','snSetDays');bt.setAttribute('data-on-click-args',JSON.stringify([cluster.id]));
+        const lb=document.createElement('span');lb.textContent=t('snDays');
+        w.appendChild(inp);w.appendChild(lb);w.appendChild(bt);b.appendChild(w);
+      }
+      if(bk.snap_err){const e=document.createElement('div');e.style.cssText='color:var(--red);font-size:11px';e.textContent=t('snErr')+': '+bk.snap_err;b.appendChild(e);}
+      else if(!(bk.snaps||[]).length){const e=document.createElement('div');e.style.cssText='color:var(--text-dim);font-size:11px';e.textContent=t('snNone');b.appendChild(e);}
+      (bk.snaps||[]).slice(0,50).forEach(s=>{
+        const l=document.createElement('div');l.style.cssText='display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:2px 0;font-size:11px';
+        const id=document.createElement('span');id.style.cssText='font-family:var(--mono);min-width:48px';id.textContent=(s.type==='ct'?'CT ':'VM ')+s.vmid;l.appendChild(id);
+        const nm=document.createElement('span');nm.style.cssText='min-width:140px';nm.textContent=s.name||'';l.appendChild(nm);
+        const sn=document.createElement('span');sn.style.fontFamily='var(--mono)';sn.textContent=s.snap;l.appendChild(sn);
+        l.appendChild(pill(t('snAge',Math.floor((Date.now()/1000-s.ts)/86400)),'var(--orange)'));
+        const d=document.createElement('span');d.style.color='var(--text-dim)';d.textContent=dtFmt(s.ts)+' · '+s.node;l.appendChild(d);
+        b.appendChild(l);
+      });
+    }
     const bad=(bk.tasks||[]).filter(x=>x.ok===false).slice(0,8);
     if(bad.length){
       const h=document.createElement('div');h.style.cssText='margin-top:8px;font-weight:600;color:var(--red)';h.textContent=t('bkFailedTasks');b.appendChild(h);
@@ -1155,4 +1192,4 @@ function remValue(){const c=document.getElementById('l-rem'),s=document.getEleme
 
 // Funciones que el HTML puede invocar con data-on-* (lista cerrada; ver csp-bind.js).
 // EN: Functions the HTML may call through data-on-* (closed list; see csp-bind.js).
-if (window.cspRegister) cspRegister({ bkSetDays, closeModals, confirmDelete, openEditCluster, doLogin, logout, moveNode, openAddCluster, pauseCluster, pinCluster, toggleStopped, resetLayout, saveCluster, toggleBkIgnore, bkSelToggle, bkSelMode, bkBulk, toggleDiag, toggleDiagAll, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection, toggleNode, setNRange });
+if (window.cspRegister) cspRegister({ bkSetDays, snSetDays, closeModals, confirmDelete, openEditCluster, doLogin, logout, moveNode, openAddCluster, pauseCluster, pinCluster, toggleStopped, resetLayout, saveCluster, toggleBkIgnore, bkSelToggle, bkSelMode, bkBulk, toggleDiag, toggleDiagAll, setLang, setTheme, testCluster, toggleNav, togglePin, toggleSection, toggleNode, setNRange });

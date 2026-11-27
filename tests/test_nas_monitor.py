@@ -49,6 +49,9 @@ FAKE = textwrap.dedent('''\
      B+"2.1.1.2.2": 'STRING: "Disk 2"', B+"2.1.1.3.2": 'STRING: "WD40"', B+"2.1.1.4.2": 'STRING: "SATA"', B+"2.1.1.5.2": "INTEGER: 5", B+"2.1.1.6.2": "INTEGER: 38",
      B+"3.1.1.2.1": 'STRING: "Volume 1"', B+"3.1.1.3.1": "INTEGER: 1", B+"3.1.1.4.1": "Counter64: 500", B+"3.1.1.5.1": "Counter64: 1000",
      B+"3.1.1.2.2": 'STRING: "Volume 2"', B+"3.1.1.3.2": "INTEGER: 12", B+"3.1.1.4.2": "Counter64: 40", B+"3.1.1.5.2": "Counter64: 1000",
+     B+"5.1.1.2.1": 'STRING: "Disk 1"', B+"5.1.1.4.1": "INTEGER: 5", B+"5.1.1.8.1": "INTEGER: 0",
+     B+"5.1.1.2.2": 'STRING: "Disk 1"', B+"5.1.1.4.2": "INTEGER: 197", B+"5.1.1.8.2": "INTEGER: 2",
+     B+"5.1.1.2.3": 'STRING: "Disk 1"', B+"5.1.1.4.3": "INTEGER: 9", B+"5.1.1.8.3": "INTEGER: 4000",
      B+"4.1.1.0": 'STRING: "UPS-X"', B+"4.2.1.0": 'STRING: "OL"', B+"4.3.1.1.0": "Gauge32: 100",
      B+"101.1.1.2.1": 'STRING: "sda"', B+"101.1.1.8.1": "INTEGER: 12", B+"101.1.1.9.1": "INTEGER: 30", B+"101.1.1.12.1": "Counter64: 1000000", B+"101.1.1.13.1": "Counter64: 2000000",
      ".1.3.6.1.2.1.31.1.1.1.1.1": 'STRING: "lo"', ".1.3.6.1.2.1.31.1.1.1.6.1": "Counter64: 5", ".1.3.6.1.2.1.31.1.1.1.10.1": "Counter64: 5",
@@ -242,6 +245,7 @@ class Collect(unittest.TestCase):
         self.assertEqual(s["ups"]["status"], "OL"); self.assertEqual(s["io"], [{"dev": "sda", "load": 30, "read": None, "write": None}])   # carga = el mayor entre LA y el promedio de 1 min
         self.assertEqual([n["name"] for n in s["net"]], ["eth0"])                 # sin lo ni docker0
         self.assertTrue(s["synology"]); self.assertEqual(s["warnings"], [])
+        self.assertEqual(s["disks"][0]["sectors"], {"realloc": 0, "pending": 2}); self.assertNotIn("sectors", s["disks"][1])   # SMART 5/197, not 9
 
     def test_alerts(self):
         types = {(a["type"], a.get("item")) for a in m.collect(m.validate(CFG3), {})["alerts"]}
@@ -287,6 +291,41 @@ class Collect(unittest.TestCase):
     def test_connection_test(self):
         r = m.test_connection(m.validate(CFG3))
         self.assertEqual((r["model"], r["dsm"], r["synology"]), ("DS918+", "DSM 7.2-64570", True))
+
+class Sectors(unittest.TestCase):
+    """Tendencia SMART: aviso y evento cuando sube un contador de sectores dañados. / SMART trend: warning and event when a bad-sector counter goes up."""
+    def setUp(self):
+        m.DATA_DIR.mkdir(parents=True, exist_ok=True); m.auth.write_json(m.SECT_FILE, {})
+        self.ev, self.rec = [], m.auth.record_event
+        m.auth.record_event = lambda mod, lv, tx, k=None, **p: self.ev.append((lv, k, p))
+    def tearDown(self): m.auth.record_event = self.rec; m.auth.write_json(m.SECT_FILE, {})
+
+    def snap(self, **v): return {"disks": [{"name": "Disk 1", "sectors": v}, {"name": "Disk 2"}]}
+
+    def test_increase_warns_and_logs(self):
+        now = 2_000_000_000
+        self.assertEqual(m.sectors_track("n1", "NAS", self.snap(realloc=0, pending=0), now), [])        # first reading: only remembered
+        self.assertEqual(m.sectors_track("n1", "NAS", self.snap(realloc=0, pending=0), now + 60), [])
+        s = self.snap(realloc=8, pending=0)
+        al = m.sectors_track("n1", "NAS", s, now + 120)
+        self.assertEqual(al, [{"lv": "warn", "type": "disk_sectors", "item": "Disk 1", "value": "+8"}])
+        self.assertEqual(self.ev, [("warn", "nas_sectors", {"n": "NAS", "d": "Disk 1", "a": "realloc", "o": 0, "v": 8})])
+        self.assertEqual(s["disks"][0]["sect_log"], [{"ts": now + 120, "a": "realloc", "o": 0, "v": 8}])
+        self.assertEqual(len(m.sectors_track("n1", "NAS", self.snap(realloc=8, pending=0), now + 3600)), 1)   # warning stays 7 days
+        self.assertEqual(len(self.ev), 1)
+        self.assertEqual(m.sectors_track("n1", "NAS", self.snap(realloc=8, pending=0), now + 120 + 7 * 86400 + 1), [])
+        self.assertEqual(m.sectors_track("n1", "NAS", self.snap(realloc=5, pending=0), now + 8 * 86400), [])   # going down does not warn
+
+    def test_omv_attributes(self):
+        r = m.remote.omv_sectors([{"id": 5, "rawvalue": "3"}, {"id": 197, "rawvalue": "0 (0 0)"}, {"id": 198, "rawvalue": ""}, {"id": 9, "rawvalue": "100"}, "x"])
+        self.assertEqual(r, {"realloc": 3, "pending": 0})
+
+    def test_backups_and_texts(self):
+        for f in ("debian/preinst", "debian/prerm", "scripts/teleporter.sh"):
+            self.assertIn("nas-monitor/smart.json", (ROOT / f).read_text(encoding="utf-8"), f)
+        ov = (ROOT / "overview/static/app.js").read_text(encoding="utf-8")
+        self.assertEqual(ov.count("nas_sectors:'"), 2); self.assertEqual(ov.count("disk_sectors:'b") + ov.count("disk_sectors:'a"), 2)
+
 
 class AlertRules(unittest.TestCase):
     def snap(self, **kw):

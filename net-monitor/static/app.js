@@ -8,7 +8,7 @@ const LANG={
     statOpenPorts:'Open ports',statLastScan:'Last scan',scanFailed:'Failed',
     filterAll:'All',filterOnline:'Online',filterOffline:'Offline',
     hostsTitle:'Hosts on network',
-    colOpenPorts:'Open ports',colLastSeen:'Last seen',colLatency:'Latency',colStatus:'Status',
+    colOpenPorts:'Open ports',colSwPort:'Switch / port',colLastSeen:'Last seen',colLatency:'Latency',colStatus:'Status',
     cancel:'Cancel',save:'Save',saveConnect:'Save & connect',
     scanningNet:'Scanning network...',
     permReadonly:'Read-only',permExecute:'Execute',permAdmin:'Administrator',
@@ -44,7 +44,7 @@ unrev:'Unreviewed',unrevMsg:(n,names,more)=>`${n} device${n>1?'s':''} not review
     statOpenPorts:'Puertos abiertos',statLastScan:'Último escaneo',scanFailed:'Falló',
     filterAll:'Todos',filterOnline:'En línea',filterOffline:'Sin conexión',
     hostsTitle:'Hosts en la red',
-    colOpenPorts:'Puertos abiertos',colLastSeen:'Último contacto',colLatency:'Latencia',colStatus:'Estado',
+    colOpenPorts:'Puertos abiertos',colSwPort:'Switch / puerto',colLastSeen:'Último contacto',colLatency:'Latencia',colStatus:'Estado',
     cancel:'Cancelar',save:'Guardar',saveConnect:'Guardar y conectar',
     scanningNet:'Escaneando red...',
     permReadonly:'Solo lectura',permExecute:'Ejecución',permAdmin:'Administrador',
@@ -158,6 +158,7 @@ async function doLogin(){
     // Cuenta con contraseña por cambiar (admin/admin inicial): se va a la pantalla obligatoria antes de entrar.
     // EN: Account with a password to change (initial admin/admin): go to the mandatory screen before entering.
     if(d.must_change_password){location.href='/admin/change-password?next='+encodeURIComponent(location.pathname);return;}
+    if(d.must_setup_2fa){location.href='/admin/setup-2fa?next='+encodeURIComponent(location.pathname);return;}   // 2FA obligatorio / mandatory 2FA
     ME=d;applyPermissions();await initApp();
     const ls=document.getElementById('login-screen');ls.style.opacity='0';setTimeout(()=>ls.style.display='none',150);
   }catch(e){err.textContent='Error: '+e.message;err.className='login-err show';}
@@ -327,6 +328,7 @@ async function fetchData(){
     const d=await r.json();
 
     updateScanBar(d.scan);
+    document.getElementById('hosts-tbody')?.closest('.tbl-wrap')?.classList.toggle('no-sw',!d.switches);   // sin switches no hay columna / no switches, no column
     fetchPveGuests();
     if(d.pihole) updatePiholeStatusDot(d.pihole);
     refreshSnmpDot();
@@ -485,7 +487,7 @@ function filtered(){
     if(filterStatus==='online'&&!h.online)return false;
     if(filterStatus==='offline'&&h.online)return false;
     if(searchQ){
-      const hay=(h.ip+' '+(h.hostname||'')+' '+(h.alias||'')+' '+h.os+' '+tType(devType(h))+' '+(h.vendor||'')+' '+(h.mac||'')+' '+(pveOf(h)?'proxmox '+(pveOf(h).type==='lxc'?'ct lxc ':'vm qemu ')+pveOf(h).vmid+' '+pveOf(h).name+' ':'')+(h.ports||[]).map(p=>p.port+' '+p.service).join(' ')).toLowerCase();
+      const hay=(h.ip+' '+(h.hostname||'')+' '+(h.alias||'')+' '+h.os+' '+tType(devType(h))+' '+(h.vendor||'')+' '+(h.mac||'')+' '+(h.swport?h.swport.sw+' '+h.swport.port+' '+(h.swport.label||'')+' ':'')+(pveOf(h)?'proxmox '+(pveOf(h).type==='lxc'?'ct lxc ':'vm qemu ')+pveOf(h).vmid+' '+pveOf(h).name+' ':'')+(h.ports||[]).map(p=>p.port+' '+p.service).join(' ')).toLowerCase();
       if(!hay.includes(searchQ))return false;
     }
     return true;
@@ -502,6 +504,7 @@ const SORT_VALUE={
   type:   h=>tType(devType(h)).toLowerCase(),
   os:     h=>tOs(h.os||'Desconocido').toLowerCase(),
   vendor: h=>(h.vendor||h.mac||'').toLowerCase(),
+  swport: h=>h.swport?(h.swport.sw+' '+String(h.swport.port).padStart(5,'0')).toLowerCase():null,
   ports:  h=>(h.ports||[]).length,
   latency:h=>h.online&&h.latency?h.latency:null,   // sin dato (offline / sin respuesta) va al final
   seen:   h=>h.last_seen||null,
@@ -617,7 +620,7 @@ function renderTable(){
   document.getElementById('host-count').textContent=list.length===hosts.length?hosts.length+' hosts':list.length+' / '+hosts.length+' hosts';
 
   if(!list.length){
-    tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state">
+    tbody.innerHTML=`<tr><td colspan="10"><div class="empty-state">
       <strong>${hosts.length?t('noResults'):(scanRunning?t('scanning'):t('noHosts2'))}</strong>
       ${hosts.length?t('filterHint'):(scanRunning?'':t('startScanHint'))}
       ${(!hosts.length&&!scanRunning&&canScan())?`<div class="empty-offer">${scanNetwork?`<div class="empty-net">${esc(t('initialScanNet',scanNetwork))}</div>`:''}<button class="btn-scan" data-on-click="startScan">${esc(t('initialScanBtn'))}</button></div>`:''}
@@ -685,6 +688,7 @@ function renderTable(){
         </div>
       </td>
       <td style="font-size:11px;color:var(--text-dim);font-family:var(--mono)">${h.vendor?`<div>${esc(h.vendor)}</div>`:''}${h.mac?`<div style="${h.vendor?'font-size:10px;opacity:.75':''}">${esc(h.mac)}</div>`:''}${!h.vendor&&!h.mac?'—':''}</td>
+      <td class="c-sw" style="font-size:11px;font-family:var(--mono);color:var(--text-mid);white-space:nowrap">${h.swport?`<span title="${esc(h.swport.label||'')}">${esc(h.swport.sw)} · ${esc(h.swport.port)}</span>`:'<span style="color:var(--border-b)">—</span>'}</td>
       <td>
         <div class="port-chips">
           ${topPorts.map(p=>`<span class="port-chip known" title="${esc(p.service)}">${p.port}</span>`).join('')}
@@ -701,7 +705,7 @@ function renderTable(){
     const dtr=document.createElement('tr');
     dtr.className='detail-row'+(isExp?' show':'');
     const allPorts=h.ports||[];
-    dtr.innerHTML=`<td colspan="9" class="detail-cell">
+    dtr.innerHTML=`<td colspan="10" class="detail-cell">
       <div class="detail-inner">
         <div class="detail-section">
           <div class="detail-label">${esc(t('detailInfo'))}</div>

@@ -66,7 +66,11 @@ class Fake:
             return h._send(200, {"upstreams": [{"ip": "1.1.1.1", "name": "one.one.one.one", "port": 53, "count": 300, "statistics": {"response": 0.020, "variance": 0}},
                                                {"ip": "9.9.9.9", "name": None, "port": 53, "count": 100, "statistics": {"response": 0.060, "variance": 0}}]})
         if path == "/api/config/dns":
-            return h._send(200, {"config": {"dns": {"upstreams": ["1.1.1.1#53"], "revServers": ["true,192.0.2.0/24,192.0.2.1,example.lan"]}}})
+            return h._send(200, {"config": {"dns": {"upstreams": ["1.1.1.1#53"], "revServers": ["true,192.0.2.0/24,192.0.2.1,example.lan"],
+                                                    "hosts": ["192.0.2.20 nas.example.lan"], "cnameRecords": ["www.example.lan,nas.example.lan"]}}})
+        if path == "/api/lists":
+            return h._send(200, {"lists": [{"address": "https://lists.example/a.txt", "type": "block", "enabled": True},
+                                           {"address": "https://lists.example/off.txt", "type": "block", "enabled": False}]})
         if path == "/api/history":
             return h._send(200, {"history": [{"timestamp": NOW - 600 * i, "total": 10, "cached": 4, "blocked": 2, "forwarded": 4} for i in range(1, 30)]})
         if path == "/api/info/version": return h._send(200, {"version": {"core": {"local": {"version": "v6.1"}}}})
@@ -102,7 +106,9 @@ class Fake:
                                  "top_upstreams_avg_time": [{"1.1.1.1:53": 0.015}, {"https://dns10.quad9.net:443/dns-query": 6.0}]})
         if path == "/control/dns_info":
             return h._send(200, {"upstream_dns": ["# comment", "1.1.1.1", "[/example.lan/]192.0.2.1"], "upstream_dns_file": "", "fallback_dns": [], "local_ptr_upstreams": []})
-        if path == "/control/filtering/status": return h._send(200, {"enabled": True, "filters": [{"enabled": True, "rules_count": 5000}, {"enabled": False, "rules_count": 9999}]})
+        if path == "/control/filtering/status": return h._send(200, {"enabled": True, "filters": [{"enabled": True, "rules_count": 5000, "url": "https://lists.example/a.txt"},
+                                                                                       {"enabled": False, "rules_count": 9999, "url": "https://lists.example/b.txt"}]})
+        if path == "/control/rewrite/list": return h._send(200, [{"domain": "nas.example.lan", "answer": "192.0.2.20"}])
         if path == "/control/protection" and method == "POST":
             self.blocking = bool(body["enabled"]); return h._send(200, {})
         h._send(404, {})
@@ -243,6 +249,43 @@ class ConfiguredUpstreams(unittest.TestCase):
         self.assertEqual(m.compute_alerts({**base, "upstreams": [{"ms": 6000, "old": True}, {"ms": 5, "old": True, "probe": {"ok": False}}]}), [])
         snap, st = {"upstreams": [{"ip": "192.0.2.53", "port": 53, "old": True}]}, {}
         m.probe_upstreams(snap, st); self.assertNotIn("probe", snap["upstreams"][0]); self.assertEqual(st["probe"]["res"], {})
+
+
+class Compare(unittest.TestCase):
+    def test_sets_are_read(self):
+        f, g = Fake("ph6"), Fake("agh")
+        try:
+            st = {}; m.collect(m.validate({"name": "P", "url": f.url, "type": "pihole", "password": f.password}), st)
+            self.assertEqual(st["cfgsets"], {"lists": ["block https://lists.example/a.txt"], "ups": ["1.1.1.1#53"],
+                                             "local": ["192.0.2.20 nas.example.lan", "CNAME www.example.lan,nas.example.lan"]})
+            st2 = {}; m.collect(m.validate({"name": "A", "url": g.url, "type": "adguard", "password": g.password, "username": g.user}), st2)
+            self.assertEqual(st2["cfgsets"], {"lists": ["block https://lists.example/a.txt"], "ups": ["1.1.1.1", "[/example.lan/]192.0.2.1"],     # comments left out
+                                              "local": ["nas.example.lan 192.0.2.20"]})
+            n = sum(1 for x in f.log if x[1] == "/api/lists"); m.collect(m.validate({"name": "P", "url": f.url, "type": "pihole", "password": f.password}), st)
+            self.assertEqual(sum(1 for x in f.log if x[1] == "/api/lists"), n)                      # read again only after CFG_EVERY
+        finally: f.close(); g.close()
+
+    def test_diffs(self):
+        a = m.cfg_sets(["block x", "block y"], ["1.1.1.1"], ["192.0.2.5 a.lan"])
+        b = m.cfg_sets(["block x"], ["1.1.1.1", "9.9.9.9"], None)                        # local records unreadable: not compared
+        c = m.cfg_sets(["block x"], ["1.1.1.1"], [])
+        d = m.config_diffs([("1", "A", "pihole", a), ("2", "B", "pihole", b), ("3", "C", "adguard", c), ("4", "D", "pihole", None)])
+        self.assertEqual(d, [{"a": "1", "b": "2", "an": "A", "bn": "B", "n": 2,
+                              "diff": {"lists": {"a": ["block y"], "b": []}, "ups": {"a": [], "b": ["9.9.9.9"]}}}])
+        self.assertEqual(m.config_diffs([("1", "A", "pihole", a), ("2", "B", "pihole", m.cfg_sets(["block y", "block  x"], ["1.1.1.1"], ["192.0.2.5 a.lan"]))]), [])
+
+
+class ClientNames(unittest.TestCase):
+    def test_names_only_for_users_who_may_see_net(self):
+        old = m.auth.net_names; m.auth.net_names = lambda path=None: {"192.0.2.10": "Laptop"}
+        srv = support.Server(m.H)
+        try:
+            ok = support.make_user("dnsn_ok", {**NONE, "dns": "readonly", "net": "readonly"}); no = support.make_user("dnsn_no", {**NONE, "dns": "readonly"})
+            self.assertEqual(srv.call("GET", "/api/dns?hist=0", None, token=ok)[1]["names"], {"192.0.2.10": "Laptop"})
+            self.assertEqual(srv.call("GET", "/api/dns?hist=0", None, token=no)[1]["names"], {})
+        finally: m.auth.net_names = old; srv.close()
+        js = (support.ROOT / "dns-monitor/static/app.js").read_text(encoding="utf-8")
+        self.assertIn("topClients(t('topClients'),d.top_clients", js); self.assertIn('<small class="tn-sub">', js)
 
 
 class Alerts(unittest.TestCase):

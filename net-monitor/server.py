@@ -1648,7 +1648,8 @@ def health_report(detailed=False):
 # ─── HTTP Handler ─────────────────────────────────────────────────────────────
 # Manejador HTTP. Cada petición se atiende en su propio hilo.
 # EN: HTTP handler. Each request is served in its own thread.
-class H(BaseHTTPRequestHandler):
+class H(auth.Audited, BaseHTTPRequestHandler):
+    AUDIT_MODULE = "net"          # accepted changes go to the audit log (auth.Audited)
     timeout = 30      # a stalled client must not hold a thread forever
     def log_message(self, fmt, *a):
         # send_error() llega aquí con (código, mensaje) y un 501 de HEAD trae el mensaje en a[1]: solo se registra un código numérico.
@@ -1718,8 +1719,13 @@ class H(BaseHTTPRequestHandler):
                     k = _mac_key(h.get("mac"))
                     if k and k in wol: h["wol"] = True
             now = int(time.time()); base = load_config().get("known_baseline")
+            # Switch y puerto de cada equipo según las tablas MAC de Switch Monitor. / EN: Switch and port of each device from the Switch Monitor MAC tables.
+            mgr = _sw_mgr
+            loc = mgr.locate() if mgr is not None else {}
             for h in out:
                 h["known"] = hw.known(h, base)
+                sp = loc.get(_mac_key(h.get("mac")))
+                if sp: h["swport"] = sp
                 if h.get("watch"):
                     w = _watch.get(h.get("ip"))
                     h["watch_state"] = {"down": bool(w and w["down"]), "since": w and w["since"], "rtt": w and w["rtt"]} if w else None
@@ -1731,6 +1737,7 @@ class H(BaseHTTPRequestHandler):
                 "hosts":   out,
                 "scan":    _scan_status,
                 "network": NETWORK,
+                "switches": bool(mgr is not None and mgr.cfg.get("switches")),
                 "pihole":  pihole_state(auth.check_permission(tok, "net", "admin")),
             })
         # Latencia de un equipo vigilado: puntos (reducidos a ~300) y resumen. Parámetros: ip y range (1d, 7d, 30d).

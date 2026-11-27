@@ -27,10 +27,13 @@ user_of() {
 if command -v runuser >/dev/null 2>&1; then
     for f in \
         /var/lib/labtower/auth/users.json \
+        /var/lib/labtower/auth/mute_schedules.json \
+        /var/lib/labtower/auth/policy.json \
         /var/lib/labtower/users.json \
         /var/lib/labtower/wol-console/devices.json \
         /var/lib/labtower/nut-monitor/servers.json \
         /var/lib/labtower/nut-monitor/history.db \
+        /var/lib/labtower/nut-monitor/energy.json \
         /var/lib/labtower/net-monitor/hosts.json \
         /var/lib/labtower/net-monitor/config.json \
         /var/lib/labtower/net-monitor/switches.json \
@@ -39,6 +42,7 @@ if command -v runuser >/dev/null 2>&1; then
         /var/lib/labtower/net-monitor/macs.json \
         /var/lib/labtower/proxmox-monitor/clusters.json \
         /var/lib/labtower/nas-monitor/nas.json \
+        /var/lib/labtower/nas-monitor/smart.json \
         /var/lib/labtower/dns-monitor/dns.json \
         /var/lib/labtower/wan-monitor/wan.json \
         /var/lib/labtower/vpn-monitor/vpn.json \

@@ -82,6 +82,73 @@ class Validate(unittest.TestCase):
         self.assertEqual(m.target_of({"type": "dns", "qname": "a.example", "rtype": "A", "server": "192.0.2.53"}), "a.example A @192.0.2.53")
 
 
+class NewTypes(unittest.TestCase):
+    def test_validate(self):
+        p = m.validate({"type": "ping", "name": "Router", "host": "192.0.2.1"})
+        self.assertEqual((p["host"], "port" in p), ("192.0.2.1", False))
+        d = m.validate({"type": "domain", "name": "Site", "domain": "https://Example.CL/x", "interval": 60})
+        self.assertEqual((d["domain"], d["interval"], d["timeout"]), ("example.cl", m.DOMAIN_EVERY, 15))
+        for bad in ({"type": "domain", "domain": "localhost"}, {"type": "domain", "domain": "192.0.2.1"}, {"type": "domain", "domain": ""}, {"type": "ping", "host": ""}):
+            with self.assertRaises(ValueError, msg=bad): m.validate({"name": "x", **bad})
+        h = m.validate({"type": "http", "name": "W", "url": "https://a.example/", "keyword": "error", "kw_absent": True, "follow": True})
+        self.assertEqual((h["kw_absent"], h["follow"]), (True, True))
+        self.assertFalse(m.validate({"type": "http", "name": "W", "url": "https://a.example/", "kw_absent": True})["kw_absent"])   # no keyword, nothing to miss
+        self.assertNotIn("domain", m.validate({"type": "tcp", "name": "T", "host": "192.0.2.5", "port": 22}, d))
+        self.assertEqual(m.validate({"name": "Site 2"}, d)["interval"], m.DOMAIN_EVERY)                  # editing a domain monitor keeps working
+        self.assertEqual(m.target_of(d), "example.cl"); self.assertEqual(m.target_of(p), "192.0.2.1")
+
+    def test_dates_and_whois(self):
+        self.assertEqual(m._parse_date("2027-03-15T21:41:23Z"), calendar.timegm((2027, 3, 15, 0, 0, 0)))
+        self.assertEqual(m._parse_date("15-Mar-2027"), calendar.timegm((2027, 3, 15, 0, 0, 0)))
+        self.assertEqual(m._parse_date("2027.03.15"), calendar.timegm((2027, 3, 15, 0, 0, 0)))
+        self.assertIsNone(m._parse_date("soon")); self.assertIsNone(m._parse_date("2027-13-40"))
+        txt = "Domain name: example.cl\nRegistrant name: Someone\nCreation date: 2010-01-02 10:00:00 CLST\nExpiration date: 2027-03-15 21:41:23 CLST\n"
+        with mock.patch.object(m.shutil, "which", lambda x: "/usr/bin/whois"), \
+             mock.patch.object(m.subprocess, "run", lambda *a, **k: mock.Mock(stdout=txt)):
+            self.assertEqual(m.whois_expiry("example.cl", 5), calendar.timegm((2027, 3, 15, 0, 0, 0)))
+        with mock.patch.object(m.shutil, "which", lambda x: None), self.assertRaises(m.CheckError): m.whois_expiry("example.cl", 5)
+
+    def test_rdap_then_whois(self):
+        tmp = Path(tempfile.mkdtemp())
+        boot = {"services": [[["com", "net"], ["https://rdap.example/"]], [["org"], ["http://insecure.example/"]]]}
+        dom = {"events": [{"eventAction": "registration", "eventDate": "2000-01-01T00:00:00Z"}, {"eventAction": "expiration", "eventDate": "2030-06-01T00:00:00Z"}]}
+        calls = []
+        def get(url, timeout):
+            calls.append(url)
+            return boot if url == m.RDAP_BOOT else dom
+        with mock.patch.object(m, "RDAP_FILE", tmp / "rdap.json"), mock.patch.object(m, "_get_json", get):
+            self.assertEqual(m.rdap_servers(5), {"com": ["https://rdap.example/"], "net": ["https://rdap.example/"]})     # http is dropped
+            self.assertEqual(m.rdap_expiry("example.com", 5), calendar.timegm((2030, 6, 1, 0, 0, 0)))
+            self.assertEqual(calls[-1], "https://rdap.example/domain/example.com")
+            n = len(calls); m.rdap_servers(5); self.assertEqual(len(calls), n)                                           # cached a week
+            self.assertIsNone(m.rdap_expiry("example.cl", 5))                                                              # no RDAP for .cl here
+        with mock.patch.object(m, "rdap_expiry", lambda d, t: None), mock.patch.object(m, "whois_expiry", lambda d, t: time.time() - 10):
+            self.assertEqual(m.run_check({"type": "domain", "name": "d", "domain": "example.cl"})["error"], "domain expired")
+        with mock.patch.object(m, "rdap_expiry", lambda d, t: time.time() + 86400 * 100):
+            r = m.run_check({"type": "domain", "name": "d", "domain": "example.com"}); self.assertTrue(r["ok"]); self.assertIn("dom_exp", r)
+
+    def test_domain_states_and_events(self):
+        now = int(time.time())
+        self.assertEqual([m.dom_state(now + d * 86400, now) for d in (60, 20, 5)], ["ok", "warn", "crit"])
+        self.assertEqual(m.dom_state(now - 1, now), "expired"); self.assertIsNone(m.dom_state(None, now))
+        ev = []
+        with mock.patch.object(m, "STATE_FILE", Path(tempfile.mkdtemp()) / "s.json"), \
+             mock.patch.object(m.auth, "record_event", lambda mod, lv, tx, k=None, **p: ev.append((k, lv, p.get("d")))):
+            cfg, mon = {"id": "dd", "name": "Site", "type": "domain", "domain": "example.com", "down_after": 1}, m.Mon("dd")
+            for i, days in enumerate((40, 40, 25, 25, 6)): m.apply_result(cfg, mon, {"ok": True, "ms": 1.0, "dom_exp": now + i + days * 86400}, now + i)
+            self.assertEqual(ev, [("uptime_dom", "warn", 25), ("uptime_dom", "crit", 6)])
+            self.assertEqual(m.public(cfg, mon, {})["dom"], "crit")
+        m._state.pop("dd", None)
+
+    def test_texts_and_package(self):
+        root = support.ROOT
+        self.assertIn("whois", (root / "debian/control").read_text().splitlines()[5])
+        ov = (root / "overview/static/app.js").read_text(encoding="utf-8")
+        self.assertEqual(ov.count("uptime_dom:'"), 2); self.assertEqual(ov.count("uptdom:'"), 2)
+        html = (root / "uptime-monitor/static/index.html").read_text(encoding="utf-8")
+        for x in ('<option value="ping">', '<option value="domain"', 'id="f-kw-absent"', 'id="f-follow"', 'id="f-domain"'): self.assertIn(x, html)
+
+
 class Certificates(unittest.TestCase):
     def test_not_after_utc_and_generalized(self):
         self.assertEqual(m.cert_not_after(fake_cert(b"300615120000Z")), calendar.timegm((2030, 6, 15, 12, 0, 0)))
@@ -132,6 +199,10 @@ class Dns(unittest.TestCase):
 class Page(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_GET(self):
+        if self.path.startswith("/r"):                                         # /r3 → /r2 → /r1 → /r0 → /
+            n = int(self.path[2:] or 0); self.send_response(302); self.send_header("Location", f"/r{n - 1}" if n > 0 else "/")
+            self.send_header("Content-Length", "0"); self.end_headers(); return
+        if self.path == "/bad": self.send_response(301); self.send_header("Location", "ftp://192.0.2.1/"); self.send_header("Content-Length", "0"); self.end_headers(); return
         code = 500 if self.path == "/fail" else 200
         body = b"<html>Welcome to the NAS</html>"
         self.send_response(code); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
@@ -154,6 +225,19 @@ class Checks(unittest.TestCase):
         self.assertEqual(self.http(keyword="Login")["error"], "keyword not found")
         self.assertEqual(self.http("/fail")["error"], "HTTP 500")
         self.assertTrue(self.http("/fail", expect="500")["ok"])
+
+    def test_keyword_absent_and_redirects(self):
+        self.assertEqual(self.http(keyword="welcome", kw_absent=True)["error"], "keyword found")
+        self.assertTrue(self.http(keyword="error page", kw_absent=True)["ok"])
+        self.assertEqual(self.http("/r2")["code"], 302)                            # not followed by default
+        r = self.http("/r3", follow=True, keyword="welcome"); self.assertTrue(r["ok"], r); self.assertEqual(r["code"], 200)
+        self.assertEqual(self.http("/r9", follow=True)["error"], "too many redirects")
+        self.assertEqual(self.http("/bad", follow=True)["error"], "redirect to an invalid URL")
+
+    def test_ping(self):
+        r = m.run_check({"type": "ping", "name": "p", "host": "127.0.0.1", "timeout": 3})
+        if not r["ok"] and "not allowed" in (r["error"] or ""): self.skipTest("unprivileged ICMP not allowed here")
+        self.assertTrue(r["ok"], r); self.assertIsInstance(r["ms"], float)
 
     def test_tcp_open_and_closed(self):
         self.assertTrue(m.run_check({"type": "tcp", "name": "t", "host": "127.0.0.1", "port": self.port, "timeout": 3})["ok"])

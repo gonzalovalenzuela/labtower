@@ -318,7 +318,7 @@ class OpenMediaVault(unittest.TestCase):
     def test_only_read_methods_are_called(self):
         srv = OmvMock(CERT_A); self.addCleanup(srv.close); m.collect(omv_cfg(srv.port), {})
         self.assertEqual({s for s, _ in srv.calls}, {"Session", "System", "DiskMgmt", "Smart", "FileSystemMgmt", "Network"})
-        self.assertTrue(all(me in ("login", "getInformation", "enumerateDevices", "getList", "enumerateFilesystems") for _, me in srv.calls))
+        self.assertTrue(all(me in ("login", "getInformation", "enumerateDevices", "getList", "enumerateFilesystems", "getAttributes") for _, me in srv.calls))
 
 class ValidateRemote(unittest.TestCase):
     def test_truenas_rules(self):

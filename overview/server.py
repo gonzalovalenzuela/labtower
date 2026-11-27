@@ -180,6 +180,64 @@ def load_rules():
     out, _err = clean_rules(auth.read_json(RULES_FILE, [], list))
     return out if out is not None else []
 
+# ─── Reglas evaluadas en el servidor / rules evaluated on the server ───
+# ES: Cada RULE_EVERY segundos se evalúan las reglas activas con las lecturas que informan los módulos (auth.metrics_all) y las del propio
+#     servidor. Una regla que se cumple RULE_HITS lecturas seguidas anota un evento en la línea de tiempo («rule_on», con el nivel de la regla)
+#     y, cuando deja de cumplirse, otro informativo («rule_off»). Un módulo con las alarmas en pausa no se evalúa.
+# EN: Every RULE_EVERY seconds the active rules are evaluated with the readings the modules report (auth.metrics_all) and the server's own.
+#     A rule that holds RULE_HITS readings in a row records a timeline event ("rule_on", with the rule level) and, when it stops holding,
+#     an informative one ("rule_off"). A module with its alarms paused is not evaluated.
+RULE_EVERY = int(os.environ.get("LABTOWER_RULE_EVERY", "60"))
+RULE_HITS  = 3
+RULE_MOD   = {"pi": "pi", "ups": "nut", "nas": "nas", "pve": "pve", "dns": "dns", "wan": "wan"}    # metric prefix → module
+_rule_state = {}                                 # (metric, op, value, level, who) → {"n": readings in a row, "on": event open}
+
+def rule_module(metric): return RULE_MOD.get(metric.split("_", 1)[0], "")
+
+def rule_readings(now=None) -> list:
+    """[(metric, who, value)]: the server's own readings plus the ones the modules report."""
+    out, s = [], auth.system_stats()
+    for m, v in (("pi_temp", s.get("temp")), ("pi_cpu", s.get("cpu")), ("pi_mem", (s.get("mem") or {}).get("pct")), ("pi_disk", (s.get("disk") or {}).get("pct"))):
+        if isinstance(v, (int, float)): out.append((m, "", float(v)))
+    for rows in auth.metrics_all(now).values():
+        out += [(r[0], r[1], r[2]) for r in rows]
+    return out
+
+def rules_tick(rules, readings, muted=(), state=None) -> list:
+    """Advance the rule state with one round of readings. Returns the events to record: [(level, kind, params)]."""
+    state = _rule_state if state is None else state
+    events = []
+    for r in rules:
+        if not r.get("on"): continue
+        mod = rule_module(r["m"])
+        for m, who, v in readings:
+            if m != r["m"]: continue
+            key = (r["m"], r["o"], r["v"], r["lv"], who)
+            st = state.setdefault(key, {"n": 0, "on": False})
+            if mod in muted: st["n"] = 0; continue                       # paused module: no counting and no events
+            p = {"n": r["m"], "w": who, "v": round(v, 1), "o": r["o"], "t": r["v"], "mod": mod}
+            if (v > r["v"]) if r["o"] == ">" else (v < r["v"]):
+                st["n"] += 1
+                if st["n"] >= RULE_HITS and not st["on"]: st["on"] = True; events.append((r["lv"], "rule_on", p))
+            else:
+                st["n"] = 0
+                if st["on"]: st["on"] = False; events.append(("info", "rule_off", p))
+    active = {(r["m"], r["o"], r["v"], r["lv"]) for r in rules if r.get("on")}
+    for k in [k for k in state if k[:4] not in active]: del state[k]   # removed or switched-off rule: forgotten without an event
+    return events
+
+def _rules_loop():
+    while True:
+        time.sleep(RULE_EVERY)
+        try:
+            rules = [r for r in load_rules() if r["on"]]
+            if not rules: _rule_state.clear(); continue
+            muted = set(auth.mutes())
+            for lv, kind, p in rules_tick(rules, rule_readings(), muted):
+                txt = f'Alert rule {p["n"]}{" " + p["w"] if p["w"] else ""}: {p["v"]} ({p["o"]} {p["t"]})' + (" back to normal" if kind == "rule_off" else "")
+                auth.record_event("overview", lv, txt, kind, **p)
+        except Exception as e: log.warning(f"rules: {e}")  # noqa: BLE001 - se registra y el servicio sigue / logged, the service keeps running
+
 
 # ─── Salud ───────────────────────────────────────────────────────────────────
 # Chequeos comunes (usuarios, sesiones, disco) y que el archivo de eventos se pueda leer y escribir.
@@ -289,8 +347,11 @@ class H(BaseHTTPRequestHandler):
             except ValueError: limit = 60
             allowed = [m for m in EVENT_MODULES if auth.LEVELS.get(sess["permissions"].get(m, ""), 0) >= auth.LEVELS["readonly"]]
             only = parse_qs(u.query).get("m", [""])[0]          # optional: events of ONE module (chart annotations)
-            if only: allowed = [m for m in allowed if m == only]
-            return self._json(200, {"events": auth.read_events(allowed, limit)})
+            if only: return self._json(200, {"events": auth.read_events([m for m in allowed if m == only], limit)})
+            # Los eventos de reglas («overview») solo los ve quien puede ver el módulo de la métrica. / EN: Rule events only for who can see the metric's module.
+            ev = [e for e in auth.read_events(allowed + ["overview"], limit)
+                  if e.get("m") != "overview" or (e.get("p") or {}).get("mod") in allowed + ["pi"]]
+            return self._json(200, {"events": ev})
         self._json(404, {"error": "Not found"})
 
     # POST: login y logout (mismo comportamiento que en los otros módulos).
@@ -328,6 +389,7 @@ if __name__ == "__main__":
     auth.system_stats()           # primes the CPU counter so the first reading is meaningful
     if pi_enabled():
         threading.Thread(target=pi_loop, daemon=True, name="pi-history").start()
+    threading.Thread(target=_rules_loop, daemon=True, name="rules").start()
     log.info(f"Overview en http://{HOST}:{PORT}")
     try:
         srv = ThreadingHTTPServer((HOST, PORT), H)

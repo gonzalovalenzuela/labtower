@@ -136,3 +136,17 @@ button.lt-btn.lt-btn-primary{border-color:var(--teal,#14b8a6);color:var(--teal,#
 button.lt-btn.lt-btn-primary:hover:not(:disabled){background:var(--teal,#14b8a6);color:#fff}
 button.lt-btn:focus-visible{outline:2px solid var(--teal,#14b8a6);outline-offset:2px}
 button.lt-btn:disabled{opacity:.55;cursor:not-allowed}
+/* Pausas programadas (editor dentro del menú de pausa). / EN: Scheduled pauses (editor inside the pause menu). */
+.gmute-sched{border-top:1px solid var(--border,#e3e8ef);margin-top:4px;border-radius:0 0 6px 6px}
+.gmute-menu.gsched{min-width:300px;max-height:calc(100vh - 80px);overflow:auto}
+.gsched-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 4px;border-bottom:1px solid var(--border,#e3e8ef)}
+.gsched-days{display:flex;gap:2px}
+.gsched-day{width:24px;height:24px;padding:0;border:1px solid var(--border,#e3e8ef);border-radius:5px;background:none;color:inherit;font:inherit;font-size:11px;cursor:pointer}
+.gsched-day[aria-pressed="true"]{background:var(--accent,#2563eb);border-color:var(--accent,#2563eb);color:#fff}
+.gsched-t,.gsched-dur{height:26px;padding:0 4px;border:1px solid var(--border,#e3e8ef);border-radius:5px;background:var(--surface,#fff);color:inherit;font:inherit;font-size:12px}
+.gsched-rm{margin-left:auto;width:24px;height:24px;border:0;border-radius:5px;background:none;color:var(--text-mid,#5a6a85);font-size:16px;cursor:pointer}
+.gsched-rm:hover,.gsched-day:focus-visible,.gsched-rm:focus-visible{background:var(--surface-2,rgba(100,116,139,.12));outline:none}
+.gsched-none{padding:8px 10px;font-size:12px;color:var(--text-mid,#5a6a85)}
+.gsched-act{display:flex;justify-content:flex-end;gap:6px;padding:6px 4px 2px}
+.gsched-btn{padding:6px 12px;border:1px solid var(--border,#e3e8ef);border-radius:6px;background:none;color:inherit;font:inherit;cursor:pointer}
+.gsched-save{background:var(--accent,#2563eb);border-color:var(--accent,#2563eb);color:#fff}

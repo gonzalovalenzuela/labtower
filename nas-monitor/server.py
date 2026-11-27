@@ -462,6 +462,53 @@ def _attach(nid, snap: dict):
         t = (dv.get("temp") or {}).get(d["name"])
         if t: d["t24"] = t
 
+# ─── Sectores dañados de cada disco (tendencia SMART) ───────────────────────────
+# ES: Atributos SMART 5 (reasignados), 197 (pendientes) y 198 (incorregibles). Synology los entrega en SYNOLOGY-SMART-MIB (ya está en el
+#     recorrido de 1.3.6.1.4.1.6574) y OpenMediaVault por Smart.getAttributes. Se guarda el último valor por disco en smart.json: si un
+#     contador SUBE respecto de la lectura anterior se anota un evento y el disco queda con aviso SECT_WARN_DAYS días. Se guardan los
+#     últimos SECT_LOG cambios de cada disco como historial.
+# EN: SMART attributes 5 (reallocated), 197 (pending) and 198 (uncorrectable). Synology gives them in SYNOLOGY-SMART-MIB (already in the
+#     1.3.6.1.4.1.6574 walk) and OpenMediaVault through Smart.getAttributes. The last value per disk is kept in smart.json: when a counter
+#     GOES UP from the previous reading an event is recorded and the disk keeps a warning for SECT_WARN_DAYS days. The last SECT_LOG changes
+#     of each disk are kept as history.
+SECT_FILE      = DATA_DIR / "smart.json"
+SECT_WARN_DAYS = 7
+SECT_LOG       = 10
+_sect_lock     = threading.Lock()
+
+def syno_sectors(syn: dict) -> dict:
+    """{disk name: {"realloc", "pending", "uncorrect"}} from the Synology SMART table."""
+    base = f"{OID_SYNO}.5.1.1"
+    dev, aid, raw = _col(syn, base, 2), _col(syn, base, 4), _col(syn, base, 8)
+    out = {}
+    for i, a in aid.items():
+        k = remote.SMART_ATTRS.get(remote._int(a))
+        v = remote._int(raw.get(i))
+        if k and v is not None and dev.get(i): out.setdefault(str(dev[i]), {})[k] = v
+    return out
+
+def sectors_track(nid: str, name: str, snap: dict, now=None) -> list:
+    """Compare each disk's counters with the stored ones; returns the alerts and records an event per increase."""
+    now = int(now or time.time()); alerts = []
+    with _sect_lock:
+        allst = auth.read_json(SECT_FILE, {}, dict); st = allst.setdefault(nid, {}); changed = False
+        for d in snap.get("disks", []):
+            cur = d.get("sectors")
+            if not isinstance(cur, dict) or not cur: continue
+            rec = st.setdefault(d["name"], {"v": {}, "log": [], "inc": 0})
+            for k, v in cur.items():
+                old = rec["v"].get(k)
+                if old is not None and v > old:
+                    rec["log"] = (rec["log"] + [{"ts": now, "a": k, "o": old, "v": v}])[-SECT_LOG:]; rec["inc"] = now
+                    auth.record_event("nas", "warn", f"{name}/{d['name']}: {k} sectors {old} -> {v}", "nas_sectors", n=name, d=d["name"], a=k, o=old, v=v)
+                if old != v: rec["v"][k] = v; changed = True
+            d["sect_log"] = rec["log"]
+            if rec["inc"] and now - rec["inc"] < SECT_WARN_DAYS * 86400:
+                up = sum(x["v"] - x["o"] for x in rec["log"] if now - x["ts"] < SECT_WARN_DAYS * 86400)
+                alerts.append({"lv": "warn", "type": "disk_sectors", "item": d["name"], "value": f"+{up}"})
+        if changed: auth.write_json(SECT_FILE, allst)
+    return alerts
+
 def collect(cfg: dict, prev: dict) -> dict:
     typ = cfg.get("type") or "synology"
     if typ == "synology": return collect_synology(cfg, prev)
@@ -506,6 +553,9 @@ def collect_synology(cfg: dict, prev: dict) -> dict:
     disks = [{"idx": i, "name": d_id.get(i) or f"Disk {n}", "model": (d_model.get(i) or "").strip(), "type": d_type.get(i) or "",
               "status": d_st.get(i), "lv": DISK_LV.get(d_st.get(i), "warn"), "temp": d_t.get(i)}
              for n, i in enumerate(sorted(set(d_id) | set(d_st) | set(d_model), key=_idx_key), 1)]
+    sect = syno_sectors(syn)
+    for d in disks:
+        if d["name"] in sect: d["sectors"] = sect[d["name"]]
 
     base = f"{OID_SYNO}.3.1.1"
     r_name, r_st, r_free, r_tot = (_col(syn, base, c) for c in (2, 3, 4, 5))
@@ -887,6 +937,13 @@ def _events(n: dict, snap: dict, prev=None):
 # la lectura y duerme según haya o no alguien mirando. Un error se anota y se reintenta: el hilo nunca muere por un fallo de red.
 # EN: Loop of a NAS's polling thread: re-reads its configuration (ends if deleted, adopts changes), queries, stores the reading and sleeps
 #     depending on whether someone is looking. An error is logged and retried: the thread never dies because of a network failure.
+# Lecturas de un NAS para las reglas de alerta del Resumen (las mismas que evalúa la página). / EN: A NAS readings for the Overview alert rules (same as the page evaluates).
+def rule_readings(name: str, snap: dict) -> list:
+    d = snap                      # the reading itself is what the page receives as snap.data
+    vols = [x["pct"] for x in d.get("raids") or [] if isinstance(x, dict) and _num(x.get("pct")) and not x.get("pool")]
+    return [("nas_cpu", name, (d.get("cpu") or {}).get("pct")), ("nas_mem", name, (d.get("mem") or {}).get("pct")),
+            ("nas_temp", name, (d.get("system") or {}).get("temp")), ("nas_vol", name, max(vols) if vols else None)]
+
 def _poll(nid: str):
     cache, prev = _cache.get(nid), {}
     if not cache: return
@@ -904,10 +961,12 @@ def _poll(nid: str):
                 snap = collect(n, prev)
                 snap["name"] = n["name"]
                 snap["certs"], cal = cert_view(n); snap["alerts"] += cal
+                snap["alerts"] += sectors_track(nid, n["name"], snap)
                 _cert_events(n, snap["certs"])
                 push_history(nid, snap)
                 if record_series(nid, snap): refresh_derived(nid, snap)
                 cache.update(snap)
+                auth.metrics_report("nas", f"nas:{nid}", rule_readings(n["name"], snap))     # alert rules on the server
                 _events(n, snap, prev)
                 if auth.state_changed(f"nas-dn:{nid}", "up"):
                     auth.record_event("nas", "info", f"{n['name']}: reachable again", "nas_up", n=n["name"])
@@ -968,7 +1027,8 @@ def health_report(detailed=False):
 # ─── HTTP ─────────────────────────────────────────────────────────────────────
 _test_gate = threading.Semaphore(2)        # a stuck test must not pile up processes
 
-class H(BaseHTTPRequestHandler):
+class H(auth.Audited, BaseHTTPRequestHandler):
+    AUDIT_MODULE = "nas"          # accepted changes go to the audit log (auth.Audited)
     timeout = 30
     def log_message(self, fmt, *a):
         # send_error() llega aquí con (código, mensaje) y un 501 de HEAD trae el mensaje en a[1]: solo se registra un código numérico.

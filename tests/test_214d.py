@@ -43,25 +43,25 @@ class UpsNames(unittest.TestCase):
         d = tempfile.mkdtemp(); f = os.path.join(d, "hosts.json")
         Path(f).write_text(json.dumps({"192.0.2.10": {"ip": "192.0.2.10", "alias": "pve1", "hostname": "x.lan"}, "192.0.2.11": {"hostname": "nas\x01main"},
                                        "192.0.2.12": {"alias": "", "hostname": ""}, "192.0.2.13": "junk"}))
-        old = (m.NET_HOSTS_FILE, list(m._names_cache)); m.NET_HOSTS_FILE = m.Path(f); m._names_cache[0] = 0
+        old = m.NET_HOSTS_FILE; m.NET_HOSTS_FILE = m.Path(f)
         try:
             self.assertEqual(m.net_names(), {"192.0.2.10": "pve1", "192.0.2.11": "nasmain"})
         finally:
-            m.NET_HOSTS_FILE = old[0]; m._names_cache[0], m._names_cache[1] = old[1]
+            m.NET_HOSTS_FILE = old
     def test_missing_file_gives_nothing(self):
-        m = support.load("nut-monitor/server.py"); old = (m.NET_HOSTS_FILE, list(m._names_cache))
-        m.NET_HOSTS_FILE = m.Path("/nonexistent/hosts.json"); m._names_cache[0] = 0
+        m = support.load("nut-monitor/server.py"); old = m.NET_HOSTS_FILE
+        m.NET_HOSTS_FILE = m.Path("/nonexistent/hosts.json")
         try: self.assertEqual(m.net_names(), {})
-        finally: m.NET_HOSTS_FILE = old[0]; m._names_cache[0], m._names_cache[1] = old[1]
+        finally: m.NET_HOSTS_FILE = old
     def test_names_only_for_users_who_may_see_net(self):
         m = support.load("nut-monitor/server.py"); srv = support.Server(m.H)
-        old = list(m._names_cache); m._names_cache[0], m._names_cache[1] = time.time(), {"192.0.2.10": "pve1"}
+        old = m.net_names; m.net_names = lambda: {"192.0.2.10": "pve1"}
         try:
             ok = support.make_user("nn_ok", {**NONE, "nut": "readonly", "net": "readonly"}); no = support.make_user("nn_no", {**NONE, "nut": "readonly"})
             self.assertEqual(srv.call("GET", "/api/servers", None, token=ok)[1]["names"], {"192.0.2.10": "pve1"})
             self.assertEqual(srv.call("GET", "/api/servers", None, token=no)[1]["names"], {})
         finally:
-            m._names_cache[0], m._names_cache[1] = old; srv.close()
+            m.net_names = old; srv.close()
 
 class PublicIp(unittest.TestCase):
     def test_change_keeps_previous_and_notice_lasts_a_day(self):
