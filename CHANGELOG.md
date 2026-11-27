@@ -1,5 +1,45 @@
 # Changelog
 
+## 2.1.10e — 2026-11-27
+
+### Resumen
+- **Nuevo:** las reglas de alerta se revisan en el servidor cada minuto, aunque nadie tenga el panel abierto. Si una se cumple 3 lecturas seguidas queda en la línea de tiempo, y también cuando deja de cumplirse.
+
+### Pausar alarmas
+- **Nuevo:** pausas programadas por módulo: día de la semana, hora y duración (por ejemplo, el respaldo de cada domingo). Si se reanuda a mano durante la ventana, esa vez no se vuelve a pausar.
+
+### UPS Monitor
+- **Nuevo:** resumen mensual de cortes (cantidad y tiempo total) con la lista de cada mes.
+- **Nuevo:** consumo en kWh por día y por mes, calculado con la potencia del UPS, y su costo según el precio por kWh que se ingrese.
+
+### Net Monitor
+- **Nuevo:** columna «Switch / puerto» con el puerto de acceso donde está cada equipo, según las tablas MAC de los switches. Sin switches configurados, la columna no aparece.
+- **Cambio:** el alias, el tipo, el SO y el grupo quedan asociados a la MAC y no a la IP. Si un equipo cambia de IP, los conserva; la IP anterior pierde el alias.
+
+### Proxmox Monitor
+- **Nuevo:** lista de snapshots de VMs y CTs con aviso para los que tienen más de 30 días. El plazo se cambia en la misma sección.
+
+### NAS Monitor
+- **Nuevo:** aviso cuando suben los sectores reasignados, pendientes o incorregibles de un disco (Synology por SNMP y OpenMediaVault). El aviso dura 7 días y se guardan los últimos cambios.
+
+### DNS Monitor
+- **Nuevo:** los upstreams DoT y DoH se miden de verdad (conexión TLS y consulta), con el certificado validado contra el nombre del servidor.
+- **Nuevo:** los clientes principales muestran el nombre que tienen en Net Monitor o UPS.
+- **Nuevo:** con dos o más servidores DNS, se comparan las listas de bloqueo, los upstreams y los registros locales, con aviso si difieren.
+- **Cambio:** los upstreams que ya no están en la configuración de AdGuard o Pi-hole v6 aparecen atenuados como «ya no configurado», no se miden y no avisan.
+
+### Uptime Monitor
+- **Nuevo:** monitores de ping (ICMP) y de vencimiento de dominio (RDAP, y whois si RDAP no responde), con aviso a 30 días y crítico a 7.
+- **Nuevo:** en HTTP, opción «palabra que no debe aparecer» y opción para seguir redirecciones.
+
+### Seguridad
+- **Nuevo:** la auditoría registra los cambios de configuración y las acciones hechas en cada módulo, no solo en el panel de administración.
+- **Nuevo:** opción para exigir 2FA a los administradores de cualquier módulo. Al entrar sin 2FA se pide configurarlo antes de seguir.
+
+### Paquete
+- **Cambio:** `whois` pasa a las dependencias.
+- **Cambio:** el respaldo incluye las pausas programadas, la política de 2FA, el precio de la energía, el historial de sectores y los alias por MAC.
+
 ## 2.1.10d — 2026-11-25
 
 ### NAS Monitor
